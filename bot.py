@@ -1730,17 +1730,10 @@ async def autist_commands(message: Message):
     except Exception as e:
         await message.reply(f"❗ Ошибка: {e}")
         
-await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
-
-    except Exception as e:
+except Exception as e:
         await message.reply(f"❗ Ошибка: {e}")
 
-        elif action == "удалить":
-            try:
-                await message.reply_to_message.delete()
-                await message.reply(f"🗑 Сообщение удалено!")
-                
-        elif action == "удалить":
+       elif action == "удалить":
             try:
                 await message.reply_to_message.delete()
                 await message.reply(f"🗑 Сообщение удалено!")
@@ -1754,6 +1747,9 @@ await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
             except:
                 await message.reply("❗ Не удалось закрепить сообщение.")
 
+    except Exception as e:
+        await message.reply(f"❗ Ошибка: {e}")
+        
         elif action == "предупредить":
             text_warn = rest.strip() or "Нарушение правил"
             await message.reply(
@@ -1830,6 +1826,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
