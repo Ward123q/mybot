@@ -11,7 +11,8 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     Message, ChatPermissions, CallbackQuery,
-    InlineKeyboardMarkup, InlineKeyboardButton
+    InlineKeyboardMarkup, InlineKeyboardButton,
+    ChatMemberUpdated
 )
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiohttp import web
@@ -20,38 +21,33 @@ from aiohttp import web
 #                   НАСТРОЙКИ БОТА
 # ╚══════════════════════════════════════════════════════╝
 
-BOT_TOKEN       = os.getenv("BOT_TOKEN")
-GROQ_API_KEY    = os.getenv("GROQ_API_KEY")
-WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
+BOT_TOKEN        = os.getenv("BOT_TOKEN")
 
 MAX_WARNINGS     = 3
 FLOOD_LIMIT      = 5
 FLOOD_TIME       = 5
 ANTI_MAT_ENABLED = True
 MAT_MUTE_MINUTES = 5
-
-WELCOME_TEXT = "👋 Привет, {name}! Добро пожаловать!\nНапиши /rules — правила, /help — команды."
+AUTO_KICK_BOTS   = True   # Автокик ботов при вступлении
 
 RULES_TEXT = (
-    "📜 <b>Правила чата:</b>\n\n"
-    "1. Уважайте друг друга\n"
-    "2. Без спама и флуда\n"
-    "3. Без оскорблений и мата\n"
-    "4. Только по теме чата\n\n"
-    "Нарушение — предупреждение — бан 🔨"
+    "📜 <b>ПРАВИЛА ЧАТА</b>\n\n"
+    "🔞 <b>Контент 18+:</b>\n"
+    "• Видео 18+\n"
+    "• Стикеры 18+\n"
+    "• Гифки 18+\n"
+    "• Ссылки на порнографические сайты\n"
+    "⚠️ Наказание: <b>Бан по решению администратора</b>\n\n"
+    "📢 <b>Реклама:</b>\n"
+    "• Реклама своих социальных сетей\n"
+    "⚠️ Наказание: <b>Предупреждение / Мут 30 мин / Бан на 24 часа</b>\n\n"
+    "🚫 <b>Общие правила:</b>\n"
+    "• Уважайте друг друга\n"
+    "• Без спама и флуда\n"
+    "• Без оскорблений и мата\n"
+    "• Только по теме чата\n\n"
+    "Нарушение правил → предупреждение → бан 🔨"
 )
-
-# Триггер-слова → автоответы
-TRIGGER_RESPONSES = {
-    "привет":    ["Привет! 👋", "Здарова! 😎", "О, живой человек! 👀"],
-    "помогите":  ["Чем помочь? Напиши подробнее! 🤝", "Слушаю! Что случилось? 👂"],
-    "скучно":    ["Поиграй в /8ball или проверь /iq 😄", "Брось кубик /roll 🎲"],
-    "спасибо":   ["Пожалуйста! 😊", "Всегда рад помочь! 🤗", "Не за что! 👍"],
-    "хорошо":    ["Вот и отлично! 😄", "Рад слышать! 🎉"],
-    "утро":      ["Доброе утро! ☀️", "Утречко! ☕"],
-    "ночь":      ["Спокойной ночи! 🌙", "Отдыхай! 😴"],
-    "го":        ["Куда? 😂", "Поехали! 🚀"],
-}
 
 # ════════════════════════════════════════════════════════
 
@@ -64,16 +60,9 @@ flood_tracker = defaultdict(lambda: defaultdict(list))
 notes         = defaultdict(dict)
 afk_users     = {}
 pending       = {}
-
-# Статистика: chat_id -> user_id -> кол-во сообщений
 chat_stats    = defaultdict(lambda: defaultdict(int))
-
-# Репутация: chat_id -> user_id -> очки
 reputation    = defaultdict(lambda: defaultdict(int))
-rep_cooldown  = {}  # ключ: (chat_id, from_user_id, target_id) -> время
-
-# История ИИ: user_id -> список сообщений
-ai_history    = defaultdict(list)
+rep_cooldown  = {}
 
 MAT_WORDS = [
     "блядь","блять","бля","сука","пизда","пиздец",
@@ -86,7 +75,7 @@ MAT_WORDS = [
 
 MAT_RESPONSES = [
     "🤬 {name}, какого хуя ты материшься?! Рот закрой на {minutes} мин.",
-    "🧼 {name}, блядь, ещё раз — и навсегда заткну! Мут {minutes} мин.",
+    "🧼 {name}, блядь, ещё раз — навсегда заткну! Мут {minutes} мин.",
     "😤 {name}, пиздец твоим манерам! Мут на {minutes} мин.",
     "🚿 {name}, иди язык мылом помой, нахуй! Мут {minutes} мин.",
     "📵 {name}, охуел что ли? Мут {minutes} мин., иди остынь.",
@@ -106,12 +95,12 @@ BAN_MESSAGES = [
 
 WARN_MESSAGES = [
     "⚠️ {name} получил варн {count}/{max}! Причина: {reason}. Ещё раз — и пиздец.",
-    "🚨 {name}, это предупреждение {count}/{max}! Причина: {reason}. Следи за собой.",
+    "🚨 {name}, предупреждение {count}/{max}! Причина: {reason}. Следи за собой.",
     "😡 {name} — варн {count}/{max}! Причина: {reason}. Ещё немного и улетишь.",
 ]
 
 AUTOBAN_MESSAGES = [
-    "🔨 {name} набрал {max} варнов и получил автобан! Пока-пока, нахуй.",
+    "🔨 {name} набрал {max} варнов — автобан! Пока-пока, нахуй.",
     "💀 {name} — пиздец! {max} варнов = бан. Скатертью дорога.",
 ]
 
@@ -130,12 +119,50 @@ QUOTES = [
     "«Будь собой. Все остальные роли заняты.» — Уайльд",
     "«Единственный способ делать великое — любить то, что делаешь.» — Джобс",
     "«Успех — идти от неудачи к неудаче без потери энтузиазма.» — Черчилль",
+    "«Тот, кто смеётся последним, смеётся лучше всех.» — Народная мудрость",
+    "«Делай что должен, и будь что будет.» — Толстой",
 ]
 
 BALL_ANSWERS = [
     "🟢 Да, нахуй, однозначно!", "🟢 Без сомнений!", "🟢 Скорее всего да.",
-    "🟡 Хуй его знает, спроси позже.", "🟡 Трудно сказать, бля.", "🟡 Да кто ж знает.",
+    "🟡 Хуй его знает, спроси позже.", "🟡 Трудно сказать, бля.",
     "🔴 Нет, нахуй.", "🔴 Однозначно нет!", "🔴 Даже не думай.",
+]
+
+TRIGGER_RESPONSES = {
+    "привет":   ["Привет! 👋", "Здарова! 😎", "О, живой человек! 👀"],
+    "помогите": ["Чем помочь? Напиши подробнее! 🤝"],
+    "скучно":   ["Поиграй в /8ball или проверь /iq 😄", "Брось кубик /roll 🎲"],
+    "спасибо":  ["Пожалуйста! 😊", "Всегда рад помочь! 🤗"],
+    "утро":     ["Доброе утро! ☀️", "Утречко! ☕"],
+    "ночь":     ["Спокойной ночи! 🌙", "Отдыхай! 😴"],
+}
+
+# Правда или ложь вопросы
+TRUTH_QUESTIONS = [
+    "Ты когда-нибудь врал другу?",
+    "Какой твой самый большой страх?",
+    "Ты когда-нибудь влюблялся в друга?",
+    "Что тебя раздражает больше всего?",
+    "Твой самый неловкий момент в жизни?",
+    "Ты когда-нибудь плакал из-за фильма?",
+    "Что ты никогда не расскажешь родителям?",
+]
+
+DARE_CHALLENGES = [
+    "Напиши комплимент случайному участнику чата!",
+    "Признайся в чём-нибудь стыдном!",
+    "Напиши стих про себя прямо сейчас!",
+    "Поменяй аватарку на 1 час!",
+    "Напиши 10 смайликов без остановки!",
+]
+
+WOULD_YOU_RATHER = [
+    "Быть богатым но одиноким или бедным но счастливым?",
+    "Уметь летать или быть невидимым?",
+    "Знать будущее или изменить прошлое?",
+    "Никогда не спать или спать 20 часов в день?",
+    "Говорить только правду или постоянно врать?",
 ]
 
 
@@ -197,47 +224,6 @@ def parse_duration(arg: str):
 
 
 # ─────────────────────────────────────────────────────
-#  ИИ — ChatGPT
-# ─────────────────────────────────────────────────────
-
-async def ask_gpt(user_id: int, user_message: str) -> str:
-    if not GROQ_API_KEY:
-        return "❌ Groq API ключ не настроен."
-
-    ai_history[user_id].append({"role": "user", "content": user_message})
-    if len(ai_history[user_id]) > 10:
-        ai_history[user_id] = ai_history[user_id][-10:]
-
-    messages = [
-        {"role": "system", "content": "Ты умный и дружелюбный помощник в Telegram чате. Отвечай кратко и по делу на русском языке."}
-    ] + ai_history[user_id]
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "llama3-8b-8192",
-                    "messages": messages,
-                    "max_tokens": 500,
-                    "temperature": 0.7
-                }
-            ) as resp:
-                data = await resp.json()
-                if "choices" in data:
-                    reply = data["choices"][0]["message"]["content"]
-                    ai_history[user_id].append({"role": "assistant", "content": reply})
-                    return reply
-                else:
-                    return f"❌ Ошибка: {data.get('error', {}).get('message', 'Неизвестная ошибка')}"
-    except Exception as e:
-        return f"❌ Ошибка подключения: {e}"
-
-# ─────────────────────────────────────────────────────
 #  ПОГОДА
 # ─────────────────────────────────────────────────────
 
@@ -248,28 +234,18 @@ async def get_weather(city: str) -> str:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 "https://api.openweathermap.org/data/2.5/weather",
-                params={
-                    "q": city,
-                    "appid": WEATHER_API_KEY,
-                    "units": "metric",
-                    "lang": "ru"
-                }
+                params={"q": city, "appid": WEATHER_API_KEY, "units": "metric", "lang": "ru"}
             ) as resp:
                 data = await resp.json()
                 if data.get("cod") != 200:
                     return f"❌ Город <b>{city}</b> не найден."
-
-                name    = data["name"]
-                temp    = round(data["main"]["temp"])
-                feels   = round(data["main"]["feels_like"])
-                desc    = data["weather"][0]["description"].capitalize()
-                humid   = data["main"]["humidity"]
-                wind    = round(data["wind"]["speed"])
-                emoji   = "☀️" if "ясно" in desc.lower() else (
-                          "🌧" if "дождь" in desc.lower() else (
-                          "❄️" if "снег" in desc.lower() else (
-                          "⛅" if "облач" in desc.lower() else "🌤")))
-
+                name  = data["name"]
+                temp  = round(data["main"]["temp"])
+                feels = round(data["main"]["feels_like"])
+                desc  = data["weather"][0]["description"].capitalize()
+                humid = data["main"]["humidity"]
+                wind  = round(data["wind"]["speed"])
+                emoji = "☀️" if "ясно" in desc.lower() else ("🌧" if "дождь" in desc.lower() else ("❄️" if "снег" in desc.lower() else "⛅"))
                 return (
                     f"{emoji} <b>Погода в {name}</b>\n\n"
                     f"🌡 Температура: <b>{temp}°C</b> (ощущается {feels}°C)\n"
@@ -300,6 +276,7 @@ def kb_main_panel(target_id: int, target_name: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="♻️ Разбан", callback_data=f"panel:unban:{target_id}"),
         ],
         [
+            InlineKeyboardButton(text="👑 Выдать админку", callback_data=f"panel:adminpromote:{target_id}"),
             InlineKeyboardButton(text="🗑 Удалить сообщение", callback_data=f"panel:del:{target_id}"),
         ],
         [
@@ -340,6 +317,9 @@ def kb_warn_options(target_id: int) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="📵 Реклама", callback_data=f"warn:{target_id}:Реклама"),
+            InlineKeyboardButton(text="🔞 Контент 18+", callback_data=f"warn:{target_id}:Контент 18+"),
+        ],
+        [
             InlineKeyboardButton(text="✏️ Своя причина", callback_data=f"warn:{target_id}:custom"),
         ],
         [InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:back:{target_id}")],
@@ -352,13 +332,27 @@ def kb_ban_options(target_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="💬 Спам/реклама", callback_data=f"ban:{target_id}:Спам и реклама"),
         ],
         [
-            InlineKeyboardButton(text="🔞 Неприемлемый контент", callback_data=f"ban:{target_id}:Неприемлемый контент"),
+            InlineKeyboardButton(text="🔞 Контент 18+", callback_data=f"ban:{target_id}:Контент 18+"),
             InlineKeyboardButton(text="🤖 Бот/накрутка", callback_data=f"ban:{target_id}:Бот или накрутка"),
         ],
         [
+            InlineKeyboardButton(text="⏰ Бан на 24 часа", callback_data=f"ban:{target_id}:tempban24"),
             InlineKeyboardButton(text="✏️ Своя причина", callback_data=f"ban:{target_id}:custom"),
         ],
         [InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:back:{target_id}")],
+    ])
+
+def kb_admin_rights() -> InlineKeyboardMarkup:
+    """Клавиатура для выдачи прав администратора."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🛡 Полные права", callback_data="adminrights:full"),
+            InlineKeyboardButton(text="👮 Только модерация", callback_data="adminrights:mod"),
+        ],
+        [
+            InlineKeyboardButton(text="📝 Только сообщения", callback_data="adminrights:messages"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="adminrights:cancel"),
+        ],
     ])
 
 
@@ -468,6 +462,7 @@ class PendingInputMiddleware(BaseMiddleware):
             target_name = p["target_name"]
             chat_id     = p["chat_id"]
             text        = event.text or ""
+
             if action == "mute_custom":
                 mins, label = parse_duration(text)
                 if mins:
@@ -478,6 +473,7 @@ class PendingInputMiddleware(BaseMiddleware):
                     await event.answer(msg, parse_mode="HTML")
                 else:
                     await event.reply("❗ Неверный формат. Примеры: 10, 10m, 2h, 1d")
+
             elif action == "warn_custom":
                 reason = text.strip() or "Нарушение правил"
                 warnings[chat_id][target_id] += 1
@@ -490,11 +486,20 @@ class PendingInputMiddleware(BaseMiddleware):
                     msg = random.choice(WARN_MESSAGES).format(
                         name=f"<b>{target_name}</b>", count=count, max=MAX_WARNINGS, reason=reason)
                 await event.answer(msg, parse_mode="HTML")
+
             elif action == "ban_custom":
                 reason = text.strip() or "Нарушение правил"
                 await bot.ban_chat_member(chat_id, target_id)
                 msg = random.choice(BAN_MESSAGES).format(name=f"<b>{target_name}</b>", reason=reason)
                 await event.answer(msg, parse_mode="HTML")
+
+            elif action == "adminpromote_username":
+                username = text.strip().lstrip("@")
+                await event.answer(
+                    f"👑 Чтобы выдать админку @{username} — используй стандартные настройки Telegram:\n\n"
+                    f"Настройки группы → Администраторы → Добавить администратора → @{username}",
+                    parse_mode="HTML")
+
             await event.delete()
             return
         return await handler(event, data)
@@ -505,6 +510,35 @@ dp.message.middleware(StatsMiddleware())
 dp.message.middleware(AntiFloodMiddleware())
 dp.message.middleware(AntiMatMiddleware())
 dp.message.middleware(AfkMiddleware())
+
+
+# ─────────────────────────────────────────────────────
+#  АВТОКИК БОТОВ + ПРИВЕТСТВИЕ НОВЫХ
+# ─────────────────────────────────────────────────────
+
+@dp.message(F.new_chat_members)
+async def on_new_member(message: Message):
+    for member in message.new_chat_members:
+        # Автокик ботов
+        if member.is_bot and AUTO_KICK_BOTS:
+            try:
+                await bot.ban_chat_member(message.chat.id, member.id)
+                await bot.unban_chat_member(message.chat.id, member.id)
+                await message.answer(
+                    f"🤖 Бот <b>{member.full_name}</b> был автоматически удалён!\n"
+                    f"Боты не приветствуются в этом чате.",
+                    parse_mode="HTML")
+            except Exception:
+                pass
+            continue
+
+        # Приветствие + правила для новых участников
+        await message.answer(
+            f"👋 Добро пожаловать, {member.mention_html()}!\n\n"
+            f"Рады видеть тебя в нашем чате. Пожалуйста, ознакомься с правилами:\n\n"
+            + RULES_TEXT,
+            parse_mode="HTML"
+        )
 
 
 # ─────────────────────────────────────────────────────
@@ -521,15 +555,19 @@ async def start_command(message: Message):
         "<i>Панель управления — только для администраторов.</i>",
         parse_mode="HTML")
 
-@dp.message(F.new_chat_members)
-async def welcome_new_member(message: Message):
-    for m in message.new_chat_members:
-        if m.is_bot: continue
-        await message.answer(WELCOME_TEXT.format(name=m.mention_html()), parse_mode="HTML")
+
+# ─────────────────────────────────────────────────────
+#  /rules
+# ─────────────────────────────────────────────────────
 
 @dp.message(Command("rules"))
 async def rules_command(message: Message):
     await message.reply(RULES_TEXT, parse_mode="HTML")
+
+
+# ─────────────────────────────────────────────────────
+#  /help
+# ─────────────────────────────────────────────────────
 
 @dp.message(Command("help"))
 async def help_command(message: Message):
@@ -537,33 +575,38 @@ async def help_command(message: Message):
     user_help = (
         "❓ <b>Доступные команды:</b>\n\n"
         "📜 /rules — правила чата\n\n"
-        "🤖 <b>ИИ:</b>\n"
-        "/ai [вопрос] — спросить ChatGPT 🧠\n"
-        "/aiclear — сбросить историю диалога\n\n"
         "🌤 <b>Погода:</b>\n"
         "/weather [город] — погода в городе\n\n"
         "⭐ <b>Репутация:</b>\n"
-        "/rep — узнать репутацию (реплай)\n"
+        "/rep — репутация (реплай)\n"
         "+1 или -1 в реплае — дать/снять очко\n\n"
         "📊 <b>Статистика:</b>\n"
         "/top — топ активных участников\n\n"
-        "🎮 <b>Игры и развлечения:</b>\n"
-        "/roll [N] — бросить кубик 🎲\n"
-        "/flip — подбросить монету 🪙\n"
+        "🎮 <b>Игры:</b>\n"
+        "/roll [N] — кубик 🎲\n"
+        "/flip — монетка 🪙\n"
         "/8ball [вопрос] — шар предсказаний 🎱\n"
         "/rate [что] — оценить что угодно ⭐\n"
         "/iq — проверить IQ 🧠\n"
         "/gay — шуточный % 🌈\n"
         "/quote — цитата дня 💬\n"
-        "/afk [причина] — уйти в AFK 😴\n"
+        "/truth — вопрос правды 🤔\n"
+        "/dare — задание смелости 😈\n"
+        "/wyr — выбор без выбора 🤯\n"
+        "/rps [к/н/б] — камень ножницы бумага ✂️\n"
+        "/slot — однорукий бандит 🎰\n"
+        "/choose [вар1|вар2|...] — выбор случайного\n"
+        "/countdown [N] — обратный отсчёт ⏱\n\n"
+        "😴 /afk [причина] — уйти в AFK\n"
         "/info — инфо о пользователе (реплай)\n"
         "/warnings — варны (реплай)\n"
         "/note get [имя] — заметка\n"
         "/note list — список заметок\n"
     )
     admin_help = (
-        "\n\n👮 <b>Команды для администраторов:</b>\n"
-        "/panel — панель управления (реплай на юзера)\n"
+        "\n\n👮 <b>Только для администраторов:</b>\n"
+        "/panel — панель управления (реплай)\n"
+        "/setadmin @username — выдать админку\n"
         "/ban [причина] — бан (реплай)\n"
         "/unban — разбан (реплай)\n"
         "/mute [время] — мут: 10m, 2h, 1d (реплай)\n"
@@ -581,131 +624,100 @@ async def help_command(message: Message):
         "/promote [должность] — выдать тег (реплай)\n"
         "/poll Вопрос|Вар1|Вар2 — голосование\n"
         "/antimat on/off — антимат\n"
+        "/autokick on/off — автокик ботов\n"
         "/rban — шуточный бан (реплай) 😄\n"
         "/note set/del [имя] [текст] — заметки\n"
+        "/warn24 — мут на 24ч за рекламу (реплай)\n"
+        "/adminlist — список администраторов\n"
     )
     await message.reply(user_help + (admin_help if is_adm else ""), parse_mode="HTML")
 
 
 # ─────────────────────────────────────────────────────
-#  ИИ КОМАНДЫ
+#  /setadmin — выдать админку
 # ─────────────────────────────────────────────────────
 
-@dp.message(Command("ai"))
-async def ai_cmd(message: Message, command: CommandObject):
-    if not command.args:
-        await message.reply("🤖 Напиши вопрос: /ai [вопрос]"); return
-    wait_msg = await message.reply("🤔 Думаю...")
-    answer = await ask_gpt(message.from_user.id, command.args)
-    await wait_msg.edit_text(f"🤖 <b>ChatGPT:</b>\n\n{answer}", parse_mode="HTML")
+@dp.message(Command("setadmin"))
+async def setadmin_cmd(message: Message, command: CommandObject):
+    if not await require_admin(message): return
 
-@dp.message(Command("aiclear"))
-async def ai_clear_cmd(message: Message):
-    ai_history[message.from_user.id].clear()
-    await message.reply("🗑 История диалога с ИИ очищена!")
-
-
-# ─────────────────────────────────────────────────────
-#  ПОГОДА
-# ─────────────────────────────────────────────────────
-
-@dp.message(Command("weather"))
-async def weather_cmd(message: Message, command: CommandObject):
-    if not command.args:
-        await message.reply("🌤 Укажи город: /weather Москва"); return
-    wait_msg = await message.reply("⏳ Получаю данные...")
-    result = await get_weather(command.args)
-    await wait_msg.edit_text(result, parse_mode="HTML")
-
-
-# ─────────────────────────────────────────────────────
-#  РЕПУТАЦИЯ
-# ─────────────────────────────────────────────────────
-
-@dp.message(Command("rep"))
-async def rep_cmd(message: Message):
-    if not message.reply_to_message:
-        await message.reply("↩️ Ответь на сообщение пользователя."); return
-    target = message.reply_to_message.from_user
-    score  = reputation[message.chat.id][target.id]
-    emoji  = "⭐" if score >= 0 else "💀"
-    await message.reply(
-        f"{emoji} Репутация {target.mention_html()}: <b>{score:+d}</b>",
-        parse_mode="HTML")
-
-@dp.message(F.text.in_({"+1", "+", "👍"}))
-async def rep_plus(message: Message):
-    if not message.reply_to_message: return
-    target = message.reply_to_message.from_user
-    if target.id == message.from_user.id:
-        await message.reply("😏 Себе репу не накручивай!"); return
-    key = (message.chat.id, message.from_user.id, target.id)
-    now = time()
-    if key in rep_cooldown and now - rep_cooldown[key] < 3600:
-        left = int(3600 - (now - rep_cooldown[key]))
-        await message.reply(f"⏳ Подожди ещё {left//60} мин. перед следующим голосом."); return
-    rep_cooldown[key] = now
-    reputation[message.chat.id][target.id] += 1
-    score = reputation[message.chat.id][target.id]
-    await message.reply(
-        f"⬆️ {target.mention_html()} +1 к репутации! Теперь: <b>{score:+d}</b>",
-        parse_mode="HTML")
-
-@dp.message(F.text.in_({"-1", "-", "👎"}))
-async def rep_minus(message: Message):
-    if not message.reply_to_message: return
-    target = message.reply_to_message.from_user
-    if target.id == message.from_user.id:
-        await message.reply("😏 Себе репу не снижай!"); return
-    key = (message.chat.id, message.from_user.id, target.id)
-    now = time()
-    if key in rep_cooldown and now - rep_cooldown[key] < 3600:
-        left = int(3600 - (now - rep_cooldown[key]))
-        await message.reply(f"⏳ Подожди ещё {left//60} мин. перед следующим голосом."); return
-    rep_cooldown[key] = now
-    reputation[message.chat.id][target.id] -= 1
-    score = reputation[message.chat.id][target.id]
-    await message.reply(
-        f"⬇️ {target.mention_html()} -1 к репутации! Теперь: <b>{score:+d}</b>",
-        parse_mode="HTML")
+    if command.args:
+        username = command.args.strip().lstrip("@")
+        await message.reply(
+            f"👑 Чтобы выдать права администратора @{username}:\n\n"
+            f"1. Зайди в настройки группы\n"
+            f"2. Нажми <b>Администраторы</b>\n"
+            f"3. Нажми <b>Добавить администратора</b>\n"
+            f"4. Найди @{username}\n"
+            f"5. Настрой нужные права и сохрани\n\n"
+            f"<i>Telegram не позволяет ботам выдавать полные права администратора — это можно сделать только вручную через настройки.</i>",
+            parse_mode="HTML")
+    else:
+        pending[message.from_user.id] = {
+            "action": "adminpromote_username",
+            "target_id": 0,
+            "target_name": "",
+            "chat_id": message.chat.id,
+        }
+        await message.reply(
+            "👑 Введи @username пользователя которому хочешь выдать админку:",
+            parse_mode="HTML")
 
 
 # ─────────────────────────────────────────────────────
-#  СТАТИСТИКА — ТОП АКТИВНЫХ
+#  /adminlist — список администраторов
 # ─────────────────────────────────────────────────────
 
-@dp.message(Command("top"))
-async def top_cmd(message: Message):
-    stats = chat_stats[message.chat.id]
-    if not stats:
-        await message.reply("📊 Статистика пока пуста — пишите больше! 😄"); return
-    sorted_users = sorted(stats.items(), key=lambda x: x[1], reverse=True)[:10]
-    medals = ["🥇", "🥈", "🥉"] + ["4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
-    lines = ["📊 <b>Топ активных участников:</b>\n"]
-    for i, (uid, count) in enumerate(sorted_users):
-        try:
-            member = await bot.get_chat_member(message.chat.id, uid)
-            name = member.user.full_name
-        except:
-            name = f"ID {uid}"
-        lines.append(f"{medals[i]} <b>{name}</b> — {count} сообщений")
+@dp.message(Command("adminlist"))
+async def adminlist_cmd(message: Message):
+    if not await require_admin(message): return
+    admins = await bot.get_chat_administrators(message.chat.id)
+    lines  = ["👮 <b>Администраторы чата:</b>\n"]
+    for admin in admins:
+        if admin.user.is_bot: continue
+        icon   = "👑" if admin.status == "creator" else "🛡"
+        title  = f" — <i>{admin.custom_title}</i>" if hasattr(admin, 'custom_title') and admin.custom_title else ""
+        lines.append(f"{icon} {admin.user.mention_html()}{title}")
     await message.reply("\n".join(lines), parse_mode="HTML")
 
 
 # ─────────────────────────────────────────────────────
-#  АВТООТВЕТЫ НА ТРИГГЕР-СЛОВА
+#  /autokick — вкл/выкл автокик ботов
 # ─────────────────────────────────────────────────────
 
-@dp.message(F.text & ~F.text.startswith("/"))
-async def auto_reply_handler(message: Message):
-    if not message.text: return
-    text_lower = message.text.lower()
-    for trigger, responses in TRIGGER_RESPONSES.items():
-        if trigger in text_lower:
-            # Отвечаем с вероятностью 40% чтобы не спамить
-            if random.random() < 0.4:
-                await message.reply(random.choice(responses))
-            break
+@dp.message(Command("autokick"))
+async def autokick_cmd(message: Message, command: CommandObject):
+    global AUTO_KICK_BOTS
+    if not await require_admin(message): return
+    if not command.args:
+        s = "вкл ✅" if AUTO_KICK_BOTS else "выкл ❌"
+        await message.reply(f"🤖 Автокик ботов: <b>{s}</b>", parse_mode="HTML"); return
+    a = command.args.strip().lower()
+    if a == "on":
+        AUTO_KICK_BOTS = True
+        await message.reply("🤖 Автокик ботов <b>включён</b>!", parse_mode="HTML")
+    elif a == "off":
+        AUTO_KICK_BOTS = False
+        await message.reply("🤖 Автокик ботов <b>выключен</b>.", parse_mode="HTML")
+
+
+# ─────────────────────────────────────────────────────
+#  /warn24 — мут на 24ч за рекламу
+# ─────────────────────────────────────────────────────
+
+@dp.message(Command("warn24"))
+async def warn24_cmd(message: Message):
+    if not await require_admin(message): return
+    if not message.reply_to_message:
+        await message.reply("↩️ Ответь на сообщение пользователя."); return
+    target = message.reply_to_message.from_user
+    await bot.restrict_chat_member(message.chat.id, target.id,
+        permissions=ChatPermissions(can_send_messages=False),
+        until_date=timedelta(hours=24))
+    await message.reply(
+        f"📵 {target.mention_html()} получил мут на <b>24 часа</b> за рекламу!\n"
+        f"Следующее нарушение — бан.",
+        parse_mode="HTML")
 
 
 # ─────────────────────────────────────────────────────
@@ -716,15 +728,18 @@ async def auto_reply_handler(message: Message):
 async def admin_panel(message: Message):
     if not await require_admin(message): return
     if not message.reply_to_message:
-        await message.reply("↩️ Ответь на сообщение пользователя чтобы открыть панель.")
-        return
+        await message.reply("↩️ Ответь на сообщение пользователя чтобы открыть панель."); return
     target = message.reply_to_message.from_user
     warns  = warnings[message.chat.id].get(target.id, 0)
+    rep    = reputation[message.chat.id].get(target.id, 0)
+    msgs   = chat_stats[message.chat.id].get(target.id, 0)
     await message.reply(
         f"🛠 <b>Панель управления</b>\n\n"
-        f"👤 Пользователь: {target.mention_html()}\n"
+        f"👤 {target.mention_html()}\n"
         f"🆔 ID: <code>{target.id}</code>\n"
-        f"⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n\n"
+        f"⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
+        f"⭐ Репутация: <b>{rep:+d}</b>\n"
+        f"💬 Сообщений: <b>{msgs}</b>\n\n"
         f"Выбери действие:",
         parse_mode="HTML",
         reply_markup=kb_main_panel(target.id, target.full_name)
@@ -738,21 +753,25 @@ async def admin_panel(message: Message):
 @dp.callback_query(F.data.startswith("panel:"))
 async def panel_callback(call: CallbackQuery):
     if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
-        await call.answer("🚫 Только для администраторов!", show_alert=True)
-        return
+        await call.answer("🚫 Только для администраторов!", show_alert=True); return
+
     _, action, target_id_str = call.data.split(":", 2)
     target_id = int(target_id_str)
     chat_id   = call.message.chat.id
+
     try:
-        target_member = await bot.get_chat_member(chat_id, target_id)
-        target_name   = target_member.user.full_name
+        tm = await bot.get_chat_member(chat_id, target_id)
+        target_name = tm.user.full_name
     except:
         target_name = f"ID {target_id}"
 
     if action == "close":
         await call.message.delete()
+
     elif action == "back":
         warns = warnings[chat_id].get(target_id, 0)
+        rep   = reputation[chat_id].get(target_id, 0)
+        msgs  = chat_stats[chat_id].get(target_id, 0)
         try:
             tm = await bot.get_chat_member(chat_id, target_id)
             mention = tm.user.mention_html()
@@ -760,46 +779,67 @@ async def panel_callback(call: CallbackQuery):
             mention = f"<code>{target_id}</code>"
         await call.message.edit_text(
             f"🛠 <b>Панель управления</b>\n\n"
-            f"👤 Пользователь: {mention}\n"
+            f"👤 {mention}\n"
             f"🆔 ID: <code>{target_id}</code>\n"
-            f"⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n\n"
+            f"⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
+            f"⭐ Репутация: <b>{rep:+d}</b>\n"
+            f"💬 Сообщений: <b>{msgs}</b>\n\n"
             f"Выбери действие:",
             parse_mode="HTML",
             reply_markup=kb_main_panel(target_id, target_name))
+
     elif action == "mute":
         await call.message.edit_text(
             f"🔇 <b>Мут для {target_name}</b>\n\nВыбери время:",
             parse_mode="HTML", reply_markup=kb_mute_time(target_id))
+
     elif action == "unmute":
         await bot.restrict_chat_member(chat_id, target_id,
             permissions=ChatPermissions(can_send_messages=True, can_send_media_messages=True,
                 can_send_polls=True, can_send_other_messages=True, can_add_web_page_previews=True))
         await call.message.edit_text(f"🔊 <b>{target_name}</b> размучен.", parse_mode="HTML")
+
     elif action == "warn":
         await call.message.edit_text(
             f"⚠️ <b>Варн для {target_name}</b>\n\nВыбери причину:",
             parse_mode="HTML", reply_markup=kb_warn_options(target_id))
+
     elif action == "unwarn":
-        if warnings[chat_id][target_id] > 0:
-            warnings[chat_id][target_id] -= 1
+        if warnings[chat_id][target_id] > 0: warnings[chat_id][target_id] -= 1
         count = warnings[chat_id][target_id]
         await call.message.edit_text(
             f"✅ С <b>{target_name}</b> снят варн. Осталось: <b>{count}/{MAX_WARNINGS}</b>",
             parse_mode="HTML")
+
     elif action == "ban":
         await call.message.edit_text(
             f"🔨 <b>Бан для {target_name}</b>\n\nВыбери причину:",
             parse_mode="HTML", reply_markup=kb_ban_options(target_id))
+
     elif action == "unban":
         await bot.unban_chat_member(chat_id, target_id, only_if_banned=True)
         await call.message.edit_text(f"♻️ <b>{target_name}</b> разбанен.", parse_mode="HTML")
+
     elif action == "del":
         try: await call.message.reply_to_message.delete()
         except: pass
         await call.message.edit_text("🗑 Сообщение удалено.")
+
+    elif action == "adminpromote":
+        await call.message.edit_text(
+            f"👑 Чтобы выдать права администратора <b>{target_name}</b>:\n\n"
+            f"1. Настройки группы → Администраторы\n"
+            f"2. Добавить администратора\n"
+            f"3. Найди пользователя и настрой права\n\n"
+            f"<i>Telegram не позволяет ботам выдавать полные права — только вручную.</i>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:back:{target_id}")
+            ]]))
+
     elif action == "info":
         try:
-            tm = await bot.get_chat_member(chat_id, target_id)
+            tm    = await bot.get_chat_member(chat_id, target_id)
             user  = tm.user
             warns = warnings[chat_id].get(target_id, 0)
             rep   = reputation[chat_id].get(target_id, 0)
@@ -822,6 +862,7 @@ async def panel_callback(call: CallbackQuery):
                 ]]))
         except Exception as e:
             await call.answer(f"Ошибка: {e}", show_alert=True)
+
     await call.answer()
 
 
@@ -842,8 +883,7 @@ async def mute_callback(call: CallbackQuery):
         pending[call.from_user.id] = {"action":"mute_custom","target_id":target_id,
             "target_name":target_name,"chat_id":chat_id}
         await call.message.edit_text(
-            f"✏️ Введи время мута для <b>{target_name}</b>:\n\n"
-            f"Примеры: <code>10</code> (мин), <code>30m</code>, <code>2h</code>, <code>1d</code>",
+            f"✏️ Введи время мута для <b>{target_name}</b>:\n\nПримеры: <code>10</code>, <code>30m</code>, <code>2h</code>, <code>1d</code>",
             parse_mode="HTML")
         await call.answer(); return
     mins  = int(time_val)
@@ -853,6 +893,7 @@ async def mute_callback(call: CallbackQuery):
     msg = random.choice(MUTE_MESSAGES).format(name=f"<b>{target_name}</b>", time=label)
     await call.message.edit_text(msg, parse_mode="HTML")
     await call.answer(f"Замутен на {label}!")
+
 
 @dp.callback_query(F.data.startswith("warn:"))
 async def warn_callback(call: CallbackQuery):
@@ -885,6 +926,7 @@ async def warn_callback(call: CallbackQuery):
     await call.message.edit_text(msg, parse_mode="HTML")
     await call.answer("Варн выдан!")
 
+
 @dp.callback_query(F.data.startswith("ban:"))
 async def ban_callback(call: CallbackQuery):
     if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
@@ -904,6 +946,11 @@ async def ban_callback(call: CallbackQuery):
         await call.message.edit_text(
             f"✏️ Напиши причину бана для <b>{target_name}</b>:", parse_mode="HTML")
         await call.answer(); return
+    if reason == "tempban24":
+        await bot.ban_chat_member(chat_id, target_id, until_date=timedelta(hours=24))
+        await call.message.edit_text(
+            f"⏰ {target_name} забанен на <b>24 часа</b>!", parse_mode="HTML")
+        await call.answer("Временный бан!"); return
     await bot.ban_chat_member(chat_id, target_id)
     msg = random.choice(BAN_MESSAGES).format(name=f"<b>{target_name}</b>", reason=reason)
     await call.message.edit_text(msg, parse_mode="HTML")
@@ -1043,7 +1090,7 @@ async def unpin_cmd(message: Message):
 async def lock_cmd(message: Message):
     if not await require_admin(message): return
     await bot.set_chat_permissions(message.chat.id, ChatPermissions(can_send_messages=False))
-    await message.reply("🔒 Чат <b>заблокирован</b>.", parse_mode="HTML")
+    await message.reply("🔒 Чат <b>заблокирован</b>. Тихо всем, нахуй.", parse_mode="HTML")
 
 @dp.message(Command("unlock"))
 async def unlock_cmd(message: Message):
@@ -1099,8 +1146,6 @@ async def antimat_cmd(message: Message, command: CommandObject):
     elif a == "off":
         ANTI_MAT_ENABLED = False
         await message.reply("🔞 Антимат <b>выключен</b>.", parse_mode="HTML")
-    else:
-        await message.reply("❗ /antimat on или /antimat off")
 
 @dp.message(Command("rban"))
 async def rban_cmd(message: Message):
@@ -1144,7 +1189,88 @@ async def note_cmd(message: Message, command: CommandObject):
 
 
 # ─────────────────────────────────────────────────────
-#  ИГРЫ
+#  ПОГОДА
+# ─────────────────────────────────────────────────────
+
+@dp.message(Command("weather"))
+async def weather_cmd(message: Message, command: CommandObject):
+    if not command.args:
+        await message.reply("🌤 Укажи город: /weather Москва"); return
+    wait_msg = await message.reply("⏳ Получаю данные...")
+    result = await get_weather(command.args)
+    await wait_msg.edit_text(result, parse_mode="HTML")
+
+
+# ─────────────────────────────────────────────────────
+#  РЕПУТАЦИЯ
+# ─────────────────────────────────────────────────────
+
+@dp.message(Command("rep"))
+async def rep_cmd(message: Message):
+    if not message.reply_to_message:
+        await message.reply("↩️ Ответь на сообщение пользователя."); return
+    target = message.reply_to_message.from_user
+    score  = reputation[message.chat.id][target.id]
+    emoji  = "⭐" if score >= 0 else "💀"
+    await message.reply(f"{emoji} Репутация {target.mention_html()}: <b>{score:+d}</b>", parse_mode="HTML")
+
+@dp.message(F.text.in_({"+1", "+", "👍"}))
+async def rep_plus(message: Message):
+    if not message.reply_to_message: return
+    target = message.reply_to_message.from_user
+    if target.id == message.from_user.id:
+        await message.reply("😏 Себе репу не накручивай!"); return
+    key = (message.chat.id, message.from_user.id, target.id)
+    now = time()
+    if key in rep_cooldown and now - rep_cooldown[key] < 3600:
+        left = int(3600 - (now - rep_cooldown[key]))
+        await message.reply(f"⏳ Подожди ещё {left//60} мин."); return
+    rep_cooldown[key] = now
+    reputation[message.chat.id][target.id] += 1
+    score = reputation[message.chat.id][target.id]
+    await message.reply(f"⬆️ {target.mention_html()} +1 к репутации! Теперь: <b>{score:+d}</b>", parse_mode="HTML")
+
+@dp.message(F.text.in_({"-1", "-", "👎"}))
+async def rep_minus(message: Message):
+    if not message.reply_to_message: return
+    target = message.reply_to_message.from_user
+    if target.id == message.from_user.id:
+        await message.reply("😏 Себе репу не снижай!"); return
+    key = (message.chat.id, message.from_user.id, target.id)
+    now = time()
+    if key in rep_cooldown and now - rep_cooldown[key] < 3600:
+        left = int(3600 - (now - rep_cooldown[key]))
+        await message.reply(f"⏳ Подожди ещё {left//60} мин."); return
+    rep_cooldown[key] = now
+    reputation[message.chat.id][target.id] -= 1
+    score = reputation[message.chat.id][target.id]
+    await message.reply(f"⬇️ {target.mention_html()} -1 к репутации! Теперь: <b>{score:+d}</b>", parse_mode="HTML")
+
+
+# ─────────────────────────────────────────────────────
+#  СТАТИСТИКА
+# ─────────────────────────────────────────────────────
+
+@dp.message(Command("top"))
+async def top_cmd(message: Message):
+    stats = chat_stats[message.chat.id]
+    if not stats:
+        await message.reply("📊 Статистика пока пуста!"); return
+    sorted_users = sorted(stats.items(), key=lambda x: x[1], reverse=True)[:10]
+    medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+    lines  = ["📊 <b>Топ активных участников:</b>\n"]
+    for i, (uid, count) in enumerate(sorted_users):
+        try:
+            member = await bot.get_chat_member(message.chat.id, uid)
+            name = member.user.full_name
+        except:
+            name = f"ID {uid}"
+        lines.append(f"{medals[i]} <b>{name}</b> — {count} сообщений")
+    await message.reply("\n".join(lines), parse_mode="HTML")
+
+
+# ─────────────────────────────────────────────────────
+#  ИГРЫ — БАЗОВЫЕ
 # ─────────────────────────────────────────────────────
 
 @dp.message(Command("warnings"))
@@ -1153,8 +1279,7 @@ async def warnings_cmd(message: Message):
         await message.reply("↩️ Ответь на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     count  = warnings[message.chat.id].get(target.id, 0)
-    await message.reply(
-        f"📊 {target.mention_html()} — варнов: <b>{count}/{MAX_WARNINGS}</b>", parse_mode="HTML")
+    await message.reply(f"📊 {target.mention_html()} — варнов: <b>{count}/{MAX_WARNINGS}</b>", parse_mode="HTML")
 
 @dp.message(Command("info"))
 async def info_cmd(message: Message):
@@ -1182,8 +1307,7 @@ async def info_cmd(message: Message):
 async def afk_cmd(message: Message, command: CommandObject):
     reason = command.args or "без причины"
     afk_users[message.from_user.id] = reason
-    await message.reply(
-        f"😴 {message.from_user.mention_html()} ушёл в AFK: {reason}", parse_mode="HTML")
+    await message.reply(f"😴 {message.from_user.mention_html()} ушёл в AFK: {reason}", parse_mode="HTML")
 
 @dp.message(Command("quote"))
 async def quote_cmd(message: Message):
@@ -1214,8 +1338,7 @@ async def rate_cmd(message: Message, command: CommandObject):
         await message.reply("❗ /rate [что]"); return
     score = random.randint(0, 10)
     bar   = "⭐" * score + "☆" * (10 - score)
-    await message.reply(
-        f"📊 <b>{command.args}</b>\n{bar}\nОценка: <b>{score}/10</b>", parse_mode="HTML")
+    await message.reply(f"📊 <b>{command.args}</b>\n{bar}\nОценка: <b>{score}/10</b>", parse_mode="HTML")
 
 @dp.message(Command("iq"))
 async def iq_cmd(message: Message):
@@ -1234,8 +1357,137 @@ async def gay_cmd(message: Message):
     p   = random.randint(0, 100)
     bar = "🌈" * (p // 10) + "⬜" * (10 - p // 10)
     await message.reply(
-        f"🏳️‍🌈 {user.mention_html()}\n{bar}\n<b>{p}%</b> — это шутка, не ссы 😄",
+        f"🏳️‍🌈 {user.mention_html()}\n{bar}\n<b>{p}%</b> — это шутка, не ссы 😄", parse_mode="HTML")
+
+
+# ─────────────────────────────────────────────────────
+#  ИГРЫ — НОВЫЕ
+# ─────────────────────────────────────────────────────
+
+@dp.message(Command("truth"))
+async def truth_cmd(message: Message):
+    """Правда или ложь — вопрос."""
+    question = random.choice(TRUTH_QUESTIONS)
+    user = (message.reply_to_message.from_user if message.reply_to_message else message.from_user)
+    await message.reply(
+        f"🤔 <b>Вопрос для {user.mention_html()}:</b>\n\n{question}",
         parse_mode="HTML")
+
+@dp.message(Command("dare"))
+async def dare_cmd(message: Message):
+    """Задание смелости."""
+    challenge = random.choice(DARE_CHALLENGES)
+    user = (message.reply_to_message.from_user if message.reply_to_message else message.from_user)
+    await message.reply(
+        f"😈 <b>Задание для {user.mention_html()}:</b>\n\n{challenge}",
+        parse_mode="HTML")
+
+@dp.message(Command("wyr"))
+async def wyr_cmd(message: Message):
+    """Выбор без выбора."""
+    question = random.choice(WOULD_YOU_RATHER)
+    await message.reply(f"🤯 <b>Выбор без выбора:</b>\n\n{question}", parse_mode="HTML")
+
+@dp.message(Command("rps"))
+async def rps_cmd(message: Message, command: CommandObject):
+    """Камень ножницы бумага."""
+    choices = {"к": "🪨 Камень", "н": "✂️ Ножницы", "б": "📄 Бумага"}
+    wins    = {"к": "н", "н": "б", "б": "к"}
+
+    if not command.args or command.args.lower() not in choices:
+        await message.reply("✂️ Используй: /rps к (камень), /rps н (ножницы), /rps б (бумага)"); return
+
+    player = command.args.lower()
+    bot_choice = random.choice(list(choices.keys()))
+
+    if player == bot_choice:
+        result = "🤝 Ничья!"
+    elif wins[player] == bot_choice:
+        result = "🎉 Ты выиграл, нахуй!"
+    else:
+        result = "😈 Я выиграл, бля!"
+
+    await message.reply(
+        f"Ты: {choices[player]}\nЯ: {choices[bot_choice]}\n\n{result}",
+        parse_mode="HTML")
+
+@dp.message(Command("slot"))
+async def slot_cmd(message: Message):
+    """Однорукий бандит."""
+    symbols = ["🍒", "🍋", "🍊", "🍇", "⭐", "7️⃣", "💎"]
+    s1, s2, s3 = random.choice(symbols), random.choice(symbols), random.choice(symbols)
+
+    if s1 == s2 == s3 == "💎":
+        result = "💰 ДЖЕКПОТ!! Три бриллианта! Пиздец повезло!"
+    elif s1 == s2 == s3:
+        result = f"🎉 Три {s1}! Выиграл!"
+    elif s1 == s2 or s2 == s3 or s1 == s3:
+        result = "😐 Два одинаковых. Почти!"
+    else:
+        result = "😢 Не повезло, нахуй. Попробуй ещё!"
+
+    await message.reply(
+        f"🎰 [ {s1} | {s2} | {s3} ]\n\n{result}")
+
+@dp.message(Command("choose"))
+async def choose_cmd(message: Message, command: CommandObject):
+    """Выбор случайного варианта."""
+    if not command.args or "|" not in command.args:
+        await message.reply("❗ Используй: /choose вариант1|вариант2|вариант3"); return
+    options = [o.strip() for o in command.args.split("|") if o.strip()]
+    if len(options) < 2:
+        await message.reply("❗ Нужно минимум 2 варианта."); return
+    chosen = random.choice(options)
+    await message.reply(
+        f"🎯 Выбираю из {len(options)} вариантов...\n\n✅ <b>{chosen}</b>!",
+        parse_mode="HTML")
+
+@dp.message(Command("countdown"))
+async def countdown_cmd(message: Message, command: CommandObject):
+    """Обратный отсчёт."""
+    if not await require_admin(message): return
+    try:
+        n = min(int(command.args or 5), 10)
+    except:
+        n = 5
+    sent = await message.reply(f"⏱ Обратный отсчёт: <b>{n}</b>...", parse_mode="HTML")
+    for i in range(n - 1, 0, -1):
+        await asyncio.sleep(1)
+        await sent.edit_text(f"⏱ Обратный отсчёт: <b>{i}</b>...", parse_mode="HTML")
+    await asyncio.sleep(1)
+    await sent.edit_text("🚀 <b>ПОЕХАЛИ!</b>", parse_mode="HTML")
+
+@dp.message(Command("predict"))
+async def predict_cmd(message: Message, command: CommandObject):
+    """Предсказание судьбы."""
+    predictions = [
+        "🔮 Сегодня тебе повезёт! Только не трать деньги 😄",
+        "💀 Осторожно с незнакомцами сегодня, нахуй.",
+        "⭐ Звёзды говорят — ты красавчик!",
+        "🍀 Удача на твоей стороне!",
+        "😈 Что-то пойдёт не так... но ты справишься!",
+        "🌈 Сегодня отличный день чтобы ничего не делать.",
+        "💪 Ты сильнее чем думаешь, бля!",
+    ]
+    user = (message.reply_to_message.from_user if message.reply_to_message else message.from_user)
+    await message.reply(
+        f"🔮 <b>Предсказание для {user.mention_html()}:</b>\n\n{random.choice(predictions)}",
+        parse_mode="HTML")
+
+
+# ─────────────────────────────────────────────────────
+#  АВТООТВЕТЫ НА ТРИГГЕР-СЛОВА
+# ─────────────────────────────────────────────────────
+
+@dp.message(F.text & ~F.text.startswith("/"))
+async def auto_reply_handler(message: Message):
+    if not message.text: return
+    text_lower = message.text.lower()
+    for trigger, responses in TRIGGER_RESPONSES.items():
+        if trigger in text_lower:
+            if random.random() < 0.3:
+                await message.reply(random.choice(responses))
+            break
 
 
 # ─────────────────────────────────────────────────────
@@ -1251,9 +1503,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
-
 
