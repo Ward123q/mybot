@@ -1732,7 +1732,6 @@ async def autist_commands(message: Message):
         
 except Exception as e:
         await message.reply(f"❗ Ошибка: {e}")
-
        elif action == "удалить":
             try:
                 await message.reply_to_message.delete()
@@ -1826,6 +1825,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
