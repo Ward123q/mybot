@@ -595,7 +595,7 @@ class AntiMediaMiddleware(BaseMiddleware):
             m = await bot.get_chat_member(cid, uid)
             if m.status in ("administrator","creator"): return await handler(event, data)
         except: pass
-        if event.photo or event.video or event.document or event.sticker or event.animation:
+      if event.photo or event.video or event.document or event.sticker or event.animation or event.video_note or event.voice:
             try:
                 await event.delete()
                 sent = await bot.send_message(cid,
@@ -1880,6 +1880,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
