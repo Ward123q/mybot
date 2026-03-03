@@ -1468,6 +1468,7 @@ async def predict_cmd(message: Message, command: CommandObject):
         "😈 Что-то пойдёт не так... но ты справишься!",
         "🌈 Сегодня отличный день чтобы ничего не делать.",
         "💪 Ты сильнее чем думаешь, бля!",
+        "иди нахуй ты хуйло"
     ]
     user = (message.reply_to_message.from_user if message.reply_to_message else message.from_user)
     await message.reply(
@@ -1503,4 +1504,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
