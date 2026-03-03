@@ -1667,7 +1667,7 @@ async def autist_commands(message: Message):
     if len(parts) < 2: return
     rest = parts[1].strip()
     action = None
-    for cmd in ["снять варн", "размут", "разбан", "варн", "мут", "бан""захуесосить"]:
+    for cmd in ["снять варн", "размут", "разбан", "варн", "мут навсегда", "мут", "бан", "захуесосить", "кик", "очистить", "удалить", "закрепить", "предупредить", "инфо", "варны", "репутация", "обозвать", "поженить"]:
         if rest.startswith(cmd):
             action = cmd
             rest = rest[len(cmd):].strip()
@@ -1761,8 +1761,66 @@ elif action == "размут":
                 f"⚠️ Внимание {tname}!\n📝 {text_warn}",
                 parse_mode="HTML")
 
-    
-  
+    elif action == "кик":
+            await bot.ban_chat_member(cid, target.id)
+            await bot.unban_chat_member(cid, target.id)
+            await message.reply(f"👢 {tname} кикнут из чата!\n📝 Причина: {reason}", parse_mode="HTML")
+
+        elif action == "мут навсегда":
+            await bot.restrict_chat_member(cid, target.id,
+                permissions=ChatPermissions(can_send_messages=False))
+            await message.reply(f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
+
+        elif action == "очистить":
+            count = duration_mins or 10
+            deleted = 0
+            for i in range(message.message_id, message.message_id - count - 1, -1):
+                try:
+                    await bot.delete_message(cid, i)
+                    deleted += 1
+                except:
+                    pass
+            await message.reply(f"🧹 Удалено <b>{deleted}</b> сообщений!", parse_mode="HTML")
+
+elif action == "инфо":
+            member = await bot.get_chat_member(cid, target.id)
+            smap = {"creator":"👑 Создатель","administrator":"🛡 Администратор",
+                    "member":"👤 Участник","restricted":"🔇 Ограничен","kicked":"🔨 Забанен"}
+            # вот тут добавляем проверку на username
+            username = f"@{target.username}" if target.username else "нет"
+            await message.reply(
+                f"👤 <b>Инфо:</b>\n{tname}\n"
+                f"🔗 Юзернейм: <b>{username}</b>\n"
+                f"🆔 ID: <code>{target.id}</code>\n"
+                f"📌 {smap.get(member.status, member.status)}\n"
+                f"⚠️ Варнов: <b>{warnings[cid].get(target.id,0)}/{MAX_WARNINGS}</b>\n"
+                f"⭐ Репутация: <b>{reputation[cid].get(target.id,0):+d}</b>\n"
+                f"💬 Сообщений: <b>{chat_stats[cid].get(target.id,0)}</b>",
+                parse_mode="HTML")
+
+elif action == "обозвать":
+            obzyvалки = [
+                "🤡 клоун", "🥴 тупица", "🐸 лягушка",
+                "🦆 утка", "🐷 хрюша", "🤪 псих",
+                "🦊 хитрая лиса", "🐌 улитка", "🦄 единорог",
+                "🤖 сломанный робот", "🥔 картошка", "🧟 зомби"
+            ]
+            await message.reply(
+                f"😂 {tname} отныне ты — <b>{random.choice(обзывалки)}</b>!",
+                parse_mode="HTML")
+
+        elif action == "поженить":
+            if not message.reply_to_message:
+                await message.reply("↩️ Ответь на сообщение участника."); return
+            user1 = message.from_user
+            user2 = target
+            await message.reply(
+                f"💍 Объявляю вас мужем и женой!\n\n"
+                f"👰 {user2.mention_html()}\n"
+                f"🤵 {user1.mention_html()}\n\n"
+                f"💑 Горько! 🥂",
+                parse_mode="HTML")
+
     except Exception as e:
         await message.reply(f"❗ Ошибка: {e}")
 async def main():
@@ -1773,6 +1831,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
