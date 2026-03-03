@@ -26,7 +26,7 @@ WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
 MAX_WARNINGS     = 3
 FLOOD_LIMIT      = 5
 FLOOD_TIME       = 5
-ANTI_MAT_ENABLED = True
+ANTI_MAT_ENABLED = False
 MAT_MUTE_MINUTES = 5
 AUTO_KICK_BOTS   = True
 CAPTCHA_TIMEOUT  = 60
@@ -1880,6 +1880,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
