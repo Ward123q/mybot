@@ -1729,7 +1729,8 @@ async def autist_commands(message: Message):
             await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
     except Exception as e:
         await message.reply(f"❗ Ошибка: {e}")
-        
+
+
 except Exception as e:
         await message.reply(f"❗ Ошибка: {e}")
        elif action == "удалить":
@@ -1825,6 +1826,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
