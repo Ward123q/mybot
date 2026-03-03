@@ -1814,8 +1814,8 @@ async def autist_commands(message: Message):
                 f"🤵 {user1.mention_html()}\n\n"
                 f"💑 Горько! 🥂",
                 parse_mode="HTML")
-
-  elif action == "проверить":
+        
+       elif action == "проверить":
             try:
                 await bot.restrict_chat_member(cid, target.id,
                     permissions=ChatPermissions(can_send_messages=False))
@@ -1851,6 +1851,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
