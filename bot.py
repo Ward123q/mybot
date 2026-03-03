@@ -426,16 +426,19 @@ class CaptchaMiddleware(BaseMiddleware):
             del captcha_pending[uid]
             try: await bot.delete_message(cap["chat_id"], cap["msg_id"])
             except: pass
-      await bot.restrict_chat_member(
-    cap["chat_id"], uid,
-    permissions=ChatPermissions(
-        can_send_messages=True,
-        can_send_media_messages=True,
-        can_send_polls=True,
-        can_send_other_messages=True,
-        can_add_web_page_previews=True, 
-    )  # <- закрывает ChatPermissions(
-)  # <- закрывает restrict_chat_member(
+    del captcha_pending[uid]
+            try: await bot.delete_message(cap["chat_id"], cap["msg_id"])
+            except: pass
+            await bot.restrict_chat_member(
+                cap["chat_id"], uid,
+                permissions=ChatPermissions(
+                    can_send_messages=True,
+                    can_send_media_messages=True,
+                    can_send_polls=True,
+                    can_send_other_messages=True,
+                    can_add_web_page_previews=True,
+                )
+            )
                 )
             )
             sent = await event.answer(
@@ -1831,6 +1834,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
