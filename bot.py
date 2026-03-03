@@ -1667,7 +1667,7 @@ async def autist_commands(message: Message):
     if len(parts) < 2: return
     rest = parts[1].strip()
     action = None
-    for cmd in ["снять варн", "снятьварн", "размут", "разбан", "варн", "мут", "бан"]:
+    for cmd in ["снять варн", "размут", "разбан", "варн", "мут", "бан""захуесосить"]:
         if rest.startswith(cmd):
             action = cmd
             rest = rest[len(cmd):].strip()
@@ -1700,6 +1700,12 @@ async def autist_commands(message: Message):
             else:
                 await bot.ban_chat_member(cid, target.id)
                 await message.reply(f"🔨 {tname} забанен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
+                
+        elif action == "захуесосить":
+            await bot.ban_chat_member(cid, target.id)
+            await bot.unban_chat_member(cid, target.id)
+            await message.reply(f"👢 {tname} захуесошен из чата!\n📝 Причина: {reason}", parse_mode="HTML")
+
         elif action == "мут":
             mins = duration_mins or 60; label = duration_label or "1 ч."
             await bot.restrict_chat_member(cid, target.id,
@@ -1733,5 +1739,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
