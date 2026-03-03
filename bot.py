@@ -1357,7 +1357,7 @@ async def cmd_antimat(message: Message, command: CommandObject):
     if not command.args:
         await message.reply(f"🧼 Антимат: <b>{'вкл' if ANTI_MAT_ENABLED else 'выкл'}</b>", parse_mode="HTML"); return
     a = command.args.strip().lower()
-    if a == "on":    ANTI_MAT_ENABLED = True;  await message.reply("🧼 Антимат <b>включён</b>.", parse_mode="HTML")
+    if a == "on":    ANTI_MAT_ENABLED = False;  await message.reply("🧼 Антимат <b>включён</b>.", parse_mode="HTML")
     elif a == "off": ANTI_MAT_ENABLED = False; await message.reply("🔞 Антимат <b>выключен</b>.", parse_mode="HTML")
 
 @dp.message(Command("autokick"))
@@ -1857,6 +1857,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
