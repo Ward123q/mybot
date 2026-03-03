@@ -1117,9 +1117,11 @@ async def gay_cmd(message: Message):
 # ─────────────────────────────────────────────────────
 
 async def main():
+    await start_web()
     print("✅ Бот запущен! Нажми Ctrl+C для остановки.")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
 
     asyncio.run(main())
+
