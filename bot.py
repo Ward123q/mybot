@@ -1727,12 +1727,9 @@ async def autist_commands(message: Message):
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
                 can_send_other_messages=True, can_add_web_page_previews=True))
             await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
-    except Exception as e: elif action == "размут":
-            await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(
-                can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
-                can_send_other_messages=True, can_add_web_page_previews=True))
-            await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
-
+    except Exception as e:
+        await message.reply(f"❗ Ошибка: {e}")
+        
 elif action == "размут":
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
@@ -1829,6 +1826,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
