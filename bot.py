@@ -1698,17 +1698,28 @@ async def autist_commands(message: Message):
             else:
                 await bot.ban_chat_member(cid, target.id)
                 await message.reply(f"🔨 {tname} забанен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
-                
+
         elif action == "захуесосить":
             await bot.ban_chat_member(cid, target.id)
             await bot.unban_chat_member(cid, target.id)
             await message.reply(f"👢 {tname} захуесошен из чата!\n📝 Причина: {reason}", parse_mode="HTML")
+
+        elif action == "кик":
+            await bot.ban_chat_member(cid, target.id)
+            await bot.unban_chat_member(cid, target.id)
+            await message.reply(f"👢 {tname} кикнут из чата!\n📝 Причина: {reason}", parse_mode="HTML")
 
         elif action == "мут":
             mins = duration_mins or 60; label = duration_label or "1 ч."
             await bot.restrict_chat_member(cid, target.id,
                 permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
             await message.reply(f"🔇 {tname} замучен на <b>{label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
+
+        elif action == "мут навсегда":
+            await bot.restrict_chat_member(cid, target.id,
+                permissions=ChatPermissions(can_send_messages=False))
+            await message.reply(f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
+
         elif action == "варн":
             warnings[cid][target.id] += 1; count = warnings[cid][target.id]
             if count >= MAX_WARNINGS:
@@ -1716,55 +1727,38 @@ async def autist_commands(message: Message):
                 await message.reply(f"🔨 {tname} — {MAX_WARNINGS} варна, автобан!\n📝 Причина: {reason}", parse_mode="HTML")
             else:
                 await message.reply(f"⚠️ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
+
         elif action in ("снять варн", "снятьварн"):
             if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1
             await message.reply(f"✅ С {tname} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>", parse_mode="HTML")
+
         elif action == "разбан":
             await bot.unban_chat_member(cid, target.id, only_if_banned=True)
             await message.reply(f"♻️ {tname} разбанен.", parse_mode="HTML")
+
         elif action == "размут":
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
                 can_send_other_messages=True, can_add_web_page_previews=True))
             await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
-    except Exception as e:
-        await message.reply(f"❗ Ошибка: {e}")
 
-
-except Exception as e:
-        await message.reply(f"❗ Ошибка: {e}")
-       elif action == "удалить":
+        elif action == "удалить":
             try:
                 await message.reply_to_message.delete()
-                await message.reply(f"🗑 Сообщение удалено!")
+                await message.reply("🗑 Сообщение удалено!")
             except:
                 await message.reply("❗ Не удалось удалить сообщение.")
 
         elif action == "закрепить":
             try:
                 await bot.pin_chat_message(cid, message.reply_to_message.message_id)
-                await message.reply(f"📌 Сообщение закреплено!")
+                await message.reply("📌 Сообщение закреплено!")
             except:
                 await message.reply("❗ Не удалось закрепить сообщение.")
 
-    except Exception as e:
-        await message.reply(f"❗ Ошибка: {e}")
-        
         elif action == "предупредить":
             text_warn = rest.strip() or "Нарушение правил"
-            await message.reply(
-                f"⚠️ Внимание {tname}!\n📝 {text_warn}",
-                parse_mode="HTML")
-
-    elif action == "кик":
-            await bot.ban_chat_member(cid, target.id)
-            await bot.unban_chat_member(cid, target.id)
-            await message.reply(f"👢 {tname} кикнут из чата!\n📝 Причина: {reason}", parse_mode="HTML")
-
-        elif action == "мут навсегда":
-            await bot.restrict_chat_member(cid, target.id,
-                permissions=ChatPermissions(can_send_messages=False))
-            await message.reply(f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
+            await message.reply(f"⚠️ Внимание {tname}!\n📝 {text_warn}", parse_mode="HTML")
 
         elif action == "очистить":
             count = duration_mins or 10
@@ -1777,24 +1771,31 @@ except Exception as e:
                     pass
             await message.reply(f"🧹 Удалено <b>{deleted}</b> сообщений!", parse_mode="HTML")
 
-elif action == "инфо":
+        elif action == "инфо":
             member = await bot.get_chat_member(cid, target.id)
-            smap = {"creator":"👑 Создатель","administrator":"🛡 Администратор",
-                    "member":"👤 Участник","restricted":"🔇 Ограничен","kicked":"🔨 Забанен"}
-            # вот тут добавляем проверку на username
+            smap = {"creator": "👑 Создатель", "administrator": "🛡 Администратор",
+                    "member": "👤 Участник", "restricted": "🔇 Ограничен", "kicked": "🔨 Забанен"}
             username = f"@{target.username}" if target.username else "нет"
             await message.reply(
                 f"👤 <b>Инфо:</b>\n{tname}\n"
                 f"🔗 Юзернейм: <b>{username}</b>\n"
                 f"🆔 ID: <code>{target.id}</code>\n"
                 f"📌 {smap.get(member.status, member.status)}\n"
-                f"⚠️ Варнов: <b>{warnings[cid].get(target.id,0)}/{MAX_WARNINGS}</b>\n"
-                f"⭐ Репутация: <b>{reputation[cid].get(target.id,0):+d}</b>\n"
-                f"💬 Сообщений: <b>{chat_stats[cid].get(target.id,0)}</b>",
+                f"⚠️ Варнов: <b>{warnings[cid].get(target.id, 0)}/{MAX_WARNINGS}</b>\n"
+                f"⭐ Репутация: <b>{reputation[cid].get(target.id, 0):+d}</b>\n"
+                f"💬 Сообщений: <b>{chat_stats[cid].get(target.id, 0)}</b>",
                 parse_mode="HTML")
 
-elif action == "обозвать":
-            obzyvалки = [
+        elif action == "варны":
+            count = warnings[cid].get(target.id, 0)
+            await message.reply(f"⚠️ Варнов у {tname}: <b>{count}/{MAX_WARNINGS}</b>", parse_mode="HTML")
+
+        elif action == "репутация":
+            rep = reputation[cid].get(target.id, 0)
+            await message.reply(f"⭐ Репутация {tname}: <b>{rep:+d}</b>", parse_mode="HTML")
+
+        elif action == "обозвать":
+            обзывалки = [
                 "🤡 клоун", "🥴 тупица", "🐸 лягушка",
                 "🦆 утка", "🐷 хрюша", "🤪 псих",
                 "🦊 хитрая лиса", "🐌 улитка", "🦄 единорог",
@@ -1805,8 +1806,6 @@ elif action == "обозвать":
                 parse_mode="HTML")
 
         elif action == "поженить":
-            if not message.reply_to_message:
-                await message.reply("↩️ Ответь на сообщение участника."); return
             user1 = message.from_user
             user2 = target
             await message.reply(
@@ -1826,6 +1825,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
