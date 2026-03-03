@@ -21,7 +21,7 @@ from aiohttp import web
 # ╚══════════════════════════════════════════════════════╝
 
 BOT_TOKEN       = os.getenv("BOT_TOKEN")
-OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
+GROQ_API_KEY    = os.getenv("GROQ_API_KEY")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
 MAX_WARNINGS     = 3
@@ -201,11 +201,10 @@ def parse_duration(arg: str):
 # ─────────────────────────────────────────────────────
 
 async def ask_gpt(user_id: int, user_message: str) -> str:
-    if not OPENAI_API_KEY:
-        return "❌ OpenAI API ключ не настроен."
+    if not GROQ_API_KEY:
+        return "❌ Groq API ключ не настроен."
 
     ai_history[user_id].append({"role": "user", "content": user_message})
-    # Храним последние 10 сообщений
     if len(ai_history[user_id]) > 10:
         ai_history[user_id] = ai_history[user_id][-10:]
 
@@ -216,13 +215,13 @@ async def ask_gpt(user_id: int, user_message: str) -> str:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                "https://api.openai.com/v1/chat/completions",
+                "https://api.groq.com/openai/v1/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {OPENAI_API_KEY}",
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "gpt-3.5-turbo",
+                    "model": "llama3-8b-8192",
                     "messages": messages,
                     "max_tokens": 500,
                     "temperature": 0.7
@@ -234,10 +233,9 @@ async def ask_gpt(user_id: int, user_message: str) -> str:
                     ai_history[user_id].append({"role": "assistant", "content": reply})
                     return reply
                 else:
-                    return f"❌ Ошибка API: {data.get('error', {}).get('message', 'Неизвестная ошибка')}"
+                    return f"❌ Ошибка: {data.get('error', {}).get('message', 'Неизвестная ошибка')}"
     except Exception as e:
         return f"❌ Ошибка подключения: {e}"
-
 
 # ─────────────────────────────────────────────────────
 #  ПОГОДА
@@ -1253,6 +1251,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
