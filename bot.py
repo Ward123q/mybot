@@ -426,12 +426,16 @@ class CaptchaMiddleware(BaseMiddleware):
             del captcha_pending[uid]
             try: await bot.delete_message(cap["chat_id"], cap["msg_id"])
             except: pass
-            await bot.restrict_chat_member(
-                cap["chat_id"], uid,
-                permissions=ChatPermissions(
-                    can_send_messages=True, can_send_media_messages=True,
-                    can_send_polls=True, can_send_other_messages=True,
-                    can_add_web_page_previews=True,
+      await bot.restrict_chat_member(
+    cap["chat_id"], uid,
+    permissions=ChatPermissions(
+        can_send_messages=True,
+        can_send_media_messages=True,
+        can_send_polls=True,
+        can_send_other_messages=True,
+        can_add_web_page_previews=True, 
+    )  # <- закрывает ChatPermissions(
+)  # <- закрывает restrict_chat_member(
                 )
             )
             sent = await event.answer(
@@ -1202,9 +1206,12 @@ async def cmd_panel(message: Message):
 async def cmd_ban(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
-    reason = command.args or "Нарушение правил"; target = message.reply_to_message.from_user
+    target = message.reply_to_message.from_user
+    # ДОБАВЬ:
+    if await is_admin_by_id(message.chat.id, target.id):
+        await message.reply("🚫 Нельзя забанить администратора!"); return
+    reason = command.args or "Нарушение правил"
     await bot.ban_chat_member(message.chat.id, target.id)
-    await message.reply(random.choice(BAN_MESSAGES).format(name=target.mention_html(), reason=reason), parse_mode="HTML")
 
 @dp.message(Command("unban"))
 async def cmd_unban(message: Message):
@@ -1218,13 +1225,10 @@ async def cmd_unban(message: Message):
 async def cmd_mute(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
-    mins, label = parse_duration(command.args) if command.args else (60, "1 ч.")
-    if not mins: mins, label = 60, "1 ч."
     target = message.reply_to_message.from_user
-    await bot.restrict_chat_member(message.chat.id, target.id,
-        permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
-    await message.reply(random.choice(MUTE_MESSAGES).format(
-        name=target.mention_html(), time=label), parse_mode="HTML")
+    # ДОБАВЬ:
+    if await is_admin_by_id(message.chat.id, target.id):
+        await message.reply("🚫 Нельзя замутить администратора!"); return
 
 @dp.message(Command("unmute"))
 async def cmd_unmute(message: Message):
@@ -1241,16 +1245,10 @@ async def cmd_warn(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
-    reason = command.args or "Нарушение правил"; cid = message.chat.id
-    warnings[cid][target.id] += 1; count = warnings[cid][target.id]
-    if count >= MAX_WARNINGS:
-        await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
-        msg = random.choice(AUTOBAN_MESSAGES).format(name=target.mention_html(), max=MAX_WARNINGS)
-    else:
-        msg = random.choice(WARN_MESSAGES).format(
-            name=target.mention_html(), count=count, max=MAX_WARNINGS, reason=reason)
-    await message.reply(msg, parse_mode="HTML")
-
+    # ДОБАВЬ:
+    if await is_admin_by_id(message.chat.id, target.id):
+        await message.reply("🚫 Нельзя выдать варн администратору!"); return
+        
 @dp.message(Command("unwarn"))
 async def cmd_unwarn(message: Message):
     if not await require_admin(message): return
@@ -1373,10 +1371,10 @@ async def cmd_warn24(message: Message):
     if not await require_admin(message): return
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
-    await bot.restrict_chat_member(message.chat.id, target.id,
-        permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(hours=24))
-    await message.reply(f"📵 {target.mention_html()} — мут на <b>24 часа</b> за рекламу.", parse_mode="HTML")
-
+    # ДОБАВЬ:
+    if await is_admin_by_id(message.chat.id, target.id):
+        await message.reply("🚫 Нельзя замутить администратора!"); return
+        
 @dp.message(Command("rban"))
 async def cmd_rban(message: Message):
     if not await require_admin(message): return
@@ -1735,4 +1733,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
