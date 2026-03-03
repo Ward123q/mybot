@@ -585,7 +585,31 @@ dp.message.middleware(StatsMiddleware())
 dp.message.middleware(AntiFloodMiddleware())
 dp.message.middleware(AntiMatMiddleware())
 dp.message.middleware(AfkMiddleware())
+class AntiMediaMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event: Message, data):
+        if not isinstance(event, Message): return await handler(event, data)
+        if event.chat.type not in ("group","supergroup"): return await handler(event, data)
+        if not event.from_user: return await handler(event, data)
+        uid, cid = event.from_user.id, event.chat.id
+        try:
+            m = await bot.get_chat_member(cid, uid)
+            if m.status in ("administrator","creator"): return await handler(event, data)
+        except: pass
+        if event.photo or event.video or event.document or event.sticker or event.animation:
+            try:
+                await event.delete()
+                sent = await bot.send_message(cid,
+                    f"🚫 {event.from_user.mention_html()}, медиа запрещено в этом чате!",
+                    parse_mode="HTML")
+                await asyncio.sleep(5)
+                try: await sent.delete()
+                except: pass
+            except: pass
+            return
+        return await handler(event, data)
 
+dp.message.middleware(AfkMiddleware())
+dp.message.middleware(AntiMediaMiddleware())
 # ═══════════════════════════════════════════
 #       КАПЧА — ТАЙМЕР КИКА
 # ═══════════════════════════════════════════
@@ -1856,6 +1880,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
