@@ -1659,7 +1659,74 @@ async def cmd_botstats(message: Message):
 # ═══════════════════════════════════════════
 #         ЗАПУСК
 # ═══════════════════════════════════════════
-
+@dp.message(F.text & ~F.text.startswith("/"))
+async def autist_commands(message: Message):
+    if not message.text: return
+    text_lower = message.text.strip().lower()
+    if not text_lower.startswith("аутист"): return
+    if not await check_admin(message): return
+    parts = text_lower.split(maxsplit=1)
+    if len(parts) < 2: return
+    rest = parts[1].strip()
+    action = None
+    for cmd in ["снять варн", "снятьварн", "размут", "разбан", "варн", "мут", "бан"]:
+        if rest.startswith(cmd):
+            action = cmd
+            rest = rest[len(cmd):].strip()
+            break
+    if not action: return
+    if not message.reply_to_message:
+        await message.reply("↩️ Ответь на сообщение участника."); return
+    target = message.reply_to_message.from_user
+    cid = message.chat.id
+    duration_mins = None
+    duration_label = None
+    reason = "Нарушение правил"
+    import re
+    time_match = re.match(r"^(\d+)\s*(д|ч|м)\s*", rest)
+    if time_match:
+        num = int(time_match.group(1)); unit = time_match.group(2)
+        if unit == "д":   duration_mins = num * 1440; duration_label = f"{num} дн."
+        elif unit == "ч": duration_mins = num * 60;   duration_label = f"{num} ч."
+        elif unit == "м": duration_mins = num;         duration_label = f"{num} мин."
+        reason_part = rest[time_match.end():].strip()
+        if reason_part: reason = reason_part
+    else:
+        if rest.strip(): reason = rest.strip()
+    tname = target.mention_html()
+    try:
+        if action == "бан":
+            if duration_mins:
+                await bot.ban_chat_member(cid, target.id, until_date=timedelta(minutes=duration_mins))
+                await message.reply(f"🔨 {tname} забанен на <b>{duration_label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
+            else:
+                await bot.ban_chat_member(cid, target.id)
+                await message.reply(f"🔨 {tname} забанен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
+        elif action == "мут":
+            mins = duration_mins or 60; label = duration_label or "1 ч."
+            await bot.restrict_chat_member(cid, target.id,
+                permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
+            await message.reply(f"🔇 {tname} замучен на <b>{label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
+        elif action == "варн":
+            warnings[cid][target.id] += 1; count = warnings[cid][target.id]
+            if count >= MAX_WARNINGS:
+                await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
+                await message.reply(f"🔨 {tname} — {MAX_WARNINGS} варна, автобан!\n📝 Причина: {reason}", parse_mode="HTML")
+            else:
+                await message.reply(f"⚠️ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
+        elif action in ("снять варн", "снятьварн"):
+            if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1
+            await message.reply(f"✅ С {tname} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>", parse_mode="HTML")
+        elif action == "разбан":
+            await bot.unban_chat_member(cid, target.id, only_if_banned=True)
+            await message.reply(f"♻️ {tname} разбанен.", parse_mode="HTML")
+        elif action == "размут":
+            await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(
+                can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
+                can_send_other_messages=True, can_add_web_page_previews=True))
+            await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
+    except Exception as e:
+        await message.reply(f"❗ Ошибка: {e}")
 async def main():
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
@@ -1668,3 +1735,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
