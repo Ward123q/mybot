@@ -20,9 +20,9 @@ from aiohttp import web
 #                   НАСТРОЙКИ БОТА
 # ╚══════════════════════════════════════════════════════╝
 
-BOT_TOKEN       = os.getenv("8668580535:AAEdYlluEfSWKqEf8E_YS-LX2emDSXtvIq4")
-OPENAI_API_KEY  = os.getenv("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")
-WEATHER_API_KEY = os.getenv("bae207595312fc0eea33c64bde578c71")
+BOT_TOKEN       = os.getenv("BOT_TOKEN")
+OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
+WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
 MAX_WARNINGS     = 3
 FLOOD_LIMIT      = 5
@@ -1253,6 +1253,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
