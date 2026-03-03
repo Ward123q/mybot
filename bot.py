@@ -628,9 +628,15 @@ async def on_new_member(message: Message):
             continue
 
         try:
-            await bot.restrict_chat_member(
+           await bot.restrict_chat_member(
                 message.chat.id, member.id,
-                permissions=ChatPermissions(can_send_messages=False))
+                permissions=ChatPermissions(
+                    can_send_messages=True,
+                    can_send_media_messages=False,
+                    can_send_polls=False,
+                    can_send_other_messages=False,
+                    can_add_web_page_previews=False,
+                ))
         except: pass
 
         code, display = generate_captcha()
@@ -1851,6 +1857,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
