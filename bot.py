@@ -1729,6 +1729,40 @@ async def autist_commands(message: Message):
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
                 can_send_other_messages=True, can_add_web_page_previews=True))
             await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
+    except Exception as e: elif action == "размут":
+            await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(
+                can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
+                can_send_other_messages=True, can_add_web_page_previews=True))
+            await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
+
+elif action == "размут":
+            await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(
+                can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
+                can_send_other_messages=True, can_add_web_page_previews=True))
+            await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
+
+        elif action == "удалить":
+            try:
+                await message.reply_to_message.delete()
+                await message.reply(f"🗑 Сообщение удалено!")
+            except:
+                await message.reply("❗ Не удалось удалить сообщение.")
+
+        elif action == "закрепить":
+            try:
+                await bot.pin_chat_message(cid, message.reply_to_message.message_id)
+                await message.reply(f"📌 Сообщение закреплено!")
+            except:
+                await message.reply("❗ Не удалось закрепить сообщение.")
+
+        elif action == "предупредить":
+            text_warn = rest.strip() or "Нарушение правил"
+            await message.reply(
+                f"⚠️ Внимание {tname}!\n📝 {text_warn}",
+                parse_mode="HTML")
+
+    
+  
     except Exception as e:
         await message.reply(f"❗ Ошибка: {e}")
 async def main():
@@ -1739,6 +1773,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
