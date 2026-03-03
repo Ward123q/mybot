@@ -30,7 +30,7 @@ async def start_web():
 #                   НАСТРОЙКИ БОТА
 # ╚══════════════════════════════════════════════════════╝
 
-BOT_TOKEN        = "8668580535:AAEdYlluEfSWKqEf8E_YS-LX2emDSXtvIq4"   # Токен от @BotFather
+BOT_TOKEN = os.getenv("8668580535:AAEdYlluEfSWKqEf8E_YS-LX2emDSXtvIq4")   # Токен от @BotFather
 MAX_WARNINGS     = 3       # Варнов до автобана
 FLOOD_LIMIT      = 5       # Макс. сообщений за FLOOD_TIME секунд
 FLOOD_TIME       = 5       # Интервал антифлуда (сек)
@@ -1124,4 +1124,5 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+
 
