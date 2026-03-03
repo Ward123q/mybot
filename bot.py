@@ -439,8 +439,6 @@ class CaptchaMiddleware(BaseMiddleware):
                     can_add_web_page_previews=True,
                 )
             )
-                )
-            )
             sent = await event.answer(
                 f"✅ {event.from_user.mention_html()} прошёл проверку! Добро пожаловать!\n\n{RULES_TEXT}",
                 parse_mode="HTML"
@@ -1834,6 +1832,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
