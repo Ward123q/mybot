@@ -1665,7 +1665,7 @@ async def autist_commands(message: Message):
     if len(parts) < 2: return
     rest = parts[1].strip()
     action = None
-    for cmd in ["снять варн", "размут", "разбан", "варн", "мут навсегда", "мут", "бан", "захуесосить", "кик", "очистить", "удалить", "закрепить", "предупредить", "инфо", "варны", "репутация", "обозвать", "поженить"]:
+    for cmd in ["снять варн", "размут", "разбан", "варн", "мут навсегда", "мут", "бан", "захуесосить", "кик", "очистить", "удалить", "закрепить", "предупредить", "инфо", "варны", "репутация", "обозвать", "поженить", "проверить"]:
         if rest.startswith(cmd):
             action = cmd
             rest = rest[len(cmd):].strip()
@@ -1815,6 +1815,31 @@ async def autist_commands(message: Message):
                 f"💑 Горько! 🥂",
                 parse_mode="HTML")
 
+    elif action == "проверить":
+            try:
+                await bot.restrict_chat_member(cid, target.id,
+                    permissions=ChatPermissions(can_send_messages=False))
+            except:
+                pass
+            code, display = generate_captcha()
+            cap_msg = await message.reply(
+                f"🔐 {tname}, администратор запросил проверку!\n\n"
+                f"Введи этот код в чат:\n\n"
+                f"<code>┌───────────────┐\n"
+                f"│   {display}   │\n"
+                f"└───────────────┘</code>\n\n"
+                f"⏰ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>. Иначе будешь удалён.",
+                parse_mode="HTML")
+            task = asyncio.create_task(
+                captcha_kick_task(target.id, cid, cap_msg.message_id, target.full_name)
+            )
+            captcha_pending[target.id] = {
+                "code":    code,
+                "chat_id": cid,
+                "msg_id":  cap_msg.message_id,
+                "task":    task,
+            }
+
     except Exception as e:
         await message.reply(f"❗ Ошибка: {e}")
 async def main():
@@ -1825,6 +1850,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
