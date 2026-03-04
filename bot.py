@@ -10,7 +10,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     Message, ChatPermissions, CallbackQuery,
-    InlineKeyboardMarkup, InlineKeyboardButton
+    InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 )
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiohttp import web
@@ -543,8 +543,9 @@ async def on_new_member(message: Message):
                 except: pass
             except: pass
             continue
-        await message.answer(
-            f"👋 Привет, {member.mention_html()}! Добро пожаловать в чат!\n\n"
+        await message.answer_photo(
+            photo=FSInputFile("welcome.jpg"),
+            caption=f"👋 Привет, {member.mention_html()}! Добро пожаловать в чат!\n\n"
             f"📜 Ознакомься с правилами чата перед тем как писать.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -1017,8 +1018,9 @@ async def cmd_start(message: Message):
 
 @dp.message(Command("rules"))
 async def cmd_rules(message: Message):
-    await message.reply(
-        "📜 <b>Правила чата</b>\n\nНажми кнопку ниже чтобы прочитать правила:",
+    await message.reply_photo(
+        photo=FSInputFile("welcome.jpg"),
+        caption="📜 <b>Правила чата</b>\n\nНажми кнопку ниже чтобы прочитать правила:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-03-2")]
@@ -1843,6 +1845,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
