@@ -545,14 +545,14 @@ async def on_new_member(message: Message):
                 except: pass
             except: pass
             continue
-       sent = await message.answer(
-    f"👋 Привет, {member.mention_html()}! Добро пожаловать в чат!\n\n"
-    f"📜 Ознакомься с правилами чата перед тем как писать.",
-    parse_mode="HTML",
-    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-03-2")]
-    ])
-)
+      sent = await message.answer(
+            f"👋 Привет, {member.mention_html()}! Добро пожаловать в чат!\n\n"
+            f"📜 Ознакомься с правилами чата перед тем как писать.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-03-2")]
+            ])
+        )
         await log_action(f"👋 <b>ВХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}")
 
 @dp.message(F.left_chat_member)
@@ -1845,3 +1845,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
