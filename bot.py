@@ -633,7 +633,6 @@ dp.message.middleware(AfkMiddleware())
 dp.message.middleware(AntiDeathMiddleware())
 dp.message.middleware(AntiCapsMiddleware())
 dp.message.middleware(AntiRepeatMiddleware())
-dp.message.middleware(AfkMiddleware())
 # ═══════════════════════════════════════════
 #       КАПЧА — ТАЙМЕР КИКА
 # ═══════════════════════════════════════════
@@ -1985,6 +1984,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
