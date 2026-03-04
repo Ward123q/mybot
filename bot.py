@@ -50,7 +50,6 @@ captcha_pending = {}
 # ═══════════════════════════════════════════
 
 RULES_TEXT = (
-   RULES_TEXT = (
     "📜 <b>ПРАВИЛА ЧАТА</b>\n\n"
     "🔞 <b>Контент 18+:</b>\n"
     "• Видео, стикеры, гифки 18+\n"
@@ -1998,6 +1997,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
