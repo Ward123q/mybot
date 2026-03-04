@@ -19,7 +19,7 @@ from aiohttp import web
 # ═══════════════════════════════════════════
 #              НАСТРОЙКИ
 # ═══════════════════════════════════════════
-
+LOG_CHANNEL_ID = -5293068734
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
 OWNER_ID = 7823802800 
@@ -260,6 +260,11 @@ def generate_captcha():
     display = " — ".join(list(code))
     return code, display
 
+async def log_action(text: str):
+    try:
+        await bot.send_message(LOG_CHANNEL_ID, text, parse_mode="HTML")
+    except:
+        pass 
 async def get_weather(city: str) -> str:
     if not WEATHER_API_KEY:
         return "❌ Weather API ключ не настроен."
@@ -784,6 +789,9 @@ async def cb_panel(call: CallbackQuery):
         await call.answer("🚫 Только для администраторов!", show_alert=True); return
     _, action, tid_str = call.data.split(":", 2)
     tid = int(tid_str); cid = call.message.chat.id
+    if tid != 0 and action in ("mute", "ban", "warn"):
+        if await is_admin_by_id(cid, tid):
+            await call.answer("🚫 Нельзя применить действие к администратору!", show_alert=True); return
     try:
         tm = await bot.get_chat_member(cid, tid) if tid != 0 else None
         tname   = tm.user.full_name if tm else "участник"
@@ -1329,7 +1337,7 @@ async def cmd_ban(message: Message, command: CommandObject):
         await message.reply("🚫 Нельзя забанить администратора!"); return
     reason = command.args or "Нарушение правил"
     await bot.ban_chat_member(message.chat.id, target.id)
-
+await log_action(f"🔨 <b>БАН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
 @dp.message(Command("unban"))
 async def cmd_unban(message: Message):
     if not await require_admin(message): return
@@ -1337,16 +1345,24 @@ async def cmd_unban(message: Message):
     target = message.reply_to_message.from_user
     await bot.unban_chat_member(message.chat.id, target.id, only_if_banned=True)
     await message.reply(f"♻️ {target.mention_html()} разбанен.", parse_mode="HTML")
+    await log_action(f"♻️ <b>РАЗБАН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nЧат: {message.chat.title}")
 
 @dp.message(Command("mute"))
 async def cmd_mute(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
-    # ДОБАВЬ:
     if await is_admin_by_id(message.chat.id, target.id):
         await message.reply("🚫 Нельзя замутить администратора!"); return
-
+    mins, label = parse_duration(command.args or "60m")
+    if not mins: mins = 60; label = "1 ч."
+    await bot.restrict_chat_member(message.chat.id, target.id,
+        permissions=ChatPermissions(can_send_messages=False),
+        until_date=timedelta(minutes=mins))
+    await message.reply(
+        random.choice(MUTE_MESSAGES).format(name=target.mention_html(), time=label),
+        parse_mode="HTML")
+    await log_action(f"🔇 <b>МУТ</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nВремя: {label}\nЧат: {message.chat.title}")
 @dp.message(Command("unmute"))
 async def cmd_unmute(message: Message):
     if not await require_admin(message): return
@@ -1362,10 +1378,20 @@ async def cmd_warn(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
-    # ДОБАВЬ:
     if await is_admin_by_id(message.chat.id, target.id):
         await message.reply("🚫 Нельзя выдать варн администратору!"); return
-        
+    reason = command.args or "Нарушение правил"
+    cid = message.chat.id
+    warnings[cid][target.id] += 1; count = warnings[cid][target.id]
+    if count >= MAX_WARNINGS:
+        await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
+        msg = random.choice(AUTOBAN_MESSAGES).format(name=target.mention_html(), max=MAX_WARNINGS)
+        await log_action(f"🔨 <b>АВТОБАН</b>\nКого: {target.mention_html()}\nПричина: {MAX_WARNINGS} варнов\nЧат: {message.chat.title}")
+    else:
+        msg = random.choice(WARN_MESSAGES).format(
+            name=target.mention_html(), count=count, max=MAX_WARNINGS, reason=reason)
+        await log_action(f"⚠️ <b>ВАРН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
+    await message.reply(msg, parse_mode="HTML")
 @dp.message(Command("unwarn"))
 async def cmd_unwarn(message: Message):
     if not await require_admin(message): return
@@ -1784,7 +1810,7 @@ async def autist_commands(message: Message):
     if len(parts) < 2: return
     rest = parts[1].strip()
     action = None
-    for cmd in ["снять варн", "размут", "разбан", "варн", "мут навсегда", "мут", "бан", "захуесосить", "кик", "очистить", "удалить", "закрепить", "предупредить", "инфо", "варны", "репутация", "обозвать", "поженить", "проверить"]:
+   for cmd in ["снять варн", "размут", "разбан", "варн", "мут навсегда", "мут", "бан", "захуесосить", "кик", "очистить", "удалить", "закрепить", "предупредить", "инфо", "варны", "репутация", "обозвать", "поженить", "проверить", "казнить", "диагноз", "профессия", "похитить", "дуэль"]:
         if rest.startswith(cmd):
             action = cmd
             rest = rest[len(cmd):].strip()
@@ -1933,7 +1959,67 @@ async def autist_commands(message: Message):
                 f"🤵 {user1.mention_html()}\n\n"
                 f"💑 Горько! 🥂",
                 parse_mode="HTML")
-        
+        elif action == "казнить":
+            казни = [
+                "🔥 сожжён на костре", "⚡ поражён молнией",
+                "🐊 съеден крокодилом", "🍌 подавился бананом",
+                "🚀 отправлен в космос без скафандра",
+                "🌊 утоплен в стакане воды", "🐝 закусан пчёлами",
+                "🎸 заслушан до смерти Шансоном", "🥄 побит ложкой",
+                "🌵 упал на кактус",
+            ]
+            await message.reply(
+                f"⚰️ {tname} приговорён к казни!\n"
+                f"💀 Способ: <b>{random.choice(казни)}</b>",
+                parse_mode="HTML")
+
+        elif action == "диагноз":
+            диагнозы = [
+                "🧠 Хроническая адекватность", "🤡 Острый клоунизм",
+                "😴 Синдром вечного AFK", "🥔 Картофельный синдром",
+                "🐒 Обезьяний рефлекс", "💤 Хроническая сонливость",
+                "🌵 Колючесть характера", "🤖 Роботизация мозга",
+                "🦆 Утиная походка", "🌈 Радужное мышление",
+            ]
+            await message.reply(
+                f"🏥 Диагноз для {tname}:\n"
+                f"📋 <b>{random.choice(диагнозы)}</b>",
+                parse_mode="HTML")
+
+        elif action == "профессия":
+            профессии = [
+                "🤡 Профессиональный клоун", "🥔 Картофелевод",
+                "🐒 Дрессировщик обезьян", "🌵 Смотритель кактусов",
+                "🦆 Переводчик с утиного", "🤖 Ремонтник роботов",
+                "💤 Профессиональный соня", "🎸 Игрок на банджо",
+                "🌈 Художник радуг", "🧠 Продавец мозгов",
+            ]
+            await message.reply(
+                f"💼 Профессия {tname}:\n"
+                f"<b>{random.choice(профессии)}</b>",
+                parse_mode="HTML")
+
+        elif action == "похитить":
+            mins = duration_mins or 5
+            await bot.restrict_chat_member(cid, target.id,
+                permissions=ChatPermissions(can_send_messages=False),
+                until_date=timedelta(minutes=mins))
+            await message.reply(
+                f"👽 {tname} похищен пришельцами на <b>{mins} мин</b>!\n"
+                f"🛸 Вернётся через {mins} минут...",
+                parse_mode="HTML")
+
+        elif action == "дуэль":
+            challenger = message.from_user
+            winner = random.choice([challenger, target])
+            loser = target if winner == challenger else challenger
+            await message.reply(
+                f"⚔️ <b>ДУЭЛЬ!</b>\n\n"
+                f"🔫 {challenger.mention_html()} vs {tname}\n\n"
+                f"🏆 Победитель: <b>{winner.mention_html()}</b>\n"
+                f"💀 Проигравший: {loser.mention_html()}",
+                parse_mode="HTML")
+            
         elif action == "проверить":
             try:
                 await bot.restrict_chat_member(cid, target.id,
@@ -1970,6 +2056,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
