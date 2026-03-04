@@ -15,6 +15,38 @@ from aiogram.types import (
 )
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiohttp import web
+import json
+from pathlib import Path
+
+DATA_FILE = "data.json"
+
+def load_data():
+    global warnings, reputation, notes
+    if Path(DATA_FILE).exists():
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for cid, users in data.get("warnings", {}).items():
+                for uid, count in users.items():
+                    warnings[int(cid)][int(uid)] = count
+            for cid, users in data.get("reputation", {}).items():
+                for uid, score in users.items():
+                    reputation[int(cid)][int(uid)] = score
+            for cid, nts in data.get("notes", {}).items():
+                notes[int(cid)] = nts
+        except:
+            pass
+
+def save_data():
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "warnings":   {str(cid): {str(uid): c for uid, c in users.items()} for cid, users in warnings.items()},
+                "reputation": {str(cid): {str(uid): s for uid, s in users.items()} for cid, users in reputation.items()},
+                "notes":      {str(cid): nts for cid, nts in notes.items()},
+            }, f, ensure_ascii=False, indent=2)
+    except:
+        pass
 
 # ═══════════════════════════════════════════
 #              НАСТРОЙКИ
@@ -1289,6 +1321,7 @@ async def cmd_warn(message: Message, command: CommandObject):
     reason = command.args or "Нарушение правил"
     cid = message.chat.id
     warnings[cid][target.id] += 1; count = warnings[cid][target.id]
+    save_data()
     if count >= MAX_WARNINGS:
         await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
         msg = random.choice(AUTOBAN_MESSAGES).format(name=target.mention_html(), max=MAX_WARNINGS)
@@ -1549,6 +1582,7 @@ async def rep_plus(message: Message):
     if key in rep_cooldown and now - rep_cooldown[key] < 3600:
         await message.reply(f"⏳ Подожди ещё {int(3600-(now-rep_cooldown[key]))//60} мин."); return
     rep_cooldown[key] = now; reputation[message.chat.id][target.id] += 1
+    save_data()
     await message.reply(
         f"⬆️ {target.mention_html()} +1 к репутации! Теперь: <b>{reputation[message.chat.id][target.id]:+d}</b>",
         parse_mode="HTML")
@@ -1562,6 +1596,7 @@ async def rep_minus(message: Message):
     if key in rep_cooldown and now - rep_cooldown[key] < 3600:
         await message.reply(f"⏳ Подожди ещё {int(3600-(now-rep_cooldown[key]))//60} мин."); return
     rep_cooldown[key] = now; reputation[message.chat.id][target.id] -= 1
+    save_data()
     await message.reply(
         f"⬇️ {target.mention_html()} -1 к репутации! Теперь: <b>{reputation[message.chat.id][target.id]:+d}</b>",
         parse_mode="HTML")
@@ -1776,6 +1811,7 @@ async def autist_commands(message: Message):
             await message.reply(f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
         elif action == "варн":
             warnings[cid][target.id] += 1; count = warnings[cid][target.id]
+            save_data()
             if count >= MAX_WARNINGS:
                 await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
                 await message.reply(f"🔨 {tname} — {MAX_WARNINGS} варна, автобан!\n📝 Причина: {reason}", parse_mode="HTML")
@@ -1944,6 +1980,7 @@ async def autist_commands(message: Message):
 # ═══════════════════════════════════════════
 
 async def main():
+    load_data()       
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
     print("✅ Бот запущен!")
@@ -1951,3 +1988,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
