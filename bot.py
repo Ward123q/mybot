@@ -6,7 +6,6 @@ import aiohttp
 from datetime import timedelta
 from collections import defaultdict
 from time import time
-
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
@@ -48,42 +47,33 @@ def save_data():
     except:
         pass
 
-# ═══════════════════════════════════════════
-#              НАСТРОЙКИ
-# ═══════════════════════════════════════════
-LOG_CHANNEL_ID = -1003832428474
+LOG_CHANNEL_ID   = -1003832428474
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
-OWNER_ID = 7823802800
+OWNER_ID         = 7823802800
 MAX_WARNINGS     = 3
 FLOOD_LIMIT      = 5
 FLOOD_TIME       = 5
 ANTI_MAT_ENABLED = False
 MAT_MUTE_MINUTES = 5
 AUTO_KICK_BOTS   = True
-CAPTCHA_TIMEOUT  = 60
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp  = Dispatcher()
 
-warnings        = defaultdict(lambda: defaultdict(int))
-flood_tracker   = defaultdict(lambda: defaultdict(list))
-notes           = defaultdict(dict)
-afk_users       = {}
-pending         = {}
-chat_stats      = defaultdict(lambda: defaultdict(int))
-reputation      = defaultdict(lambda: defaultdict(int))
-rep_cooldown    = {}
-captcha_pending = {}
-reminders       = {}
-birthdays       = {}
-levels          = defaultdict(lambda: defaultdict(int))
-xp_data         = defaultdict(lambda: defaultdict(int))
-
-# ═══════════════════════════════════════════
-#              ТЕКСТЫ
-# ═══════════════════════════════════════════
+warnings      = defaultdict(lambda: defaultdict(int))
+flood_tracker = defaultdict(lambda: defaultdict(list))
+notes         = defaultdict(dict)
+afk_users     = {}
+pending       = {}
+chat_stats    = defaultdict(lambda: defaultdict(int))
+reputation    = defaultdict(lambda: defaultdict(int))
+rep_cooldown  = {}
+reminders     = {}
+birthdays     = {}
+levels        = defaultdict(lambda: defaultdict(int))
+xp_data       = defaultdict(lambda: defaultdict(int))
 
 RULES_TEXT = (
     "👋 <b>Правила нашего чата</b>\n\n"
@@ -103,47 +93,31 @@ RULES_TEXT = (
     "👉 Мут 10м или предупреждения!\n\n"
 )
 
-DEATH_WORDS = [
-    "вскройся", "вскроися", "иди умри", "умри", "убейся", "убейся об стену",
-    "иди повесься", "повесься", "застрелись", "выпрыгни", "прыгни с крыши",
-    "иди под поезд", "пойди утопись", "утопись", "иди сдохни", "сдохни",
-    "лучше бы ты умер", "лучше бы ты умерла", "ты не должен жить",
-    "жить не стоит", "иди на тот свет",
-]
-
 MUTE_MESSAGES = [
     "🔇 {name} заглушён на {time}.",
     "😶 {name} получил мут на {time}.",
     "🤫 {name} временно не может писать. Время: {time}.",
     "📵 {name} помолчи {time}.",
 ]
-
 BAN_MESSAGES = [
     "🔨 {name} забанен. Причина: {reason}",
     "💥 {name} вылетел из чата. Причина: {reason}",
     "🚪 {name} удалён из чата. Причина: {reason}",
 ]
-
 WARN_MESSAGES = [
     "⚠️ {name} получил предупреждение {count}/{max}. Причина: {reason}.",
     "🚨 {name} — предупреждение {count}/{max}. Причина: {reason}. Будь осторожен.",
     "😡 {name} — предупреждение {count}/{max}. Причина: {reason}.",
 ]
-
 AUTOBAN_MESSAGES = [
     "🔨 {name} набрал {max} предупреждений и получил автобан.",
     "💀 {name} — {max} варнов = бан.",
 ]
-
 RANDOM_BAN_REASONS = [
-    "слишком умный",
-    "подозрение в адекватности",
-    "нарушение закона бутерброда",
-    "превышение лимита здравого смысла",
-    "нарушение пространственно-временного континуума",
+    "слишком умный", "подозрение в адекватности", "нарушение закона бутерброда",
+    "превышение лимита здравого смысла", "нарушение пространственно-временного континуума",
     "слишком много смайликов",
 ]
-
 QUOTES = [
     "«Не важно, как медленно ты идёшь, главное — не останавливаться.» — Конфуций",
     "«Будь изменением, которое хочешь видеть в мире.» — Ганди",
@@ -152,43 +126,29 @@ QUOTES = [
     "«Успех — идти от неудачи к неудаче без потери энтузиазма.» — Черчилль",
     "«Делай что должен, и будь что будет.» — Толстой",
 ]
-
 BALL_ANSWERS = [
     "🟢 Определённо да!", "🟢 Без сомнений!", "🟢 Скорее всего да.",
     "🟡 Трудно сказать.", "🟡 Спроси потом.", "🟡 Пока неясно.",
     "🔴 хз", "🔴 Нет.", "🔴 Определённо нет",
 ]
-
 TRUTH_QUESTIONS = [
-    "Ты когда-нибудь врал другу?",
-    "Какой твой самый большой страх?",
-    "Ты когда-нибудь влюблялся в друга?",
-    "Что тебя раздражает больше всего?",
-    "Твой самый неловкий момент в жизни?",
-    "Ты когда-нибудь плакал из-за фильма?",
-    "Что ты никогда не расскажешь родителям?",
-    "ты когда нибудь писял под кровать?",
-    "ты бы хотел себе ту самую девушку найти?",
-    "ты бы хотел завести детей в будущем?",
+    "Ты когда-нибудь врал другу?", "Какой твой самый большой страх?",
+    "Ты когда-нибудь влюблялся в друга?", "Что тебя раздражает больше всего?",
+    "Твой самый неловкий момент в жизни?", "Ты когда-нибудь плакал из-за фильма?",
+    "Что ты никогда не расскажешь родителям?", "ты когда нибудь писял под кровать?",
+    "ты бы хотел себе ту самую девушку найти?", "ты бы хотел завести детей в будущем?",
 ]
-
 DARE_CHALLENGES = [
-    "Напиши комплимент случайному участнику чата!",
-    "Признайся в чём-нибудь стыдном...",
-    "Напиши стих про себя прямо сейчас.",
-    "Расскажи смешной случай из жизни.",
-    "Придумай и напиши анекдот прямо сейчас.",
-    "сделай 10 приседаний если не лень",
+    "Напиши комплимент случайному участнику чата!", "Признайся в чём-нибудь стыдном...",
+    "Напиши стих про себя прямо сейчас.", "Расскажи смешной случай из жизни.",
+    "Придумай и напиши анекдот прямо сейчас.", "сделай 10 приседаний если не лень",
 ]
-
 WOULD_YOU_RATHER = [
     "Быть богатым но одиноким или бедным но счастливым?",
-    "Уметь летать или быть невидимым?",
-    "Знать будущее или изменить прошлое?",
+    "Уметь летать или быть невидимым?", "Знать будущее или изменить прошлое?",
     "Говорить только правду или постоянно врать?",
     "Жить 200 лет в бедности или 50 лет в богатстве?",
 ]
-
 HOROSCOPES = {
     "♈ Овен":     "Сегодня звёзды говорят — делай что хочешь, но с умом.",
     "♉ Телец":    "День для отдыха. Полежи, поешь, снова полежи.",
@@ -203,21 +163,15 @@ HOROSCOPES = {
     "♒ Водолей":  "Ты уникальный. Как и все остальные.",
     "♓ Рыбы":     "Плыви по течению. Или против. Главное — плыви.",
 }
-
 COMPLIMENTS = [
-    "Ты просто огонь! 🔥",
-    "С тобой в чате теплее! ☀️",
-    "Ты делаешь этот чат лучше! 💎",
-    "Без тебя тут было бы скучнее! 🌟",
-    "Ты как редкий покемон — очень ценный! ⭐",
-    "Интеллект зашкаливает! 🧠",
+    "Ты просто огонь! 🔥", "С тобой в чате теплее! ☀️",
+    "Ты делаешь этот чат лучше! 💎", "Без тебя тут было бы скучнее! 🌟",
+    "Ты как редкий покемон — очень ценный! ⭐", "Интеллект зашкаливает! 🧠",
 ]
-
 PREDICTIONS = [
     "🔮 Сегодня тебе повезёт! Только не трать деньги.",
     "💀 Осторожно с незнакомцами сегодня.",
-    "⭐ Звёзды говорят — ты красавчик!",
-    "🍀 Удача на твоей стороне!",
+    "⭐ Звёзды говорят — ты красавчик!", "🍀 Удача на твоей стороне!",
     "🐉 Тебя ждёт необычная встреча. Возможно с котом.",
     "💤 Лучший план на сегодня — поспать. Доверяй процессу.",
 ]
@@ -225,7 +179,6 @@ PREDICTIONS = [
 # ═══════════════════════════════════════════
 #         ВЕБ-СЕРВЕР (для Render)
 # ═══════════════════════════════════════════
-
 async def health(request):
     return web.Response(text="OK")
 
@@ -239,7 +192,6 @@ async def start_web():
 # ═══════════════════════════════════════════
 #             ХЕЛПЕРЫ
 # ═══════════════════════════════════════════
-
 async def check_admin(message: Message) -> bool:
     if message.from_user.id == OWNER_ID:
         return True
@@ -264,13 +216,6 @@ async def require_admin(message: Message) -> bool:
         return False
     return True
 
-def contains_mat(text: str) -> bool:
-    t = text.lower().replace("ё", "е")
-    for w in MAT_WORDS:
-        if w.replace("ё", "е") in t:
-            return True
-    return False
-
 def parse_duration(arg: str):
     arg = arg.strip().lower()
     try:
@@ -281,11 +226,6 @@ def parse_duration(arg: str):
     except:
         pass
     return None, None
-
-def generate_captcha():
-    code = str(random.randint(1000, 9999))
-    display = " — ".join(list(code))
-    return code, display
 
 async def log_action(text: str):
     try:
@@ -319,7 +259,6 @@ async def get_weather(city: str) -> str:
 # ═══════════════════════════════════════════
 #            КЛАВИАТУРЫ
 # ═══════════════════════════════════════════
-
 def kb_back(tid: int) -> list:
     return [InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:back:{tid}")]
 
@@ -459,7 +398,8 @@ def kb_games(tid: int) -> InlineKeyboardMarkup:
 # ═══════════════════════════════════════════
 #              MIDDLEWARE
 # ═══════════════════════════════════════════
-message_cache   = {}
+message_cache = {}
+
 class StatsMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if isinstance(event, Message) and event.from_user and event.chat.type in ("group","supergroup"):
@@ -479,59 +419,15 @@ class StatsMiddleware(BaseMiddleware):
                 try:
                     await event.answer(
                         f"🎉 {event.from_user.mention_html()} достиг <b>{new_level} уровня</b>!\n"
-                        f"🏅 Титул: <b>{title}</b>",
-                        parse_mode="HTML")
+                        f"🏅 Титул: <b>{title}</b>", parse_mode="HTML")
                 except: pass
             if event.text:
                 message_cache[event.message_id] = {
-                    "text": event.text,
-                    "user": event.from_user.full_name,
-                    "user_id": event.from_user.id,
-                    "chat_id": event.chat.id,
+                    "text": event.text, "user": event.from_user.full_name,
+                    "user_id": event.from_user.id, "chat_id": event.chat.id,
                     "chat_title": event.chat.title,
                 }
         return await handler(event, data)
-class CaptchaMiddleware(BaseMiddleware):
-    async def __call__(self, handler, event: Message, data):
-        if not isinstance(event, Message): return await handler(event, data)
-        if not event.from_user: return await handler(event, data)
-        if event.chat.type not in ("group","supergroup"): return await handler(event, data)
-        uid = event.from_user.id
-        if uid not in captcha_pending: return await handler(event, data)
-        cap  = captcha_pending[uid]
-        text = (event.text or "").strip()
-        if text == cap["code"]:
-            cap["task"].cancel()
-            del captcha_pending[uid]
-            try: await bot.delete_message(cap["chat_id"], cap["msg_id"])
-            except: pass
-            await bot.restrict_chat_member(
-                cap["chat_id"], uid,
-                permissions=ChatPermissions(
-                    can_send_messages=True,
-                    can_send_media_messages=True,
-                    can_send_polls=True,
-                    can_send_other_messages=True,
-                    can_add_web_page_previews=True,
-                )
-            )
-            sent = await event.answer(
-                f"✅ {event.from_user.mention_html()} прошёл проверку! Добро пожаловать!\n\n{RULES_TEXT}",
-                parse_mode="HTML"
-            )
-            try: await event.delete()
-            except: pass
-            await asyncio.sleep(30)
-            try: await sent.delete()
-            except: pass
-        else:
-            sent = await event.answer("❌ Неверный код! Попробуй ещё раз.")
-            try: await event.delete()
-            except: pass
-            await asyncio.sleep(3)
-            try: await sent.delete()
-            except: pass
-        return
 
 class AntiFloodMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
@@ -540,7 +436,6 @@ class AntiFloodMiddleware(BaseMiddleware):
         if event.text and event.text.startswith("/"): return await handler(event, data)
         if not event.from_user: return await handler(event, data)
         uid, cid = event.from_user.id, event.chat.id
-        if uid in captcha_pending: return
         try:
             m = await bot.get_chat_member(cid, uid)
             if m.status in ("administrator","creator"): return await handler(event, data)
@@ -573,25 +468,10 @@ class AntiMatMiddleware(BaseMiddleware):
         if not event.text or event.text.startswith("/"): return await handler(event, data)
         if not event.from_user: return await handler(event, data)
         uid, cid = event.from_user.id, event.chat.id
-        if uid in captcha_pending: return await handler(event, data)
         try:
             m = await bot.get_chat_member(cid, uid)
             if m.status in ("administrator","creator"): return await handler(event, data)
         except: pass
-        if contains_mat(event.text):
-            try:
-                await event.delete()
-                await bot.restrict_chat_member(cid, uid,
-                    permissions=ChatPermissions(can_send_messages=False),
-                    until_date=timedelta(minutes=MAT_MUTE_MINUTES))
-                sent = await bot.send_message(cid,
-                    f"🚫 {event.from_user.mention_html()}, мат запрещён! Мут на {MAT_MUTE_MINUTES} мин.",
-                    parse_mode="HTML")
-                await asyncio.sleep(10)
-                try: await sent.delete()
-                except: pass
-            except: pass
-            return
         return await handler(event, data)
 
 class PendingInputMiddleware(BaseMiddleware):
@@ -643,37 +523,14 @@ class PendingInputMiddleware(BaseMiddleware):
             return
         return await handler(event, data)
 
-dp.message.middleware(CaptchaMiddleware())
 dp.message.middleware(PendingInputMiddleware())
 dp.message.middleware(StatsMiddleware())
 dp.message.middleware(AntiFloodMiddleware())
 dp.message.middleware(AntiMatMiddleware())
 
 # ═══════════════════════════════════════════
-#       КАПЧА — ТАЙМЕР КИКА
+#       НОВЫЕ УЧАСТНИКИ
 # ═══════════════════════════════════════════
-
-async def captcha_kick_task(user_id: int, chat_id: int, msg_id: int, user_name: str):
-    await asyncio.sleep(CAPTCHA_TIMEOUT)
-    if user_id in captcha_pending:
-        del captcha_pending[user_id]
-        try: await bot.delete_message(chat_id, msg_id)
-        except: pass
-        try:
-            await bot.ban_chat_member(chat_id, user_id)
-            await bot.unban_chat_member(chat_id, user_id)
-        except: pass
-        sent = await bot.send_message(chat_id,
-            f"⏰ <b>{user_name}</b> не прошёл проверку за {CAPTCHA_TIMEOUT} секунд и был удалён.",
-            parse_mode="HTML")
-        await asyncio.sleep(10)
-        try: await sent.delete()
-        except: pass
-
-# ═══════════════════════════════════════════
-#       НОВЫЕ УЧАСТНИКИ + КАПЧА
-# ═══════════════════════════════════════════
-
 @dp.message(F.new_chat_members)
 async def on_new_member(message: Message):
     for member in message.new_chat_members:
@@ -688,54 +545,25 @@ async def on_new_member(message: Message):
                 except: pass
             except: pass
             continue
+       sent = await message.answer(
+    f"👋 Привет, {member.mention_html()}! Добро пожаловать в чат!\n\n"
+    f"📜 Ознакомься с правилами чата перед тем как писать.",
+    parse_mode="HTML",
+    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-03-2")]
+    ])
+)
+        await log_action(f"👋 <b>ВХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}")
 
-        try:
-            await bot.restrict_chat_member(
-                message.chat.id, member.id,
-                permissions=ChatPermissions(
-                    can_send_messages=True,
-                    can_send_media_messages=False,
-                    can_send_polls=False,
-                    can_send_other_messages=False,
-                    can_add_web_page_previews=False,
-                ))
-        except: pass
-
-        code, display = generate_captcha()
-        cap_msg = await message.answer(
-            f"👋 Привет, {member.mention_html()}!\n\n"
-            f"🔐 <b>Для доступа к чату пройди проверку.</b>\n\n"
-            f"Введи этот код в чат:\n\n"
-            f"<code>┌───────────────┐\n"
-            f"│   {display}   │\n"
-            f"└───────────────┘</code>\n\n"
-            f"⏰ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>. Иначе будешь удалён.",
-            parse_mode="HTML"
-        )
-        task = asyncio.create_task(
-            captcha_kick_task(member.id, message.chat.id, cap_msg.message_id, member.full_name)
-        )
-        captcha_pending[member.id] = {
-            "code":    code,
-            "chat_id": message.chat.id,
-            "msg_id":  cap_msg.message_id,
-            "task":    task,
-        }
-        await log_action(
-            f"👋 <b>ВХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}"
-        )
 @dp.message(F.left_chat_member)
 async def on_left_member(message: Message):
     member = message.left_chat_member
     if member.is_bot: return
-    await log_action(
-        f"🚪 <b>ВЫХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}"
-    )
+    await log_action(f"🚪 <b>ВЫХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}")
 
 # ═══════════════════════════════════════════
 #         CALLBACK HANDLERS — ПАНЕЛЬ
 # ═══════════════════════════════════════════
-
 @dp.callback_query(F.data.startswith("panel:"))
 async def cb_panel(call: CallbackQuery):
     if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
@@ -1179,7 +1007,6 @@ async def cb_game(call: CallbackQuery):
 # ═══════════════════════════════════════════
 #      КОМАНДЫ — ОСНОВНЫЕ
 # ═══════════════════════════════════════════
-
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     await message.reply(
@@ -1192,7 +1019,13 @@ async def cmd_start(message: Message):
 
 @dp.message(Command("rules"))
 async def cmd_rules(message: Message):
-    await message.reply(RULES_TEXT, parse_mode="HTML")
+    await message.reply(
+        "📜 <b>Правила чата</b>\n\nНажми кнопку ниже чтобы прочитать правила:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-03-2")]
+        ])
+    )
 
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
@@ -1286,7 +1119,6 @@ async def cmd_panel(message: Message):
 # ═══════════════════════════════════════════
 #      КОМАНДЫ МОДЕРАЦИИ
 # ═══════════════════════════════════════════
-
 @dp.message(Command("ban"))
 async def cmd_ban(message: Message, command: CommandObject):
     if not await require_admin(message): return
@@ -1318,11 +1150,8 @@ async def cmd_mute(message: Message, command: CommandObject):
     mins, label = parse_duration(command.args or "60m")
     if not mins: mins = 60; label = "1 ч."
     await bot.restrict_chat_member(message.chat.id, target.id,
-        permissions=ChatPermissions(can_send_messages=False),
-        until_date=timedelta(minutes=mins))
-    await message.reply(
-        random.choice(MUTE_MESSAGES).format(name=target.mention_html(), time=label),
-        parse_mode="HTML")
+        permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
+    await message.reply(random.choice(MUTE_MESSAGES).format(name=target.mention_html(), time=label), parse_mode="HTML")
     await log_action(f"🔇 <b>МУТ</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nВремя: {label}\nЧат: {message.chat.title}")
 
 @dp.message(Command("unmute"))
@@ -1529,70 +1358,56 @@ async def cmd_note(message: Message, command: CommandObject):
     elif action == "list":
         keys = list(notes[cid].keys())
         await message.reply("📋 <b>Заметки:</b>\n" + "\n".join(f"• {k}" for k in keys) if keys else "📭 Заметок нет.", parse_mode="HTML")
+
 @dp.message(Command("birthday"))
 async def cmd_birthday(message: Message, command: CommandObject):
     if not command.args:
-        await message.reply(
-            "🎂 Формат: /birthday ДД.ММ\n"
-            "Пример: <code>/birthday 25.03</code>",
-            parse_mode="HTML"); return
+        await message.reply("🎂 Формат: /birthday ДД.ММ\nПример: <code>/birthday 25.03</code>", parse_mode="HTML"); return
     try:
         day, month = map(int, command.args.strip().split("."))
-        if not (1 <= day <= 31 and 1 <= month <= 12):
-            raise ValueError
+        if not (1 <= day <= 31 and 1 <= month <= 12): raise ValueError
     except:
         await message.reply("❗ Неверный формат. Пример: /birthday 25.03"); return
     uid = message.from_user.id
     birthdays[uid] = {"day": day, "month": month, "name": message.from_user.full_name, "chat_id": message.chat.id}
     await message.reply(
-        f"🎂 {message.from_user.mention_html()}, день рождения <b>{day:02d}.{month:02d}</b> сохранён!\n"
-        f"🎉 Поздравлю тебя в этот день!",
+        f"🎂 {message.from_user.mention_html()}, день рождения <b>{day:02d}.{month:02d}</b> сохранён!\n🎉 Поздравлю тебя в этот день!",
         parse_mode="HTML")
 
 async def birthday_checker():
     while True:
-        now = asyncio.get_event_loop().time()
         from datetime import datetime
         today = datetime.now()
         for uid, data in list(birthdays.items()):
             if data["day"] == today.day and data["month"] == today.month:
                 try:
                     await bot.send_message(data["chat_id"],
-                        f"🎉🎂 Сегодня день рождения у "
-                        f"<a href='tg://user?id={uid}'>{data['name']}</a>!\n\n"
-                        f"🎊 Поздравляем! Желаем всего самого лучшего! 🥳",
+                        f"🎉🎂 Сегодня день рождения у <a href='tg://user?id={uid}'>{data['name']}</a>!\n\n🎊 Поздравляем! 🥳",
                         parse_mode="HTML")
                 except: pass
         await asyncio.sleep(3600)
-    
+
 @dp.message(Command("remind"))
 async def cmd_remind(message: Message, command: CommandObject):
     if not command.args or len(command.args.split(maxsplit=1)) < 2:
         await message.reply(
             "⏰ Формат: /remind 30m текст\n"
-            "Примеры:\n"
             "<code>/remind 10m Написать другу</code>\n"
-            "<code>/remind 2h Встреча</code>\n"
-            "<code>/remind 1d День рождения</code>",
-            parse_mode="HTML"); return
+            "<code>/remind 2h Встреча</code>", parse_mode="HTML"); return
     parts = command.args.split(maxsplit=1)
     mins, label = parse_duration(parts[0])
-    if not mins:
-        await message.reply("❗ Неверный формат времени. Примеры: 10m, 2h, 1d"); return
+    if not mins: await message.reply("❗ Неверный формат времени. Примеры: 10m, 2h, 1d"); return
     text = parts[1].strip()
-    uid = message.from_user.id
     cid = message.chat.id
-    sent = await message.reply(
-        f"⏰ Напомню через <b>{label}</b>!\n📝 {text}", parse_mode="HTML")
+    await message.reply(f"⏰ Напомню через <b>{label}</b>!\n📝 {text}", parse_mode="HTML")
     async def remind_task():
         await asyncio.sleep(mins * 60)
         try:
             await bot.send_message(cid,
-                f"⏰ {message.from_user.mention_html()}, напоминание!\n\n📝 <b>{text}</b>",
-                parse_mode="HTML")
+                f"⏰ {message.from_user.mention_html()}, напоминание!\n\n📝 <b>{text}</b>", parse_mode="HTML")
         except: pass
     asyncio.create_task(remind_task())
-    
+
 @dp.message(Command("countdown"))
 async def cmd_countdown(message: Message, command: CommandObject):
     if not await require_admin(message): return
@@ -1609,7 +1424,6 @@ async def cmd_countdown(message: Message, command: CommandObject):
 # ═══════════════════════════════════════════
 #         ПОГОДА / АФК / ИНФО
 # ═══════════════════════════════════════════
-
 @dp.message(Command("weather"))
 async def cmd_weather(message: Message, command: CommandObject):
     if not command.args: await message.reply("🌤 Укажи город: /weather Москва"); return
@@ -1651,7 +1465,6 @@ async def cmd_warnings(message: Message):
 # ═══════════════════════════════════════════
 #         РЕПУТАЦИЯ
 # ═══════════════════════════════════════════
-
 @dp.message(Command("rep"))
 async def cmd_rep(message: Message):
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
@@ -1688,6 +1501,7 @@ async def rep_minus(message: Message):
     await message.reply(
         f"⬇️ {target.mention_html()} -1 к репутации! Теперь: <b>{reputation[message.chat.id][target.id]:+d}</b>",
         parse_mode="HTML")
+
 @dp.message(Command("ранг"))
 async def cmd_rank(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
@@ -1696,20 +1510,14 @@ async def cmd_rank(message: Message):
     xp_current = xp % 100
     bar = "█" * (xp_current // 10) + "░" * (10 - xp_current // 10)
     title = (
-        "👑 Элита" if lvl >= 20 else
-        "🏆 Легенда" if lvl >= 10 else
-        "⭐ Ветеран" if lvl >= 5 else
-        "💪 Активный" if lvl >= 3 else
-        "👤 Участник" if lvl >= 1 else
-        "🌱 Новичок")
+        "👑 Элита" if lvl >= 20 else "🏆 Легенда" if lvl >= 10 else
+        "⭐ Ветеран" if lvl >= 5 else "💪 Активный" if lvl >= 3 else
+        "👤 Участник" if lvl >= 1 else "🌱 Новичок")
     await message.reply(
         f"📊 <b>Уровень {user.mention_html()}</b>\n\n"
-        f"🏅 Титул: <b>{title}</b>\n"
-        f"⚡ Уровень: <b>{lvl}</b>\n"
-        f"✨ Опыт: <b>{xp_current}/100</b>\n"
-        f"[{bar}]",
-        parse_mode="HTML")
-    
+        f"🏅 Титул: <b>{title}</b>\n⚡ Уровень: <b>{lvl}</b>\n"
+        f"✨ Опыт: <b>{xp_current}/100</b>\n[{bar}]", parse_mode="HTML")
+
 @dp.message(Command("top"))
 async def cmd_top(message: Message):
     stats = chat_stats[message.chat.id]
@@ -1726,7 +1534,6 @@ async def cmd_top(message: Message):
 # ═══════════════════════════════════════════
 #         ИГРЫ
 # ═══════════════════════════════════════════
-
 @dp.message(Command("quote"))
 async def cmd_quote(message: Message):
     await message.reply(f"💬 {random.choice(QUOTES)}")
@@ -1745,16 +1552,14 @@ async def cmd_flip(message: Message):
 async def cmd_8ball(message: Message, command: CommandObject):
     if not command.args: await message.reply("❓ /8ball [вопрос]"); return
     await message.reply(
-        f"🎱 <b>Вопрос:</b> {command.args}\n\n<b>Ответ:</b> {random.choice(BALL_ANSWERS)}",
-        parse_mode="HTML")
+        f"🎱 <b>Вопрос:</b> {command.args}\n\n<b>Ответ:</b> {random.choice(BALL_ANSWERS)}", parse_mode="HTML")
 
 @dp.message(Command("rate"))
 async def cmd_rate(message: Message, command: CommandObject):
     if not command.args: await message.reply("❗ /rate [что]"); return
     score = random.randint(0, 10)
     await message.reply(
-        f"📊 <b>{command.args}</b>\n{'⭐'*score+'☆'*(10-score)}\nОценка: <b>{score}/10</b>",
-        parse_mode="HTML")
+        f"📊 <b>{command.args}</b>\n{'⭐'*score+'☆'*(10-score)}\nОценка: <b>{score}/10</b>", parse_mode="HTML")
 
 @dp.message(Command("iq"))
 async def cmd_iq(message: Message):
@@ -1775,20 +1580,17 @@ async def cmd_gay(message: Message):
 async def cmd_truth(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     await message.reply(
-        f"🤔 <b>Вопрос для {user.mention_html()}:</b>\n\n{random.choice(TRUTH_QUESTIONS)}",
-        parse_mode="HTML")
+        f"🤔 <b>Вопрос для {user.mention_html()}:</b>\n\n{random.choice(TRUTH_QUESTIONS)}", parse_mode="HTML")
 
 @dp.message(Command("dare"))
 async def cmd_dare(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     await message.reply(
-        f"😈 <b>Задание для {user.mention_html()}:</b>\n\n{random.choice(DARE_CHALLENGES)}",
-        parse_mode="HTML")
+        f"😈 <b>Задание для {user.mention_html()}:</b>\n\n{random.choice(DARE_CHALLENGES)}", parse_mode="HTML")
 
 @dp.message(Command("wyr"))
 async def cmd_wyr(message: Message):
-    await message.reply(
-        f"🤯 <b>Выбор без выбора:</b>\n\n{random.choice(WOULD_YOU_RATHER)}", parse_mode="HTML")
+    await message.reply(f"🤯 <b>Выбор без выбора:</b>\n\n{random.choice(WOULD_YOU_RATHER)}", parse_mode="HTML")
 
 @dp.message(Command("rps"))
 async def cmd_rps(message: Message, command: CommandObject):
@@ -1828,17 +1630,14 @@ async def cmd_horoscope(message: Message):
 async def cmd_predict(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     await message.reply(
-        f"🔮 <b>Предсказание для {user.mention_html()}:</b>\n\n{random.choice(PREDICTIONS)}",
-        parse_mode="HTML")
+        f"🔮 <b>Предсказание для {user.mention_html()}:</b>\n\n{random.choice(PREDICTIONS)}", parse_mode="HTML")
+
 @dp.message(Command("совместимость"))
 async def cmd_compatibility(message: Message):
     if not message.reply_to_message:
         await message.reply("↩️ Ответь на сообщение участника!"); return
-    user1 = message.from_user
-    user2 = message.reply_to_message.from_user
-    if user1.id == user2.id:
-        await message.reply("😏 Сам с собой? Интересно..."); return
-    seed = (user1.id + user2.id) % 100
+    user1 = message.from_user; user2 = message.reply_to_message.from_user
+    if user1.id == user2.id: await message.reply("😏 Сам с собой? Интересно..."); return
     percent = (user1.id * user2.id) % 101
     bar = "❤️" * (percent // 10) + "🖤" * (10 - percent // 10)
     if percent >= 80:   verdict = "💍 Идеальная пара! Женитесь!"
@@ -1847,13 +1646,9 @@ async def cmd_compatibility(message: Message):
     elif percent >= 20: verdict = "😬 Сложно, но возможно..."
     else:               verdict = "💔 Катастрофа! Держитесь подальше!"
     await message.reply(
-        f"💘 <b>Совместимость:</b>\n\n"
-        f"👤 {user1.mention_html()}\n"
-        f"💞 {bar}\n"
-        f"👤 {user2.mention_html()}\n\n"
-        f"<b>{percent}%</b> — {verdict}",
+        f"💘 <b>Совместимость:</b>\n\n👤 {user1.mention_html()}\n💞 {bar}\n👤 {user2.mention_html()}\n\n<b>{percent}%</b> — {verdict}",
         parse_mode="HTML")
-    
+
 @dp.message(Command("compliment"))
 async def cmd_compliment(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
@@ -1865,19 +1660,15 @@ async def cmd_botstats(message: Message):
     total_msgs  = sum(sum(v.values()) for v in chat_stats.values())
     total_warns = sum(sum(v.values()) for v in warnings.values())
     await message.reply(
-        f"📊 <b>Статистика бота</b>\n\n"
-        f"💬 Сообщений: <b>{total_msgs}</b>\n"
-        f"⚠️ Варнов: <b>{total_warns}</b>\n"
-        f"😴 AFK: <b>{len(afk_users)}</b>\n"
+        f"📊 <b>Статистика бота</b>\n\n💬 Сообщений: <b>{total_msgs}</b>\n"
+        f"⚠️ Варнов: <b>{total_warns}</b>\n😴 AFK: <b>{len(afk_users)}</b>\n"
         f"🌐 Чатов: <b>{len(chat_stats)}</b>\n"
         f"🧼 Антимат: <b>{'вкл' if ANTI_MAT_ENABLED else 'выкл'}</b>\n"
-        f"🤖 Автокик: <b>{'вкл' if AUTO_KICK_BOTS else 'выкл'}</b>",
-        parse_mode="HTML")
+        f"🤖 Автокик: <b>{'вкл' if AUTO_KICK_BOTS else 'выкл'}</b>", parse_mode="HTML")
 
 # ═══════════════════════════════════════════
 #         АУТИСТ КОМАНДЫ
 # ═══════════════════════════════════════════
-
 @dp.message(F.text & ~F.text.startswith("/"))
 async def autist_commands(message: Message):
     if not message.text: return
@@ -1891,19 +1682,16 @@ async def autist_commands(message: Message):
     if len(parts) < 2: return
     rest = parts[1].strip()
     action = None
-    for cmd in ["снять варн", "размут", "разбан", "варн", "мут навсегда", "мут", "бан", "захуесосить", "кик", "очистить", "удалить", "закрепить", "предупредить", "инфо", "варны", "репутация", "обозвать", "поженить", "проверить", "казнить", "диагноз", "профессия", "похитить", "дуэль", "экзамен"]:
+    for cmd in ["снять варн","размут","разбан","варн","мут навсегда","мут","бан","захуесосить","кик",
+                "очистить","удалить","закрепить","предупредить","инфо","варны","репутация",
+                "обозвать","поженить","проверить","казнить","диагноз","профессия","похитить","дуэль","экзамен"]:
         if rest.startswith(cmd):
-            action = cmd
-            rest = rest[len(cmd):].strip()
-            break
+            action = cmd; rest = rest[len(cmd):].strip(); break
     if not action: return
     if not message.reply_to_message:
         await message.reply("↩️ Ответь на сообщение участника."); return
-    target = message.reply_to_message.from_user
-    cid = message.chat.id
-    duration_mins = None
-    duration_label = None
-    reason = "Нарушение правил"
+    target = message.reply_to_message.from_user; cid = message.chat.id
+    duration_mins = None; duration_label = None; reason = "Нарушение правил"
     import re
     time_match = re.match(r"^(\d+)\s*(д|ч|м)\s*", rest)
     if time_match:
@@ -1938,12 +1726,10 @@ async def autist_commands(message: Message):
                 permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
             await message.reply(f"🔇 {tname} замучен на <b>{label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
         elif action == "мут навсегда":
-            await bot.restrict_chat_member(cid, target.id,
-                permissions=ChatPermissions(can_send_messages=False))
+            await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(can_send_messages=False))
             await message.reply(f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
         elif action == "варн":
-            warnings[cid][target.id] += 1; count = warnings[cid][target.id]
-            save_data()
+            warnings[cid][target.id] += 1; count = warnings[cid][target.id]; save_data()
             if count >= MAX_WARNINGS:
                 await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
                 await message.reply(f"🔨 {tname} — {MAX_WARNINGS} варна, автобан!\n📝 Причина: {reason}", parse_mode="HTML")
@@ -1961,44 +1747,31 @@ async def autist_commands(message: Message):
                 can_send_other_messages=True, can_add_web_page_previews=True))
             await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
         elif action == "удалить":
-            try:
-                await message.reply_to_message.delete()
-                await message.reply("🗑 Сообщение удалено!")
-            except:
-                await message.reply("❗ Не удалось удалить сообщение.")
+            try: await message.reply_to_message.delete(); await message.reply("🗑 Сообщение удалено!")
+            except: await message.reply("❗ Не удалось удалить сообщение.")
         elif action == "закрепить":
-            try:
-                await bot.pin_chat_message(cid, message.reply_to_message.message_id)
-                await message.reply("📌 Сообщение закреплено!")
-            except:
-                await message.reply("❗ Не удалось закрепить сообщение.")
+            try: await bot.pin_chat_message(cid, message.reply_to_message.message_id); await message.reply("📌 Сообщение закреплено!")
+            except: await message.reply("❗ Не удалось закрепить сообщение.")
         elif action == "предупредить":
             text_warn = rest.strip() or "Нарушение правил"
             await message.reply(f"⚠️ Внимание {tname}!\n📝 {text_warn}", parse_mode="HTML")
         elif action == "очистить":
-            count = duration_mins or 10
-            deleted = 0
+            count = duration_mins or 10; deleted = 0
             for i in range(message.message_id, message.message_id - count - 1, -1):
-                try:
-                    await bot.delete_message(cid, i)
-                    deleted += 1
-                except:
-                    pass
+                try: await bot.delete_message(cid, i); deleted += 1
+                except: pass
             await message.reply(f"🧹 Удалено <b>{deleted}</b> сообщений!", parse_mode="HTML")
         elif action == "инфо":
             member = await bot.get_chat_member(cid, target.id)
-            smap = {"creator": "👑 Создатель", "administrator": "🛡 Администратор",
-                    "member": "👤 Участник", "restricted": "🔇 Ограничен", "kicked": "🔨 Забанен"}
+            smap = {"creator":"👑 Создатель","administrator":"🛡 Администратор",
+                    "member":"👤 Участник","restricted":"🔇 Ограничен","kicked":"🔨 Забанен"}
             username = f"@{target.username}" if target.username else "нет"
             await message.reply(
-                f"👤 <b>Инфо:</b>\n{tname}\n"
-                f"🔗 Юзернейм: <b>{username}</b>\n"
-                f"🆔 ID: <code>{target.id}</code>\n"
-                f"📌 {smap.get(member.status, member.status)}\n"
-                f"⚠️ Варнов: <b>{warnings[cid].get(target.id, 0)}/{MAX_WARNINGS}</b>\n"
-                f"⭐ Репутация: <b>{reputation[cid].get(target.id, 0):+d}</b>\n"
-                f"💬 Сообщений: <b>{chat_stats[cid].get(target.id, 0)}</b>",
-                parse_mode="HTML")
+                f"👤 <b>Инфо:</b>\n{tname}\n🔗 Юзернейм: <b>{username}</b>\n"
+                f"🆔 ID: <code>{target.id}</code>\n📌 {smap.get(member.status, member.status)}\n"
+                f"⚠️ Варнов: <b>{warnings[cid].get(target.id,0)}/{MAX_WARNINGS}</b>\n"
+                f"⭐ Репутация: <b>{reputation[cid].get(target.id,0):+d}</b>\n"
+                f"💬 Сообщений: <b>{chat_stats[cid].get(target.id,0)}</b>", parse_mode="HTML")
         elif action == "варны":
             count = warnings[cid].get(target.id, 0)
             await message.reply(f"⚠️ Варнов у {tname}: <b>{count}/{MAX_WARNINGS}</b>", parse_mode="HTML")
@@ -2006,133 +1779,65 @@ async def autist_commands(message: Message):
             rep = reputation[cid].get(target.id, 0)
             await message.reply(f"⭐ Репутация {tname}: <b>{rep:+d}</b>", parse_mode="HTML")
         elif action == "обозвать":
-            обзывалки = [
-                "🤡 клоун", "🥴 тупица", "🐸 лягушка",
-                "🦆 утка", "🐷 хрюша", "🤪 псих",
-                "🦊 хитрая лиса", "🐌 улитка", "🦄 единорог",
-                "🤖 сломанный робот", "🥔 картошка", "🧟 зомби"
-            ]
-            await message.reply(
-                f"😂 {tname} отныне ты — <b>{random.choice(обзывалки)}</b>!",
-                parse_mode="HTML")
+            обзывалки = ["🤡 клоун","🥴 тупица","🐸 лягушка","🦆 утка","🐷 хрюша","🤪 псих",
+                         "🦊 хитрая лиса","🐌 улитка","🦄 единорог","🤖 сломанный робот","🥔 картошка","🧟 зомби"]
+            await message.reply(f"😂 {tname} отныне ты — <b>{random.choice(обзывалки)}</b>!", parse_mode="HTML")
         elif action == "поженить":
-            user1 = message.from_user
-            user2 = target
             await message.reply(
-                f"💍 Объявляю вас мужем и женой!\n\n"
-                f"👰 {user2.mention_html()}\n"
-                f"🤵 {user1.mention_html()}\n\n"
-                f"💑 Горько! 🥂",
+                f"💍 Объявляю вас мужем и женой!\n\n👰 {target.mention_html()}\n🤵 {message.from_user.mention_html()}\n\n💑 Горько! 🥂",
                 parse_mode="HTML")
         elif action == "казнить":
-            казни = [
-                "🔥 сожжён на костре", "⚡ поражён молнией",
-                "🐊 съеден крокодилом", "🍌 подавился бананом",
-                "🚀 отправлен в космос без скафандра",
-                "🌊 утоплен в стакане воды", "🐝 закусан пчёлами",
-                "🎸 заслушан до смерти Шансоном", "🥄 побит ложкой",
-                "🌵 упал на кактус",
-            ]
+            казни = ["🔥 сожжён на костре","⚡ поражён молнией","🐊 съеден крокодилом",
+                     "🍌 подавился бананом","🚀 отправлен в космос без скафандра",
+                     "🌊 утоплен в стакане воды","🐝 закусан пчёлами",
+                     "🎸 заслушан до смерти Шансоном","🥄 побит ложкой","🌵 упал на кактус"]
             await message.reply(
-                f"⚰️ {tname} приговорён к казни!\n"
-                f"💀 Способ: <b>{random.choice(казни)}</b>",
-                parse_mode="HTML")
+                f"⚰️ {tname} приговорён к казни!\n💀 Способ: <b>{random.choice(казни)}</b>", parse_mode="HTML")
         elif action == "диагноз":
-            диагнозы = [
-                "🧠 Хроническая адекватность", "🤡 Острый клоунизм",
-                "😴 Синдром вечного AFK", "🥔 Картофельный синдром",
-                "🐒 Обезьяний рефлекс", "💤 Хроническая сонливость",
-                "🌵 Колючесть характера", "🤖 Роботизация мозга",
-                "🦆 Утиная походка", "🌈 Радужное мышление",
-            ]
-            await message.reply(
-                f"🏥 Диагноз для {tname}:\n"
-                f"📋 <b>{random.choice(диагнозы)}</b>",
-                parse_mode="HTML")
+            диагнозы = ["🧠 Хроническая адекватность","🤡 Острый клоунизм","😴 Синдром вечного AFK",
+                        "🥔 Картофельный синдром","🐒 Обезьяний рефлекс","💤 Хроническая сонливость",
+                        "🌵 Колючесть характера","🤖 Роботизация мозга","🦆 Утиная походка","🌈 Радужное мышление"]
+            await message.reply(f"🏥 Диагноз для {tname}:\n📋 <b>{random.choice(диагнозы)}</b>", parse_mode="HTML")
         elif action == "профессия":
-            профессии = [
-                "🤡 Профессиональный клоун", "🥔 Картофелевод",
-                "🐒 Дрессировщик обезьян", "🌵 Смотритель кактусов",
-                "🦆 Переводчик с утиного", "🤖 Ремонтник роботов",
-                "💤 Профессиональный соня", "🎸 Игрок на банджо",
-                "🌈 Художник радуг", "🧠 Продавец мозгов",
-            ]
-            await message.reply(
-                f"💼 Профессия {tname}:\n"
-                f"<b>{random.choice(профессии)}</b>",
-                parse_mode="HTML")
+            профессии = ["🤡 Профессиональный клоун","🥔 Картофелевод","🐒 Дрессировщик обезьян",
+                         "🌵 Смотритель кактусов","🦆 Переводчик с утиного","🤖 Ремонтник роботов",
+                         "💤 Профессиональный соня","🎸 Игрок на банджо","🌈 Художник радуг","🧠 Продавец мозгов"]
+            await message.reply(f"💼 Профессия {tname}:\n<b>{random.choice(профессии)}</b>", parse_mode="HTML")
         elif action == "похитить":
             mins = duration_mins or 5
             await bot.restrict_chat_member(cid, target.id,
-                permissions=ChatPermissions(can_send_messages=False),
-                until_date=timedelta(minutes=mins))
+                permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
             await message.reply(
-                f"👽 {tname} похищен пришельцами на <b>{mins} мин</b>!\n"
-                f"🛸 Вернётся через {mins} минут...",
+                f"👽 {tname} похищен пришельцами на <b>{mins} мин</b>!\n🛸 Вернётся через {mins} минут...",
                 parse_mode="HTML")
         elif action == "дуэль":
             challenger = message.from_user
             winner = random.choice([challenger, target])
             loser = target if winner == challenger else challenger
             await message.reply(
-                f"⚔️ <b>ДУЭЛЬ!</b>\n\n"
-                f"🔫 {challenger.mention_html()} vs {tname}\n\n"
-                f"🏆 Победитель: <b>{winner.mention_html()}</b>\n"
-                f"💀 Проигравший: {loser.mention_html()}",
-        parse_mode="HTML")
+                f"⚔️ <b>ДУЭЛЬ!</b>\n\n🔫 {challenger.mention_html()} vs {tname}\n\n"
+                f"🏆 Победитель: <b>{winner.mention_html()}</b>\n💀 Проигравший: {loser.mention_html()}",
+                parse_mode="HTML")
         elif action == "экзамен":
-            экзамен_вопросы = [
-                "🧠 Сколько будет 2+2*2?",
-                "🌍 Какая столица Франции?",
-                "🔢 Назови простое число от 10 до 20.",
-                "🐘 Какое животное самое большое на суше?",
-                "🌊 Какой самый глубокий океан?",
-                "🎨 Смешай красный и синий — какой цвет получится?",
-                "⚡ Кто придумал лампочку?",
-                "🦁 Царь зверей — это?",
-                "🌙 Как называется спутник Земли?",
-                "🍎 Какой фрукт упал на Ньютона?",
-            ]
-            вопрос = random.choice(экзамен_вопросы)
+            вопросы = ["🧠 Сколько будет 2+2*2?","🌍 Какая столица Франции?",
+                       "🔢 Назови простое число от 10 до 20.","🐘 Какое животное самое большое на суше?",
+                       "🌊 Какой самый глубокий океан?","🎨 Смешай красный и синий — какой цвет получится?",
+                       "⚡ Кто придумал лампочку?","🦁 Царь зверей — это?",
+                       "🌙 Как называется спутник Земли?","🍎 Какой фрукт упал на Ньютона?"]
             await message.reply(
-                f"📝 <b>ЭКЗАМЕН для {tname}!</b>\n\n"
-                f"{вопрос}\n\n"
-                f"⏰ У тебя <b>30 секунд</b> чтобы ответить!",
+                f"📝 <b>ЭКЗАМЕН для {tname}!</b>\n\n{random.choice(вопросы)}\n\n⏰ У тебя <b>30 секунд</b>!",
                 parse_mode="HTML")
         elif action == "проверить":
-            try:
-                await bot.restrict_chat_member(cid, target.id,
-                    permissions=ChatPermissions(can_send_messages=False))
-            except:
-                pass
-            code, display = generate_captcha()
-            cap_msg = await message.reply(
-                f"🔐 {tname}, администратор запросил проверку!\n\n"
-                f"Введи этот код в чат:\n\n"
-                f"<code>┌───────────────┐\n"
-                f"│   {display}   │\n"
-                f"└───────────────┘</code>\n\n"
-                f"⏰ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>. Иначе будешь удалён.",
-                parse_mode="HTML")
-            task = asyncio.create_task(
-                captcha_kick_task(target.id, cid, cap_msg.message_id, target.full_name)
-            )
-            captcha_pending[target.id] = {
-                "code":    code,
-                "chat_id": cid,
-                "msg_id":  cap_msg.message_id,
-                "task":    task,
-            }
+            await message.reply(f"ℹ️ Функция проверки (капча) отключена.", parse_mode="HTML")
     except Exception as e:
         await message.reply(f"❗ Ошибка: {e}")
 
 # ═══════════════════════════════════════════
 #         ЗАПУСК
 # ═══════════════════════════════════════════
-
 async def main():
     load_data()
-    asyncio.create_task(birthday_checker())   
+    asyncio.create_task(birthday_checker())
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
     print("✅ Бот запущен!")
@@ -2140,9 +1845,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
-
-
