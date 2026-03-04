@@ -553,16 +553,15 @@ class AntiDeathMiddleware(BaseMiddleware):
                     warnings[cid][uid] += 1
                     count = warnings[cid][uid]
                     if count >= MAX_WARNINGS:
-                        await bot.ban_chat_member(cid, uid)
-                        warnings[cid][uid] = 0
-                        sent = await bot.send_message(cid,
-                            f"🔨 {event.from_user.mention_html()} забанен за призывы к суициду!",
-                            parse_mode="HTML")
-                    else:
-                        sent = await bot.send_message(cid,
-                            f"⚠️ {event.from_user.mention_html()} получил варн "
-                            f"<b>{count}/{MAX_WARNINGS}</b> за недопустимые высказывания!",
-                            parse_mode="HTML")
+                    sent = await bot.send_message(cid,
+                        f"⚠️ {event.from_user.mention_html()} получил варн "
+                        f"<b>{count}/{MAX_WARNINGS}</b> за недопустимые высказывания!",
+                        parse_mode="HTML")
+                else:
+                    sent = await bot.send_message(cid,
+                        f"⚠️ {event.from_user.mention_html()} получил варн "
+                        f"<b>{count}/{MAX_WARNINGS}</b> за недопустимые высказывания!",
+                        parse_mode="HTML")
                     await asyncio.sleep(10)
                     try: await sent.delete()
                     except: pass
@@ -1976,6 +1975,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
