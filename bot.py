@@ -534,41 +534,6 @@ class AntiMatMiddleware(BaseMiddleware):
             except: pass
             return
         return await handler(event, data)
-class AntiDeathMiddleware(BaseMiddleware):
-    async def __call__(self, handler, event: Message, data):
-        if not isinstance(event, Message): return await handler(event, data)
-        if event.chat.type not in ("group","supergroup"): return await handler(event, data)
-        if not event.text or event.text.startswith("/"): return await handler(event, data)
-        if not event.from_user: return await handler(event, data)
-        uid, cid = event.from_user.id, event.chat.id
-        try:
-            m = await bot.get_chat_member(cid, uid)
-            if m.status in ("administrator","creator"): return await handler(event, data)
-        except: pass
-        t = event.text.lower()
-        for w in DEATH_WORDS:
-            if w in t:
-                try:
-                    await event.delete()
-                    warnings[cid][uid] += 1
-                    count = warnings[cid][uid]
-                    if count >= MAX_WARNINGS:
-                    sent = await bot.send_message(cid,
-                        f"⚠️ {event.from_user.mention_html()} получил варн "
-                        f"<b>{count}/{MAX_WARNINGS}</b> за недопустимые высказывания!",
-                        parse_mode="HTML")
-                else:
-                    sent = await bot.send_message(cid,
-                        f"⚠️ {event.from_user.mention_html()} получил варн "
-                        f"<b>{count}/{MAX_WARNINGS}</b> за недопустимые высказывания!",
-                        parse_mode="HTML")
-                    await asyncio.sleep(10)
-                    try: await sent.delete()
-                    except: pass
-                except: pass
-                return
-        return await handler(event, data)
-
 class PendingInputMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if not isinstance(event, Message): return await handler(event, data)
@@ -623,7 +588,6 @@ dp.message.middleware(PendingInputMiddleware())
 dp.message.middleware(StatsMiddleware())
 dp.message.middleware(AntiFloodMiddleware())
 dp.message.middleware(AntiMatMiddleware())
-dp.message.middleware(AntiDeathMiddleware())
 # ═══════════════════════════════════════════
 #       КАПЧА — ТАЙМЕР КИКА
 # ═══════════════════════════════════════════
@@ -1975,6 +1939,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
