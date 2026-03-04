@@ -727,17 +727,6 @@ async def on_new_member(message: Message):
         await log_action(
             f"👋 <b>ВХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}"
         )
-@dp.deleted_message()
-async def on_deleted_message(event, bot: Bot):
-    msg = message_cache.get(event.message_id)
-    if msg:
-        await log_action(
-            f"🗑 <b>УДАЛЕНО СООБЩЕНИЕ</b>\n"
-            f"👤 {msg['user']} (<code>{msg['user_id']}</code>)\n"
-            f"💬 Текст: <i>{msg['text'][:200]}</i>\n"
-            f"📌 Чат: {msg['chat_title']}"
-        )
-        del message_cache[event.message_id]
 @dp.message(F.left_chat_member)
 async def on_left_member(message: Message):
     member = message.left_chat_member
@@ -2154,6 +2143,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
