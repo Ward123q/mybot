@@ -19,10 +19,10 @@ from aiohttp import web
 # ═══════════════════════════════════════════
 #              НАСТРОЙКИ
 # ═══════════════════════════════════════════
-LOG_CHANNEL_ID = -5293068734
+LOG_CHANNEL_ID = -1003832428474
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
-OWNER_ID = 7823802800 
+OWNER_ID = 7823802800
 MAX_WARNINGS     = 3
 FLOOD_LIMIT      = 5
 FLOOD_TIME       = 5
@@ -69,7 +69,7 @@ RULES_TEXT = (
     "💡 Просто будьте вежливы и всё будет хорошо! По возможности 😊\n"
     "Нарушение → предупреждение → бан 🔨"
 )
-    
+
 DEATH_WORDS = [
     "вскройся", "вскроися", "иди умри", "умри", "убейся", "убейся об стену",
     "иди повесься", "повесься", "застрелись", "выпрыгни", "прыгни с крыши",
@@ -77,7 +77,6 @@ DEATH_WORDS = [
     "лучше бы ты умер", "лучше бы ты умерла", "ты не должен жить",
     "жить не стоит", "иди на тот свет",
 ]
-
 
 MUTE_MESSAGES = [
     "🔇 {name} заглушён на {time}.",
@@ -94,13 +93,13 @@ BAN_MESSAGES = [
 
 WARN_MESSAGES = [
     "⚠️ {name} получил предупреждение {count}/{max}. Причина: {reason}.",
-    "🚨 {name} — получил пизды {count}/{max}. Причина: {reason}. Будь осторожен.",
+    "🚨 {name} — предупреждение {count}/{max}. Причина: {reason}. Будь осторожен.",
     "😡 {name} — предупреждение {count}/{max}. Причина: {reason}.",
 ]
 
 AUTOBAN_MESSAGES = [
-    "🔨 {name} набрал {max} предупреждений и получил автобан. туда долбаеба",
-    "💀 {name} — {max} варнов = бан. лох ты",
+    "🔨 {name} набрал {max} предупреждений и получил автобан.",
+    "💀 {name} — {max} варнов = бан.",
 ]
 
 RANDOM_BAN_REASONS = [
@@ -259,7 +258,8 @@ async def log_action(text: str):
     try:
         await bot.send_message(LOG_CHANNEL_ID, text, parse_mode="HTML")
     except:
-        pass 
+        pass
+
 async def get_weather(city: str) -> str:
     if not WEATHER_API_KEY:
         return "❌ Weather API ключ не настроен."
@@ -422,7 +422,8 @@ def kb_games(tid: int) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="⏱ Отсчёт 10 сек",     callback_data=f"game:countdown10:{tid}")],
         [InlineKeyboardButton(text="◀️ Назад",             callback_data=f"panel:mainmenu:0")],
     ])
-    # ═══════════════════════════════════════════
+
+# ═══════════════════════════════════════════
 #              MIDDLEWARE
 # ═══════════════════════════════════════════
 
@@ -526,7 +527,7 @@ class AntiMatMiddleware(BaseMiddleware):
                     permissions=ChatPermissions(can_send_messages=False),
                     until_date=timedelta(minutes=MAT_MUTE_MINUTES))
                 sent = await bot.send_message(cid,
-                    f"🚫 {event.from_user.mention_html()}, мат запрещён правилами чата! Мут на {MAT_MUTE_MINUTES} мин.",
+                    f"🚫 {event.from_user.mention_html()}, мат запрещён! Мут на {MAT_MUTE_MINUTES} мин.",
                     parse_mode="HTML")
                 await asyncio.sleep(10)
                 try: await sent.delete()
@@ -534,6 +535,7 @@ class AntiMatMiddleware(BaseMiddleware):
             except: pass
             return
         return await handler(event, data)
+
 class PendingInputMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if not isinstance(event, Message): return await handler(event, data)
@@ -588,6 +590,7 @@ dp.message.middleware(PendingInputMiddleware())
 dp.message.middleware(StatsMiddleware())
 dp.message.middleware(AntiFloodMiddleware())
 dp.message.middleware(AntiMatMiddleware())
+
 # ═══════════════════════════════════════════
 #       КАПЧА — ТАЙМЕР КИКА
 # ═══════════════════════════════════════════
@@ -629,7 +632,7 @@ async def on_new_member(message: Message):
             continue
 
         try:
-           await bot.restrict_chat_member(
+            await bot.restrict_chat_member(
                 message.chat.id, member.id,
                 permissions=ChatPermissions(
                     can_send_messages=True,
@@ -651,7 +654,6 @@ async def on_new_member(message: Message):
             f"⏰ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>. Иначе будешь удалён.",
             parse_mode="HTML"
         )
-
         task = asyncio.create_task(
             captcha_kick_task(member.id, message.chat.id, cap_msg.message_id, member.full_name)
         )
@@ -661,6 +663,17 @@ async def on_new_member(message: Message):
             "msg_id":  cap_msg.message_id,
             "task":    task,
         }
+        await log_action(
+            f"👋 <b>ВХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}"
+        )
+
+@dp.message(F.left_chat_member)
+async def on_left_member(message: Message):
+    member = message.left_chat_member
+    if member.is_bot: return
+    await log_action(
+        f"🚪 <b>ВЫХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}"
+    )
 
 # ═══════════════════════════════════════════
 #         CALLBACK HANDLERS — ПАНЕЛЬ
@@ -724,6 +737,7 @@ async def cb_panel(call: CallbackQuery):
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
                 can_send_other_messages=True, can_add_web_page_previews=True))
             await call.message.edit_text(f"🔊 <b>{tname}</b> размучен.", parse_mode="HTML")
+            await log_action(f"🔊 <b>РАЗМУТ</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nЧат: {call.message.chat.title}")
         elif action == "warn":
             await call.message.edit_text(f"⚠️ <b>Варн для {tname}</b>\n\nВыбери причину:",
                 parse_mode="HTML", reply_markup=kb_warn(tid))
@@ -738,6 +752,7 @@ async def cb_panel(call: CallbackQuery):
         elif action == "unban":
             await bot.unban_chat_member(cid, tid, only_if_banned=True)
             await call.message.edit_text(f"♻️ <b>{tname}</b> разбанен.", parse_mode="HTML")
+            await log_action(f"♻️ <b>РАЗБАН</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nЧат: {call.message.chat.title}")
         elif action == "del":
             try: await call.message.reply_to_message.delete()
             except: pass
@@ -809,6 +824,7 @@ async def cb_mute(call: CallbackQuery):
         permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
     await call.message.edit_text(
         random.choice(MUTE_MESSAGES).format(name=f"<b>{tname}</b>", time=label), parse_mode="HTML")
+    await log_action(f"🔇 <b>МУТ</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nВремя: {label}\nЧат: {call.message.chat.title}")
     await call.answer(f"Замутен на {label}!")
 
 @dp.callback_query(F.data.startswith("warn:"))
@@ -826,9 +842,11 @@ async def cb_warn(call: CallbackQuery):
     if count >= MAX_WARNINGS:
         await bot.ban_chat_member(cid, tid); warnings[cid][tid] = 0
         msg = random.choice(AUTOBAN_MESSAGES).format(name=f"<b>{tname}</b>", max=MAX_WARNINGS)
+        await log_action(f"🔨 <b>АВТОБАН</b>\nКого: <b>{tname}</b>\nПричина: {MAX_WARNINGS} варнов\nЧат: {call.message.chat.title}")
     else:
         msg = random.choice(WARN_MESSAGES).format(
             name=f"<b>{tname}</b>", count=count, max=MAX_WARNINGS, reason=reason)
+        await log_action(f"⚠️ <b>ВАРН</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nПричина: {reason}\nЧат: {call.message.chat.title}")
     await call.message.edit_text(msg, parse_mode="HTML")
     await call.answer("Варн выдан!")
 
@@ -846,10 +864,12 @@ async def cb_ban(call: CallbackQuery):
     if reason == "tempban24":
         await bot.ban_chat_member(cid, tid, until_date=timedelta(hours=24))
         await call.message.edit_text(f"⏰ <b>{tname}</b> забанен на <b>24 часа</b>.", parse_mode="HTML")
+        await log_action(f"⏰ <b>БАН 24ч</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nЧат: {call.message.chat.title}")
         await call.answer(); return
     await bot.ban_chat_member(cid, tid)
     await call.message.edit_text(
         random.choice(BAN_MESSAGES).format(name=f"<b>{tname}</b>", reason=reason), parse_mode="HTML")
+    await log_action(f"🔨 <b>БАН</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nПричина: {reason}\nЧат: {call.message.chat.title}")
     await call.answer("Забанен!")
 
 @dp.callback_query(F.data.startswith("fun:"))
@@ -976,6 +996,7 @@ async def cb_members(call: CallbackQuery):
                 permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(hours=24))
             await call.message.edit_text(
                 f"📵 <b>{tname}</b> — мут на <b>24 часа</b> за рекламу.", parse_mode="HTML")
+            await log_action(f"📵 <b>МУТ 24ч</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nЧат: {call.message.chat.title}")
         else: await call.answer("❗ Открой панель реплаем на участника.", show_alert=True)
     elif action == "warninfo":
         if tid != 0:
@@ -993,7 +1014,6 @@ async def cb_chat(call: CallbackQuery):
     if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
         await call.answer("🚫 Только для администраторов!", show_alert=True); return
     parts = call.data.split(":"); cid = call.message.chat.id
-    # формат: chat:slow:секунды:tid  или  chat:action:tid
     if parts[1] == "slow":
         delay = int(parts[2]); tid = int(parts[3])
         await bot.set_chat_slow_mode_delay(cid, delay)
@@ -1221,6 +1241,7 @@ async def cmd_ban(message: Message, command: CommandObject):
     await bot.ban_chat_member(message.chat.id, target.id)
     await message.reply(random.choice(BAN_MESSAGES).format(name=target.mention_html(), reason=reason), parse_mode="HTML")
     await log_action(f"🔨 <b>БАН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
+
 @dp.message(Command("unban"))
 async def cmd_unban(message: Message):
     if not await require_admin(message): return
@@ -1246,6 +1267,7 @@ async def cmd_mute(message: Message, command: CommandObject):
         random.choice(MUTE_MESSAGES).format(name=target.mention_html(), time=label),
         parse_mode="HTML")
     await log_action(f"🔇 <b>МУТ</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nВремя: {label}\nЧат: {message.chat.title}")
+
 @dp.message(Command("unmute"))
 async def cmd_unmute(message: Message):
     if not await require_admin(message): return
@@ -1255,6 +1277,7 @@ async def cmd_unmute(message: Message):
         permissions=ChatPermissions(can_send_messages=True, can_send_media_messages=True,
             can_send_polls=True, can_send_other_messages=True, can_add_web_page_previews=True))
     await message.reply(f"🔊 {target.mention_html()} размучен.", parse_mode="HTML")
+    await log_action(f"🔊 <b>РАЗМУТ</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nЧат: {message.chat.title}")
 
 @dp.message(Command("warn"))
 async def cmd_warn(message: Message, command: CommandObject):
@@ -1275,6 +1298,7 @@ async def cmd_warn(message: Message, command: CommandObject):
             name=target.mention_html(), count=count, max=MAX_WARNINGS, reason=reason)
         await log_action(f"⚠️ <b>ВАРН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
     await message.reply(msg, parse_mode="HTML")
+
 @dp.message(Command("unwarn"))
 async def cmd_unwarn(message: Message):
     if not await require_admin(message): return
@@ -1379,7 +1403,7 @@ async def cmd_antimat(message: Message, command: CommandObject):
     if not command.args:
         await message.reply(f"🧼 Антимат: <b>{'вкл' if ANTI_MAT_ENABLED else 'выкл'}</b>", parse_mode="HTML"); return
     a = command.args.strip().lower()
-    if a == "on":    ANTI_MAT_ENABLED = False;  await message.reply("🧼 Антимат <b>включён</b>.", parse_mode="HTML")
+    if a == "on": ANTI_MAT_ENABLED = True; await message.reply("🧼 Антимат <b>включён</b>.", parse_mode="HTML")
     elif a == "off": ANTI_MAT_ENABLED = False; await message.reply("🔞 Антимат <b>выключен</b>.", parse_mode="HTML")
 
 @dp.message(Command("autokick"))
@@ -1389,7 +1413,7 @@ async def cmd_autokick(message: Message, command: CommandObject):
     if not command.args:
         await message.reply(f"🤖 Автокик: <b>{'вкл' if AUTO_KICK_BOTS else 'выкл'}</b>", parse_mode="HTML"); return
     a = command.args.strip().lower()
-    if a == "on":    AUTO_KICK_BOTS = True;  await message.reply("🤖 Автокик <b>включён</b>.", parse_mode="HTML")
+    if a == "on": AUTO_KICK_BOTS = True; await message.reply("🤖 Автокик <b>включён</b>.", parse_mode="HTML")
     elif a == "off": AUTO_KICK_BOTS = False; await message.reply("🤖 Автокик <b>выключен</b>.", parse_mode="HTML")
 
 @dp.message(Command("warn24"))
@@ -1397,10 +1421,13 @@ async def cmd_warn24(message: Message):
     if not await require_admin(message): return
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
-    # ДОБАВЬ:
     if await is_admin_by_id(message.chat.id, target.id):
         await message.reply("🚫 Нельзя замутить администратора!"); return
-        
+    await bot.restrict_chat_member(message.chat.id, target.id,
+        permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(hours=24))
+    await message.reply(f"📵 {target.mention_html()} замучен на <b>24 часа</b> за рекламу.", parse_mode="HTML")
+    await log_action(f"📵 <b>МУТ 24ч</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nЧат: {message.chat.title}")
+
 @dp.message(Command("rban"))
 async def cmd_rban(message: Message):
     if not await require_admin(message): return
@@ -1681,14 +1708,18 @@ async def cmd_botstats(message: Message):
         parse_mode="HTML")
 
 # ═══════════════════════════════════════════
-#         ЗАПУСК
+#         АУТИСТ КОМАНДЫ
 # ═══════════════════════════════════════════
+
 @dp.message(F.text & ~F.text.startswith("/"))
 async def autist_commands(message: Message):
     if not message.text: return
     text_lower = message.text.strip().lower()
     if not text_lower.startswith("аутист"): return
-    if not await check_admin(message): return
+    fun_only = ["обозвать", "поженить", "казнить", "диагноз", "профессия", "похитить", "дуэль"]
+    is_admin = await check_admin(message)
+    is_fun = any(f in text_lower for f in fun_only)
+    if not is_admin and not is_fun: return
     parts = text_lower.split(maxsplit=1)
     if len(parts) < 2: return
     rest = parts[1].strip()
@@ -1726,28 +1757,23 @@ async def autist_commands(message: Message):
             else:
                 await bot.ban_chat_member(cid, target.id)
                 await message.reply(f"🔨 {tname} забанен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
-
         elif action == "захуесосить":
             await bot.ban_chat_member(cid, target.id)
             await bot.unban_chat_member(cid, target.id)
             await message.reply(f"👢 {tname} захуесошен из чата!\n📝 Причина: {reason}", parse_mode="HTML")
-
         elif action == "кик":
             await bot.ban_chat_member(cid, target.id)
             await bot.unban_chat_member(cid, target.id)
             await message.reply(f"👢 {tname} кикнут из чата!\n📝 Причина: {reason}", parse_mode="HTML")
-
         elif action == "мут":
             mins = duration_mins or 60; label = duration_label or "1 ч."
             await bot.restrict_chat_member(cid, target.id,
                 permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
             await message.reply(f"🔇 {tname} замучен на <b>{label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
-
         elif action == "мут навсегда":
             await bot.restrict_chat_member(cid, target.id,
                 permissions=ChatPermissions(can_send_messages=False))
             await message.reply(f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
-
         elif action == "варн":
             warnings[cid][target.id] += 1; count = warnings[cid][target.id]
             if count >= MAX_WARNINGS:
@@ -1755,39 +1781,32 @@ async def autist_commands(message: Message):
                 await message.reply(f"🔨 {tname} — {MAX_WARNINGS} варна, автобан!\n📝 Причина: {reason}", parse_mode="HTML")
             else:
                 await message.reply(f"⚠️ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
-
         elif action in ("снять варн", "снятьварн"):
             if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1
             await message.reply(f"✅ С {tname} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>", parse_mode="HTML")
-
         elif action == "разбан":
             await bot.unban_chat_member(cid, target.id, only_if_banned=True)
             await message.reply(f"♻️ {tname} разбанен.", parse_mode="HTML")
-
         elif action == "размут":
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
                 can_send_other_messages=True, can_add_web_page_previews=True))
             await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
-
         elif action == "удалить":
             try:
                 await message.reply_to_message.delete()
                 await message.reply("🗑 Сообщение удалено!")
             except:
                 await message.reply("❗ Не удалось удалить сообщение.")
-
         elif action == "закрепить":
             try:
                 await bot.pin_chat_message(cid, message.reply_to_message.message_id)
                 await message.reply("📌 Сообщение закреплено!")
             except:
                 await message.reply("❗ Не удалось закрепить сообщение.")
-
         elif action == "предупредить":
             text_warn = rest.strip() or "Нарушение правил"
             await message.reply(f"⚠️ Внимание {tname}!\n📝 {text_warn}", parse_mode="HTML")
-
         elif action == "очистить":
             count = duration_mins or 10
             deleted = 0
@@ -1798,7 +1817,6 @@ async def autist_commands(message: Message):
                 except:
                     pass
             await message.reply(f"🧹 Удалено <b>{deleted}</b> сообщений!", parse_mode="HTML")
-
         elif action == "инфо":
             member = await bot.get_chat_member(cid, target.id)
             smap = {"creator": "👑 Создатель", "administrator": "🛡 Администратор",
@@ -1813,15 +1831,12 @@ async def autist_commands(message: Message):
                 f"⭐ Репутация: <b>{reputation[cid].get(target.id, 0):+d}</b>\n"
                 f"💬 Сообщений: <b>{chat_stats[cid].get(target.id, 0)}</b>",
                 parse_mode="HTML")
-
         elif action == "варны":
             count = warnings[cid].get(target.id, 0)
             await message.reply(f"⚠️ Варнов у {tname}: <b>{count}/{MAX_WARNINGS}</b>", parse_mode="HTML")
-
         elif action == "репутация":
             rep = reputation[cid].get(target.id, 0)
             await message.reply(f"⭐ Репутация {tname}: <b>{rep:+d}</b>", parse_mode="HTML")
-
         elif action == "обозвать":
             обзывалки = [
                 "🤡 клоун", "🥴 тупица", "🐸 лягушка",
@@ -1832,7 +1847,6 @@ async def autist_commands(message: Message):
             await message.reply(
                 f"😂 {tname} отныне ты — <b>{random.choice(обзывалки)}</b>!",
                 parse_mode="HTML")
-
         elif action == "поженить":
             user1 = message.from_user
             user2 = target
@@ -1855,7 +1869,6 @@ async def autist_commands(message: Message):
                 f"⚰️ {tname} приговорён к казни!\n"
                 f"💀 Способ: <b>{random.choice(казни)}</b>",
                 parse_mode="HTML")
-
         elif action == "диагноз":
             диагнозы = [
                 "🧠 Хроническая адекватность", "🤡 Острый клоунизм",
@@ -1868,7 +1881,6 @@ async def autist_commands(message: Message):
                 f"🏥 Диагноз для {tname}:\n"
                 f"📋 <b>{random.choice(диагнозы)}</b>",
                 parse_mode="HTML")
-
         elif action == "профессия":
             профессии = [
                 "🤡 Профессиональный клоун", "🥔 Картофелевод",
@@ -1881,7 +1893,6 @@ async def autist_commands(message: Message):
                 f"💼 Профессия {tname}:\n"
                 f"<b>{random.choice(профессии)}</b>",
                 parse_mode="HTML")
-
         elif action == "похитить":
             mins = duration_mins or 5
             await bot.restrict_chat_member(cid, target.id,
@@ -1891,7 +1902,6 @@ async def autist_commands(message: Message):
                 f"👽 {tname} похищен пришельцами на <b>{mins} мин</b>!\n"
                 f"🛸 Вернётся через {mins} минут...",
                 parse_mode="HTML")
-
         elif action == "дуэль":
             challenger = message.from_user
             winner = random.choice([challenger, target])
@@ -1902,7 +1912,6 @@ async def autist_commands(message: Message):
                 f"🏆 Победитель: <b>{winner.mention_html()}</b>\n"
                 f"💀 Проигравший: {loser.mention_html()}",
                 parse_mode="HTML")
-            
         elif action == "проверить":
             try:
                 await bot.restrict_chat_member(cid, target.id,
@@ -1927,10 +1936,13 @@ async def autist_commands(message: Message):
                 "msg_id":  cap_msg.message_id,
                 "task":    task,
             }
-
-
     except Exception as e:
         await message.reply(f"❗ Ошибка: {e}")
+
+# ═══════════════════════════════════════════
+#         ЗАПУСК
+# ═══════════════════════════════════════════
+
 async def main():
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
@@ -1939,68 +1951,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
