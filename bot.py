@@ -1689,9 +1689,9 @@ async def autist_commands(message: Message):
     text_lower = message.text.strip().lower()
     if not text_lower.startswith("аутист"): return
   fun_only = ["обозвать", "поженить", "казнить", "диагноз", "профессия", "похитить", "дуэль"]
-  is_admin = await check_admin(message)
-  is_fun = any(f in text_lower for f in fun_only)
-  if not is_admin and not is_fun: return
+    is_admin = await check_admin(message)
+    is_fun = any(f in text_lower for f in fun_only)
+    if not is_admin and not is_fun: return
     parts = text_lower.split(maxsplit=1)
     if len(parts) < 2: return
     rest = parts[1].strip()
@@ -1942,6 +1942,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
