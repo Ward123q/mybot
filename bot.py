@@ -66,9 +66,11 @@ RULES_TEXT = (
 )
 
 MAT_WORDS = [
-    "блядь","блять","сука","пизда","пиздец","хуй","хуйня","нахуй","похуй",
-    "ебать","ебал","ёбаный","еблан","заебал","мудак","мудила","долбоёб",
-    "долбоеб","уёбок","уебок","шлюха","курва","пиздобол","хуесос","залупа",
+     "вскройся", "вскроися", "иди умри", "умри", "убейся", "убейся об стену",
+    "иди повесься", "повесься", "застрелись", "выпрыгни", "прыгни с крыши",
+    "иди под поезд", "пойди утопись", "утопись", "иди сдохни", "сдохни",
+    "лучше бы ты умер", "лучше бы ты умерла", "ты не должен жить",
+    "жить не стоит", "иди на тот свет",
 ]
 
 MUTE_MESSAGES = [
@@ -513,6 +515,41 @@ class AntiMatMiddleware(BaseMiddleware):
             except: pass
             return
         return await handler(event, data)
+class AntiDeathMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event: Message, data):
+        if not isinstance(event, Message): return await handler(event, data)
+        if event.chat.type not in ("group","supergroup"): return await handler(event, data)
+        if not event.text or event.text.startswith("/"): return await handler(event, data)
+        if not event.from_user: return await handler(event, data)
+        uid, cid = event.from_user.id, event.chat.id
+        try:
+            m = await bot.get_chat_member(cid, uid)
+            if m.status in ("administrator","creator"): return await handler(event, data)
+        except: pass
+        t = event.text.lower()
+        for w in DEATH_WORDS:
+            if w in t:
+                try:
+                    await event.delete()
+                    warnings[cid][uid] += 1
+                    count = warnings[cid][uid]
+                    if count >= MAX_WARNINGS:
+                        await bot.ban_chat_member(cid, uid)
+                        warnings[cid][uid] = 0
+                        sent = await bot.send_message(cid,
+                            f"🔨 {event.from_user.mention_html()} забанен за призывы к суициду!",
+                            parse_mode="HTML")
+                    else:
+                        sent = await bot.send_message(cid,
+                            f"⚠️ {event.from_user.mention_html()} получил варн "
+                            f"<b>{count}/{MAX_WARNINGS}</b> за недопустимые высказывания!",
+                            parse_mode="HTML")
+                    await asyncio.sleep(10)
+                    try: await sent.delete()
+                    except: pass
+                except: pass
+                return
+        return await handler(event, data)
 
 class AfkMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
@@ -585,6 +622,7 @@ dp.message.middleware(StatsMiddleware())
 dp.message.middleware(AntiFloodMiddleware())
 dp.message.middleware(AntiMatMiddleware())
 dp.message.middleware(AfkMiddleware())
+dp.message.middleware(AntiDeathMiddleware())
 class AntiMediaMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if not isinstance(event, Message): return await handler(event, data)
@@ -1880,6 +1918,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
