@@ -1578,11 +1578,6 @@ async def birthday_checker():
                         parse_mode="HTML")
                 except: pass
         await asyncio.sleep(3600)
-```
-
-Потом найди через **Ctrl+F**:
-```
-async def main():
     
 @dp.message(Command("remind"))
 async def cmd_remind(message: Message, command: CommandObject):
@@ -2158,5 +2153,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
