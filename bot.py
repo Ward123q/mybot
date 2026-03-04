@@ -545,7 +545,7 @@ async def on_new_member(message: Message):
                 except: pass
             except: pass
             continue
-      sent = await message.answer(
+        await message.answer(
             f"👋 Привет, {member.mention_html()}! Добро пожаловать в чат!\n\n"
             f"📜 Ознакомься с правилами чата перед тем как писать.",
             parse_mode="HTML",
@@ -554,7 +554,7 @@ async def on_new_member(message: Message):
             ])
         )
         await log_action(f"👋 <b>ВХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}")
-
+        
 @dp.message(F.left_chat_member)
 async def on_left_member(message: Message):
     member = message.left_chat_member
@@ -1845,4 +1845,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
