@@ -699,7 +699,6 @@ dp.message.middleware(AfkMiddleware())
 dp.message.middleware(AntiDeathMiddleware())
 dp.message.middleware(AntiCapsMiddleware())
 dp.message.middleware(AntiRepeatMiddleware())
-class AntiMediaMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if not isinstance(event, Message): return await handler(event, data)
         if event.chat.type not in ("group","supergroup"): return await handler(event, data)
@@ -723,7 +722,6 @@ class AntiMediaMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 dp.message.middleware(AfkMiddleware())
-dp.message.middleware(AntiMediaMiddleware())
 # ═══════════════════════════════════════════
 #       КАПЧА — ТАЙМЕР КИКА
 # ═══════════════════════════════════════════
@@ -1994,6 +1992,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
