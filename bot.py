@@ -2145,7 +2145,8 @@ async def autist_commands(message: Message):
 # ═══════════════════════════════════════════
 
 async def main():
-    load_data() asyncio.create_task(birthday_checker())     
+    load_data()
+    asyncio.create_task(birthday_checker())   
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
     print("✅ Бот запущен!")
@@ -2153,6 +2154,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
