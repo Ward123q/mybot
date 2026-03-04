@@ -574,77 +574,6 @@ class AntiDeathMiddleware(BaseMiddleware):
                 except: pass
                 return
         return await handler(event, data)
-class AntiCapsMiddleware(BaseMiddleware):
-    async def __call__(self, handler, event: Message, data):
-        if not isinstance(event, Message): return await handler(event, data)
-        if event.chat.type not in ("group","supergroup"): return await handler(event, data)
-        if not event.text or event.text.startswith("/"): return await handler(event, data)
-        if not event.from_user: return await handler(event, data)
-        uid, cid = event.from_user.id, event.chat.id
-        try:
-            m = await bot.get_chat_member(cid, uid)
-            if m.status in ("administrator","creator"): return await handler(event, data)
-        except: pass
-        text = event.text
-        if len(text) >= 6:
-            upper = sum(1 for c in text if c.isupper())
-            total = sum(1 for c in text if c.isalpha())
-            if total > 0 and upper / total >= 0.7:
-                try:
-                    await event.delete()
-                    sent = await bot.send_message(cid,
-                        f"🔠 {event.from_user.mention_html()}, не пиши КАПСОМ!",
-                        parse_mode="HTML")
-                    await asyncio.sleep(5)
-                    try: await sent.delete()
-                    except: pass
-                except: pass
-                return
-        return await handler(event, data)
-
-class AntiRepeatMiddleware(BaseMiddleware):
-    def __init__(self):
-        self.last_messages = defaultdict(lambda: defaultdict(str))
-
-    async def __call__(self, handler, event: Message, data):
-        if not isinstance(event, Message): return await handler(event, data)
-        if event.chat.type not in ("group","supergroup"): return await handler(event, data)
-        if not event.text or event.text.startswith("/"): return await handler(event, data)
-        if not event.from_user: return await handler(event, data)
-        uid, cid = event.from_user.id, event.chat.id
-        try:
-            m = await bot.get_chat_member(cid, uid)
-            if m.status in ("administrator","creator"): return await handler(event, data)
-        except: pass
-        text = event.text.strip().lower()
-        if self.last_messages[cid][uid] == text:
-            try:
-                await event.delete()
-                sent = await bot.send_message(cid,
-                    f"🔄 {event.from_user.mention_html()}, не повторяй одно и то же сообщение!",
-                    parse_mode="HTML")
-                await asyncio.sleep(5)
-                try: await sent.delete()
-                except: pass
-            except: pass
-            return
-        self.last_messages[cid][uid] = text
-        return await handler(event, data)
-class AfkMiddleware(BaseMiddleware):
-    async def __call__(self, handler, event: Message, data):
-        if not isinstance(event, Message): return await handler(event, data)
-        if event.from_user and event.from_user.id in captcha_pending: return await handler(event, data)
-        if event.from_user and event.from_user.id in afk_users:
-            if not (event.text and event.text.startswith("/afk")):
-                reason = afk_users.pop(event.from_user.id)
-                try: await event.answer(f"👋 {event.from_user.mention_html()} вернулся из AFK! (был: {reason})", parse_mode="HTML")
-                except: pass
-        if event.reply_to_message and event.reply_to_message.from_user:
-            tid = event.reply_to_message.from_user.id
-            if tid in afk_users:
-                try: await event.answer(f"😴 {event.reply_to_message.from_user.mention_html()} сейчас AFK: {afk_users[tid]}", parse_mode="HTML")
-                except: pass
-        return await handler(event, data)
 
 class PendingInputMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
@@ -2056,6 +1985,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
