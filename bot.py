@@ -433,6 +433,7 @@ class AntiFloodMiddleware(BaseMiddleware):
         if event.chat.type not in ("group","supergroup"): return await handler(event, data)
         if event.text and event.text.startswith("/"): return await handler(event, data)
         if not event.from_user: return await handler(event, data)
+        if event.new_chat_members or event.left_chat_member: return await handler(event, data)
         uid, cid = event.from_user.id, event.chat.id
         try:
             m = await bot.get_chat_member(cid, uid)
@@ -465,6 +466,7 @@ class AntiMatMiddleware(BaseMiddleware):
         if event.chat.type not in ("group","supergroup"): return await handler(event, data)
         if not event.text or event.text.startswith("/"): return await handler(event, data)
         if not event.from_user: return await handler(event, data)
+        if event.new_chat_members or event.left_chat_member: return await handler(event, data)
         uid, cid = event.from_user.id, event.chat.id
         try:
             m = await bot.get_chat_member(cid, uid)
@@ -1845,6 +1847,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
