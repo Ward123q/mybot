@@ -1335,9 +1335,10 @@ async def cmd_ban(message: Message, command: CommandObject):
     # ДОБАВЬ:
     if await is_admin_by_id(message.chat.id, target.id):
         await message.reply("🚫 Нельзя забанить администратора!"); return
-    reason = command.args or "Нарушение правил"
-    await bot.ban_chat_member(message.chat.id, target.id)
-await log_action(f"🔨 <b>БАН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
+       reason = command.args or "Нарушение правил"
+        await bot.ban_chat_member(message.chat.id, target.id)
+        await message.reply(random.choice(BAN_MESSAGES).format(name=target.mention_html(), reason=reason), parse_mode="HTML")
+        await log_action(f"🔨 <b>БАН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
 @dp.message(Command("unban"))
 async def cmd_unban(message: Message):
     if not await require_admin(message): return
@@ -2056,6 +2057,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
