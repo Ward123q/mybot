@@ -593,28 +593,28 @@ async def cb_panel(call: CallbackQuery):
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
             elif action == "back":
-            if tid != 0:
-                warns = warnings[cid].get(tid, 0); rep = reputation[cid].get(tid, 0)
-                msgs  = chat_stats[cid].get(tid, 0)
-                afk   = f"\n😴 AFK: {afk_users[tid]}" if tid in afk_users else ""
-                try:
-                    safe_name = (tm.user.full_name
-                        .replace("&","&amp;")
-                        .replace("<","&lt;")
-                        .replace(">","&gt;"))
-                    mention = f'<a href="tg://user?id={tid}">{safe_name}</a>'
-                except:
-                    mention = f"<code>{tid}</code>"
-                await call.message.edit_text(
-                    f"👤 <b>Панель участника</b>\n\n🔭 {mention}{afk}\n"
-                    f"🪪 ID: <code>{tid}</code>\n"
-                    f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
-                    f"🌟 Репутация: <b>{rep:+d}</b>\n"
-                    f"💬 Сообщений: <b>{msgs}</b>\n\n🚀 Выбери действие:",
-                    parse_mode="HTML", reply_markup=kb_user_panel(tid))
-            else:
-                await call.message.edit_text("🛸 <b>Панель управления</b>\n\n🚀 Выбери раздел:",
-                    parse_mode="HTML", reply_markup=kb_main_menu())
+               if tid != 0:
+                    warns = warnings[cid].get(tid, 0); rep = reputation[cid].get(tid, 0)
+                    msgs  = chat_stats[cid].get(tid, 0)
+                    afk   = f"\n😴 AFK: {afk_users[tid]}" if tid in afk_users else ""
+                    try:
+                        safe_name = (tm.user.full_name
+                            .replace("&","&amp;")
+                            .replace("<","&lt;")
+                            .replace(">","&gt;"))
+                        mention = f'<a href="tg://user?id={tid}">{safe_name}</a>'
+                    except:
+                        mention = f"<code>{tid}</code>"
+                    await call.message.edit_text(
+                        f"👤 <b>Панель участника</b>\n\n🔭 {mention}{afk}\n"
+                        f"🪪 ID: <code>{tid}</code>\n"
+                        f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
+                        f"🌟 Репутация: <b>{rep:+d}</b>\n"
+                        f"💬 Сообщений: <b>{msgs}</b>\n\n🚀 Выбери действие:",
+                        parse_mode="HTML", reply_markup=kb_user_panel(tid))
+                else:
+                    await call.message.edit_text("🛸 <b>Панель управления</b>\n\n🚀 Выбери раздел:",
+                        parse_mode="HTML", reply_markup=kb_main_menu())
         
         elif action == "mute":
             await call.message.edit_text(f"🔇 <b>Мут для {tname}</b>\n\nВыбери время:",
@@ -2251,6 +2251,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
