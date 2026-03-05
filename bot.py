@@ -2240,6 +2240,22 @@ async def cmd_profile(message: Message):
         f"🔥 Серия: <b>{streak}</b> дней\n"
         f"⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>",
         parse_mode="HTML")
+@dp.message(Command("addrep"))
+async def cmd_addrep(message: Message, command: CommandObject):
+    if message.from_user.id != OWNER_ID:
+        return
+    try:
+        amount = int(command.args or 100)
+    except:
+        amount = 100
+    uid = message.from_user.id
+    cid = message.chat.id
+    reputation[cid][uid] += amount
+    save_data()
+    await message.reply(
+        f"✅ Добавлено <b>{amount}</b> репутации!\n"
+        f"🌟 Теперь: <b>{reputation[cid][uid]:+d}</b>",
+        parse_mode="HTML")
     
 async def main():
     load_data()
@@ -2251,6 +2267,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
