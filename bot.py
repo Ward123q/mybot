@@ -66,6 +66,8 @@ warnings      = defaultdict(lambda: defaultdict(int))
 flood_tracker = defaultdict(lambda: defaultdict(list))
 notes         = defaultdict(dict)
 mod_history   = defaultdict(lambda: defaultdict(list))  # {cid: {uid: [{"action":..., "reason":..., "by":..., "time":...}]}}
+warn_expiry   = defaultdict(lambda: defaultdict(list))  # {cid: {uid: [expiry_timestamp, ...]}}
+mute_timers   = {}  # {(cid, uid): task} — активные задачи автоснятия мута
 afk_users     = {}
 pending       = {}
 chat_stats    = defaultdict(lambda: defaultdict(int))
@@ -238,9 +240,89 @@ def add_mod_history(cid: int, uid: int, action: str, reason: str, by_name: str):
         "by": by_name,
         "time": datetime.now().strftime("%d.%m.%Y %H:%M")
     })
-    # Хранить только последние 20 записей
     if len(mod_history[cid][uid]) > 20:
         mod_history[cid][uid] = mod_history[cid][uid][-20:]
+
+WARN_EXPIRY_DAYS = 30  # варн сгорает через 30 дней
+
+def add_warn_with_expiry(cid: int, uid: int):
+    """Добавляет варн с временем истечения"""
+    expiry = time() + WARN_EXPIRY_DAYS * 86400
+    warn_expiry[cid][uid].append(expiry)
+    warnings[cid][uid] = len(warn_expiry[cid][uid])
+
+def clean_expired_warns(cid: int, uid: int):
+    """Удаляет истёкшие варны"""
+    now = time()
+    warn_expiry[cid][uid] = [e for e in warn_expiry[cid][uid] if e > now]
+    warnings[cid][uid] = len(warn_expiry[cid][uid])
+
+async def auto_unmute(cid: int, uid: int, mins: int, uname: str):
+    """Автоматически снимает мут через указанное время"""
+    await asyncio.sleep(mins * 60)
+    try:
+        await bot.restrict_chat_member(
+            cid, uid,
+            permissions=ChatPermissions(
+                can_send_messages=True, can_send_media_messages=True,
+                can_send_polls=True, can_send_other_messages=True,
+                can_add_web_page_previews=True))
+        await bot.send_message(
+            cid,
+            f"🔊 Мут с <b>{uname}</b> снят автоматически.",
+            parse_mode="HTML")
+        await log_action(
+            f"🔄 <b>АВТОРАЗМУТ</b>\n"
+            f"👤 <b>{uname}</b>\n"
+            f"⏱ Время мута истекло автоматически")
+    except:
+        pass
+    finally:
+        mute_timers.pop((cid, uid), None)
+
+def schedule_unmute(cid: int, uid: int, mins: int, uname: str):
+    """Запускает задачу автоснятия мута"""
+    key = (cid, uid)
+    old = mute_timers.get(key)
+    if old:
+        old.cancel()
+    task = asyncio.create_task(auto_unmute(cid, uid, mins, uname))
+    mute_timers[key] = task
+
+async def log_violation_screenshot(cid: int, uid: int, uname: str, msg_text: str,
+                                    action: str, reason: str, by_name: str, chat_title: str):
+    """Сохраняет текст сообщения-нарушения в лог"""
+    from datetime import datetime
+    preview = msg_text[:300] + ("…" if len(msg_text) > 300 else "")
+    await log_action(
+        f"📸 <b>СКРИНШОТ НАРУШЕНИЯ</b>\n"
+        f"━━━━━━━━━━━━━━━━━\n"
+        f"👤 Нарушитель: <b>{uname}</b> (<code>{uid}</code>)\n"
+        f"⚖️ Действие: <b>{action}</b>\n"
+        f"📝 Причина: <b>{reason}</b>\n"
+        f"👮 Модератор: <b>{by_name}</b>\n"
+        f"💬 Чат: <b>{chat_title}</b>\n"
+        f"🕐 Время: <b>{datetime.now().strftime('%d.%m.%Y %H:%M')}</b>\n"
+        f"━━━━━━━━━━━━━━━━━\n"
+        f"💬 <b>Текст сообщения:</b>\n<code>{preview}</code>"
+    )
+
+async def dm_warn_user(uid: int, uname: str, reason: str, chat_title: str,
+                       action: str, by_name: str):
+    """Отправляет личное предупреждение нарушителю в лс"""
+    try:
+        await bot.send_message(
+            uid,
+            f"⚠️ <b>Предупреждение от администрации</b>\n\n"
+            f"💬 Чат: <b>{chat_title}</b>\n"
+            f"⚖️ Действие: <b>{action}</b>\n"
+            f"📝 Причина: <b>{reason}</b>\n"
+            f"👮 Модератор: <b>{by_name}</b>\n\n"
+            f"⚡ Пожалуйста, соблюдай правила чата!",
+            parse_mode="HTML")
+        return True
+    except:
+        return False  # пользователь не начал диалог с ботом
 
 async def get_weather(city: str) -> str:
     if not WEATHER_API_KEY:
@@ -1197,10 +1279,22 @@ async def cmd_ban(message: Message, command: CommandObject):
     if await is_admin_by_id(message.chat.id, target.id):
         await message.reply("🚫 Нельзя забанить администратора!"); return
     reason = command.args or "Нарушение правил"
-    await bot.ban_chat_member(message.chat.id, target.id)
-    await message.reply(random.choice(BAN_MESSAGES).format(name=target.mention_html(), reason=reason), parse_mode="HTML")
+    cid = message.chat.id
+    # 📨 ЛС нарушителю ДО бана (после уже не получится)
+    dm_ok = await dm_warn_user(target.id, target.full_name, reason,
+                                message.chat.title, "🔨 Бан", message.from_user.full_name)
+    await bot.ban_chat_member(cid, target.id)
+    # 📸 Скриншот нарушения
+    if message.reply_to_message.text:
+        await log_violation_screenshot(
+            cid, target.id, target.full_name,
+            message.reply_to_message.text,
+            "🔨 Бан", reason, message.from_user.full_name, message.chat.title)
+    reply = random.choice(BAN_MESSAGES).format(name=target.mention_html(), reason=reason)
+    if dm_ok: reply += "\n<i>📨 Нарушитель уведомлён в лс</i>"
+    await message.reply(reply, parse_mode="HTML")
     await log_action(f"🔨 <b>БАН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
-    add_mod_history(message.chat.id, target.id, "🔨 Бан", reason, message.from_user.full_name)
+    add_mod_history(cid, target.id, "🔨 Бан", reason, message.from_user.full_name)
 
 @dp.message(Command("unban"))
 async def cmd_unban(message: Message):
@@ -1220,11 +1314,26 @@ async def cmd_mute(message: Message, command: CommandObject):
         await message.reply("🚫 Нельзя замутить администратора!"); return
     mins, label = parse_duration(command.args or "60m")
     if not mins: mins = 60; label = "1 ч."
-    await bot.restrict_chat_member(message.chat.id, target.id,
+    cid = message.chat.id
+    await bot.restrict_chat_member(cid, target.id,
         permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
-    await message.reply(random.choice(MUTE_MESSAGES).format(name=target.mention_html(), time=label), parse_mode="HTML")
+    # 📸 Скриншот нарушения
+    if message.reply_to_message.text:
+        await log_violation_screenshot(
+            cid, target.id, target.full_name,
+            message.reply_to_message.text,
+            f"🔇 Мут {label}", command.args or "—",
+            message.from_user.full_name, message.chat.title)
+    # 📨 ЛС нарушителю
+    dm_ok = await dm_warn_user(target.id, target.full_name, command.args or "Нарушение правил",
+                                message.chat.title, f"🔇 Мут на {label}", message.from_user.full_name)
+    reply = random.choice(MUTE_MESSAGES).format(name=target.mention_html(), time=label)
+    if dm_ok: reply += "\n<i>📨 Нарушитель уведомлён в лс</i>"
+    await message.reply(reply, parse_mode="HTML")
     await log_action(f"🔇 <b>МУТ</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nВремя: {label}\nЧат: {message.chat.title}")
-    add_mod_history(message.chat.id, target.id, f"🔇 Мут {label}", "—", message.from_user.full_name)
+    add_mod_history(cid, target.id, f"🔇 Мут {label}", command.args or "—", message.from_user.full_name)
+    # 🔄 Запуск автоснятия мута
+    schedule_unmute(cid, target.id, mins, target.full_name)
 
 @dp.message(Command("unmute"))
 async def cmd_unmute(message: Message):
@@ -1246,18 +1355,42 @@ async def cmd_warn(message: Message, command: CommandObject):
         await message.reply("🚫 Нельзя выдать варн администратору!"); return
     reason = command.args or "Нарушение правил"
     cid = message.chat.id
-    warnings[cid][target.id] += 1; count = warnings[cid][target.id]
+
+    # Чистим истёкшие варны перед добавлением
+    clean_expired_warns(cid, target.id)
+    add_warn_with_expiry(cid, target.id)
+    count = warnings[cid][target.id]
     save_data()
+
+    # 📸 Скриншот сообщения-нарушения в лог
+    if message.reply_to_message.text:
+        await log_violation_screenshot(
+            cid, target.id, target.full_name,
+            message.reply_to_message.text,
+            f"⚡ Варн {count}/{MAX_WARNINGS}", reason,
+            message.from_user.full_name, message.chat.title)
+
     if count >= MAX_WARNINGS:
-        await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
+        await bot.ban_chat_member(cid, target.id)
+        warn_expiry[cid][target.id].clear()
+        warnings[cid][target.id] = 0
         msg = random.choice(AUTOBAN_MESSAGES).format(name=target.mention_html(), max=MAX_WARNINGS)
         await log_action(f"🔨 <b>АВТОБАН</b>\nКого: {target.mention_html()}\nПричина: {MAX_WARNINGS} варнов\nЧат: {message.chat.title}")
         add_mod_history(cid, target.id, "🔨 Автобан", f"{MAX_WARNINGS} варнов", message.from_user.full_name)
+        # 📨 ЛС нарушителю
+        await dm_warn_user(target.id, target.full_name, f"{MAX_WARNINGS} варнов — автобан",
+                           message.chat.title, "🔨 Бан", message.from_user.full_name)
     else:
         msg = random.choice(WARN_MESSAGES).format(
             name=target.mention_html(), count=count, max=MAX_WARNINGS, reason=reason)
-        await log_action(f"⚡ <b>ВАРН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
+        await log_action(f"⚡ <b>ВАРН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\n⏳ Сгорит через {WARN_EXPIRY_DAYS} дн.\nЧат: {message.chat.title}")
         add_mod_history(cid, target.id, f"⚡ Варн {count}/{MAX_WARNINGS}", reason, message.from_user.full_name)
+        # 📨 ЛС нарушителю
+        dm_ok = await dm_warn_user(target.id, target.full_name, reason,
+                                    message.chat.title, f"⚡ Варн {count}/{MAX_WARNINGS}",
+                                    message.from_user.full_name)
+        if dm_ok:
+            msg += "\n<i>📨 Нарушитель уведомлён в лс</i>"
     await message.reply(msg, parse_mode="HTML")
 
 @dp.message(Command("unwarn"))
@@ -2415,6 +2548,23 @@ async def cmd_join(message: Message):
         f"👥 Участников: <b>{len(parts)}</b>", parse_mode="HTML")
 
 # ===== НЕДЕЛЬНАЯ СТАТИСТИКА =====
+async def warn_expiry_checker():
+    """Каждые 6 часов чистит истёкшие варны и уведомляет если они сгорели"""
+    while True:
+        await asyncio.sleep(21600)  # 6 часов
+        for cid in list(warn_expiry.keys()):
+            for uid in list(warn_expiry[cid].keys()):
+                old_count = warnings[cid].get(uid, 0)
+                clean_expired_warns(cid, uid)
+                new_count = warnings[cid].get(uid, 0)
+                if old_count > new_count and new_count == 0:
+                    try:
+                        await bot.send_message(
+                            cid,
+                            f"⏳ Варны участника <code>{uid}</code> истекли и сброшены автоматически.",
+                            parse_mode="HTML")
+                    except: pass
+
 async def send_weekly_stats():
     while True:
         await asyncio.sleep(604800)  # 7 дней
@@ -2691,6 +2841,7 @@ async def main():
     load_data()
     asyncio.create_task(birthday_checker())
     asyncio.create_task(send_weekly_stats())
+    asyncio.create_task(warn_expiry_checker())
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
     print("✅ Бот запущен!")
