@@ -593,7 +593,7 @@ async def cb_panel(call: CallbackQuery):
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
         elif action == "back":
-               if tid != 0:
+            if tid != 0:
                 warns = warnings[cid].get(tid, 0); rep = reputation[cid].get(tid, 0)
                 msgs  = chat_stats[cid].get(tid, 0)
                 afk   = f"\n🎮 AFK: {afk_users[tid]}" if tid in afk_users else ""
@@ -612,10 +612,10 @@ async def cb_panel(call: CallbackQuery):
                     f"⭐ Репутация: <b>{rep:+d}</b>\n"
                     f"💬 Сообщений: <b>{msgs}</b>\n\n➡️ Выбери действие:",
                     parse_mode="HTML", reply_markup=kb_user_panel(tid))
-              else:
+            else:
                 await call.message.edit_text("🔧 <b>Панель управления</b>\n\n➡️ Выбери раздел:",
                     parse_mode="HTML", reply_markup=kb_main_menu())
-        
+                
         elif action == "mute":
             await call.message.edit_text(f"🔇 <b>Мут для {tname}</b>\n\nВыбери время:",
                 parse_mode="HTML", reply_markup=kb_mute(tid))
@@ -2267,6 +2267,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
