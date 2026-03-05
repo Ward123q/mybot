@@ -2055,7 +2055,7 @@ async def cmd_casino(message: Message, command: CommandObject):
         await message.reply(
             "🎰 Формат: /casino [сумма]\n"
             "Пример: <code>/casino 10</code>\n\n"
-            f"💰 Твоя репутация: <b>{reputation[cid][uid]:+d}</b>",
+            f"💰 Твоя репутация: <b>{reputation[cid].get(uid, 0):+d}</b>",
             parse_mode="HTML")
         return
     try:
@@ -2067,12 +2067,18 @@ async def cmd_casino(message: Message, command: CommandObject):
         await message.reply("⚠️ Ставка должна быть больше 0!")
         return
     current_rep = reputation[cid].get(uid, 0)
-        if current_rep < bet:
-            await message.reply(
-                f"💸 Недостаточно репутации!\n"
-                f"💰 У тебя: <b>{current_rep:+d}</b>",
-                parse_mode="HTML")
-            return
+    if current_rep < bet:
+        await message.reply(
+            f"💸 Недостаточно репутации!\n"
+            f"💰 У тебя: <b>{current_rep:+d}</b>",
+            parse_mode="HTML")
+        return
+    save_data()
+    await message.reply(
+        f"🎰 [ {s1} | {s2} | {s3} ]\n\n"
+        f"{res}\n{result}\n\n"
+        f"💰 Репутация: <b>{reputation[cid][uid]:+d}</b>",
+        parse_mode="HTML")
             
     symbols = ["🍒","🍋","🍊","🍇","⭐","7️⃣","💎"]
     s1,s2,s3 = random.choice(symbols),random.choice(symbols),random.choice(symbols)
@@ -2091,20 +2097,6 @@ async def cmd_casino(message: Message, command: CommandObject):
             result = f"❌ -{bet} к репутации!"
             
         reputation[cid][uid] -= bet
-        result = f"❌ -{bet} к репутации!"
-    save_data()
-    await message.reply(
-        f"🎰 [ {s1} | {s2} | {s3} ]\n\n"
-        f"{res}\n{result}\n\n"
-        f"💰 Репутация: <b>{reputation[cid][uid]:+d}</b>",
-        parse_mode="HTML")
-duel_requests = {}
-
-@dp.message(Command("duel"))
-async def cmd_duel(message: Message, command: CommandObject):
-    if not message.reply_to_message:
-        await message.reply("↩️ Ответь на сообщение участника для дуэли!")
-        return
     challenger = message.from_user
     target = message.reply_to_message.from_user
     cid = message.chat.id
@@ -2353,6 +2345,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
