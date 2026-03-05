@@ -438,6 +438,7 @@ class StatsMiddleware(BaseMiddleware):
                         f"🎉 {event.from_user.mention_html()} достиг <b>{new_level} уровня</b>!\n"
                         f"🏅 Титул: <b>{title}</b>", parse_mode="HTML")
                 except: pass
+            asyncio.create_task(check_achievements(uid, cid, event))
             if event.text:
                 message_cache[event.message_id] = {
                     "text": event.text, "user": event.from_user.full_name,
@@ -1072,7 +1073,13 @@ async def cmd_help(message: Message):
         "😴 /afk [причина] — уйти в AFK\n"
         "📋 /report причина — пожаловаться на нарушителя (реплай)\n"
         "🔍 /info — инфо о пользователе (реплай)\n"
-        "⚡ /warnings — варны пользователя (реплай)\n\n"
+        "⚡ /warnings — варны пользователя (реплай)\n"
+        "🎁 /daily — ежедневный бонус репутации\n"
+        "⚔️ /rpg — RPG персонаж\n"
+        "🗡 /rpgfight — бой с монстром\n"
+        "🏥 /rpgheal — лечение (10 реп.)\n"
+        "🏅 /achievements — достижения\n"
+        "🎪 /join — записаться в турнир\n\n"
         "🎮 <b>Игры:</b>\n"
         "🎲 /roll [N] — кубик\n"
         "🪙 /flip — монетка\n"
@@ -1119,6 +1126,7 @@ async def cmd_help(message: Message):
             "🎲 /rban — шуточный бан\n"
             "⏱ /countdown [N] — обратный отсчёт\n"
             "📝 /note set/del — управление заметками\n"
+            "🎪 /tournament start/begin/next/stop — турнир\n"
         )
     await message.reply(text, parse_mode="HTML")
 
@@ -2238,6 +2246,314 @@ async def cmd_addrep(message: Message, command: CommandObject):
         parse_mode="HTML")
     await log_action(f"💰 <b>ADDREP</b>\nОт: {message.from_user.mention_html()}\nКому: {target.mention_html()}\nСумма: {amount:+d}\nЧат: {message.chat.title}")
 
+# ===== RPG СИСТЕМА =====
+rpg_classes = {
+    "⚔️ Воин":    {"hp": 120, "atk": 15, "def": 10, "emoji": "⚔️"},
+    "🧙 Маг":     {"hp": 80,  "atk": 25, "def": 5,  "emoji": "🧙"},
+    "🏹 Лучник":  {"hp": 100, "atk": 20, "def": 7,  "emoji": "🏹"},
+    "🛡 Паладин": {"hp": 150, "atk": 10, "def": 20, "emoji": "🛡"},
+}
+rpg_players = {}  # {uid: {"class": ..., "hp": ..., "max_hp": ..., "level": ..., "xp": ...}}
+
+@dp.message(Command("rpg"))
+async def cmd_rpg(message: Message, command: CommandObject):
+    uid = message.from_user.id
+    if uid in rpg_players:
+        p = rpg_players[uid]
+        await message.reply(
+            f"🎮 <b>Твой RPG персонаж:</b>\n\n"
+            f"{p['class']}\n"
+            f"❤️ HP: <b>{p['hp']}/{p['max_hp']}</b>\n"
+            f"⚔️ Атака: <b>{p['atk']}</b>\n"
+            f"🛡 Защита: <b>{p['def']}</b>\n"
+            f"⭐ Уровень: <b>{p['level']}</b>\n"
+            f"✨ Опыт: <b>{p['xp']}/100</b>\n\n"
+            f"🗡 /rpgfight — сразиться с монстром\n"
+            f"🏥 /rpgheal — лечиться (10 репутации)", parse_mode="HTML")
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=cls, callback_data=f"rpg:pick:{cls}:{uid}")]
+        for cls in rpg_classes
+    ])
+    await message.reply("⚔️ <b>Выбери класс персонажа:</b>", parse_mode="HTML", reply_markup=kb)
+
+@dp.callback_query(F.data.startswith("rpg:pick:"))
+async def cb_rpg_pick(call: CallbackQuery):
+    parts = call.data.split(":", 3); cls = parts[2]; uid = int(parts[3])
+    if call.from_user.id != uid:
+        await call.answer("❌ Это не твой выбор!", show_alert=True); return
+    stats = rpg_classes[cls]
+    rpg_players[uid] = {
+        "class": cls, "hp": stats["hp"], "max_hp": stats["hp"],
+        "atk": stats["atk"], "def": stats["def"], "level": 1, "xp": 0
+    }
+    await call.message.edit_text(
+        f"✅ <b>Персонаж создан!</b>\n\n{cls}\n"
+        f"❤️ HP: <b>{stats['hp']}</b>\n"
+        f"⚔️ Атака: <b>{stats['atk']}</b>\n"
+        f"🛡 Защита: <b>{stats['def']}</b>\n\n"
+        f"🗡 Используй /rpgfight чтобы начать бой!", parse_mode="HTML")
+    await call.answer()
+
+MONSTERS = [
+    {"name": "🐀 Крыса",      "hp": 30,  "atk": 5,  "xp": 10, "rep": 2},
+    {"name": "🐺 Волк",       "hp": 60,  "atk": 10, "xp": 20, "rep": 5},
+    {"name": "🧟 Зомби",      "hp": 80,  "atk": 12, "xp": 30, "rep": 8},
+    {"name": "🐉 Дракон",     "hp": 200, "atk": 30, "xp": 80, "rep": 25},
+    {"name": "👹 Огр",        "hp": 120, "atk": 20, "xp": 50, "rep": 15},
+    {"name": "🧙 Тёмный маг", "hp": 90,  "atk": 25, "xp": 60, "rep": 18},
+]
+
+@dp.message(Command("rpgfight"))
+async def cmd_rpgfight(message: Message):
+    uid = message.from_user.id; cid = message.chat.id
+    if uid not in rpg_players:
+        await message.reply("❌ Сначала создай персонажа: /rpg"); return
+    p = rpg_players[uid]
+    if p["hp"] <= 0:
+        await message.reply("💀 Твой персонаж мёртв! Используй /rpgheal для лечения."); return
+    monster = dict(random.choice(MONSTERS))
+    p_hp = p["hp"]; m_hp = monster["hp"]; log = []
+    rounds = 0
+    while p_hp > 0 and m_hp > 0 and rounds < 20:
+        rounds += 1
+        p_dmg = max(1, p["atk"] - random.randint(0, 3))
+        m_dmg = max(1, monster["atk"] - p["def"] + random.randint(0, 5))
+        m_hp -= p_dmg
+        if m_hp > 0: p_hp -= m_dmg
+        if rounds <= 3:
+            log.append(f"Раунд {rounds}: ты -{p_dmg} HP монстру, монстр -{max(0,m_dmg)} HP тебе")
+    p["hp"] = max(0, p_hp)
+    if m_hp <= 0:
+        p["xp"] += monster["xp"]
+        reputation[cid][uid] += monster["rep"]
+        save_data()
+        if p["xp"] >= 100:
+            p["xp"] -= 100; p["level"] += 1
+            p["max_hp"] += 10; p["atk"] += 2; p["def"] += 1
+            level_up = f"\n\n🎉 <b>ЛЕВЕЛ АП! Уровень {p['level']}!</b>"
+        else: level_up = ""
+        await message.reply(
+            f"⚔️ <b>БОЙ с {monster['name']}</b>\n\n"
+            f"{'  '.join(log[:3])}\n\n"
+            f"🏆 <b>ПОБЕДА!</b>\n"
+            f"✨ +{monster['xp']} XP | 🌟 +{monster['rep']} репутации\n"
+            f"❤️ Осталось HP: <b>{p['hp']}/{p['max_hp']}</b>{level_up}", parse_mode="HTML")
+        await log_action(f"⚔️ <b>RPG победа</b>\n👤 {message.from_user.mention_html()}\nМонстр: {monster['name']}\nЧат: {message.chat.title}")
+    else:
+        await message.reply(
+            f"⚔️ <b>БОЙ с {monster['name']}</b>\n\n"
+            f"💀 <b>Ты проиграл!</b>\n"
+            f"❤️ HP: <b>0/{p['max_hp']}</b>\n\n"
+            f"🏥 Используй /rpgheal для лечения.", parse_mode="HTML")
+
+@dp.message(Command("rpgheal"))
+async def cmd_rpgheal(message: Message):
+    uid = message.from_user.id; cid = message.chat.id
+    if uid not in rpg_players:
+        await message.reply("❌ Сначала создай персонажа: /rpg"); return
+    cost = 10
+    if reputation[cid].get(uid, 0) < cost:
+        await message.reply(f"💸 Нужно {cost} репутации для лечения!"); return
+    p = rpg_players[uid]
+    heal = p["max_hp"] - p["hp"]
+    p["hp"] = p["max_hp"]
+    reputation[cid][uid] -= cost; save_data()
+    await message.reply(
+        f"🏥 {message.from_user.mention_html()} вылечился!\n"
+        f"❤️ HP: <b>{p['hp']}/{p['max_hp']}</b> (+{heal})\n"
+        f"💰 Потрачено: -{cost} репутации", parse_mode="HTML")
+
+# ===== ЕЖЕДНЕВНЫЙ БОНУС =====
+daily_claimed = {}
+
+@dp.message(Command("daily"))
+async def cmd_daily(message: Message):
+    uid = message.from_user.id; cid = message.chat.id
+    from datetime import datetime
+    today = datetime.now().strftime("%d.%m.%Y")
+    key = (cid, uid)
+    if daily_claimed.get(key) == today:
+        await message.reply(
+            f"⏳ Ты уже забрал ежедневный бонус!\n"
+            f"🔄 Приходи завтра.", parse_mode="HTML"); return
+    streak = streaks[cid][uid]
+    bonus = 10 + min(streak * 2, 40)
+    daily_claimed[key] = today
+    reputation[cid][uid] += bonus; save_data()
+    await message.reply(
+        f"🎁 <b>Ежедневный бонус!</b>\n\n"
+        f"🌟 +{bonus} репутации\n"
+        f"🔥 Серия: <b>{streak}</b> дней\n"
+        f"💰 Всего репутации: <b>{reputation[cid][uid]:+d}</b>\n\n"
+        f"{'🎉 Бонус за серию +' + str(min(streak*2,40)) + '!' if streak > 1 else '💡 Заходи каждый день для бонуса!'}",
+        parse_mode="HTML")
+    await log_action(f"🎁 <b>DAILY</b>\n👤 {message.from_user.mention_html()}\n+{bonus} репутации\nЧат: {message.chat.title}")
+
+# ===== СИСТЕМА ДОСТИЖЕНИЙ =====
+ACHIEVEMENTS = {
+    "первые_слова":   {"name": "🗣 Первые слова",    "desc": "Написал первое сообщение",         "condition": lambda s,r,w,l: s >= 1},
+    "болтун":         {"name": "💬 Болтун",           "desc": "100 сообщений в чате",             "condition": lambda s,r,w,l: s >= 100},
+    "легенда_чата":   {"name": "🏆 Легенда чата",    "desc": "1000 сообщений в чате",            "condition": lambda s,r,w,l: s >= 1000},
+    "богач":          {"name": "💰 Богач",            "desc": "Репутация 100+",                   "condition": lambda s,r,w,l: r >= 100},
+    "олигарх":        {"name": "👑 Олигарх",          "desc": "Репутация 500+",                   "condition": lambda s,r,w,l: r >= 500},
+    "чистый":         {"name": "😇 Чистый",           "desc": "0 варнов и 50+ сообщений",         "condition": lambda s,r,w,l: w == 0 and s >= 50},
+    "ветеран":        {"name": "⚔️ Ветеран",          "desc": "Достиг 5 уровня",                 "condition": lambda s,r,w,l: l >= 5},
+    "элита":          {"name": "🌟 Элита",            "desc": "Достиг 10 уровня",                "condition": lambda s,r,w,l: l >= 10},
+}
+user_achievements = defaultdict(set)
+
+async def check_achievements(uid: int, cid: int, message: Message):
+    msgs  = chat_stats[cid].get(uid, 0)
+    rep   = reputation[cid].get(uid, 0)
+    warns = warnings[cid].get(uid, 0)
+    lvl   = levels[cid].get(uid, 0)
+    for key, ach in ACHIEVEMENTS.items():
+        if key not in user_achievements[uid] and ach["condition"](msgs, rep, warns, lvl):
+            user_achievements[uid].add(key)
+            try:
+                await message.answer(
+                    f"🏅 <b>ДОСТИЖЕНИЕ!</b>\n\n"
+                    f"{ach['name']}\n"
+                    f"📋 {ach['desc']}\n\n"
+                    f"🎉 {message.from_user.mention_html()} получает ачивку!", parse_mode="HTML")
+                await log_action(f"🏅 <b>АЧИВКА</b>\n👤 {message.from_user.mention_html()}\n{ach['name']}\nЧат: {message.chat.title}")
+            except: pass
+
+@dp.message(Command("achievements"))
+async def cmd_achievements(message: Message):
+    user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
+    uid  = user.id; cid = message.chat.id
+    msgs  = chat_stats[cid].get(uid, 0)
+    rep   = reputation[cid].get(uid, 0)
+    warns = warnings[cid].get(uid, 0)
+    lvl   = levels[cid].get(uid, 0)
+    lines = [f"🏅 <b>Достижения {user.mention_html()}:</b>\n"]
+    for key, ach in ACHIEVEMENTS.items():
+        if key in user_achievements[uid]:
+            lines.append(f"✅ {ach['name']} — {ach['desc']}")
+        elif ach["condition"](msgs, rep, warns, lvl):
+            user_achievements[uid].add(key)
+            lines.append(f"✅ {ach['name']} — {ach['desc']}")
+        else:
+            lines.append(f"🔒 {ach['name']} — {ach['desc']}")
+    await message.reply("\n".join(lines), parse_mode="HTML")
+
+# ===== ТУРНИРЫ =====
+tournament_data = {}  # {cid: {"active": bool, "participants": [], "bracket": [], "round": 0}}
+
+@dp.message(Command("tournament"))
+async def cmd_tournament(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    sub = command.args.strip().lower() if command.args else ""
+    if sub == "start":
+        if cid in tournament_data and tournament_data[cid].get("active"):
+            await message.reply("⚠️ Турнир уже идёт!"); return
+        tournament_data[cid] = {"active": False, "registration": True, "participants": [], "round": 0}
+        await message.reply(
+            f"🎪 <b>ТУРНИР ОТКРЫТ!</b>\n\n"
+            f"📝 Пиши /join чтобы записаться!\n"
+            f"🚀 Админ запустит турнир командой /tournament begin",
+            parse_mode="HTML")
+        await log_action(f"🎪 <b>ТУРНИР ОТКРЫТ</b>\nЧат: {message.chat.title}")
+    elif sub == "begin":
+        if cid not in tournament_data:
+            await message.reply("❌ Сначала открой регистрацию: /tournament start"); return
+        parts = tournament_data[cid]["participants"]
+        if len(parts) < 2:
+            await message.reply("⚠️ Нужно минимум 2 участника!"); return
+        random.shuffle(parts)
+        tournament_data[cid]["active"] = True
+        tournament_data[cid]["registration"] = False
+        names = "\n".join([f"• {p['name']}" for p in parts])
+        await message.reply(
+            f"🎪 <b>ТУРНИР НАЧАЛСЯ!</b>\n\n"
+            f"👥 Участников: <b>{len(parts)}</b>\n\n{names}\n\n"
+            f"⚔️ Запускаем первый раунд с /tournament next!", parse_mode="HTML")
+    elif sub == "next":
+        if cid not in tournament_data or not tournament_data[cid].get("active"):
+            await message.reply("❌ Нет активного турнира!"); return
+        parts = tournament_data[cid]["participants"]
+        if len(parts) == 1:
+            winner = parts[0]
+            reputation[message.chat.id][winner["id"]] += 50; save_data()
+            del tournament_data[cid]
+            await message.reply(
+                f"🏆 <b>ПОБЕДИТЕЛЬ ТУРНИРА:</b>\n\n"
+                f"👑 <b>{winner['name']}</b>\n🌟 +50 репутации!", parse_mode="HTML")
+            await log_action(f"🏆 <b>ТУРНИР ЗАВЕРШЁН</b>\nПобедитель: {winner['name']}\nЧат: {message.chat.title}")
+            return
+        random.shuffle(parts)
+        results = []; survivors = []
+        for i in range(0, len(parts) - 1, 2):
+            a = parts[i]; b = parts[i+1]
+            winner = random.choice([a, b])
+            loser  = b if winner == a else a
+            survivors.append(winner)
+            results.append(f"⚔️ {a['name']} vs {b['name']} → 🏆 <b>{winner['name']}</b>")
+        if len(parts) % 2 == 1:
+            bye = parts[-1]; survivors.append(bye)
+            results.append(f"🎟 {bye['name']} — проходит автоматически")
+        tournament_data[cid]["participants"] = survivors
+        tournament_data[cid]["round"] += 1
+        rnd = tournament_data[cid]["round"]
+        await message.reply(
+            f"🎪 <b>Раунд {rnd} завершён!</b>\n\n" + "\n".join(results) +
+            f"\n\n👥 Осталось: <b>{len(survivors)}</b>\n"
+            f"{'⚔️ /tournament next для следующего раунда' if len(survivors) > 1 else '🏆 /tournament next для финала'}",
+            parse_mode="HTML")
+    elif sub == "stop":
+        if cid in tournament_data:
+            del tournament_data[cid]
+            await message.reply("🛑 Турнир отменён.")
+    else:
+        await message.reply(
+            "🎪 <b>Управление турниром:</b>\n\n"
+            "/tournament start — открыть регистрацию\n"
+            "/tournament begin — начать турнир\n"
+            "/tournament next — следующий раунд\n"
+            "/tournament stop — отменить", parse_mode="HTML")
+
+@dp.message(Command("join"))
+async def cmd_join(message: Message):
+    cid = message.chat.id; uid = message.from_user.id
+    if cid not in tournament_data or not tournament_data[cid].get("registration"):
+        await message.reply("❌ Регистрация на турнир не открыта!"); return
+    parts = tournament_data[cid]["participants"]
+    if any(p["id"] == uid for p in parts):
+        await message.reply("✅ Ты уже записан!"); return
+    parts.append({"id": uid, "name": message.from_user.full_name})
+    await message.reply(
+        f"✅ {message.from_user.mention_html()} записан в турнир!\n"
+        f"👥 Участников: <b>{len(parts)}</b>", parse_mode="HTML")
+
+# ===== НЕДЕЛЬНАЯ СТАТИСТИКА =====
+async def send_weekly_stats():
+    while True:
+        await asyncio.sleep(604800)  # 7 дней
+        for cid, stats in chat_stats.items():
+            if not stats: continue
+            sorted_u = sorted(stats.items(), key=lambda x: x[1], reverse=True)[:5]
+            medals   = ["🥇","🥈","🥉","4️⃣","5️⃣"]
+            lines    = [f"📊 <b>НЕДЕЛЬНАЯ СТАТИСТИКА</b>\n"]
+            for i, (uid, cnt) in enumerate(sorted_u):
+                try:
+                    chat_member = await bot.get_chat_member(cid, uid)
+                    uname = chat_member.user.full_name
+                except: uname = f"ID {uid}"
+                lines.append(f"{medals[i]} <b>{uname}</b> — {cnt} сообщений")
+            top_rep = sorted(reputation[cid].items(), key=lambda x: x[1], reverse=True)
+            if top_rep:
+                try:
+                    top_uid = top_rep[0][0]
+                    top_member = await bot.get_chat_member(cid, top_uid)
+                    lines.append(f"\n🌟 Богач недели: <b>{top_member.user.full_name}</b> ({top_rep[0][1]:+d} реп.)")
+                except: pass
+            try:
+                await bot.send_message(LOG_CHANNEL_ID, "\n".join(lines), parse_mode="HTML")
+            except: pass
+
 # ===== РЕПОРТЫ =====
 report_cooldown = {}
 
@@ -2292,6 +2608,7 @@ async def cmd_report(message: Message, command: CommandObject):
 async def main():
     load_data()
     asyncio.create_task(birthday_checker())
+    asyncio.create_task(send_weekly_stats())
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
     print("✅ Бот запущен!")
