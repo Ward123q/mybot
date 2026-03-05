@@ -434,9 +434,6 @@ class AntiFloodMiddleware(BaseMiddleware):
         if len(flood_tracker[cid][uid]) >= FLOOD_LIMIT:
             try:
                 await event.delete()
-                await bot.restrict_chat_member(cid, uid,
-                    permissions=ChatPermissions(can_send_messages=False),
-                    until_date=timedelta(minutes=5))
                 sent = await bot.send_message(cid,
                     f"🌊 {event.from_user.mention_html()}, флуд запрещён! Мут на 5 минут.",
                     parse_mode="HTML")
@@ -1809,3 +1806,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
