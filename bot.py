@@ -1052,6 +1052,7 @@ async def cmd_help(message: Message):
         "✅ /accept — принять дуэль\n"
         "❌ /decline — отказаться от дуэли\n"
         "😴 /afk [причина] — уйти в AFK\n"
+        "📋 /report причина — пожаловаться на нарушителя (реплай)\n"
         "🔍 /info — инфо о пользователе (реплай)\n"
         "⚡ /warnings — варны пользователя (реплай)\n\n"
         "🎮 <b>Игры:</b>\n"
@@ -2352,6 +2353,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
