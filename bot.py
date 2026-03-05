@@ -74,6 +74,8 @@ reminders     = {}
 birthdays     = {}
 levels        = defaultdict(lambda: defaultdict(int))
 xp_data       = defaultdict(lambda: defaultdict(int))
+streaks       = defaultdict(lambda: defaultdict(int))
+streak_dates  = defaultdict(lambda: defaultdict(str))
 
 RULES_TEXT = (
     "🌌 <b>Правила анон чата</b>\n\n"
@@ -223,6 +225,22 @@ def parse_duration(arg: str):
 async def log_action(text: str):
     try:
         await bot.send_message(LOG_CHANNEL_ID, text, parse_mode="HTML")
+    except:
+        pass
+
+async def log_command(message: Message, extra: str = ""):
+    """Логирует любую команду в канал"""
+    try:
+        chat_name = message.chat.title or "ЛС"
+        user = message.from_user
+        text = message.text or ""
+        await log_action(
+            f"📝 <b>КОМАНДА</b>\n"
+            f"👤 {user.mention_html()}\n"
+            f"💬 Чат: <b>{chat_name}</b>\n"
+            f"✏️ <code>{text[:200]}</code>"
+            + (f"\n{extra}" if extra else "")
+        )
     except:
         pass
 
@@ -405,16 +423,16 @@ class StatsMiddleware(BaseMiddleware):
                 else:
                     streaks[cid][uid] = 1
                 streak_dates[cid][uid] = today
-                old_level = levels[cid][uid]
-                new_level = xp_data[cid][uid] // 100
-                if new_level > old_level:
-                    levels[cid][uid] = new_level
-                    title = (
-                        "👑 Элита" if new_level >= 20 else
-                        "🏆 Легенда" if new_level >= 10 else
-                        "⚔️ Ветеран" if new_level >= 5 else
-                        "🌱 Активный" if new_level >= 3 else
-                        "🔰 Участник")
+            old_level = levels[cid][uid]
+            new_level = xp_data[cid][uid] // 100
+            if new_level > old_level:
+                levels[cid][uid] = new_level
+                title = (
+                    "👑 Элита" if new_level >= 20 else
+                    "🏆 Легенда" if new_level >= 10 else
+                    "⚔️ Ветеран" if new_level >= 5 else
+                    "🌱 Активный" if new_level >= 3 else
+                    "🔰 Участник")
                 try:
                     await event.answer(
                         f"🎉 {event.from_user.mention_html()} достиг <b>{new_level} уровня</b>!\n"
@@ -599,9 +617,7 @@ async def cb_panel(call: CallbackQuery):
                 afk   = f"\n🎮 AFK: {afk_users[tid]}" if tid in afk_users else ""
                 try:
                     safe_name = (tm.user.full_name
-                        .replace("&","&amp;")
-                        .replace("<","&lt;")
-                        .replace(">","&gt;"))
+                        .replace("&","&amp;").replace("<","&lt;").replace(">","&gt;"))
                     mention = f'<a href="tg://user?id={tid}">{safe_name}</a>'
                 except:
                     mention = f"<code>{tid}</code>"
@@ -615,7 +631,6 @@ async def cb_panel(call: CallbackQuery):
             else:
                 await call.message.edit_text("🔧 <b>Панель управления</b>\n\n➡️ Выбери раздел:",
                     parse_mode="HTML", reply_markup=kb_main_menu())
-                
         elif action == "mute":
             await call.message.edit_text(f"🔇 <b>Мут для {tname}</b>\n\nВыбери время:",
                 parse_mode="HTML", reply_markup=kb_mute(tid))
@@ -1008,6 +1023,7 @@ async def cb_game(call: CallbackQuery):
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
+    await log_command(message)
     await message.reply(
         f"👋 Привет, <b>{message.from_user.first_name}</b>!\n\n"
         "🤖 Я бот-модератор этого чата.\n"
@@ -1018,6 +1034,7 @@ async def cmd_start(message: Message):
 
 @dp.message(Command("rules"))
 async def cmd_rules(message: Message):
+    await log_command(message)
     await message.reply_photo(
         photo=FSInputFile("welcome.jpg"),
         caption="📜 <b>Правила чата</b>\n\n🔎 Нажми кнопку ниже чтобы прочитать правила:",
@@ -1029,6 +1046,7 @@ async def cmd_rules(message: Message):
 
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
+    await log_command(message)
     is_adm = await check_admin(message)
     text = (
         "❓ <b>Команды для всех:</b>\n"
@@ -1107,6 +1125,7 @@ async def cmd_help(message: Message):
 @dp.message(Command("panel"))
 async def cmd_panel(message: Message):
     if not await require_admin(message): return
+    await log_command(message)
     if message.reply_to_message:
         target = message.reply_to_message.from_user
         warns  = warnings[message.chat.id].get(target.id, 0)
@@ -1218,6 +1237,7 @@ async def cmd_del(message: Message):
 @dp.message(Command("clear"))
 async def cmd_clear(message: Message, command: CommandObject):
     if not await require_admin(message): return
+    await log_command(message)
     try: count = min(int(command.args or 10), 50)
     except ValueError: await message.reply("⚠️ /clear 20"); return
     deleted = 0
@@ -1232,6 +1252,7 @@ async def cmd_clear(message: Message, command: CommandObject):
 @dp.message(Command("announce"))
 async def cmd_announce(message: Message, command: CommandObject):
     if not await require_admin(message): return
+    await log_command(message)
     if not command.args:
         pending[message.from_user.id] = {"action":"announce_text","target_id":0,"target_name":"","chat_id":message.chat.id}
         await message.reply("📢 Напиши текст объявления:"); return
@@ -1258,6 +1279,7 @@ async def cmd_lock(message: Message):
     if not await require_admin(message): return
     await bot.set_chat_permissions(message.chat.id, ChatPermissions(can_send_messages=False))
     await message.reply("🔒 Чат <b>заблокирован</b>.", parse_mode="HTML")
+    await log_action(f"🔒 <b>ЧАТ ЗАБЛОКИРОВАН</b>\nКто: {message.from_user.mention_html()}\nЧат: {message.chat.title}")
 
 @dp.message(Command("unlock"))
 async def cmd_unlock(message: Message):
@@ -1266,6 +1288,7 @@ async def cmd_unlock(message: Message):
         can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
         can_send_other_messages=True, can_add_web_page_previews=True, can_invite_users=True))
     await message.reply("🔓 Чат <b>разблокирован</b>.", parse_mode="HTML")
+    await log_action(f"🔓 <b>ЧАТ РАЗБЛОКИРОВАН</b>\nКто: {message.from_user.mention_html()}\nЧат: {message.chat.title}")
 
 @dp.message(Command("slowmode"))
 async def cmd_slowmode(message: Message, command: CommandObject):
@@ -1357,7 +1380,7 @@ async def cmd_note(message: Message, command: CommandObject):
     if action == "set":
         if not await require_admin(message): return
         if len(parts) < 3: await message.reply("⚠️ /note set [имя] [текст]"); return
-        notes[cid][parts[1]] = parts[2]
+        notes[cid][parts[1]] = parts[2]; save_data()
         await message.reply(f"📝 Заметка <b>{parts[1]}</b> сохранена!", parse_mode="HTML")
     elif action == "get":
         if len(parts) < 2: await message.reply("⚠️ /note get [имя]"); return
@@ -1366,7 +1389,8 @@ async def cmd_note(message: Message, command: CommandObject):
     elif action == "del":
         if not await require_admin(message): return
         if len(parts) > 1 and parts[1] in notes[cid]:
-            del notes[cid][parts[1]]; await message.reply(f"🗑 Заметка <b>{parts[1]}</b> удалена.", parse_mode="HTML")
+            del notes[cid][parts[1]]; save_data()
+            await message.reply(f"🗑 Заметка <b>{parts[1]}</b> удалена.", parse_mode="HTML")
         else: await message.reply("❌ Не найдена.")
     elif action == "list":
         keys = list(notes[cid].keys())
@@ -1397,6 +1421,7 @@ async def birthday_checker():
                     await bot.send_message(data["chat_id"],
                         f"🎉🎂 Сегодня день рождения у <a href='tg://user?id={uid}'>{data['name']}</a>!\n\n🎊 Поздравляем! 🥳",
                         parse_mode="HTML")
+                    await log_action(f"🎂 <b>ДЕНЬ РОЖДЕНИЯ</b>\nИменинник: <a href='tg://user?id={uid}'>{data['name']}</a>\nЧат: {data.get('chat_id','?')}")
                 except: pass
         await asyncio.sleep(3600)
 
@@ -1437,6 +1462,7 @@ async def cmd_countdown(message: Message, command: CommandObject):
 @dp.message(Command("weather"))
 async def cmd_weather(message: Message, command: CommandObject):
     if not command.args: await message.reply("🌤 Укажи город: /weather Москва"); return
+    await log_command(message)
     wait = await message.reply("⏳ Получаю данные...")
     await wait.edit_text(await get_weather(command.args), parse_mode="HTML")
 
@@ -1449,6 +1475,7 @@ async def cmd_afk(message: Message, command: CommandObject):
 @dp.message(Command("info"))
 async def cmd_info(message: Message):
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
+    await log_command(message)
     user = message.reply_to_message.from_user
     member = await bot.get_chat_member(message.chat.id, user.id)
     smap = {"creator":"👑 Создатель","administrator":"🛡 Администратор","member":"👤 Участник",
@@ -1476,7 +1503,7 @@ async def cmd_warnings(message: Message):
 async def cmd_rep(message: Message):
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
-    score  = reputation[message.chat.id][target.id]
+    score  = reputation[message.chat.id].get(target.id, 0)
     await message.reply(
         f"{'🌟' if score>=0 else '💀'} Репутация {target.mention_html()}: <b>{score:+d}</b>",
         parse_mode="HTML")
@@ -1489,7 +1516,8 @@ async def rep_plus(message: Message):
     key = (message.chat.id, message.from_user.id, target.id); now = time()
     if key in rep_cooldown and now - rep_cooldown[key] < 3600:
         await message.reply(f"⏳ Подожди ещё {int(3600-(now-rep_cooldown[key]))//60} мин."); return
-    rep_cooldown[key] = now; reputation[message.chat.id][target.id] += 1
+    rep_cooldown[key] = now
+    reputation[message.chat.id][target.id] += 1
     save_data()
     await message.reply(
         f"⬆️ {target.mention_html()} +1 к репутации! Теперь: <b>{reputation[message.chat.id][target.id]:+d}</b>",
@@ -1503,7 +1531,8 @@ async def rep_minus(message: Message):
     key = (message.chat.id, message.from_user.id, target.id); now = time()
     if key in rep_cooldown and now - rep_cooldown[key] < 3600:
         await message.reply(f"⏳ Подожди ещё {int(3600-(now-rep_cooldown[key]))//60} мин."); return
-    rep_cooldown[key] = now; reputation[message.chat.id][target.id] -= 1
+    rep_cooldown[key] = now
+    reputation[message.chat.id][target.id] -= 1
     save_data()
     await message.reply(
         f"⬇️ {target.mention_html()} -1 к репутации! Теперь: <b>{reputation[message.chat.id][target.id]:+d}</b>",
@@ -1713,19 +1742,23 @@ async def autist_commands(message: Message):
             else:
                 await bot.ban_chat_member(cid, target.id)
                 await message.reply(f"🔨 {tname} забанен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
+            await log_action(f"🔨 <b>БАН (аутист)</b>\nКто: {message.from_user.mention_html()}\nКого: {tname}\nПричина: {reason}\nЧат: {message.chat.title}")
         elif action == "захуесосить":
             await bot.ban_chat_member(cid, target.id)
             await bot.unban_chat_member(cid, target.id)
             await message.reply(f"👢 {tname} захуесошен из чата!\n📝 Причина: {reason}", parse_mode="HTML")
+            await log_action(f"👢 <b>КИК (аутист)</b>\nКто: {message.from_user.mention_html()}\nКого: {tname}\nЧат: {message.chat.title}")
         elif action == "кик":
             await bot.ban_chat_member(cid, target.id)
             await bot.unban_chat_member(cid, target.id)
             await message.reply(f"👟 {tname} кикнут из чата!\n📝 Причина: {reason}", parse_mode="HTML")
+            await log_action(f"👟 <b>КИК (аутист)</b>\nКто: {message.from_user.mention_html()}\nКого: {tname}\nЧат: {message.chat.title}")
         elif action == "мут":
             mins = duration_mins or 60; label = duration_label or "1 ч."
             await bot.restrict_chat_member(cid, target.id,
                 permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
             await message.reply(f"🔇 {tname} замучен на <b>{label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
+            await log_action(f"🔇 <b>МУТ (аутист)</b>\nКто: {message.from_user.mention_html()}\nКого: {tname}\nВремя: {label}\nЧат: {message.chat.title}")
         elif action == "мут навсегда":
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(can_send_messages=False))
             await message.reply(f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
@@ -1734,8 +1767,10 @@ async def autist_commands(message: Message):
             if count >= MAX_WARNINGS:
                 await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
                 await message.reply(f"🔨 {tname} — {MAX_WARNINGS} варна, автобан!\n📝 Причина: {reason}", parse_mode="HTML")
+                await log_action(f"🔨 <b>АВТОБАН (аутист)</b>\nКто: {message.from_user.mention_html()}\nКого: {tname}\nЧат: {message.chat.title}")
             else:
                 await message.reply(f"⚡ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
+                await log_action(f"⚡ <b>ВАРН (аутист)</b>\nКто: {message.from_user.mention_html()}\nКого: {tname}\nПричина: {reason}\nЧат: {message.chat.title}")
         elif action in ("снять варн", "снятьварн"):
             if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1
             await message.reply(f"🌿 С {tname} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>", parse_mode="HTML")
@@ -1832,6 +1867,8 @@ async def autist_commands(message: Message):
             await message.reply(f"ℹ️ Функция проверки (капча) отключена.", parse_mode="HTML")
     except Exception as e:
         await message.reply(f"⚠️ Ошибка: {e}")
+
+# ===== УГАДАЙ ЧИСЛО =====
 guess_games = {}
 
 @dp.message(Command("guess"))
@@ -1861,29 +1898,25 @@ async def guess_handler(message: Message):
             f"🎉 {message.from_user.mention_html()} угадал за <b>{game['attempts']}</b> попыток!\n"
             f"✅ Число было <b>{num}</b>!", parse_mode="HTML")
     elif game["attempts"] >= 10:
-        n = game["number"]
-        del guess_games[cid]
+        n = game["number"]; del guess_games[cid]
         await message.reply(f"😢 Попытки кончились! Загадано было <b>{n}</b>.", parse_mode="HTML")
     elif num < game["number"]:
         await message.reply(f"⬆️ Больше! Попытка {game['attempts']}/10")
     else:
         await message.reply(f"⬇️ Меньше! Попытка {game['attempts']}/10")
+
+# ===== АСК =====
 ask_targets = {}
 
 @dp.message(Command("ask"))
 async def cmd_ask(message: Message):
     if message.chat.type == "private":
-        await message.reply("❓ Эту команду используй в чате!")
-        return
-    ask_targets[message.from_user.id] = {
-        "chat_id": message.chat.id,
-        "name": message.from_user.full_name
-    }
+        await message.reply("❓ Эту команду используй в чате!"); return
+    ask_targets[message.from_user.id] = {"chat_id": message.chat.id, "name": message.from_user.full_name}
     await message.reply(
         f"📬 <b>{message.from_user.mention_html()} открыл АСК!</b>\n\n"
         f"🔒 Напиши боту в личку анонимный вопрос!\n"
-        f"👉 @AllAnonandbot",
-        parse_mode="HTML")
+        f"👉 @AllAnonandbot", parse_mode="HTML")
 
 @dp.message(Command("askoff"))
 async def cmd_askoff(message: Message):
@@ -1896,18 +1929,12 @@ async def cmd_askoff(message: Message):
 @dp.message(Command("send"))
 async def cmd_send_ask(message: Message, command: CommandObject):
     if message.chat.type != "private":
-        await message.reply("📩 Эту команду используй в личке с ботом!")
-        return
+        await message.reply("📩 Эту команду используй в личке с ботом!"); return
     if not command.args:
-        await message.reply(
-            "❓ Формат: /send @юзернейм текст\n"
-            "Пример: <code>/send @username Привет как дела?</code>",
-            parse_mode="HTML")
-        return
+        await message.reply("❓ Формат: /send @юзернейм текст", parse_mode="HTML"); return
     parts = command.args.split(maxsplit=1)
     if len(parts) < 2:
-        await message.reply("⚠️ Укажи юзернейм и текст вопроса!")
-        return
+        await message.reply("⚠️ Укажи юзернейм и текст вопроса!"); return
     username = parts[0].replace("@", "").lower()
     text = parts[1].strip()
     target_id = None
@@ -1915,67 +1942,53 @@ async def cmd_send_ask(message: Message, command: CommandObject):
         try:
             chat_member = await bot.get_chat_member(data["chat_id"], uid)
             if chat_member.user.username and chat_member.user.username.lower() == username:
-                target_id = uid
-                break
+                target_id = uid; break
         except: pass
     if not target_id:
-        await message.reply("❌ Этот пользователь не открыл АСК или не найден.")
-        return
+        await message.reply("❌ Этот пользователь не открыл АСК или не найден."); return
     data = ask_targets[target_id]
     try:
         await bot.send_message(data["chat_id"],
-            f"📬 <b>Анонимный вопрос для {data['name']}:</b>\n\n"
-            f"💬 {text}\n\n"
-            f"<i>Ответь командой /reply</i>",
+            f"📬 <b>Анонимный вопрос для {data['name']}:</b>\n\n💬 {text}\n\n<i>Ответь командой /reply</i>",
             parse_mode="HTML")
         await message.reply("✅ Вопрос отправлен анонимно!")
     except:
         await message.reply("⚠️ Не удалось отправить вопрос.")
+
+# ===== МВП =====
 mvp_votes = {}
 mvp_voted = {}
 
 @dp.message(Command("mvp"))
 async def cmd_mvp(message: Message):
     if not message.reply_to_message:
-        await message.reply("↩️ Ответь на сообщение участника чтобы проголосовать за МВП!")
-        return
-    voter = message.from_user
-    target = message.reply_to_message.from_user
-    cid = message.chat.id
+        await message.reply("↩️ Ответь на сообщение участника чтобы проголосовать за МВП!"); return
+    voter = message.from_user; target = message.reply_to_message.from_user; cid = message.chat.id
     if target.id == voter.id:
-        await message.reply("😏 За себя голосовать нельзя!")
-        return
-    if cid not in mvp_voted:
-        mvp_voted[cid] = {}
+        await message.reply("😏 За себя голосовать нельзя!"); return
+    if cid not in mvp_voted: mvp_voted[cid] = {}
     if voter.id in mvp_voted[cid]:
-        await message.reply(f"⏳ Ты уже голосовал сегодня за МВП!")
-        return
+        await message.reply("⏳ Ты уже голосовал сегодня за МВП!"); return
     mvp_voted[cid][voter.id] = True
-    if cid not in mvp_votes:
-        mvp_votes[cid] = {}
+    if cid not in mvp_votes: mvp_votes[cid] = {}
     mvp_votes[cid][target.id] = mvp_votes[cid].get(target.id, 0) + 1
     votes = mvp_votes[cid][target.id]
     await message.reply(
         f"⭐ {voter.mention_html()} проголосовал за <b>МВП</b>!\n\n"
-        f"🏆 {target.mention_html()}\n"
-        f"👍 Голосов: <b>{votes}</b>",
-        parse_mode="HTML")
+        f"🏆 {target.mention_html()}\n👍 Голосов: <b>{votes}</b>", parse_mode="HTML")
+    await log_action(f"⭐ <b>МВП ГОЛОС</b>\nОт: {voter.mention_html()}\nЗа: {target.mention_html()}\nГолосов: {votes}\nЧат: {message.chat.title}")
 
 @dp.message(Command("mvpstats"))
 async def cmd_mvpstats(message: Message):
     cid = message.chat.id
     if cid not in mvp_votes or not mvp_votes[cid]:
-        await message.reply("📊 Голосов ещё нет!")
-        return
+        await message.reply("📊 Голосов ещё нет!"); return
     sorted_mvp = sorted(mvp_votes[cid].items(), key=lambda x: x[1], reverse=True)[:5]
     medals = ["🥇","🥈","🥉","4️⃣","5️⃣"]
     lines = ["🏆 <b>Топ МВП:</b>\n"]
     for i, (uid, votes) in enumerate(sorted_mvp):
-        try:
-            m = await bot.get_chat_member(cid, uid)
-            uname = m.user.full_name
-        except:
-            uname = f"ID {uid}"
+        try: m = await bot.get_chat_member(cid, uid); uname = m.user.full_name
+        except: uname = f"ID {uid}"
         lines.append(f"{medals[i]} <b>{uname}</b> — {votes} голосов")
     await message.reply("\n".join(lines), parse_mode="HTML")
 
@@ -1983,42 +1996,36 @@ async def cmd_mvpstats(message: Message):
 async def cmd_mvpreset(message: Message):
     if not await require_admin(message): return
     cid = message.chat.id
-    mvp_votes[cid] = {}
-    mvp_voted[cid] = {}
+    mvp_votes[cid] = {}; mvp_voted[cid] = {}
     await message.reply("🔄 МВП голосование сброшено!")
+
+# ===== CONFESSION =====
 @dp.message(Command("confession"))
 async def cmd_confession(message: Message, command: CommandObject):
     if not command.args:
         await message.reply(
             "💌 Формат: /confession текст\n"
-            "Пример: <code>/confession Я влюблён в одного человека в этом чате...</code>\n\n"
-            "<i>Сообщение отправится анонимно в чат!</i>",
-            parse_mode="HTML")
-        return
+            "Пример: <code>/confession Я влюблён в одного человека в этом чате...</code>",
+            parse_mode="HTML"); return
     text = command.args.strip()
     if len(text) < 5:
-        await message.reply("⚠️ Слишком короткое сообщение!")
-        return
-    try:
-        await message.delete()
+        await message.reply("⚠️ Слишком короткое сообщение!"); return
+    try: await message.delete()
     except: pass
-    await bot.send_message(
-        message.chat.id,
-        f"💌 <b>Анонимное признание:</b>\n\n"
-        f"<i>{text}</i>\n\n"
-        f"🔒 <i>Автор неизвестен</i>",
+    await bot.send_message(message.chat.id,
+        f"💌 <b>Анонимное признание:</b>\n\n<i>{text}</i>\n\n🔒 <i>Автор неизвестен</i>",
         parse_mode="HTML")
+    await log_action(f"💌 <b>CONFESSION</b>\nЧат: {message.chat.title}\nТекст: {text[:100]}")
+
+# ===== SECRET =====
 @dp.message(Command("secret"))
 async def cmd_secret(message: Message, command: CommandObject):
     if message.chat.type == "private":
-        await message.reply("❌ Эту команду используй в чате!")
-        return
+        await message.reply("❌ Эту команду используй в чате!"); return
     if not command.args or len(command.args.split(maxsplit=1)) < 2:
         await message.reply(
             "📩 Формат: /secret @юзернейм текст\n"
-            "Пример: <code>/secret @username Ты мне нравишься 😊</code>",
-            parse_mode="HTML")
-        return
+            "Пример: <code>/secret @username Ты мне нравишься 😊</code>", parse_mode="HTML"); return
     parts = command.args.split(maxsplit=1)
     username = parts[0].replace("@", "").lower()
     text = parts[1].strip()
@@ -2029,24 +2036,19 @@ async def cmd_secret(message: Message, command: CommandObject):
     except: pass
     async for member in bot.get_chat_members(message.chat.id):
         if member.user.username and member.user.username.lower() == username:
-            target = member.user
-            break
+            target = member.user; break
     if not target:
-        await message.reply("❌ Участник не найден в чате!")
-        return
+        await message.reply("❌ Участник не найден в чате!"); return
     try:
         await message.delete()
-        await bot.send_message(
-            target.id,
-            f"💌 <b>Тебе анонимное сообщение!</b>\n\n"
-            f"<i>{text}</i>\n\n"
-            f"🔒 <i>Автор неизвестен</i>",
+        await bot.send_message(target.id,
+            f"💌 <b>Тебе анонимное сообщение!</b>\n\n<i>{text}</i>\n\n🔒 <i>Автор неизвестен</i>",
             parse_mode="HTML")
-        await bot.send_message(
-            message.chat.id,
-            f"📩 Анонимное сообщение отправлено!",)
+        await bot.send_message(message.chat.id, "📩 Анонимное сообщение отправлено!")
     except:
         await message.reply("⚠️ Не удалось отправить — участник должен написать боту в лс хотя бы раз!")
+
+# ===== КАЗИНО =====
 @dp.message(Command("casino"))
 async def cmd_casino(message: Message, command: CommandObject):
     cid = message.chat.id
@@ -2056,30 +2058,19 @@ async def cmd_casino(message: Message, command: CommandObject):
             "🎰 Формат: /casino [сумма]\n"
             "Пример: <code>/casino 10</code>\n\n"
             f"💰 Твоя репутация: <b>{reputation[cid].get(uid, 0):+d}</b>",
-            parse_mode="HTML")
-        return
+            parse_mode="HTML"); return
     try:
         bet = int(command.args.strip())
     except:
-        await message.reply("⚠️ Укажи число! Пример: /casino 10")
-        return
+        await message.reply("⚠️ Укажи число! Пример: /casino 10"); return
     if bet <= 0:
-        await message.reply("⚠️ Ставка должна быть больше 0!")
-        return
+        await message.reply("⚠️ Ставка должна быть больше 0!"); return
     current_rep = reputation[cid].get(uid, 0)
     if current_rep < bet:
         await message.reply(
             f"💸 Недостаточно репутации!\n"
             f"💰 У тебя: <b>{current_rep:+d}</b>",
-            parse_mode="HTML")
-        return
-    save_data()
-    await message.reply(
-        f"🎰 [ {s1} | {s2} | {s3} ]\n\n"
-        f"{res}\n{result}\n\n"
-        f"💰 Репутация: <b>{reputation[cid][uid]:+d}</b>",
-        parse_mode="HTML")
-            
+            parse_mode="HTML"); return
     symbols = ["🍒","🍋","🍊","🍇","⭐","7️⃣","💎"]
     s1,s2,s3 = random.choice(symbols),random.choice(symbols),random.choice(symbols)
     if s1==s2==s3=="💎":
@@ -2088,39 +2079,46 @@ async def cmd_casino(message: Message, command: CommandObject):
         mult = 3; res = f"🎉 Три {s1}! Выиграл x3!"
     elif s1==s2 or s2==s3 or s1==s3:
         mult = 2; res = "😊 Два одинаковых! Выиграл x2!"
+    else:
+        mult = 0; res = "😢 Не повезло! Проиграл!"
     if mult > 0:
-            win = bet * mult
-            reputation[cid][uid] = current_rep + win
-            result = f"✅ +{win} к репутации!"
-        else:
-            reputation[cid][uid] = current_rep - bet
-            result = f"❌ -{bet} к репутации!"
-            
-        reputation[cid][uid] -= bet
-    challenger = message.from_user
-    target = message.reply_to_message.from_user
-    cid = message.chat.id
+        win = bet * mult
+        reputation[cid][uid] = current_rep + win
+        result = f"✅ +{win} к репутации!"
+        await log_action(f"🎰 <b>КАЗИНО ВЫИГРЫШ</b>\n👤 {message.from_user.mention_html()}\n💰 Ставка: {bet} | Выигрыш: +{win}\nЧат: {message.chat.title}")
+    else:
+        reputation[cid][uid] = current_rep - bet
+        result = f"❌ -{bet} к репутации!"
+        await log_action(f"🎰 <b>КАЗИНО ПРОИГРЫШ</b>\n👤 {message.from_user.mention_html()}\n💰 Ставка: {bet} | Проигрыш: -{bet}\nЧат: {message.chat.title}")
+    save_data()
+    await message.reply(
+        f"🎰 [ {s1} | {s2} | {s3} ]\n\n"
+        f"{res}\n{result}\n\n"
+        f"💰 Репутация: <b>{reputation[cid][uid]:+d}</b>",
+        parse_mode="HTML")
+
+# ===== ДУЭЛИ =====
+duel_requests = {}
+
+@dp.message(Command("duel"))
+async def cmd_duel(message: Message, command: CommandObject):
+    if not message.reply_to_message:
+        await message.reply("↩️ Ответь на сообщение участника для дуэли!"); return
+    challenger = message.from_user; target = message.reply_to_message.from_user; cid = message.chat.id
     if target.id == challenger.id:
-        await message.reply("😏 Сам с собой дуэль?")
-        return
+        await message.reply("😏 Сам с собой дуэль?"); return
     if target.is_bot:
-        await message.reply("🤖 С ботом не подерёшься!")
-        return
+        await message.reply("🤖 С ботом не подерёшься!"); return
     try: bet = int(command.args) if command.args else 10
     except: bet = 10
     if bet <= 0: bet = 10
-    if reputation[cid][challenger.id] < bet:
-        await message.reply(f"💸 Недостаточно репутации! У тебя: <b>{reputation[cid][challenger.id]:+d}</b>", parse_mode="HTML")
-        return
-    if reputation[cid][target.id] < bet:
-        await message.reply(f"💸 У {target.mention_html()} недостаточно репутации!", parse_mode="HTML")
-        return
+    if reputation[cid].get(challenger.id, 0) < bet:
+        await message.reply(f"💸 Недостаточно репутации! У тебя: <b>{reputation[cid].get(challenger.id, 0):+d}</b>", parse_mode="HTML"); return
+    if reputation[cid].get(target.id, 0) < bet:
+        await message.reply(f"💸 У {target.mention_html()} недостаточно репутации!", parse_mode="HTML"); return
     duel_requests[cid] = {
-        "challenger_id": challenger.id,
-        "challenger_name": challenger.full_name,
-        "target_id": target.id,
-        "target_name": target.full_name,
-        "bet": bet
+        "challenger_id": challenger.id, "challenger_name": challenger.full_name,
+        "target_id": target.id, "target_name": target.full_name, "bet": bet
     }
     await message.reply(
         f"⚔️ <b>ВЫЗОВ НА ДУЭЛЬ!</b>\n\n"
@@ -2132,15 +2130,12 @@ async def cmd_casino(message: Message, command: CommandObject):
 
 @dp.message(Command("accept"))
 async def cmd_accept(message: Message):
-    cid = message.chat.id
-    uid = message.from_user.id
+    cid = message.chat.id; uid = message.from_user.id
     if cid not in duel_requests:
-        await message.reply("❌ Нет активных дуэлей!")
-        return
+        await message.reply("❌ Нет активных дуэлей!"); return
     duel = duel_requests[cid]
     if uid != duel["target_id"]:
-        await message.reply("❌ Это не твоя дуэль!")
-        return
+        await message.reply("❌ Это не твоя дуэль!"); return
     winner_id = random.choice([duel["challenger_id"], duel["target_id"]])
     loser_id = duel["target_id"] if winner_id == duel["challenger_id"] else duel["challenger_id"]
     winner_name = duel["challenger_name"] if winner_id == duel["challenger_id"] else duel["target_name"]
@@ -2156,30 +2151,28 @@ async def cmd_accept(message: Message):
         f"🏆 Победитель: <b>{winner_name}</b> +{bet} репутации!\n"
         f"💀 Проигравший: <b>{loser_name}</b> -{bet} репутации!",
         parse_mode="HTML")
+    await log_action(
+        f"⚔️ <b>ДУЭЛЬ</b>\n"
+        f"🏆 Победитель: <b>{winner_name}</b> +{bet}\n"
+        f"💀 Проигравший: <b>{loser_name}</b> -{bet}\n"
+        f"Чат: {message.chat.title}")
 
 @dp.message(Command("decline"))
 async def cmd_decline(message: Message):
-    cid = message.chat.id
-    uid = message.from_user.id
+    cid = message.chat.id; uid = message.from_user.id
     if cid not in duel_requests:
-        await message.reply("❌ Нет активных дуэлей!")
-        return
+        await message.reply("❌ Нет активных дуэлей!"); return
     duel = duel_requests[cid]
     if uid != duel["target_id"]:
-        await message.reply("❌ Это не твоя дуэль!")
-        return
+        await message.reply("❌ Это не твоя дуэль!"); return
     del duel_requests[cid]
     await message.reply(f"🏳 {message.from_user.mention_html()} отказался от дуэли!", parse_mode="HTML")
-streaks = defaultdict(lambda: defaultdict(int))
-streak_dates = defaultdict(lambda: defaultdict(str))
 
 @dp.message(Command("streak"))
 async def cmd_streak(message: Message):
     from datetime import datetime
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
-    uid = user.id
-    cid = message.chat.id
-    today = datetime.now().strftime("%d.%m.%Y")
+    uid = user.id; cid = message.chat.id
     streak = streaks[cid][uid]
     last_date = streak_dates[cid][uid]
     await message.reply(
@@ -2188,6 +2181,7 @@ async def cmd_streak(message: Message):
         f"📆 Последний день: <b>{last_date or 'нет данных'}</b>\n\n"
         f"💬 Пиши каждый день чтобы серия росла!",
         parse_mode="HTML")
+
 @dp.message(Command("toprep"))
 async def cmd_toprep(message: Message):
     rep = reputation[message.chat.id]
@@ -2197,11 +2191,8 @@ async def cmd_toprep(message: Message):
     medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
     lines = ["🌟 <b>Топ по репутации:</b>\n"]
     for i, (uid, score) in enumerate(sorted_u):
-        try:
-            m = await bot.get_chat_member(message.chat.id, uid)
-            uname = m.user.full_name
-        except:
-            uname = f"ID {uid}"
+        try: m = await bot.get_chat_member(message.chat.id, uid); uname = m.user.full_name
+        except: uname = f"ID {uid}"
         icon = "⬆️" if score >= 0 else "⬇️"
         lines.append(f"{medals[i]} <b>{uname}</b> — {icon} <b>{score:+d}</b>")
     await message.reply("\n".join(lines), parse_mode="HTML")
@@ -2210,46 +2201,34 @@ async def cmd_toprep(message: Message):
 async def cmd_profile(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     uid, cid = user.id, message.chat.id
-    xp = xp_data[cid][uid]
-    lvl = levels[cid][uid]
+    xp = xp_data[cid][uid]; lvl = levels[cid][uid]
     xp_current = xp % 100
     bar = "🟩" * (xp_current // 10) + "⬜" * (10 - xp_current // 10)
-    rep = reputation[cid][uid]
+    rep = reputation[cid].get(uid, 0)
     warns = warnings[cid].get(uid, 0)
     msgs = chat_stats[cid].get(uid, 0)
     streak = streaks[cid][uid]
     title = (
-        "👑 Элита" if lvl >= 20 else
-        "🏆 Легенда" if lvl >= 10 else
-        "⚔️ Ветеран" if lvl >= 5 else
-        "🌱 Активный" if lvl >= 3 else
-        "🔰 Участник" if lvl >= 1 else
-        "🐣 Новичок")
+        "👑 Элита" if lvl >= 20 else "🏆 Легенда" if lvl >= 10 else
+        "⚔️ Ветеран" if lvl >= 5 else "🌱 Активный" if lvl >= 3 else
+        "🔰 Участник" if lvl >= 1 else "🐣 Новичок")
     await message.reply(
         f"👤 <b>Профиль {user.mention_html()}</b>\n\n"
-        f"🏅 Титул: <b>{title}</b>\n"
-        f"⚡ Уровень: <b>{lvl}</b>\n"
-        f"✨ Опыт: <b>{xp_current}/100</b>\n"
-        f"[{bar}]\n\n"
-        f"🌟 Репутация: <b>{rep:+d}</b>\n"
-        f"💬 Сообщений: <b>{msgs}</b>\n"
-        f"🔥 Серия: <b>{streak}</b> дней\n"
-        f"⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>",
+        f"🏅 Титул: <b>{title}</b>\n⚡ Уровень: <b>{lvl}</b>\n"
+        f"✨ Опыт: <b>{xp_current}/100</b>\n[{bar}]\n\n"
+        f"🌟 Репутация: <b>{rep:+d}</b>\n💬 Сообщений: <b>{msgs}</b>\n"
+        f"🔥 Серия: <b>{streak}</b> дней\n⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>",
         parse_mode="HTML")
-    
+
 @dp.message(Command("addrep"))
 async def cmd_addrep(message: Message, command: CommandObject):
-    if message.from_user.id != OWNER_ID:
-        return
-    # Если реплай — добавляем тому человеку, иначе себе
+    if message.from_user.id != OWNER_ID: return
     if message.reply_to_message:
         target = message.reply_to_message.from_user
     else:
         target = message.from_user
-    try:
-        amount = int(command.args or 100)
-    except:
-        amount = 100
+    try: amount = int(command.args or 100)
+    except: amount = 100
     cid = message.chat.id
     reputation[cid][target.id] += amount
     save_data()
@@ -2257,7 +2236,9 @@ async def cmd_addrep(message: Message, command: CommandObject):
         f"✅ {target.mention_html()} добавлено <b>{amount}</b> репутации!\n"
         f"🌟 Теперь: <b>{reputation[cid][target.id]:+d}</b>",
         parse_mode="HTML")
-# ===== СИСТЕМА РЕПОРТОВ =====
+    await log_action(f"💰 <b>ADDREP</b>\nОт: {message.from_user.mention_html()}\nКому: {target.mention_html()}\nСумма: {amount:+d}\nЧат: {message.chat.title}")
+
+# ===== РЕПОРТЫ =====
 report_cooldown = {}
 
 @dp.message(Command("report"))
@@ -2266,34 +2247,18 @@ async def cmd_report(message: Message, command: CommandObject):
         await message.reply(
             "📋 <b>Как использовать:</b>\n"
             "↩️ Ответь на сообщение нарушителя и напиши:\n"
-            "<code>/report причина</code>",
-            parse_mode="HTML")
-        return
-    
-    reporter = message.from_user
-    target = message.reply_to_message.from_user
-    cid = message.chat.id
-    
+            "<code>/report причина</code>", parse_mode="HTML"); return
+    reporter = message.from_user; target = message.reply_to_message.from_user; cid = message.chat.id
     if target.id == reporter.id:
-        await message.reply("😏 Сам на себя жалуешься?")
-        return
-    
+        await message.reply("😏 Сам на себя жалуешься?"); return
     if await is_admin_by_id(cid, target.id):
-        await message.reply("🚫 Нельзя пожаловаться на администратора!")
-        return
-    
-    # Кулдаун 5 минут между репортами
-    now = time()
-    key = (cid, reporter.id)
+        await message.reply("🚫 Нельзя пожаловаться на администратора!"); return
+    now = time(); key = (cid, reporter.id)
     if key in report_cooldown and now - report_cooldown[key] < 300:
         left = int(300 - (now - report_cooldown[key]))
-        await message.reply(f"⏳ Подожди ещё <b>{left} сек.</b> перед следующим репортом!", parse_mode="HTML")
-        return
-    
+        await message.reply(f"⏳ Подожди ещё <b>{left} сек.</b> перед следующим репортом!", parse_mode="HTML"); return
     report_cooldown[key] = now
     reason = command.args or "Без причины"
-    
-    # Уведомление в лог-канал
     report_text = (
         f"🚨 <b>НОВЫЙ РЕПОРТ</b>\n\n"
         f"👤 Жалоба от: {reporter.mention_html()}\n"
@@ -2302,39 +2267,28 @@ async def cmd_report(message: Message, command: CommandObject):
         f"💬 Чат: <b>{message.chat.title}</b>\n"
         f"🔗 Сообщение: <a href='https://t.me/c/{str(cid)[4:]}/{message.reply_to_message.message_id}'>перейти</a>"
     )
-    
     await log_action(report_text)
-    
-    # Уведомить всех админов в чате
     try:
         admins = await bot.get_chat_administrators(cid)
         for adm in admins:
             if adm.user.is_bot: continue
             try:
-                await bot.send_message(
-                    adm.user.id,
+                await bot.send_message(adm.user.id,
                     f"🚨 <b>РЕПОРТ в чате {message.chat.title}</b>\n\n"
-                    f"👤 От: {reporter.full_name}\n"
-                    f"🎯 На: {target.full_name}\n"
-                    f"📝 Причина: <b>{reason}</b>",
-                    parse_mode="HTML")
+                    f"👤 От: {reporter.full_name}\n🎯 На: {target.full_name}\n"
+                    f"📝 Причина: <b>{reason}</b>", parse_mode="HTML")
             except: pass
     except: pass
-    
-    # Подтверждение репортеру
     sent = await message.reply(
         f"✅ <b>Жалоба отправлена администраторам!</b>\n"
-        f"🎯 На кого: {target.mention_html()}\n"
-        f"📝 Причина: <b>{reason}</b>",
+        f"🎯 На кого: {target.mention_html()}\n📝 Причина: <b>{reason}</b>",
         parse_mode="HTML")
-    
-    # Удалить подтверждение через 10 секунд
     await asyncio.sleep(10)
     try:
         await sent.delete()
         await message.delete()
     except: pass
-        
+
 async def main():
     load_data()
     asyncio.create_task(birthday_checker())
@@ -2345,20 +2299,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
