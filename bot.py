@@ -1059,7 +1059,8 @@ async def cmd_help(message: Message):
         "🌟 /rep — репутация (реплай)\n"
         "🏆 /toprep — топ по репутации\n"
         "🏆 /top — топ активных участников\n"
-        "🎁 /daily — ежедневный бонус (+10 реп, растёт со стриком)\n\n"
+        "🎁 /daily — ежедневный бонус (+10 реп, растёт со стриком)\n"
+        "🏪 /shop — магазин титулов за репутацию\n\n"
 
         "🎰 <b>Экономика и игры на репутацию:</b>\n"
         "🎰 /casino [сумма] — казино на репутацию\n"
@@ -2273,10 +2274,13 @@ async def cmd_profile(message: Message):
         "👑 Элита" if lvl >= 20 else "🏆 Легенда" if lvl >= 10 else
         "⚔️ Ветеран" if lvl >= 5 else "🌱 Активный" if lvl >= 3 else
         "🔰 Участник" if lvl >= 1 else "🐣 Новичок")
+    shop_title = user_titles[uid].get("title")
+    title_line = f"🎭 Титул магазина: <b>{shop_title}</b>\n" if shop_title else ""
     await message.reply(
         f"👤 <b>Профиль {user.mention_html()}</b>\n\n"
-        f"🏅 Титул: <b>{title}</b>\n⚡ Уровень: <b>{lvl}</b>\n"
+        f"🏅 Уровень: <b>{title}</b> (lvl {lvl})\n"
         f"✨ Опыт: <b>{xp_current}/100</b>\n[{bar}]\n\n"
+        f"{title_line}"
         f"🌟 Репутация: <b>{rep:+d}</b>\n💬 Сообщений: <b>{msgs}</b>\n"
         f"🔥 Серия: <b>{streak}</b> дней\n⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>",
         parse_mode="HTML")
@@ -2435,6 +2439,152 @@ async def send_weekly_stats():
             try:
                 await bot.send_message(LOG_CHANNEL_ID, "\n".join(lines), parse_mode="HTML")
             except: pass
+
+# ===== МАГАЗИН РЕПУТАЦИИ =====
+SHOP_ITEMS = {
+    # ===== ДЕШЁВЫЕ (10–100) =====
+    "1":  {"name": "🌱 Новичок",         "price": 10,   "type": "title"},
+    "2":  {"name": "🐣 Птенец",          "price": 15,   "type": "title"},
+    "3":  {"name": "🍃 Росток",          "price": 20,   "type": "title"},
+    "4":  {"name": "🌊 Волна",           "price": 30,   "type": "title"},
+    "5":  {"name": "🌙 Лунатик",         "price": 40,   "type": "title"},
+    "6":  {"name": "🎈 Воздушный",       "price": 50,   "type": "title"},
+    "7":  {"name": "🐢 Черепаха",        "price": 60,   "type": "title"},
+    "8":  {"name": "🌸 Сакура",          "price": 75,   "type": "title"},
+    "9":  {"name": "🌀 Вихрь",           "price": 90,   "type": "title"},
+    "10": {"name": "🍀 Удачливый",       "price": 100,  "type": "title"},
+    # ===== СРЕДНИЕ (150–500) =====
+    "11": {"name": "⚡ Активист",        "price": 150,  "type": "title"},
+    "12": {"name": "🌈 Радуга",          "price": 200,  "type": "title"},
+    "13": {"name": "🎭 Анонимус",        "price": 250,  "type": "title"},
+    "14": {"name": "🔥 Ветеран",         "price": 300,  "type": "title"},
+    "15": {"name": "🧠 Мудрец",          "price": 350,  "type": "title"},
+    "16": {"name": "🚀 Космонавт",       "price": 400,  "type": "title"},
+    "17": {"name": "🐉 Дракон",          "price": 450,  "type": "title"},
+    "18": {"name": "🏹 Охотник",         "price": 500,  "type": "title"},
+    # ===== ДОРОГИЕ (600–2000) =====
+    "19": {"name": "💎 Элита",           "price": 600,  "type": "title"},
+    "20": {"name": "🦁 Царь зверей",     "price": 700,  "type": "title"},
+    "21": {"name": "🌟 Звезда",          "price": 800,  "type": "title"},
+    "22": {"name": "🎯 Снайпер",         "price": 900,  "type": "title"},
+    "23": {"name": "👑 Легенда",         "price": 1000, "type": "title"},
+    "24": {"name": "🔱 Посейдон",        "price": 1200, "type": "title"},
+    "25": {"name": "⚔️ Воитель",         "price": 1500, "type": "title"},
+    "26": {"name": "🌌 Галактика",       "price": 1800, "type": "title"},
+    "27": {"name": "🏆 Чемпион",         "price": 2000, "type": "title"},
+    # ===== ЭКСКЛЮЗИВНЫЕ (3000–10000) =====
+    "28": {"name": "🐲 Повелитель",      "price": 3000, "type": "title"},
+    "29": {"name": "☄️ Метеорит",        "price": 5000, "type": "title"},
+    "30": {"name": "💀 Бессмертный",     "price": 10000,"type": "title"},
+}
+user_titles = defaultdict(dict)  # {uid: {"title": "...", "purchased": [...]}}
+
+def kb_shop(cid: int, uid: int, page: int = 0) -> InlineKeyboardMarkup:
+    items = list(SHOP_ITEMS.items())
+    per_page = 8
+    start = page * per_page
+    page_items = items[start:start + per_page]
+    rows = []
+    for i in range(0, len(page_items), 2):
+        row = []
+        for item_id, item in page_items[i:i+2]:
+            owned = item["name"] in user_titles[uid].get("purchased", [])
+            active = user_titles[uid].get("title") == item["name"]
+            icon = "🟢" if active else ("✅" if owned else "🛒")
+            label = f"{icon} {item['name']} {item['price']}⭐"
+            row.append(InlineKeyboardButton(text=label, callback_data=f"shop:buy:{item_id}:{uid}:{cid}:{page}"))
+        rows.append(row)
+    nav = []
+    total_pages = (len(items) + per_page - 1) // per_page
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"shop:page:{page-1}:{uid}:{cid}"))
+    nav.append(InlineKeyboardButton(text=f"{page+1}/{total_pages}", callback_data="shop:noop"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"shop:page:{page+1}:{uid}:{cid}"))
+    rows.append(nav)
+    rows.append([InlineKeyboardButton(text="🎭 Мой титул", callback_data=f"shop:mytitle:{uid}:{cid}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+@dp.message(Command("shop"))
+async def cmd_shop(message: Message):
+    uid = message.from_user.id; cid = message.chat.id
+    rep = reputation[cid].get(uid, 0)
+    await message.reply(
+        f"🏪 <b>Магазин титулов</b>\n\n"
+        f"💰 Твоя репутация: <b>{rep:+d}</b>\n\n"
+        f"🟢 — активный | ✅ — куплено | 🛒 — купить\n"
+        f"Всего <b>{len(SHOP_ITEMS)}</b> титулов, листай страницы!",
+        parse_mode="HTML",
+        reply_markup=kb_shop(cid, uid, 0))
+
+@dp.callback_query(F.data.startswith("shop:"))
+async def cb_shop(call: CallbackQuery):
+    parts = call.data.split(":")
+    action = parts[1]
+
+    if action == "noop":
+        await call.answer(); return
+
+    elif action == "page":
+        page, uid, cid = int(parts[2]), int(parts[3]), int(parts[4])
+        if call.from_user.id != uid:
+            await call.answer("❌ Это не твой магазин!", show_alert=True); return
+        rep = reputation[cid].get(uid, 0)
+        await call.message.edit_text(
+            f"🏪 <b>Магазин титулов</b>\n\n"
+            f"💰 Твоя репутация: <b>{rep:+d}</b>\n\n"
+            f"🟢 — активный | ✅ — куплено | 🛒 — купить\n"
+            f"Всего <b>{len(SHOP_ITEMS)}</b> титулов, листай страницы!",
+            parse_mode="HTML",
+            reply_markup=kb_shop(cid, uid, page))
+        await call.answer()
+
+    elif action == "buy":
+        item_id, uid, cid = parts[2], int(parts[3]), int(parts[4])
+        page = int(parts[5]) if len(parts) > 5 else 0
+        if call.from_user.id != uid:
+            await call.answer("❌ Это не твой магазин!", show_alert=True); return
+        item = SHOP_ITEMS.get(item_id)
+        if not item:
+            await call.answer("❌ Товар не найден!", show_alert=True); return
+        purchased = user_titles[uid].get("purchased", [])
+        if item["name"] in purchased:
+            user_titles[uid]["title"] = item["name"]
+            await call.answer(f"🟢 Титул «{item['name']}» активирован!", show_alert=True)
+            await call.message.edit_reply_markup(reply_markup=kb_shop(cid, uid, page))
+            return
+        rep = reputation[cid].get(uid, 0)
+        if rep < item["price"]:
+            await call.answer(
+                f"💸 Недостаточно репутации!\nНужно: {item['price']} | У тебя: {rep}",
+                show_alert=True); return
+        reputation[cid][uid] -= item["price"]
+        save_data()
+        if "purchased" not in user_titles[uid]:
+            user_titles[uid]["purchased"] = []
+        user_titles[uid]["purchased"].append(item["name"])
+        user_titles[uid]["title"] = item["name"]
+        await call.answer(
+            f"🎉 Куплено: {item['name']}\n💸 Потрачено: {item['price']} реп.\n💰 Осталось: {reputation[cid][uid]:+d}",
+            show_alert=True)
+        await call.message.edit_text(
+            f"🏪 <b>Магазин титулов</b>\n\n"
+            f"💰 Твоя репутация: <b>{reputation[cid].get(uid, 0):+d}</b>\n\n"
+            f"🟢 — активный | ✅ — куплено | 🛒 — купить\n"
+            f"Всего <b>{len(SHOP_ITEMS)}</b> титулов, листай страницы!",
+            parse_mode="HTML",
+            reply_markup=kb_shop(cid, uid, page))
+
+    elif action == "mytitle":
+        uid, cid = int(parts[2]), int(parts[3])
+        if call.from_user.id != uid:
+            await call.answer("❌ Это не твой магазин!", show_alert=True); return
+        title = user_titles[uid].get("title", "нет")
+        purchased = user_titles[uid].get("purchased", [])
+        bought_str = ", ".join(purchased) if purchased else "ничего"
+        await call.answer(
+            f"🎭 Активный: {title}\n\n📦 Куплено ({len(purchased)}):\n{bought_str}",
+            show_alert=True)
 
 # ===== РЕПОРТЫ =====
 report_cooldown = {}
