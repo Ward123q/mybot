@@ -606,14 +606,14 @@ async def cb_panel(call: CallbackQuery):
                     except:
                         mention = f"<code>{tid}</code>"
                     await call.message.edit_text(
-                        f"👤 <b>Панель участника</b>\n\n🔭 {mention}{afk}\n"
-                        f"🪪 ID: <code>{tid}</code>\n"
+                        f"👤 <b>Панель участника</b>\n\n☠ {mention}{afk}\n"
+                        f"🆔 ID: <code>{tid}</code>\n"
                         f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
-                        f"🌟 Репутация: <b>{rep:+d}</b>\n"
-                        f"💬 Сообщений: <b>{msgs}</b>\n\n🚀 Выбери действие:",
+                        f"⭐ Репутация: <b>{rep:+d}</b>\n"
+                        f"💬 Сообщений: <b>{msgs}</b>\n\n✏ Выбери действие:",
                         parse_mode="HTML", reply_markup=kb_user_panel(tid))
-            else:
-                    await call.message.edit_text("🛸 <b>Панель управления</b>\n\n🚀 Выбери раздел:",
+                else:
+                    await call.message.edit_text("⚙ <b>Панель управления</b>\n\n✏ Выбери раздел:",
                         parse_mode="HTML", reply_markup=kb_main_menu())
         
         elif action == "mute":
@@ -2267,6 +2267,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
