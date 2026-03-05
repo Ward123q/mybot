@@ -393,16 +393,28 @@ class StatsMiddleware(BaseMiddleware):
             chat_stats[event.chat.id][event.from_user.id] += 1
             uid, cid = event.from_user.id, event.chat.id
             xp_data[cid][uid] += random.randint(1, 5)
-            old_level = levels[cid][uid]
-            new_level = xp_data[cid][uid] // 100
-            if new_level > old_level:
-                levels[cid][uid] = new_level
-                title = (
-                    "👑 Элита" if new_level >= 20 else
-                    "🏆 Легенда" if new_level >= 10 else
-                    "⚔️ Ветеран" if new_level >= 5 else
-                    "🌱 Активный" if new_level >= 3 else
-                    "🔰 Участник")
+            from datetime import datetime, timedelta
+            today = datetime.now().strftime("%d.%m.%Y")
+            last = streak_dates[cid][uid]
+            if last != today:
+                yesterday = (datetime.now() - timedelta(days=1)).strftime("%d.%m.%Y")
+                if last == yesterday:
+                    streaks[cid][uid] += 1
+                elif last == "":
+                    streaks[cid][uid] = 1
+                else:
+                    streaks[cid][uid] = 1
+                streak_dates[cid][uid] = today
+                old_level = levels[cid][uid]
+                new_level = xp_data[cid][uid] // 100
+                if new_level > old_level:
+                    levels[cid][uid] = new_level
+                    title = (
+                        "👑 Элита" if new_level >= 20 else
+                        "🏆 Легенда" if new_level >= 10 else
+                        "⚔️ Ветеран" if new_level >= 5 else
+                        "🌱 Активный" if new_level >= 3 else
+                        "🔰 Участник")
                 try:
                     await event.answer(
                         f"🎉 {event.from_user.mention_html()} достиг <b>{new_level} уровня</b>!\n"
@@ -1015,6 +1027,21 @@ async def cmd_help(message: Message):
         "🌤 /weather [город] — погода\n"
         "🌟 /rep — репутация (реплай)\n"
         "🏆 /top — топ активных\n"
+        "🎯 /guess — угадай число\n"
+        "📬 /ask — открыть АСК (анонимные вопросы)\n"
+        "📭 /askoff — закрыть АСК\n"
+        "📩 /send @юзернейм текст — отправить анонимный вопрос\n"
+        "🏆 /mvp — проголосовать за МВП (реплай)\n"
+        "📊 /mvpstats — топ МВП\n"
+        "💌 /confession текст — анонимное признание в чат\n"
+        "📩 /secret @юзернейм текст — анонимное сообщение в лс\n"
+        "🎰 /casino [сумма] — казино на репутацию\n"
+        "⚔️ /duel [сумма] — дуэль на репутацию (реплай)\n"
+        "🔥 /streak — серия активности\n"
+        "🌟 /toprep — топ по репутации\n"
+        "👤 /profile — профиль участника\n"
+        "✅ /accept — принять дуэль\n"
+        "❌ /decline — отказаться от дуэли\n"
         "😴 /afk [причина] — уйти в AFK\n"
         "🔍 /info — инфо о пользователе (реплай)\n"
         "⚡ /warnings — варны пользователя (реплай)\n\n"
@@ -1795,7 +1822,416 @@ async def autist_commands(message: Message):
             await message.reply(f"ℹ️ Функция проверки (капча) отключена.", parse_mode="HTML")
     except Exception as e:
         await message.reply(f"⚠️ Ошибка: {e}")
+guess_games = {}
 
+@dp.message(Command("guess"))
+async def cmd_guess(message: Message):
+    cid = message.chat.id
+    number = random.randint(1, 100)
+    guess_games[cid] = {"number": number, "attempts": 0}
+    await message.reply(
+        f"🎯 <b>Угадай число!</b>\n\n"
+        f"🔢 Загадал число от <b>1 до 100</b>\n"
+        f"💬 Просто напиши число в чат!\n"
+        f"⚡ Есть <b>10 попыток</b>",
+        parse_mode="HTML")
+
+@dp.message(F.text.regexp(r'^\d+$'))
+async def guess_handler(message: Message):
+    cid = message.chat.id
+    if cid not in guess_games: return
+    game = guess_games[cid]
+    try: num = int(message.text)
+    except: return
+    if num < 1 or num > 100: return
+    game["attempts"] += 1
+    if num == game["number"]:
+        del guess_games[cid]
+        await message.reply(
+            f"🎉 {message.from_user.mention_html()} угадал за <b>{game['attempts']}</b> попыток!\n"
+            f"✅ Число было <b>{num}</b>!", parse_mode="HTML")
+    elif game["attempts"] >= 10:
+        n = game["number"]
+        del guess_games[cid]
+        await message.reply(f"😢 Попытки кончились! Загадано было <b>{n}</b>.", parse_mode="HTML")
+    elif num < game["number"]:
+        await message.reply(f"⬆️ Больше! Попытка {game['attempts']}/10")
+    else:
+        await message.reply(f"⬇️ Меньше! Попытка {game['attempts']}/10")
+ask_targets = {}
+
+@dp.message(Command("ask"))
+async def cmd_ask(message: Message):
+    if message.chat.type == "private":
+        await message.reply("❓ Эту команду используй в чате!")
+        return
+    ask_targets[message.from_user.id] = {
+        "chat_id": message.chat.id,
+        "name": message.from_user.full_name
+    }
+    await message.reply(
+        f"📬 <b>{message.from_user.mention_html()} открыл АСК!</b>\n\n"
+        f"🔒 Напиши боту в личку анонимный вопрос!\n"
+        f"👉 @AllAnonandbot",
+        parse_mode="HTML")
+
+@dp.message(Command("askoff"))
+async def cmd_askoff(message: Message):
+    if message.from_user.id in ask_targets:
+        del ask_targets[message.from_user.id]
+        await message.reply("📭 АСК закрыт!")
+    else:
+        await message.reply("❌ У тебя не открыт АСК.")
+
+@dp.message(Command("send"))
+async def cmd_send_ask(message: Message, command: CommandObject):
+    if message.chat.type != "private":
+        await message.reply("📩 Эту команду используй в личке с ботом!")
+        return
+    if not command.args:
+        await message.reply(
+            "❓ Формат: /send @юзернейм текст\n"
+            "Пример: <code>/send @username Привет как дела?</code>",
+            parse_mode="HTML")
+        return
+    parts = command.args.split(maxsplit=1)
+    if len(parts) < 2:
+        await message.reply("⚠️ Укажи юзернейм и текст вопроса!")
+        return
+    username = parts[0].replace("@", "").lower()
+    text = parts[1].strip()
+    target_id = None
+    for uid, data in ask_targets.items():
+        try:
+            chat_member = await bot.get_chat_member(data["chat_id"], uid)
+            if chat_member.user.username and chat_member.user.username.lower() == username:
+                target_id = uid
+                break
+        except: pass
+    if not target_id:
+        await message.reply("❌ Этот пользователь не открыл АСК или не найден.")
+        return
+    data = ask_targets[target_id]
+    try:
+        await bot.send_message(data["chat_id"],
+            f"📬 <b>Анонимный вопрос для {data['name']}:</b>\n\n"
+            f"💬 {text}\n\n"
+            f"<i>Ответь командой /reply</i>",
+            parse_mode="HTML")
+        await message.reply("✅ Вопрос отправлен анонимно!")
+    except:
+        await message.reply("⚠️ Не удалось отправить вопрос.")
+mvp_votes = {}
+mvp_voted = {}
+
+@dp.message(Command("mvp"))
+async def cmd_mvp(message: Message):
+    if not message.reply_to_message:
+        await message.reply("↩️ Ответь на сообщение участника чтобы проголосовать за МВП!")
+        return
+    voter = message.from_user
+    target = message.reply_to_message.from_user
+    cid = message.chat.id
+    if target.id == voter.id:
+        await message.reply("😏 За себя голосовать нельзя!")
+        return
+    if cid not in mvp_voted:
+        mvp_voted[cid] = {}
+    if voter.id in mvp_voted[cid]:
+        await message.reply(f"⏳ Ты уже голосовал сегодня за МВП!")
+        return
+    mvp_voted[cid][voter.id] = True
+    if cid not in mvp_votes:
+        mvp_votes[cid] = {}
+    mvp_votes[cid][target.id] = mvp_votes[cid].get(target.id, 0) + 1
+    votes = mvp_votes[cid][target.id]
+    await message.reply(
+        f"⭐ {voter.mention_html()} проголосовал за <b>МВП</b>!\n\n"
+        f"🏆 {target.mention_html()}\n"
+        f"👍 Голосов: <b>{votes}</b>",
+        parse_mode="HTML")
+
+@dp.message(Command("mvpstats"))
+async def cmd_mvpstats(message: Message):
+    cid = message.chat.id
+    if cid not in mvp_votes or not mvp_votes[cid]:
+        await message.reply("📊 Голосов ещё нет!")
+        return
+    sorted_mvp = sorted(mvp_votes[cid].items(), key=lambda x: x[1], reverse=True)[:5]
+    medals = ["🥇","🥈","🥉","4️⃣","5️⃣"]
+    lines = ["🏆 <b>Топ МВП:</b>\n"]
+    for i, (uid, votes) in enumerate(sorted_mvp):
+        try:
+            m = await bot.get_chat_member(cid, uid)
+            uname = m.user.full_name
+        except:
+            uname = f"ID {uid}"
+        lines.append(f"{medals[i]} <b>{uname}</b> — {votes} голосов")
+    await message.reply("\n".join(lines), parse_mode="HTML")
+
+@dp.message(Command("mvpreset"))
+async def cmd_mvpreset(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    mvp_votes[cid] = {}
+    mvp_voted[cid] = {}
+    await message.reply("🔄 МВП голосование сброшено!")
+@dp.message(Command("confession"))
+async def cmd_confession(message: Message, command: CommandObject):
+    if not command.args:
+        await message.reply(
+            "💌 Формат: /confession текст\n"
+            "Пример: <code>/confession Я влюблён в одного человека в этом чате...</code>\n\n"
+            "<i>Сообщение отправится анонимно в чат!</i>",
+            parse_mode="HTML")
+        return
+    text = command.args.strip()
+    if len(text) < 5:
+        await message.reply("⚠️ Слишком короткое сообщение!")
+        return
+    try:
+        await message.delete()
+    except: pass
+    await bot.send_message(
+        message.chat.id,
+        f"💌 <b>Анонимное признание:</b>\n\n"
+        f"<i>{text}</i>\n\n"
+        f"🔒 <i>Автор неизвестен</i>",
+        parse_mode="HTML")
+@dp.message(Command("secret"))
+async def cmd_secret(message: Message, command: CommandObject):
+    if message.chat.type == "private":
+        await message.reply("❌ Эту команду используй в чате!")
+        return
+    if not command.args or len(command.args.split(maxsplit=1)) < 2:
+        await message.reply(
+            "📩 Формат: /secret @юзернейм текст\n"
+            "Пример: <code>/secret @username Ты мне нравишься 😊</code>",
+            parse_mode="HTML")
+        return
+    parts = command.args.split(maxsplit=1)
+    username = parts[0].replace("@", "").lower()
+    text = parts[1].strip()
+    target = None
+    try:
+        admins = await bot.get_chat_administrators(message.chat.id)
+        members = await bot.get_chat_members_count(message.chat.id)
+    except: pass
+    async for member in bot.get_chat_members(message.chat.id):
+        if member.user.username and member.user.username.lower() == username:
+            target = member.user
+            break
+    if not target:
+        await message.reply("❌ Участник не найден в чате!")
+        return
+    try:
+        await message.delete()
+        await bot.send_message(
+            target.id,
+            f"💌 <b>Тебе анонимное сообщение!</b>\n\n"
+            f"<i>{text}</i>\n\n"
+            f"🔒 <i>Автор неизвестен</i>",
+            parse_mode="HTML")
+        await bot.send_message(
+            message.chat.id,
+            f"📩 Анонимное сообщение отправлено!",)
+    except:
+        await message.reply("⚠️ Не удалось отправить — участник должен написать боту в лс хотя бы раз!")
+@dp.message(Command("casino"))
+async def cmd_casino(message: Message, command: CommandObject):
+    cid = message.chat.id
+    uid = message.from_user.id
+    if not command.args:
+        await message.reply(
+            "🎰 Формат: /casino [сумма]\n"
+            "Пример: <code>/casino 10</code>\n\n"
+            f"💰 Твоя репутация: <b>{reputation[cid][uid]:+d}</b>",
+            parse_mode="HTML")
+        return
+    try:
+        bet = int(command.args.strip())
+    except:
+        await message.reply("⚠️ Укажи число! Пример: /casino 10")
+        return
+    if bet <= 0:
+        await message.reply("⚠️ Ставка должна быть больше 0!")
+        return
+    if reputation[cid][uid] < bet:
+        await message.reply(
+            f"💸 Недостаточно репутации!\n"
+            f"💰 У тебя: <b>{reputation[cid][uid]:+d}</b>",
+            parse_mode="HTML")
+        return
+    symbols = ["🍒","🍋","🍊","🍇","⭐","7️⃣","💎"]
+    s1,s2,s3 = random.choice(symbols),random.choice(symbols),random.choice(symbols)
+    if s1==s2==s3=="💎":
+        mult = 5; res = "💰 ДЖЕКПОТ!! Три бриллианта!"
+    elif s1==s2==s3:
+        mult = 3; res = f"🎉 Три {s1}! Выиграл x3!"
+    elif s1==s2 or s2==s3 or s1==s3:
+        mult = 2; res = "😊 Два одинаковых! Выиграл x2!"
+    else:
+        mult = 0; res = "😢 Не повезло! Проиграл!"
+    if mult > 0:
+        win = bet * mult
+        reputation[cid][uid] += win
+        result = f"✅ +{win} к репутации!"
+    else:
+        reputation[cid][uid] -= bet
+        result = f"❌ -{bet} к репутации!"
+    save_data()
+    await message.reply(
+        f"🎰 [ {s1} | {s2} | {s3} ]\n\n"
+        f"{res}\n{result}\n\n"
+        f"💰 Репутация: <b>{reputation[cid][uid]:+d}</b>",
+        parse_mode="HTML")
+duel_requests = {}
+
+@dp.message(Command("duel"))
+async def cmd_duel(message: Message, command: CommandObject):
+    if not message.reply_to_message:
+        await message.reply("↩️ Ответь на сообщение участника для дуэли!")
+        return
+    challenger = message.from_user
+    target = message.reply_to_message.from_user
+    cid = message.chat.id
+    if target.id == challenger.id:
+        await message.reply("😏 Сам с собой дуэль?")
+        return
+    if target.is_bot:
+        await message.reply("🤖 С ботом не подерёшься!")
+        return
+    try: bet = int(command.args) if command.args else 10
+    except: bet = 10
+    if bet <= 0: bet = 10
+    if reputation[cid][challenger.id] < bet:
+        await message.reply(f"💸 Недостаточно репутации! У тебя: <b>{reputation[cid][challenger.id]:+d}</b>", parse_mode="HTML")
+        return
+    if reputation[cid][target.id] < bet:
+        await message.reply(f"💸 У {target.mention_html()} недостаточно репутации!", parse_mode="HTML")
+        return
+    duel_requests[cid] = {
+        "challenger_id": challenger.id,
+        "challenger_name": challenger.full_name,
+        "target_id": target.id,
+        "target_name": target.full_name,
+        "bet": bet
+    }
+    await message.reply(
+        f"⚔️ <b>ВЫЗОВ НА ДУЭЛЬ!</b>\n\n"
+        f"🔫 {challenger.mention_html()} вызывает {target.mention_html()}!\n"
+        f"💰 Ставка: <b>{bet}</b> репутации\n\n"
+        f"✅ {target.mention_html()}, напиши <b>/accept</b> чтобы принять!\n"
+        f"❌ Или <b>/decline</b> чтобы отказаться!",
+        parse_mode="HTML")
+
+@dp.message(Command("accept"))
+async def cmd_accept(message: Message):
+    cid = message.chat.id
+    uid = message.from_user.id
+    if cid not in duel_requests:
+        await message.reply("❌ Нет активных дуэлей!")
+        return
+    duel = duel_requests[cid]
+    if uid != duel["target_id"]:
+        await message.reply("❌ Это не твоя дуэль!")
+        return
+    winner_id = random.choice([duel["challenger_id"], duel["target_id"]])
+    loser_id = duel["target_id"] if winner_id == duel["challenger_id"] else duel["challenger_id"]
+    winner_name = duel["challenger_name"] if winner_id == duel["challenger_id"] else duel["target_name"]
+    loser_name = duel["target_name"] if winner_id == duel["challenger_id"] else duel["challenger_name"]
+    bet = duel["bet"]
+    reputation[cid][winner_id] += bet
+    reputation[cid][loser_id] -= bet
+    save_data()
+    del duel_requests[cid]
+    await message.reply(
+        f"⚔️ <b>ДУЭЛЬ!</b>\n\n"
+        f"🔫 {duel['challenger_name']} vs {duel['target_name']}\n\n"
+        f"🏆 Победитель: <b>{winner_name}</b> +{bet} репутации!\n"
+        f"💀 Проигравший: <b>{loser_name}</b> -{bet} репутации!",
+        parse_mode="HTML")
+
+@dp.message(Command("decline"))
+async def cmd_decline(message: Message):
+    cid = message.chat.id
+    uid = message.from_user.id
+    if cid not in duel_requests:
+        await message.reply("❌ Нет активных дуэлей!")
+        return
+    duel = duel_requests[cid]
+    if uid != duel["target_id"]:
+        await message.reply("❌ Это не твоя дуэль!")
+        return
+    del duel_requests[cid]
+    await message.reply(f"🏳 {message.from_user.mention_html()} отказался от дуэли!", parse_mode="HTML")
+streaks = defaultdict(lambda: defaultdict(int))
+streak_dates = defaultdict(lambda: defaultdict(str))
+
+@dp.message(Command("streak"))
+async def cmd_streak(message: Message):
+    from datetime import datetime
+    user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
+    uid = user.id
+    cid = message.chat.id
+    today = datetime.now().strftime("%d.%m.%Y")
+    streak = streaks[cid][uid]
+    last_date = streak_dates[cid][uid]
+    await message.reply(
+        f"🔥 <b>Серия активности {user.mention_html()}:</b>\n\n"
+        f"📅 Дней подряд: <b>{streak}</b>\n"
+        f"📆 Последний день: <b>{last_date or 'нет данных'}</b>\n\n"
+        f"💬 Пиши каждый день чтобы серия росла!",
+        parse_mode="HTML")
+@dp.message(Command("toprep"))
+async def cmd_toprep(message: Message):
+    rep = reputation[message.chat.id]
+    if not rep:
+        await message.reply("📊 Репутация пока пуста!"); return
+    sorted_u = sorted(rep.items(), key=lambda x: x[1], reverse=True)[:10]
+    medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+    lines = ["🌟 <b>Топ по репутации:</b>\n"]
+    for i, (uid, score) in enumerate(sorted_u):
+        try:
+            m = await bot.get_chat_member(message.chat.id, uid)
+            uname = m.user.full_name
+        except:
+            uname = f"ID {uid}"
+        icon = "⬆️" if score >= 0 else "⬇️"
+        lines.append(f"{medals[i]} <b>{uname}</b> — {icon} <b>{score:+d}</b>")
+    await message.reply("\n".join(lines), parse_mode="HTML")
+
+@dp.message(Command("profile"))
+async def cmd_profile(message: Message):
+    user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
+    uid, cid = user.id, message.chat.id
+    xp = xp_data[cid][uid]
+    lvl = levels[cid][uid]
+    xp_current = xp % 100
+    bar = "🟩" * (xp_current // 10) + "⬜" * (10 - xp_current // 10)
+    rep = reputation[cid][uid]
+    warns = warnings[cid].get(uid, 0)
+    msgs = chat_stats[cid].get(uid, 0)
+    streak = streaks[cid][uid]
+    title = (
+        "👑 Элита" if lvl >= 20 else
+        "🏆 Легенда" if lvl >= 10 else
+        "⚔️ Ветеран" if lvl >= 5 else
+        "🌱 Активный" if lvl >= 3 else
+        "🔰 Участник" if lvl >= 1 else
+        "🐣 Новичок")
+    await message.reply(
+        f"👤 <b>Профиль {user.mention_html()}</b>\n\n"
+        f"🏅 Титул: <b>{title}</b>\n"
+        f"⚡ Уровень: <b>{lvl}</b>\n"
+        f"✨ Опыт: <b>{xp_current}/100</b>\n"
+        f"[{bar}]\n\n"
+        f"🌟 Репутация: <b>{rep:+d}</b>\n"
+        f"💬 Сообщений: <b>{msgs}</b>\n"
+        f"🔥 Серия: <b>{streak}</b> дней\n"
+        f"⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>",
+        parse_mode="HTML")
+    
 async def main():
     load_data()
     asyncio.create_task(birthday_checker())
@@ -1806,4 +2242,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
