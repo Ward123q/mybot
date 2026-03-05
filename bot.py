@@ -592,7 +592,7 @@ async def cb_panel(call: CallbackQuery):
                 "<code>/panel</code> → ответь на сообщение участника",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
-            elif action == "back":
+        elif action == "back":
                if tid != 0:
                     warns = warnings[cid].get(tid, 0); rep = reputation[cid].get(tid, 0)
                     msgs  = chat_stats[cid].get(tid, 0)
@@ -2267,6 +2267,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
