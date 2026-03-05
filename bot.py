@@ -2065,12 +2065,14 @@ async def cmd_casino(message: Message, command: CommandObject):
     if bet <= 0:
         await message.reply("⚠️ Ставка должна быть больше 0!")
         return
-    if reputation[cid][uid] < bet:
-        await message.reply(
-            f"💸 Недостаточно репутации!\n"
-            f"💰 У тебя: <b>{reputation[cid][uid]:+d}</b>",
-            parse_mode="HTML")
-        return
+    current_rep = reputation[cid].get(uid, 0)
+        if current_rep < bet:
+            await message.reply(
+                f"💸 Недостаточно репутации!\n"
+                f"💰 У тебя: <b>{current_rep:+d}</b>",
+                parse_mode="HTML")
+            return
+            
     symbols = ["🍒","🍋","🍊","🍇","⭐","7️⃣","💎"]
     s1,s2,s3 = random.choice(symbols),random.choice(symbols),random.choice(symbols)
     if s1==s2==s3=="💎":
@@ -2079,13 +2081,14 @@ async def cmd_casino(message: Message, command: CommandObject):
         mult = 3; res = f"🎉 Три {s1}! Выиграл x3!"
     elif s1==s2 or s2==s3 or s1==s3:
         mult = 2; res = "😊 Два одинаковых! Выиграл x2!"
-    else:
-        mult = 0; res = "😢 Не повезло! Проиграл!"
     if mult > 0:
-        win = bet * mult
-        reputation[cid][uid] += win
-        result = f"✅ +{win} к репутации!"
-    else:
+            win = bet * mult
+            reputation[cid][uid] = current_rep + win
+            result = f"✅ +{win} к репутации!"
+        else:
+            reputation[cid][uid] = current_rep - bet
+            result = f"❌ -{bet} к репутации!"
+            
         reputation[cid][uid] -= bet
         result = f"❌ -{bet} к репутации!"
     save_data()
@@ -2261,7 +2264,84 @@ async def cmd_addrep(message: Message, command: CommandObject):
         f"✅ {target.mention_html()} добавлено <b>{amount}</b> репутации!\n"
         f"🌟 Теперь: <b>{reputation[cid][target.id]:+d}</b>",
         parse_mode="HTML")
+# ===== СИСТЕМА РЕПОРТОВ =====
+report_cooldown = {}
+
+@dp.message(Command("report"))
+async def cmd_report(message: Message, command: CommandObject):
+    if not message.reply_to_message:
+        await message.reply(
+            "📋 <b>Как использовать:</b>\n"
+            "↩️ Ответь на сообщение нарушителя и напиши:\n"
+            "<code>/report причина</code>",
+            parse_mode="HTML")
+        return
     
+    reporter = message.from_user
+    target = message.reply_to_message.from_user
+    cid = message.chat.id
+    
+    if target.id == reporter.id:
+        await message.reply("😏 Сам на себя жалуешься?")
+        return
+    
+    if await is_admin_by_id(cid, target.id):
+        await message.reply("🚫 Нельзя пожаловаться на администратора!")
+        return
+    
+    # Кулдаун 5 минут между репортами
+    now = time()
+    key = (cid, reporter.id)
+    if key in report_cooldown and now - report_cooldown[key] < 300:
+        left = int(300 - (now - report_cooldown[key]))
+        await message.reply(f"⏳ Подожди ещё <b>{left} сек.</b> перед следующим репортом!", parse_mode="HTML")
+        return
+    
+    report_cooldown[key] = now
+    reason = command.args or "Без причины"
+    
+    # Уведомление в лог-канал
+    report_text = (
+        f"🚨 <b>НОВЫЙ РЕПОРТ</b>\n\n"
+        f"👤 Жалоба от: {reporter.mention_html()}\n"
+        f"🎯 На кого: {target.mention_html()}\n"
+        f"📝 Причина: <b>{reason}</b>\n"
+        f"💬 Чат: <b>{message.chat.title}</b>\n"
+        f"🔗 Сообщение: <a href='https://t.me/c/{str(cid)[4:]}/{message.reply_to_message.message_id}'>перейти</a>"
+    )
+    
+    await log_action(report_text)
+    
+    # Уведомить всех админов в чате
+    try:
+        admins = await bot.get_chat_administrators(cid)
+        for adm in admins:
+            if adm.user.is_bot: continue
+            try:
+                await bot.send_message(
+                    adm.user.id,
+                    f"🚨 <b>РЕПОРТ в чате {message.chat.title}</b>\n\n"
+                    f"👤 От: {reporter.full_name}\n"
+                    f"🎯 На: {target.full_name}\n"
+                    f"📝 Причина: <b>{reason}</b>",
+                    parse_mode="HTML")
+            except: pass
+    except: pass
+    
+    # Подтверждение репортеру
+    sent = await message.reply(
+        f"✅ <b>Жалоба отправлена администраторам!</b>\n"
+        f"🎯 На кого: {target.mention_html()}\n"
+        f"📝 Причина: <b>{reason}</b>",
+        parse_mode="HTML")
+    
+    # Удалить подтверждение через 10 секунд
+    await asyncio.sleep(10)
+    try:
+        await sent.delete()
+        await message.delete()
+    except: pass
+        
 async def main():
     load_data()
     asyncio.create_task(birthday_checker())
@@ -2272,6 +2352,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
