@@ -76,8 +76,8 @@ levels        = defaultdict(lambda: defaultdict(int))
 xp_data       = defaultdict(lambda: defaultdict(int))
 
 RULES_TEXT = (
-    "📄 <b>Правила анон чата</b>\n\n"
-    "🔞 <b>Контент 18+:</b>\n"
+    "🌌 <b>Правила анон чата</b>\n\n"
+    "🔥 <b>Контент 18+:</b>\n"
     "• Видео 18+\n"
     "• Стикеры 18+\n"
     "• Гифки 18+\n"
@@ -85,31 +85,32 @@ RULES_TEXT = (
     "⚠️ Наказание: предупреждение. При повторном нарушении — бан.\n\n"
     "📢 <b>Реклама:</b>\n"
     "• Реклама своих социальных сетей\n"
-    "⚠️ Наказание: Предупреждение / Мут 30 мин / Бан на 24 часа\n\n"
-    "🚫 <b>Общие правила:</b>\n"
+    "🛑 Наказание: Предупреждение / Мут 30 мин / Бан на 24 часа\n\n"
+    "🌿 <b>Общие правила:</b>\n"
     "• Уважайте друг друга\n"
     "• Без спама и флуда\n"
 )
 
 MUTE_MESSAGES = [
-    "🔇 {name} заглушён на {time}.",
-    "😶 {name} получил мут на {time}.",
-    "🤫 {name} временно не может писать. Время: {time}.",
-    "📵 {name} помолчи {time}.",
+    "🔇 {name} заглушён на {time}. Тишина — это сила.",
+    "🧊 {name} заморожен на {time}. Остынь немного.",
+    "🌑 {name} ушёл в тень на {time}. До встречи.",
+    "⛓ {name} скован на {time}. Причина понятна.",
 ]
 BAN_MESSAGES = [
-    "🔨 {name} забанен. Причина: {reason}",
-    "💥 {name} вылетел из чата. Причина: {reason}",
-    "🚪 {name} удалён из чата. Причина: {reason}",
+    "🔨 {name} разлетелся в пыль. Причина: {reason}",
+    "🚀 {name} запущен в открытый космос. Причина: {reason}",
+    "🌊 {name} смыт волной. Причина: {reason}",
+    "🗡 {name} пал в бою. Причина: {reason}",
 ]
 WARN_MESSAGES = [
-    "⚠️ {name} получил предупреждение {count}/{max}. Причина: {reason}.",
-    "🚨 {name} — предупреждение {count}/{max}. Причина: {reason}. Будь осторожен.",
-    "😡 {name} — предупреждение {count}/{max}. Причина: {reason}.",
+    "⚡ {name} — удар молнии #{count}/{max}. Причина: {reason}.",
+    "🌪 {name} — предупреждение {count}/{max}. Причина: {reason}. Следи за собой.",
+    "🔮 {name} — {count}/{max} знаков судьбы. Причина: {reason}.",
 ]
 AUTOBAN_MESSAGES = [
-    "🔨 {name} набрал {max} предупреждений и получил автобан.",
-    "💀 {name} — {max} варнов = бан.",
+    "💀 {name} собрал {max} ударов и исчез навсегда.",
+    "🌋 {name} — {max} предупреждений. Извержение неизбежно. Бан.",
 ]
 RANDOM_BAN_REASONS = [
     "слишком умный", "подозрение в адекватности", "нарушение закона бутерброда",
@@ -125,9 +126,9 @@ QUOTES = [
     "«Делай что должен, и будь что будет.» — Толстой",
 ]
 BALL_ANSWERS = [
-    "🟢 Определённо да!", "🟢 Без сомнений!", "🟢 Скорее всего да.",
-    "🟡 Трудно сказать.", "🟡 Спроси потом.", "🟡 Пока неясно.",
-    "🔴 хз", "🔴 Нет.", "🔴 Определённо нет",
+    "🌟 Определённо да!", "🔥 Без сомнений!", "🌈 Скорее всего да.",
+    "🌫 Трудно сказать.", "⏳ Спроси потом.", "🌀 Пока неясно.",
+    "🌑 хз", "❄️ Нет.", "🪨 Определённо нет",
 ]
 TRUTH_QUESTIONS = [
     "Ты когда-нибудь врал другу?", "Какой твой самый большой страх?",
@@ -163,20 +164,17 @@ HOROSCOPES = {
 }
 COMPLIMENTS = [
     "Ты просто огонь! 🔥", "С тобой в чате теплее! ☀️",
-    "Ты делаешь этот чат лучше! 💎", "Без тебя тут было бы скучнее! 🌟",
-    "Ты как редкий покемон — очень ценный! ⭐", "Интеллект зашкаливает! 🧠",
+    "Ты делаешь этот чат лучше! 🌟", "Без тебя тут было бы скучнее! 🎭",
+    "Ты как редкий метеорит — очень ценный! 🌠", "Интеллект зашкаливает! 🧬",
 ]
 PREDICTIONS = [
     "🔮 Сегодня тебе повезёт! Только не трать деньги.",
-    "💀 Осторожно с незнакомцами сегодня.",
-    "⭐ Звёзды говорят — ты красавчик!", "🍀 Удача на твоей стороне!",
+    "🌩 Осторожно с незнакомцами сегодня.",
+    "🌟 Звёзды говорят — ты красавчик!", "🍀 Удача на твоей стороне!",
     "🐉 Тебя ждёт необычная встреча. Возможно с котом.",
-    "💤 Лучший план на сегодня — поспать. Доверяй процессу.",
+    "🛋 Лучший план на сегодня — поспать. Доверяй процессу.",
 ]
 
-# ═══════════════════════════════════════════
-#         ВЕБ-СЕРВЕР (для Render)
-# ═══════════════════════════════════════════
 async def health(request):
     return web.Response(text="OK")
 
@@ -187,9 +185,6 @@ async def start_web():
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", 8080).start()
 
-# ═══════════════════════════════════════════
-#             ХЕЛПЕРЫ
-# ═══════════════════════════════════════════
 async def check_admin(message: Message) -> bool:
     if message.from_user.id == OWNER_ID:
         return True
@@ -233,7 +228,7 @@ async def log_action(text: str):
 
 async def get_weather(city: str) -> str:
     if not WEATHER_API_KEY:
-        return "❌ Weather API ключ не настроен."
+        return "🌧 Weather API ключ не настроен."
     try:
         async with aiohttp.ClientSession() as s:
             async with s.get(
@@ -242,7 +237,7 @@ async def get_weather(city: str) -> str:
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as r:
                 d = await r.json()
-                if d.get("cod") != 200: return f"❌ Город <b>{city}</b> не найден."
+                if d.get("cod") != 200: return f"🌧 Город <b>{city}</b> не найден."
                 temp  = round(d["main"]["temp"]); feels = round(d["main"]["feels_like"])
                 desc  = d["weather"][0]["description"].capitalize()
                 humid = d["main"]["humidity"]; wind = round(d["wind"]["speed"])
@@ -250,152 +245,146 @@ async def get_weather(city: str) -> str:
                 emoji = "☀️" if "ясно" in dl else ("🌧" if "дождь" in dl else ("❄️" if "снег" in dl else "⛅"))
                 return (f"{emoji} <b>Погода в {d['name']}</b>\n\n"
                         f"🌡 Температура: <b>{temp}°C</b> (ощущается {feels}°C)\n"
-                        f"📋 {desc}\n💧 Влажность: <b>{humid}%</b>\n💨 Ветер: <b>{wind} м/с</b>")
+                        f"📋 {desc}\n💧 Влажность: <b>{humid}%</b>\n🌬 Ветер: <b>{wind} м/с</b>")
     except:
-        return "❌ Ошибка при получении погоды."
+        return "⛈ Ошибка при получении погоды."
 
-# ═══════════════════════════════════════════
-#            КЛАВИАТУРЫ
-# ═══════════════════════════════════════════
 def kb_back(tid: int) -> list:
-    return [InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:back:{tid}")]
+    return [InlineKeyboardButton(text="🔙 Назад", callback_data=f"panel:back:{tid}")]
 
 def kb_main_menu(tid: int = 0) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👤 Управление участником", callback_data=f"panel:select:{tid}"),
-         InlineKeyboardButton(text="💬 Сообщения",             callback_data=f"panel:messages:{tid}")],
+         InlineKeyboardButton(text="✉️ Сообщения",             callback_data=f"panel:messages:{tid}")],
         [InlineKeyboardButton(text="👥 Участники",             callback_data=f"panel:members:{tid}"),
-         InlineKeyboardButton(text="🔧 Чат",                   callback_data=f"panel:chat:{tid}")],
+         InlineKeyboardButton(text="⚙️ Чат",                   callback_data=f"panel:chat:{tid}")],
         [InlineKeyboardButton(text="🎮 Игры",                  callback_data=f"panel:games:{tid}"),
          InlineKeyboardButton(text="📊 Статистика",            callback_data=f"panel:botstats2:{tid}")],
-        [InlineKeyboardButton(text="❌ Закрыть",               callback_data="panel:close:0")],
+        [InlineKeyboardButton(text="✖️ Закрыть",               callback_data="panel:close:0")],
     ])
 
 def kb_user_panel(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔇 Мут",        callback_data=f"panel:mute:{tid}"),
-         InlineKeyboardButton(text="🔊 Размут",     callback_data=f"panel:unmute:{tid}")],
-        [InlineKeyboardButton(text="⚠️ Варн",       callback_data=f"panel:warn:{tid}"),
-         InlineKeyboardButton(text="✅ Снять варн", callback_data=f"panel:unwarn:{tid}")],
-        [InlineKeyboardButton(text="🔨 Бан",        callback_data=f"panel:ban:{tid}"),
-         InlineKeyboardButton(text="♻️ Разбан",     callback_data=f"panel:unban:{tid}")],
-        [InlineKeyboardButton(text="📊 Информация", callback_data=f"panel:info:{tid}"),
+        [InlineKeyboardButton(text="🔇 Мут",         callback_data=f"panel:mute:{tid}"),
+         InlineKeyboardButton(text="🔊 Размут",      callback_data=f"panel:unmute:{tid}")],
+        [InlineKeyboardButton(text="⚡ Варн",        callback_data=f"panel:warn:{tid}"),
+         InlineKeyboardButton(text="🌿 Снять варн",  callback_data=f"panel:unwarn:{tid}")],
+        [InlineKeyboardButton(text="🔨 Бан",         callback_data=f"panel:ban:{tid}"),
+         InlineKeyboardButton(text="🕊 Разбан",      callback_data=f"panel:unban:{tid}")],
+        [InlineKeyboardButton(text="🔍 Информация",  callback_data=f"panel:info:{tid}"),
          InlineKeyboardButton(text="🗑 Удалить сообщ", callback_data=f"panel:del:{tid}")],
-        [InlineKeyboardButton(text="🎭 Приколы",    callback_data=f"panel:fun:{tid}"),
-         InlineKeyboardButton(text="◀️ Назад",      callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="🎭 Приколы",     callback_data=f"panel:fun:{tid}"),
+         InlineKeyboardButton(text="🔙 Назад",       callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_mute(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="5 мин",   callback_data=f"mute:{tid}:5"),
-         InlineKeyboardButton(text="15 мин",  callback_data=f"mute:{tid}:15"),
-         InlineKeyboardButton(text="30 мин",  callback_data=f"mute:{tid}:30")],
-        [InlineKeyboardButton(text="1 час",   callback_data=f"mute:{tid}:60"),
-         InlineKeyboardButton(text="3 часа",  callback_data=f"mute:{tid}:180"),
-         InlineKeyboardButton(text="12 часов",callback_data=f"mute:{tid}:720")],
-        [InlineKeyboardButton(text="1 день",  callback_data=f"mute:{tid}:1440"),
-         InlineKeyboardButton(text="7 дней",  callback_data=f"mute:{tid}:10080"),
-         InlineKeyboardButton(text="✏️ Своё", callback_data=f"mute:{tid}:custom")],
+        [InlineKeyboardButton(text="5 мин",    callback_data=f"mute:{tid}:5"),
+         InlineKeyboardButton(text="15 мин",   callback_data=f"mute:{tid}:15"),
+         InlineKeyboardButton(text="30 мин",   callback_data=f"mute:{tid}:30")],
+        [InlineKeyboardButton(text="1 час",    callback_data=f"mute:{tid}:60"),
+         InlineKeyboardButton(text="3 часа",   callback_data=f"mute:{tid}:180"),
+         InlineKeyboardButton(text="12 часов", callback_data=f"mute:{tid}:720")],
+        [InlineKeyboardButton(text="1 день",   callback_data=f"mute:{tid}:1440"),
+         InlineKeyboardButton(text="7 дней",   callback_data=f"mute:{tid}:10080"),
+         InlineKeyboardButton(text="✏️ Своё",  callback_data=f"mute:{tid}:custom")],
         kb_back(tid),
     ])
 
 def kb_warn(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🤬 Мат",          callback_data=f"warn:{tid}:Мат в чате"),
-         InlineKeyboardButton(text="💬 Спам",          callback_data=f"warn:{tid}:Спам")],
-        [InlineKeyboardButton(text="😡 Оскорбление",  callback_data=f"warn:{tid}:Оскорбление"),
-         InlineKeyboardButton(text="🚫 Флуд",          callback_data=f"warn:{tid}:Флуд")],
-        [InlineKeyboardButton(text="📵 Реклама",      callback_data=f"warn:{tid}:Реклама"),
-         InlineKeyboardButton(text="🔞 Контент 18+",  callback_data=f"warn:{tid}:Контент 18+")],
-        [InlineKeyboardButton(text="✏️ Своя причина", callback_data=f"warn:{tid}:custom")],
+         InlineKeyboardButton(text="📨 Спам",          callback_data=f"warn:{tid}:Спам")],
+        [InlineKeyboardButton(text="😡 Оскорбление",   callback_data=f"warn:{tid}:Оскорбление"),
+         InlineKeyboardButton(text="🌊 Флуд",          callback_data=f"warn:{tid}:Флуд")],
+        [InlineKeyboardButton(text="📣 Реклама",       callback_data=f"warn:{tid}:Реклама"),
+         InlineKeyboardButton(text="🔞 Контент 18+",   callback_data=f"warn:{tid}:Контент 18+")],
+        [InlineKeyboardButton(text="✏️ Своя причина",  callback_data=f"warn:{tid}:custom")],
         kb_back(tid),
     ])
 
 def kb_ban(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🤬 Грубые нарушения",  callback_data=f"ban:{tid}:Грубые нарушения правил"),
-         InlineKeyboardButton(text="💬 Спам/реклама",       callback_data=f"ban:{tid}:Спам и реклама")],
-        [InlineKeyboardButton(text="🔞 Контент 18+",        callback_data=f"ban:{tid}:Контент 18+"),
-         InlineKeyboardButton(text="🤖 Бот/накрутка",       callback_data=f"ban:{tid}:Бот или накрутка")],
-        [InlineKeyboardButton(text="⏰ Бан на 24 часа",     callback_data=f"ban:{tid}:tempban24"),
-         InlineKeyboardButton(text="✏️ Своя причина",       callback_data=f"ban:{tid}:custom")],
+        [InlineKeyboardButton(text="🔥 Грубые нарушения", callback_data=f"ban:{tid}:Грубые нарушения правил"),
+         InlineKeyboardButton(text="📣 Спам/реклама",      callback_data=f"ban:{tid}:Спам и реклама")],
+        [InlineKeyboardButton(text="🔞 Контент 18+",       callback_data=f"ban:{tid}:Контент 18+"),
+         InlineKeyboardButton(text="🤖 Бот/накрутка",      callback_data=f"ban:{tid}:Бот или накрутка")],
+        [InlineKeyboardButton(text="⏰ Бан на 24 часа",    callback_data=f"ban:{tid}:tempban24"),
+         InlineKeyboardButton(text="✏️ Своя причина",      callback_data=f"ban:{tid}:custom")],
         kb_back(tid),
     ])
 
 def kb_fun(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎲 Шуточный бан",      callback_data=f"fun:rban:{tid}"),
-         InlineKeyboardButton(text="🧠 Проверить IQ",      callback_data=f"fun:iq:{tid}")],
-        [InlineKeyboardButton(text="🌈 % гейства",         callback_data=f"fun:gay:{tid}"),
-         InlineKeyboardButton(text="💐 Комплимент",         callback_data=f"fun:compliment:{tid}")],
-        [InlineKeyboardButton(text="🔮 Предсказание",      callback_data=f"fun:predict:{tid}"),
-         InlineKeyboardButton(text="♈ Гороскоп",          callback_data=f"fun:horoscope:{tid}")],
-        [InlineKeyboardButton(text="⭐ Оценить",           callback_data=f"fun:rate:{tid}"),
-         InlineKeyboardButton(text="🤔 Вопрос правды",     callback_data=f"fun:truth:{tid}")],
-        [InlineKeyboardButton(text="😈 Задание",           callback_data=f"fun:dare:{tid}"),
-         InlineKeyboardButton(text="🤯 Выбор без выбора",  callback_data=f"fun:wyr:{tid}")],
+        [InlineKeyboardButton(text="🎲 Шуточный бан",     callback_data=f"fun:rban:{tid}"),
+         InlineKeyboardButton(text="🧠 Проверить IQ",     callback_data=f"fun:iq:{tid}")],
+        [InlineKeyboardButton(text="🌈 % гейства",        callback_data=f"fun:gay:{tid}"),
+         InlineKeyboardButton(text="🌸 Комплимент",        callback_data=f"fun:compliment:{tid}")],
+        [InlineKeyboardButton(text="🔮 Предсказание",     callback_data=f"fun:predict:{tid}"),
+         InlineKeyboardButton(text="🌌 Гороскоп",         callback_data=f"fun:horoscope:{tid}")],
+        [InlineKeyboardButton(text="⭐ Оценить",          callback_data=f"fun:rate:{tid}"),
+         InlineKeyboardButton(text="🤔 Вопрос правды",    callback_data=f"fun:truth:{tid}")],
+        [InlineKeyboardButton(text="😈 Задание",          callback_data=f"fun:dare:{tid}"),
+         InlineKeyboardButton(text="🎯 Выбор без выбора", callback_data=f"fun:wyr:{tid}")],
         kb_back(tid),
     ])
 
 def kb_messages(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📌 Закрепить",         callback_data=f"msg:pin:{tid}"),
-         InlineKeyboardButton(text="📌 Открепить",         callback_data=f"msg:unpin:{tid}")],
-        [InlineKeyboardButton(text="🗑 Удалить сообщение", callback_data=f"msg:del:{tid}"),
-         InlineKeyboardButton(text="🧹 Очистить 10",       callback_data=f"msg:clear10:{tid}")],
-        [InlineKeyboardButton(text="🧹 Очистить 20",       callback_data=f"msg:clear20:{tid}"),
-         InlineKeyboardButton(text="🧹 Очистить 50",       callback_data=f"msg:clear50:{tid}")],
-        [InlineKeyboardButton(text="📢 Объявление",         callback_data=f"msg:announce:{tid}"),
-         InlineKeyboardButton(text="📊 Голосование",        callback_data=f"msg:poll:{tid}")],
-        [InlineKeyboardButton(text="◀️ Назад",             callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="📌 Закрепить",          callback_data=f"msg:pin:{tid}"),
+         InlineKeyboardButton(text="📍 Открепить",          callback_data=f"msg:unpin:{tid}")],
+        [InlineKeyboardButton(text="🗑 Удалить сообщение",  callback_data=f"msg:del:{tid}"),
+         InlineKeyboardButton(text="🧹 Очистить 10",        callback_data=f"msg:clear10:{tid}")],
+        [InlineKeyboardButton(text="🧹 Очистить 20",        callback_data=f"msg:clear20:{tid}"),
+         InlineKeyboardButton(text="🧹 Очистить 50",        callback_data=f"msg:clear50:{tid}")],
+        [InlineKeyboardButton(text="📢 Объявление",          callback_data=f"msg:announce:{tid}"),
+         InlineKeyboardButton(text="📊 Голосование",         callback_data=f"msg:poll:{tid}")],
+        [InlineKeyboardButton(text="🔙 Назад",              callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_members(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👮 Список админов",     callback_data=f"members:adminlist:{tid}"),
-         InlineKeyboardButton(text="📊 Топ активности",     callback_data=f"members:top:{tid}")],
-        [InlineKeyboardButton(text="📵 Мут 24ч за рекламу", callback_data=f"members:warn24:{tid}"),
-         InlineKeyboardButton(text="⚠️ Варны участника",    callback_data=f"members:warninfo:{tid}")],
-        [InlineKeyboardButton(text="◀️ Назад",             callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="👮 Список админов",      callback_data=f"members:adminlist:{tid}"),
+         InlineKeyboardButton(text="🏆 Топ активности",      callback_data=f"members:top:{tid}")],
+        [InlineKeyboardButton(text="📵 Мут 24ч за рекламу",  callback_data=f"members:warn24:{tid}"),
+         InlineKeyboardButton(text="⚠️ Варны участника",     callback_data=f"members:warninfo:{tid}")],
+        [InlineKeyboardButton(text="🔙 Назад",              callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_chat(tid: int) -> InlineKeyboardMarkup:
     ms = "✅ вкл" if ANTI_MAT_ENABLED else "❌ выкл"
     ks = "✅ вкл" if AUTO_KICK_BOTS   else "❌ выкл"
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔒 Заблокировать чат", callback_data=f"chat:lock:{tid}"),
-         InlineKeyboardButton(text="🔓 Разблокировать",    callback_data=f"chat:unlock:{tid}")],
-        [InlineKeyboardButton(text="🐢 Slowmode 10с",      callback_data=f"chat:slow:10:{tid}"),
-         InlineKeyboardButton(text="🐢 Slowmode 30с",      callback_data=f"chat:slow:30:{tid}")],
-        [InlineKeyboardButton(text="🐢 Slowmode 60с",      callback_data=f"chat:slow:60:{tid}"),
-         InlineKeyboardButton(text="🐇 Выкл slowmode",     callback_data=f"chat:slow:0:{tid}")],
-        [InlineKeyboardButton(text=f"🧼 Антимат: {ms}",   callback_data=f"chat:antimat:{tid}"),
-         InlineKeyboardButton(text=f"🤖 Автокик: {ks}",   callback_data=f"chat:autokick:{tid}")],
-        [InlineKeyboardButton(text="📜 Правила",            callback_data=f"chat:rules:{tid}"),
-         InlineKeyboardButton(text="📊 Статистика",         callback_data=f"chat:botstats:{tid}")],
-        [InlineKeyboardButton(text="◀️ Назад",             callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="🔒 Заблокировать чат",  callback_data=f"chat:lock:{tid}"),
+         InlineKeyboardButton(text="🔓 Разблокировать",     callback_data=f"chat:unlock:{tid}")],
+        [InlineKeyboardButton(text="🐢 Slowmode 10с",       callback_data=f"chat:slow:10:{tid}"),
+         InlineKeyboardButton(text="🐢 Slowmode 30с",       callback_data=f"chat:slow:30:{tid}")],
+        [InlineKeyboardButton(text="🐢 Slowmode 60с",       callback_data=f"chat:slow:60:{tid}"),
+         InlineKeyboardButton(text="🐇 Выкл slowmode",      callback_data=f"chat:slow:0:{tid}")],
+        [InlineKeyboardButton(text=f"🧼 Антимат: {ms}",    callback_data=f"chat:antimat:{tid}"),
+         InlineKeyboardButton(text=f"🤖 Автокик: {ks}",    callback_data=f"chat:autokick:{tid}")],
+        [InlineKeyboardButton(text="📜 Правила",             callback_data=f"chat:rules:{tid}"),
+         InlineKeyboardButton(text="📈 Статистика",          callback_data=f"chat:botstats:{tid}")],
+        [InlineKeyboardButton(text="🔙 Назад",              callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_games(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎲 Кубик d6",          callback_data=f"game:roll:{tid}"),
-         InlineKeyboardButton(text="🪙 Монетка",           callback_data=f"game:flip:{tid}")],
-        [InlineKeyboardButton(text="🎰 Слот-машина",       callback_data=f"game:slot:{tid}"),
-         InlineKeyboardButton(text="🎱 Шар предсказаний",  callback_data=f"game:8ball:{tid}")],
-        [InlineKeyboardButton(text="✂️ КНБ — Камень",      callback_data=f"game:rps_k:{tid}"),
-         InlineKeyboardButton(text="✂️ КНБ — Ножницы",     callback_data=f"game:rps_n:{tid}")],
-        [InlineKeyboardButton(text="✂️ КНБ — Бумага",      callback_data=f"game:rps_b:{tid}"),
-         InlineKeyboardButton(text="💬 Цитата дня",        callback_data=f"game:quote:{tid}")],
-        [InlineKeyboardButton(text="🌤 Погода — Москва",   callback_data=f"game:weather_Москва:{tid}"),
-         InlineKeyboardButton(text="🌤 Свой город",         callback_data=f"game:weather_custom:{tid}")],
-        [InlineKeyboardButton(text="⏱ Отсчёт 5 сек",      callback_data=f"game:countdown5:{tid}"),
-         InlineKeyboardButton(text="⏱ Отсчёт 10 сек",     callback_data=f"game:countdown10:{tid}")],
-        [InlineKeyboardButton(text="◀️ Назад",             callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="🎲 Кубик d6",           callback_data=f"game:roll:{tid}"),
+         InlineKeyboardButton(text="🪙 Монетка",            callback_data=f"game:flip:{tid}")],
+        [InlineKeyboardButton(text="🎰 Слот-машина",        callback_data=f"game:slot:{tid}"),
+         InlineKeyboardButton(text="🎱 Шар предсказаний",   callback_data=f"game:8ball:{tid}")],
+        [InlineKeyboardButton(text="✊ КНБ — Камень",       callback_data=f"game:rps_k:{tid}"),
+         InlineKeyboardButton(text="✌️ КНБ — Ножницы",      callback_data=f"game:rps_n:{tid}")],
+        [InlineKeyboardButton(text="🖐 КНБ — Бумага",       callback_data=f"game:rps_b:{tid}"),
+         InlineKeyboardButton(text="📖 Цитата дня",         callback_data=f"game:quote:{tid}")],
+        [InlineKeyboardButton(text="🌤 Погода — Москва",    callback_data=f"game:weather_Москва:{tid}"),
+         InlineKeyboardButton(text="🌍 Свой город",          callback_data=f"game:weather_custom:{tid}")],
+        [InlineKeyboardButton(text="⏱ Отсчёт 5 сек",       callback_data=f"game:countdown5:{tid}"),
+         InlineKeyboardButton(text="⏱ Отсчёт 10 сек",      callback_data=f"game:countdown10:{tid}")],
+        [InlineKeyboardButton(text="🔙 Назад",              callback_data=f"panel:mainmenu:0")],
     ])
 
-# ═══════════════════════════════════════════
-#              MIDDLEWARE
-# ═══════════════════════════════════════════
 message_cache = {}
 
 class StatsMiddleware(BaseMiddleware):
@@ -411,9 +400,9 @@ class StatsMiddleware(BaseMiddleware):
                 title = (
                     "👑 Элита" if new_level >= 20 else
                     "🏆 Легенда" if new_level >= 10 else
-                    "⭐ Ветеран" if new_level >= 5 else
-                    "💪 Активный" if new_level >= 3 else
-                    "👤 Участник")
+                    "⚔️ Ветеран" if new_level >= 5 else
+                    "🌱 Активный" if new_level >= 3 else
+                    "🔰 Участник")
                 try:
                     await event.answer(
                         f"🎉 {event.from_user.mention_html()} достиг <b>{new_level} уровня</b>!\n"
@@ -491,7 +480,7 @@ class PendingInputMiddleware(BaseMiddleware):
                             until_date=timedelta(minutes=mins))
                         await event.answer(random.choice(MUTE_MESSAGES).format(
                             name=f"<b>{target_name}</b>", time=label), parse_mode="HTML")
-                    else: await event.reply("❗ Примеры: 10, 30m, 2h, 1d")
+                    else: await event.reply("⚠️ Примеры: 10, 30m, 2h, 1d")
                 elif action == "warn_custom":
                     reason = text.strip() or "Нарушение правил"
                     warnings[chat_id][target_id] += 1; count = warnings[chat_id][target_id]
@@ -513,11 +502,11 @@ class PendingInputMiddleware(BaseMiddleware):
                 elif action == "poll_text":
                     parts = [x.strip() for x in text.split("|") if x.strip()]
                     if len(parts) >= 3: await bot.send_poll(chat_id, question=parts[0], options=parts[1:], is_anonymous=False)
-                    else: await event.reply("❗ Формат: Вопрос|Вариант1|Вариант2")
+                    else: await event.reply("⚠️ Формат: Вопрос|Вариант1|Вариант2")
                 elif action == "weather_city":
                     await event.answer(await get_weather(text.strip()), parse_mode="HTML")
             except Exception as e:
-                await event.reply(f"❗ Ошибка: {e}")
+                await event.reply(f"⚠️ Ошибка: {e}")
             try: await event.delete()
             except: pass
             return
@@ -528,9 +517,6 @@ dp.message.middleware(StatsMiddleware())
 dp.message.middleware(AntiFloodMiddleware())
 dp.message.middleware(AntiMatMiddleware())
 
-# ═══════════════════════════════════════════
-#       НОВЫЕ УЧАСТНИКИ
-# ═══════════════════════════════════════════
 @dp.message(F.new_chat_members)
 async def on_new_member(message: Message):
     for member in message.new_chat_members:
@@ -548,23 +534,20 @@ async def on_new_member(message: Message):
         await message.answer_photo(
             photo=FSInputFile("welcome.jpg"),
             caption=f"👋 Привет, {member.mention_html()}! Добро пожаловать в чат!\n\n"
-            f"📜 Ознакомься с правилами чата перед тем как писать.",
+                    f"📜 Ознакомься с правилами чата перед тем как писать.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-03-2")]
             ])
         )
-        await log_action(f"👋 <b>ВХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}")
-        
+        await log_action(f"🚪 <b>ВХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}")
+
 @dp.message(F.left_chat_member)
 async def on_left_member(message: Message):
     member = message.left_chat_member
     if member.is_bot: return
-    await log_action(f"🚪 <b>ВЫХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}")
+    await log_action(f"🚶 <b>ВЫХОД</b>\nУчастник: {member.mention_html()}\nЧат: {message.chat.title}")
 
-# ═══════════════════════════════════════════
-#         CALLBACK HANDLERS — ПАНЕЛЬ
-# ═══════════════════════════════════════════
 @dp.callback_query(F.data.startswith("panel:"))
 async def cb_panel(call: CallbackQuery):
     if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
@@ -587,10 +570,10 @@ async def cb_panel(call: CallbackQuery):
             total_msgs  = sum(chat_stats[cid].values())
             total_warns = sum(warnings[cid].values())
             await call.message.edit_text(
-                f"🛠 <b>Панель управления</b>\n\n"
+                f"⚙️ <b>Панель управления</b>\n\n"
                 f"💬 Чат: <b>{call.message.chat.title}</b>\n"
-                f"📊 Сообщений: <b>{total_msgs}</b>\n"
-                f"⚠️ Варнов: <b>{total_warns}</b>\n"
+                f"📨 Сообщений: <b>{total_msgs}</b>\n"
+                f"⚡ Варнов: <b>{total_warns}</b>\n"
                 f"🧼 Антимат: <b>{'✅ вкл' if ANTI_MAT_ENABLED else '❌ выкл'}</b>\n"
                 f"🤖 Автокик: <b>{'✅ вкл' if AUTO_KICK_BOTS else '❌ выкл'}</b>\n\nВыбери раздел:",
                 parse_mode="HTML", reply_markup=kb_main_menu())
@@ -599,21 +582,21 @@ async def cb_panel(call: CallbackQuery):
                 "👤 <b>Управление участником</b>\n\nОткрой панель реплаем:\n"
                 "<code>/panel</code> → ответь на сообщение участника",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
         elif action == "back":
             if tid != 0:
                 warns = warnings[cid].get(tid, 0); rep = reputation[cid].get(tid, 0)
                 msgs  = chat_stats[cid].get(tid, 0)
                 afk   = f"\n😴 AFK: {afk_users[tid]}" if tid in afk_users else ""
                 await call.message.edit_text(
-                    f"🛠 <b>Панель участника</b>\n\n👤 {mention}{afk}\n"
-                    f"🆔 ID: <code>{tid}</code>\n"
-                    f"⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
-                    f"⭐ Репутация: <b>{rep:+d}</b>\n"
+                    f"👤 <b>Панель участника</b>\n\n🔎 {mention}{afk}\n"
+                    f"🪪 ID: <code>{tid}</code>\n"
+                    f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
+                    f"🌟 Репутация: <b>{rep:+d}</b>\n"
                     f"💬 Сообщений: <b>{msgs}</b>\n\nВыбери действие:",
                     parse_mode="HTML", reply_markup=kb_user_panel(tid))
             else:
-                await call.message.edit_text("🛠 <b>Панель управления</b>\n\nВыбери раздел:",
+                await call.message.edit_text("⚙️ <b>Панель управления</b>\n\nВыбери раздел:",
                     parse_mode="HTML", reply_markup=kb_main_menu())
         elif action == "mute":
             await call.message.edit_text(f"🔇 <b>Мут для {tname}</b>\n\nВыбери время:",
@@ -625,20 +608,20 @@ async def cb_panel(call: CallbackQuery):
             await call.message.edit_text(f"🔊 <b>{tname}</b> размучен.", parse_mode="HTML")
             await log_action(f"🔊 <b>РАЗМУТ</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nЧат: {call.message.chat.title}")
         elif action == "warn":
-            await call.message.edit_text(f"⚠️ <b>Варн для {tname}</b>\n\nВыбери причину:",
+            await call.message.edit_text(f"⚡ <b>Варн для {tname}</b>\n\nВыбери причину:",
                 parse_mode="HTML", reply_markup=kb_warn(tid))
         elif action == "unwarn":
             if warnings[cid][tid] > 0: warnings[cid][tid] -= 1
             await call.message.edit_text(
-                f"✅ С <b>{tname}</b> снят варн. Осталось: <b>{warnings[cid][tid]}/{MAX_WARNINGS}</b>",
+                f"🌿 С <b>{tname}</b> снят варн. Осталось: <b>{warnings[cid][tid]}/{MAX_WARNINGS}</b>",
                 parse_mode="HTML")
         elif action == "ban":
             await call.message.edit_text(f"🔨 <b>Бан для {tname}</b>\n\nВыбери причину:",
                 parse_mode="HTML", reply_markup=kb_ban(tid))
         elif action == "unban":
             await bot.unban_chat_member(cid, tid, only_if_banned=True)
-            await call.message.edit_text(f"♻️ <b>{tname}</b> разбанен.", parse_mode="HTML")
-            await log_action(f"♻️ <b>РАЗБАН</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nЧат: {call.message.chat.title}")
+            await call.message.edit_text(f"🕊 <b>{tname}</b> разбанен.", parse_mode="HTML")
+            await log_action(f"🕊 <b>РАЗБАН</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nЧат: {call.message.chat.title}")
         elif action == "del":
             try: await call.message.reply_to_message.delete()
             except: pass
@@ -649,25 +632,25 @@ async def cb_panel(call: CallbackQuery):
                     "member":"👤 Участник","restricted":"🔇 Ограничен","kicked":"🔨 Забанен"}
             afk = f"\n😴 AFK: {afk_users[tid]}" if tid in afk_users else ""
             await call.message.edit_text(
-                f"👤 <b>Инфо:</b>\n\n🏷 {u.mention_html()}{afk}\n"
-                f"🔗 {'@'+u.username if u.username else 'нет'}\n🆔 <code>{u.id}</code>\n"
+                f"🔍 <b>Инфо:</b>\n\n🏷 {u.mention_html()}{afk}\n"
+                f"🔗 {'@'+u.username if u.username else 'нет'}\n🪪 <code>{u.id}</code>\n"
                 f"📌 {smap.get(tm2.status, tm2.status)}\n"
-                f"⚠️ Варнов: <b>{warnings[cid].get(tid,0)}/{MAX_WARNINGS}</b>\n"
-                f"⭐ Репутация: <b>{reputation[cid].get(tid,0):+d}</b>\n"
+                f"⚡ Варнов: <b>{warnings[cid].get(tid,0)}/{MAX_WARNINGS}</b>\n"
+                f"🌟 Репутация: <b>{reputation[cid].get(tid,0):+d}</b>\n"
                 f"💬 Сообщений: <b>{chat_stats[cid].get(tid,0)}</b>",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[kb_back(tid)]))
         elif action == "fun":
             await call.message.edit_text(f"🎭 <b>Приколы над {tname}</b>\n\nВыбери:",
                 parse_mode="HTML", reply_markup=kb_fun(tid))
         elif action == "messages":
-            await call.message.edit_text("💬 <b>Действия с сообщениями</b>\n\nВыбери:",
+            await call.message.edit_text("✉️ <b>Действия с сообщениями</b>\n\nВыбери:",
                 parse_mode="HTML", reply_markup=kb_messages(tid))
         elif action == "members":
             await call.message.edit_text("👥 <b>Управление участниками</b>\n\nВыбери:",
                 parse_mode="HTML", reply_markup=kb_members(tid))
         elif action == "chat":
             await call.message.edit_text(
-                f"🔧 <b>Управление чатом</b>\n\n"
+                f"⚙️ <b>Управление чатом</b>\n\n"
                 f"🧼 Антимат: <b>{'✅ вкл' if ANTI_MAT_ENABLED else '❌ выкл'}</b>\n"
                 f"🤖 Автокик: <b>{'✅ вкл' if AUTO_KICK_BOTS else '❌ выкл'}</b>\n\nВыбери:",
                 parse_mode="HTML", reply_markup=kb_chat(tid))
@@ -679,14 +662,14 @@ async def cb_panel(call: CallbackQuery):
             total_warns = sum(sum(v.values()) for v in warnings.values())
             await call.message.edit_text(
                 f"📊 <b>Статистика бота</b>\n\n💬 Сообщений: <b>{total_msgs}</b>\n"
-                f"⚠️ Варнов: <b>{total_warns}</b>\n😴 AFK: <b>{len(afk_users)}</b>\n"
+                f"⚡ Варнов: <b>{total_warns}</b>\n😴 AFK: <b>{len(afk_users)}</b>\n"
                 f"🌐 Чатов: <b>{len(chat_stats)}</b>\n"
                 f"🧼 Антимат: <b>{'вкл' if ANTI_MAT_ENABLED else 'выкл'}</b>\n"
                 f"🤖 Автокик: <b>{'вкл' if AUTO_KICK_BOTS else 'выкл'}</b>",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
     except Exception as e:
-        await call.answer(f"❗ Ошибка: {e}", show_alert=True)
+        await call.answer(f"⚠️ Ошибка: {e}", show_alert=True)
     await call.answer()
 
 @dp.callback_query(F.data.startswith("mute:"))
@@ -732,7 +715,7 @@ async def cb_warn(call: CallbackQuery):
     else:
         msg = random.choice(WARN_MESSAGES).format(
             name=f"<b>{tname}</b>", count=count, max=MAX_WARNINGS, reason=reason)
-        await log_action(f"⚠️ <b>ВАРН</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nПричина: {reason}\nЧат: {call.message.chat.title}")
+        await log_action(f"⚡ <b>ВАРН</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nПричина: {reason}\nЧат: {call.message.chat.title}")
     await call.message.edit_text(msg, parse_mode="HTML")
     await call.answer("Варн выдан!")
 
@@ -779,11 +762,11 @@ async def cb_fun(call: CallbackQuery):
     elif action == "gay":
         p = random.randint(0, 100)
         await call.message.edit_text(
-            f"🏳️‍🌈 {mention}\n{'🌈'*(p//10)+'⬜'*(10-p//10)}\n<b>{p}%</b> — это шутка 😄",
+            f"🌈 {mention}\n{'🟣'*(p//10)+'⬜'*(10-p//10)}\n<b>{p}%</b> — это шутка 😄",
             parse_mode="HTML", reply_markup=back_kb)
     elif action == "compliment":
         await call.message.edit_text(
-            f"💐 <b>{mention}:</b>\n\n{random.choice(COMPLIMENTS)}", parse_mode="HTML", reply_markup=back_kb)
+            f"🌸 <b>{mention}:</b>\n\n{random.choice(COMPLIMENTS)}", parse_mode="HTML", reply_markup=back_kb)
     elif action == "predict":
         await call.message.edit_text(
             f"🔮 <b>Предсказание для {mention}:</b>\n\n{random.choice(PREDICTIONS)}", parse_mode="HTML", reply_markup=back_kb)
@@ -794,7 +777,7 @@ async def cb_fun(call: CallbackQuery):
     elif action == "rate":
         score = random.randint(0, 10)
         await call.message.edit_text(
-            f"📊 Оценка {mention}:\n{'⭐'*score+'☆'*(10-score)}\n<b>{score}/10</b>",
+            f"⭐ Оценка {mention}:\n{'🌟'*score+'☆'*(10-score)}\n<b>{score}/10</b>",
             parse_mode="HTML", reply_markup=back_kb)
     elif action == "truth":
         await call.message.edit_text(
@@ -804,7 +787,7 @@ async def cb_fun(call: CallbackQuery):
             f"😈 <b>Задание для {mention}:</b>\n\n{random.choice(DARE_CHALLENGES)}", parse_mode="HTML", reply_markup=back_kb)
     elif action == "wyr":
         await call.message.edit_text(
-            f"🤯 <b>Выбор для {mention}:</b>\n\n{random.choice(WOULD_YOU_RATHER)}", parse_mode="HTML", reply_markup=back_kb)
+            f"🎯 <b>Выбор для {mention}:</b>\n\n{random.choice(WOULD_YOU_RATHER)}", parse_mode="HTML", reply_markup=back_kb)
     await call.answer()
 
 @dp.callback_query(F.data.startswith("msg:"))
@@ -814,13 +797,13 @@ async def cb_msg(call: CallbackQuery):
     parts = call.data.split(":"); action = parts[1]; tid = int(parts[2]); cid = call.message.chat.id
     if action == "pin":
         try: await bot.pin_chat_message(cid, call.message.reply_to_message.message_id); await call.answer("📌 Закреплено!", show_alert=True)
-        except: await call.answer("❗ Открой панель реплаем на нужное сообщение.", show_alert=True)
+        except: await call.answer("⚠️ Открой панель реплаем на нужное сообщение.", show_alert=True)
     elif action == "unpin":
-        try: await bot.unpin_chat_message(cid, call.message.reply_to_message.message_id); await call.answer("📌 Откреплено!", show_alert=True)
-        except: await call.answer("❗ Нет сообщения.", show_alert=True)
+        try: await bot.unpin_chat_message(cid, call.message.reply_to_message.message_id); await call.answer("📍 Откреплено!", show_alert=True)
+        except: await call.answer("⚠️ Нет сообщения.", show_alert=True)
     elif action == "del":
         try: await call.message.reply_to_message.delete(); await call.answer("🗑 Удалено!", show_alert=True)
-        except: await call.answer("❗ Нет сообщения.", show_alert=True)
+        except: await call.answer("⚠️ Нет сообщения.", show_alert=True)
     elif action.startswith("clear"):
         n = int(action.replace("clear",""))
         deleted = 0
@@ -832,15 +815,15 @@ async def cb_msg(call: CallbackQuery):
         pending[call.from_user.id] = {"action":"announce_text","target_id":0,"target_name":"","chat_id":cid}
         await call.message.edit_text("📢 Напиши текст объявления:\n<i>(следующее сообщение станет объявлением)</i>",
             parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
         await call.answer(); return
     elif action == "poll":
         pending[call.from_user.id] = {"action":"poll_text","target_id":0,"target_name":"","chat_id":cid}
         await call.message.edit_text("📊 Напиши голосование:\n<code>Вопрос|Вариант 1|Вариант 2</code>",
             parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
         await call.answer(); return
-    try: await call.message.edit_text("💬 <b>Действия с сообщениями</b>\n\nВыбери:", parse_mode="HTML", reply_markup=kb_messages(tid))
+    try: await call.message.edit_text("✉️ <b>Действия с сообщениями</b>\n\nВыбери:", parse_mode="HTML", reply_markup=kb_messages(tid))
     except: pass
     await call.answer()
 
@@ -861,21 +844,21 @@ async def cb_members(call: CallbackQuery):
             lines.append(f"{icon} {adm.user.mention_html()}{title}")
         await call.message.edit_text("\n".join(lines), parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
     elif action == "top":
         stats = chat_stats[cid]
         if not stats: await call.answer("📊 Статистика пуста!", show_alert=True)
         else:
             sorted_u = sorted(stats.items(), key=lambda x: x[1], reverse=True)[:10]
             medals   = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
-            lines    = ["📊 <b>Топ активных:</b>\n"]
+            lines    = ["🏆 <b>Топ активных:</b>\n"]
             for i, (uid, cnt) in enumerate(sorted_u):
                 try: m = await bot.get_chat_member(cid, uid); uname = m.user.full_name
                 except: uname = f"ID {uid}"
                 lines.append(f"{medals[i]} <b>{uname}</b> — {cnt} сообщ.")
             await call.message.edit_text("\n".join(lines), parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
     elif action == "warn24":
         if tid != 0:
             await bot.restrict_chat_member(cid, tid,
@@ -883,15 +866,15 @@ async def cb_members(call: CallbackQuery):
             await call.message.edit_text(
                 f"📵 <b>{tname}</b> — мут на <b>24 часа</b> за рекламу.", parse_mode="HTML")
             await log_action(f"📵 <b>МУТ 24ч</b>\nКто: {call.from_user.mention_html()}\nКого: <b>{tname}</b>\nЧат: {call.message.chat.title}")
-        else: await call.answer("❗ Открой панель реплаем на участника.", show_alert=True)
+        else: await call.answer("⚠️ Открой панель реплаем на участника.", show_alert=True)
     elif action == "warninfo":
         if tid != 0:
             count = warnings[cid].get(tid, 0)
             await call.message.edit_text(
-                f"⚠️ Варнов у <b>{tname}</b>: <b>{count}/{MAX_WARNINGS}</b>",
+                f"⚡ Варнов у <b>{tname}</b>: <b>{count}/{MAX_WARNINGS}</b>",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
-        else: await call.answer("❗ Открой панель реплаем на участника.", show_alert=True)
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
+        else: await call.answer("⚠️ Открой панель реплаем на участника.", show_alert=True)
     await call.answer()
 
 @dp.callback_query(F.data.startswith("chat:"))
@@ -906,7 +889,7 @@ async def cb_chat(call: CallbackQuery):
         label = f"Slowmode {delay}с включён!" if delay > 0 else "Slowmode выключен!"
         await call.answer(f"🐢 {label}", show_alert=True)
         await call.message.edit_text(
-            f"🔧 <b>Управление чатом</b>\n\n"
+            f"⚙️ <b>Управление чатом</b>\n\n"
             f"🧼 Антимат: <b>{'✅ вкл' if ANTI_MAT_ENABLED else '❌ выкл'}</b>\n"
             f"🤖 Автокик: <b>{'✅ вкл' if AUTO_KICK_BOTS else '❌ выкл'}</b>\n\nВыбери:",
             parse_mode="HTML", reply_markup=kb_chat(tid))
@@ -929,22 +912,22 @@ async def cb_chat(call: CallbackQuery):
     elif action == "rules":
         await call.message.edit_text(RULES_TEXT, parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
         await call.answer(); return
     elif action == "botstats":
         total_msgs  = sum(sum(v.values()) for v in chat_stats.values())
         total_warns = sum(sum(v.values()) for v in warnings.values())
         await call.message.edit_text(
-            f"📊 <b>Статистика бота</b>\n\n💬 Сообщений: <b>{total_msgs}</b>\n"
-            f"⚠️ Варнов: <b>{total_warns}</b>\n😴 AFK: <b>{len(afk_users)}</b>\n"
+            f"📈 <b>Статистика бота</b>\n\n💬 Сообщений: <b>{total_msgs}</b>\n"
+            f"⚡ Варнов: <b>{total_warns}</b>\n😴 AFK: <b>{len(afk_users)}</b>\n"
             f"🌐 Чатов: <b>{len(chat_stats)}</b>\n"
             f"🧼 Антимат: <b>{'вкл' if ANTI_MAT_ENABLED else 'выкл'}</b>\n"
             f"🤖 Автокик: <b>{'вкл' if AUTO_KICK_BOTS else 'выкл'}</b>",
             parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
         await call.answer(); return
     await call.message.edit_text(
-        f"🔧 <b>Управление чатом</b>\n\n"
+        f"⚙️ <b>Управление чатом</b>\n\n"
         f"🧼 Антимат: <b>{'✅ вкл' if ANTI_MAT_ENABLED else '❌ выкл'}</b>\n"
         f"🤖 Автокик: <b>{'✅ вкл' if AUTO_KICK_BOTS else '❌ выкл'}</b>\n\nВыбери:",
         parse_mode="HTML", reply_markup=kb_chat(tid))
@@ -957,12 +940,12 @@ async def cb_game(call: CallbackQuery):
     parts = call.data.split(":", 2); action = parts[1]; tid = int(parts[2]); cid = call.message.chat.id
     back_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔄 Ещё раз", callback_data=call.data)],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]])
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]])
     if action == "roll":
         await call.message.edit_text(
-            f"🎲 Бросаю d6... выпало: <b>{random.randint(1,6)}</b>!", parse_mode="HTML", reply_markup=back_kb)
+            f"🎲 Бросаю кубик... выпало: <b>{random.randint(1,6)}</b>!", parse_mode="HTML", reply_markup=back_kb)
     elif action == "flip":
-        await call.message.edit_text(random.choice(["🪙 Орёл!", "🪙 Решка!"]), reply_markup=back_kb)
+        await call.message.edit_text(random.choice(["🦅 Орёл!", "🪙 Решка!"]), reply_markup=back_kb)
     elif action == "slot":
         symbols = ["🍒","🍋","🍊","🍇","⭐","7️⃣","💎"]
         s1,s2,s3 = random.choice(symbols),random.choice(symbols),random.choice(symbols)
@@ -975,20 +958,20 @@ async def cb_game(call: CallbackQuery):
         await call.message.edit_text(
             f"🎱 <b>Ответ шара:</b>\n\n{random.choice(BALL_ANSWERS)}", parse_mode="HTML", reply_markup=back_kb)
     elif action.startswith("rps_"):
-        mp = {"k":("к","🪨 Камень"),"n":("н","✂️ Ножницы"),"b":("б","📄 Бумага")}
+        mp = {"k":("к","✊ Камень"),"n":("н","✌️ Ножницы"),"b":("б","🖐 Бумага")}
         wins = {"к":"н","н":"б","б":"к"}
         key = action.split("_")[1]; pk,pl = mp[key]; bk,bl = random.choice(list(mp.values()))
         res = "🤝 Ничья!" if pk==bk else ("🎉 Ты выиграл!" if wins[pk]==bk else "😈 Я выиграл!")
         await call.message.edit_text(f"Ты: {pl}\nЯ: {bl}\n\n{res}", reply_markup=back_kb)
     elif action == "quote":
-        await call.message.edit_text(f"💬 {random.choice(QUOTES)}", reply_markup=back_kb)
+        await call.message.edit_text(f"📖 {random.choice(QUOTES)}", reply_markup=back_kb)
     elif action.startswith("weather_"):
         city = action.replace("weather_","")
         if city == "custom":
             pending[call.from_user.id] = {"action":"weather_city","target_id":0,"target_name":"","chat_id":cid}
-            await call.message.edit_text("🌤 Напиши название города:",
+            await call.message.edit_text("🌍 Напиши название города:",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
             await call.answer(); return
         await call.message.edit_text(await get_weather(city), parse_mode="HTML", reply_markup=back_kb)
     elif action.startswith("countdown"):
@@ -1001,28 +984,25 @@ async def cb_game(call: CallbackQuery):
         await asyncio.sleep(1)
         await call.message.edit_text("🚀 <b>ПОЕХАЛИ!</b>", parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")]]))
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
         await call.answer(); return
     await call.answer()
 
-# ═══════════════════════════════════════════
-#      КОМАНДЫ — ОСНОВНЫЕ
-# ═══════════════════════════════════════════
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     await message.reply(
         f"👋 Привет, <b>{message.from_user.first_name}</b>!\n\n"
-        "Я бот-модератор этого чата.\n"
+        "🤖 Я бот-модератор этого чата.\n"
         "📜 /rules — правила\n"
         "❓ /help — все команды\n"
-        "🛠 /panel — панель управления (реплай на участника)",
+        "⚙️ /panel — панель управления (реплай на участника)",
         parse_mode="HTML")
 
 @dp.message(Command("rules"))
 async def cmd_rules(message: Message):
     await message.reply_photo(
         photo=FSInputFile("welcome.jpg"),
-        caption="📜 <b>Правила чата</b>\n\nНажми кнопку ниже чтобы прочитать правила:",
+        caption="📜 <b>Правила чата</b>\n\n🔎 Нажми кнопку ниже чтобы прочитать правила:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-03-2")]
@@ -1034,59 +1014,59 @@ async def cmd_help(message: Message):
     is_adm = await check_admin(message)
     text = (
         "❓ <b>Команды для всех:</b>\n"
-        "/rules — правила чата\n"
-        "/weather [город] — погода\n"
-        "/rep — репутация (реплай)\n"
-        "/top — топ активных\n"
-        "/afk [причина] — уйти в AFK\n"
-        "/info — инфо о пользователе (реплай)\n"
-        "/warnings — варны пользователя (реплай)\n\n"
+        "📜 /rules — правила чата\n"
+        "🌤 /weather [город] — погода\n"
+        "🌟 /rep — репутация (реплай)\n"
+        "🏆 /top — топ активных\n"
+        "😴 /afk [причина] — уйти в AFK\n"
+        "🔍 /info — инфо о пользователе (реплай)\n"
+        "⚡ /warnings — варны пользователя (реплай)\n\n"
         "🎮 <b>Игры:</b>\n"
-        "/roll [N] — кубик\n"
-        "/flip — монетка\n"
-        "/8ball [вопрос] — шар предсказаний\n"
-        "/rate [что] — оценить\n"
-        "/iq — проверить IQ\n"
-        "/gay — шуточный %\n"
-        "/quote — цитата дня\n"
-        "/truth — вопрос правды\n"
-        "/dare — задание смелости\n"
-        "/wyr — выбор без выбора\n"
-        "/rps к/н/б — камень ножницы бумага\n"
-        "/slot — однорукий бандит\n"
-        "/choose вар1|вар2 — случайный выбор\n"
-        "/horoscope — гороскоп\n"
-        "/predict — предсказание\n"
-        "/compliment — комплимент\n"
-        "/note get/list — заметки\n"
+        "🎲 /roll [N] — кубик\n"
+        "🪙 /flip — монетка\n"
+        "🎱 /8ball [вопрос] — шар предсказаний\n"
+        "⭐ /rate [что] — оценить\n"
+        "🧠 /iq — проверить IQ\n"
+        "🌈 /gay — шуточный %\n"
+        "📖 /quote — цитата дня\n"
+        "🤔 /truth — вопрос правды\n"
+        "😈 /dare — задание смелости\n"
+        "🎯 /wyr — выбор без выбора\n"
+        "✊ /rps к/н/б — камень ножницы бумага\n"
+        "🎰 /slot — однорукий бандит\n"
+        "🎯 /choose вар1|вар2 — случайный выбор\n"
+        "🌌 /horoscope — гороскоп\n"
+        "🔮 /predict — предсказание\n"
+        "🌸 /compliment — комплимент\n"
+        "📝 /note get/list — заметки\n"
     )
     if is_adm:
         text += (
             "\n👮 <b>Только для администраторов:</b>\n"
-            "/panel — панель управления (реплай)\n"
-            "/ban [причина] — бан\n"
-            "/unban — разбан\n"
-            "/mute [время] — мут (10m / 2h / 1d)\n"
-            "/unmute — размут\n"
-            "/warn [причина] — варн\n"
-            "/unwarn — снять варн\n"
-            "/del — удалить сообщение\n"
-            "/clear [N] — очистить N сообщений\n"
-            "/announce [текст] — объявление\n"
-            "/pin — закрепить\n"
-            "/unpin — открепить\n"
-            "/lock — заблокировать чат\n"
-            "/unlock — разблокировать\n"
-            "/slowmode [сек] — медленный режим\n"
-            "/promote [тег] — выдать тег участнику\n"
-            "/poll Вопрос|Вар1|Вар2 — голосование\n"
-            "/antimat on/off — антимат\n"
-            "/autokick on/off — автокик ботов\n"
-            "/warn24 — мут 24ч за рекламу\n"
-            "/adminlist — список администраторов\n"
-            "/rban — шуточный бан\n"
-            "/countdown [N] — обратный отсчёт\n"
-            "/note set/del — управление заметками\n"
+            "⚙️ /panel — панель управления (реплай)\n"
+            "🔨 /ban [причина] — бан\n"
+            "🕊 /unban — разбан\n"
+            "🔇 /mute [время] — мут (10m / 2h / 1d)\n"
+            "🔊 /unmute — размут\n"
+            "⚡ /warn [причина] — варн\n"
+            "🌿 /unwarn — снять варн\n"
+            "🗑 /del — удалить сообщение\n"
+            "🧹 /clear [N] — очистить N сообщений\n"
+            "📢 /announce [текст] — объявление\n"
+            "📌 /pin — закрепить\n"
+            "📍 /unpin — открепить\n"
+            "🔒 /lock — заблокировать чат\n"
+            "🔓 /unlock — разблокировать\n"
+            "🐢 /slowmode [сек] — медленный режим\n"
+            "🏅 /promote [тег] — выдать тег участнику\n"
+            "📊 /poll Вопрос|Вар1|Вар2 — голосование\n"
+            "🧼 /antimat on/off — антимат\n"
+            "🤖 /autokick on/off — автокик ботов\n"
+            "📵 /warn24 — мут 24ч за рекламу\n"
+            "👮 /adminlist — список администраторов\n"
+            "🎲 /rban — шуточный бан\n"
+            "⏱ /countdown [N] — обратный отсчёт\n"
+            "📝 /note set/del — управление заметками\n"
         )
     await message.reply(text, parse_mode="HTML")
 
@@ -1100,27 +1080,24 @@ async def cmd_panel(message: Message):
         msgs   = chat_stats[message.chat.id].get(target.id, 0)
         afk    = f"\n😴 AFK: {afk_users[target.id]}" if target.id in afk_users else ""
         await message.reply(
-            f"🛠 <b>Панель участника</b>\n\n👤 {target.mention_html()}{afk}\n"
-            f"🆔 ID: <code>{target.id}</code>\n"
-            f"⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
-            f"⭐ Репутация: <b>{rep:+d}</b>\n"
+            f"👤 <b>Панель участника</b>\n\n🔎 {target.mention_html()}{afk}\n"
+            f"🪪 ID: <code>{target.id}</code>\n"
+            f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
+            f"🌟 Репутация: <b>{rep:+d}</b>\n"
             f"💬 Сообщений: <b>{msgs}</b>\n\nВыбери действие:",
             parse_mode="HTML", reply_markup=kb_user_panel(target.id))
     else:
         total_msgs  = sum(chat_stats[message.chat.id].values())
         total_warns = sum(warnings[message.chat.id].values())
         await message.reply(
-            f"🛠 <b>Панель управления</b>\n\n"
+            f"⚙️ <b>Панель управления</b>\n\n"
             f"💬 Чат: <b>{message.chat.title}</b>\n"
-            f"📊 Сообщений: <b>{total_msgs}</b>\n"
-            f"⚠️ Варнов: <b>{total_warns}</b>\n"
+            f"📨 Сообщений: <b>{total_msgs}</b>\n"
+            f"⚡ Варнов: <b>{total_warns}</b>\n"
             f"🧼 Антимат: <b>{'✅ вкл' if ANTI_MAT_ENABLED else '❌ выкл'}</b>\n"
             f"🤖 Автокик: <b>{'✅ вкл' if AUTO_KICK_BOTS else '❌ выкл'}</b>\n\nВыбери раздел:",
             parse_mode="HTML", reply_markup=kb_main_menu())
 
-# ═══════════════════════════════════════════
-#      КОМАНДЫ МОДЕРАЦИИ
-# ═══════════════════════════════════════════
 @dp.message(Command("ban"))
 async def cmd_ban(message: Message, command: CommandObject):
     if not await require_admin(message): return
@@ -1139,8 +1116,8 @@ async def cmd_unban(message: Message):
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
     await bot.unban_chat_member(message.chat.id, target.id, only_if_banned=True)
-    await message.reply(f"♻️ {target.mention_html()} разбанен.", parse_mode="HTML")
-    await log_action(f"♻️ <b>РАЗБАН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nЧат: {message.chat.title}")
+    await message.reply(f"🕊 {target.mention_html()} разбанен.", parse_mode="HTML")
+    await log_action(f"🕊 <b>РАЗБАН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nЧат: {message.chat.title}")
 
 @dp.message(Command("mute"))
 async def cmd_mute(message: Message, command: CommandObject):
@@ -1185,7 +1162,7 @@ async def cmd_warn(message: Message, command: CommandObject):
     else:
         msg = random.choice(WARN_MESSAGES).format(
             name=target.mention_html(), count=count, max=MAX_WARNINGS, reason=reason)
-        await log_action(f"⚠️ <b>ВАРН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
+        await log_action(f"⚡ <b>ВАРН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
     await message.reply(msg, parse_mode="HTML")
 
 @dp.message(Command("unwarn"))
@@ -1195,7 +1172,7 @@ async def cmd_unwarn(message: Message):
     target = message.reply_to_message.from_user; cid = message.chat.id
     if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1
     await message.reply(
-        f"✅ С {target.mention_html()} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>",
+        f"🌿 С {target.mention_html()} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>",
         parse_mode="HTML")
 
 @dp.message(Command("del"))
@@ -1208,7 +1185,7 @@ async def cmd_del(message: Message):
 async def cmd_clear(message: Message, command: CommandObject):
     if not await require_admin(message): return
     try: count = min(int(command.args or 10), 50)
-    except ValueError: await message.reply("❗ /clear 20"); return
+    except ValueError: await message.reply("⚠️ /clear 20"); return
     deleted = 0
     for i in range(message.message_id, message.message_id - count - 1, -1):
         try: await bot.delete_message(message.chat.id, i); deleted += 1
@@ -1240,7 +1217,7 @@ async def cmd_unpin(message: Message):
     if not await require_admin(message): return
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
     await bot.unpin_chat_message(message.chat.id, message.reply_to_message.message_id)
-    await message.reply("📌 Откреплено!")
+    await message.reply("📍 Откреплено!")
 
 @dp.message(Command("lock"))
 async def cmd_lock(message: Message):
@@ -1260,7 +1237,7 @@ async def cmd_unlock(message: Message):
 async def cmd_slowmode(message: Message, command: CommandObject):
     if not await require_admin(message): return
     try: delay = int(command.args) if command.args else 10
-    except ValueError: await message.reply("❗ /slowmode 30"); return
+    except ValueError: await message.reply("⚠️ /slowmode 30"); return
     await bot.set_chat_slow_mode_delay(message.chat.id, delay)
     if delay == 0: await message.reply("🐇 Slowmode выключен.")
     else:
@@ -1279,9 +1256,9 @@ async def cmd_promote(message: Message, command: CommandObject):
 async def cmd_poll(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not command.args or "|" not in command.args:
-        await message.reply("❗ /poll Вопрос|Вар1|Вар2"); return
+        await message.reply("⚠️ /poll Вопрос|Вар1|Вар2"); return
     parts = [p.strip() for p in command.args.split("|")]
-    if len(parts) < 3: await message.reply("❗ Нужно минимум 2 варианта."); return
+    if len(parts) < 3: await message.reply("⚠️ Нужно минимум 2 варианта."); return
     await message.delete()
     await bot.send_poll(message.chat.id, question=parts[0], options=parts[1:], is_anonymous=False)
 
@@ -1345,13 +1322,13 @@ async def cmd_note(message: Message, command: CommandObject):
     parts = command.args.split(maxsplit=2); action = parts[0].lower(); cid = message.chat.id
     if action == "set":
         if not await require_admin(message): return
-        if len(parts) < 3: await message.reply("❗ /note set [имя] [текст]"); return
+        if len(parts) < 3: await message.reply("⚠️ /note set [имя] [текст]"); return
         notes[cid][parts[1]] = parts[2]
-        await message.reply(f"✅ Заметка <b>{parts[1]}</b> сохранена!", parse_mode="HTML")
+        await message.reply(f"📝 Заметка <b>{parts[1]}</b> сохранена!", parse_mode="HTML")
     elif action == "get":
-        if len(parts) < 2: await message.reply("❗ /note get [имя]"); return
+        if len(parts) < 2: await message.reply("⚠️ /note get [имя]"); return
         t = notes[cid].get(parts[1])
-        await message.reply(f"📝 <b>{parts[1]}:</b>\n{t}" if t else "❌ Заметка не найдена.", parse_mode="HTML")
+        await message.reply(f"📄 <b>{parts[1]}:</b>\n{t}" if t else "❌ Заметка не найдена.", parse_mode="HTML")
     elif action == "del":
         if not await require_admin(message): return
         if len(parts) > 1 and parts[1] in notes[cid]:
@@ -1359,7 +1336,7 @@ async def cmd_note(message: Message, command: CommandObject):
         else: await message.reply("❌ Не найдена.")
     elif action == "list":
         keys = list(notes[cid].keys())
-        await message.reply("📋 <b>Заметки:</b>\n" + "\n".join(f"• {k}" for k in keys) if keys else "📭 Заметок нет.", parse_mode="HTML")
+        await message.reply("📋 <b>Заметки:</b>\n" + "\n".join(f"📌 {k}" for k in keys) if keys else "📭 Заметок нет.", parse_mode="HTML")
 
 @dp.message(Command("birthday"))
 async def cmd_birthday(message: Message, command: CommandObject):
@@ -1369,7 +1346,7 @@ async def cmd_birthday(message: Message, command: CommandObject):
         day, month = map(int, command.args.strip().split("."))
         if not (1 <= day <= 31 and 1 <= month <= 12): raise ValueError
     except:
-        await message.reply("❗ Неверный формат. Пример: /birthday 25.03"); return
+        await message.reply("⚠️ Неверный формат. Пример: /birthday 25.03"); return
     uid = message.from_user.id
     birthdays[uid] = {"day": day, "month": month, "name": message.from_user.full_name, "chat_id": message.chat.id}
     await message.reply(
@@ -1398,7 +1375,7 @@ async def cmd_remind(message: Message, command: CommandObject):
             "<code>/remind 2h Встреча</code>", parse_mode="HTML"); return
     parts = command.args.split(maxsplit=1)
     mins, label = parse_duration(parts[0])
-    if not mins: await message.reply("❗ Неверный формат времени. Примеры: 10m, 2h, 1d"); return
+    if not mins: await message.reply("⚠️ Неверный формат времени. Примеры: 10m, 2h, 1d"); return
     text = parts[1].strip()
     cid = message.chat.id
     await message.reply(f"⏰ Напомню через <b>{label}</b>!\n📝 {text}", parse_mode="HTML")
@@ -1406,7 +1383,7 @@ async def cmd_remind(message: Message, command: CommandObject):
         await asyncio.sleep(mins * 60)
         try:
             await bot.send_message(cid,
-                f"⏰ {message.from_user.mention_html()}, напоминание!\n\n📝 <b>{text}</b>", parse_mode="HTML")
+                f"⏰ {message.from_user.mention_html()}, напоминание!\n\n📌 <b>{text}</b>", parse_mode="HTML")
         except: pass
     asyncio.create_task(remind_task())
 
@@ -1423,9 +1400,6 @@ async def cmd_countdown(message: Message, command: CommandObject):
     await asyncio.sleep(1)
     await sent.edit_text("🚀 <b>ПОЕХАЛИ!</b>", parse_mode="HTML")
 
-# ═══════════════════════════════════════════
-#         ПОГОДА / АФК / ИНФО
-# ═══════════════════════════════════════════
 @dp.message(Command("weather"))
 async def cmd_weather(message: Message, command: CommandObject):
     if not command.args: await message.reply("🌤 Укажи город: /weather Москва"); return
@@ -1447,12 +1421,12 @@ async def cmd_info(message: Message):
             "restricted":"🔇 Ограничен","kicked":"🔨 Забанен","left":"🚶 Вышел"}
     afk  = f"\n😴 AFK: {afk_users[user.id]}" if user.id in afk_users else ""
     await message.reply(
-        f"👤 <b>Инфо:</b>\n{user.mention_html()}{afk}\n"
+        f"🔍 <b>Инфо:</b>\n{user.mention_html()}{afk}\n"
         f"🔗 {'@'+user.username if user.username else 'нет'}\n"
-        f"🆔 <code>{user.id}</code>\n"
+        f"🪪 <code>{user.id}</code>\n"
         f"📌 {smap.get(member.status, member.status)}\n"
-        f"⚠️ Варнов: <b>{warnings[message.chat.id].get(user.id,0)}/{MAX_WARNINGS}</b>\n"
-        f"⭐ Репутация: <b>{reputation[message.chat.id].get(user.id,0):+d}</b>\n"
+        f"⚡ Варнов: <b>{warnings[message.chat.id].get(user.id,0)}/{MAX_WARNINGS}</b>\n"
+        f"🌟 Репутация: <b>{reputation[message.chat.id].get(user.id,0):+d}</b>\n"
         f"💬 Сообщений: <b>{chat_stats[message.chat.id].get(user.id,0)}</b>",
         parse_mode="HTML")
 
@@ -1461,19 +1435,16 @@ async def cmd_warnings(message: Message):
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
     await message.reply(
-        f"📊 {target.mention_html()} — варнов: <b>{warnings[message.chat.id].get(target.id,0)}/{MAX_WARNINGS}</b>",
+        f"⚡ {target.mention_html()} — варнов: <b>{warnings[message.chat.id].get(target.id,0)}/{MAX_WARNINGS}</b>",
         parse_mode="HTML")
 
-# ═══════════════════════════════════════════
-#         РЕПУТАЦИЯ
-# ═══════════════════════════════════════════
 @dp.message(Command("rep"))
 async def cmd_rep(message: Message):
     if not message.reply_to_message: await message.reply("↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
     score  = reputation[message.chat.id][target.id]
     await message.reply(
-        f"{'⭐' if score>=0 else '💀'} Репутация {target.mention_html()}: <b>{score:+d}</b>",
+        f"{'🌟' if score>=0 else '💀'} Репутация {target.mention_html()}: <b>{score:+d}</b>",
         parse_mode="HTML")
 
 @dp.message(F.text.in_({"+1", "+", "👍"}))
@@ -1510,11 +1481,11 @@ async def cmd_rank(message: Message):
     uid, cid = user.id, message.chat.id
     xp = xp_data[cid][uid]; lvl = levels[cid][uid]
     xp_current = xp % 100
-    bar = "█" * (xp_current // 10) + "░" * (10 - xp_current // 10)
+    bar = "🟩" * (xp_current // 10) + "⬜" * (10 - xp_current // 10)
     title = (
         "👑 Элита" if lvl >= 20 else "🏆 Легенда" if lvl >= 10 else
-        "⭐ Ветеран" if lvl >= 5 else "💪 Активный" if lvl >= 3 else
-        "👤 Участник" if lvl >= 1 else "🌱 Новичок")
+        "⚔️ Ветеран" if lvl >= 5 else "🌱 Активный" if lvl >= 3 else
+        "🔰 Участник" if lvl >= 1 else "🐣 Новичок")
     await message.reply(
         f"📊 <b>Уровень {user.mention_html()}</b>\n\n"
         f"🏅 Титул: <b>{title}</b>\n⚡ Уровень: <b>{lvl}</b>\n"
@@ -1526,19 +1497,16 @@ async def cmd_top(message: Message):
     if not stats: await message.reply("📊 Статистика пока пуста!"); return
     sorted_u = sorted(stats.items(), key=lambda x: x[1], reverse=True)[:10]
     medals   = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
-    lines    = ["📊 <b>Топ активных участников:</b>\n"]
+    lines    = ["🏆 <b>Топ активных участников:</b>\n"]
     for i, (uid, count) in enumerate(sorted_u):
         try: m = await bot.get_chat_member(message.chat.id, uid); uname = m.user.full_name
         except: uname = f"ID {uid}"
         lines.append(f"{medals[i]} <b>{uname}</b> — {count} сообщений")
     await message.reply("\n".join(lines), parse_mode="HTML")
 
-# ═══════════════════════════════════════════
-#         ИГРЫ
-# ═══════════════════════════════════════════
 @dp.message(Command("quote"))
 async def cmd_quote(message: Message):
-    await message.reply(f"💬 {random.choice(QUOTES)}")
+    await message.reply(f"📖 {random.choice(QUOTES)}")
 
 @dp.message(Command("roll"))
 async def cmd_roll(message: Message, command: CommandObject):
@@ -1548,7 +1516,7 @@ async def cmd_roll(message: Message, command: CommandObject):
 
 @dp.message(Command("flip"))
 async def cmd_flip(message: Message):
-    await message.reply(random.choice(["🪙 Орёл!", "🪙 Решка!"]))
+    await message.reply(random.choice(["🦅 Орёл!", "🪙 Решка!"]))
 
 @dp.message(Command("8ball"))
 async def cmd_8ball(message: Message, command: CommandObject):
@@ -1558,10 +1526,10 @@ async def cmd_8ball(message: Message, command: CommandObject):
 
 @dp.message(Command("rate"))
 async def cmd_rate(message: Message, command: CommandObject):
-    if not command.args: await message.reply("❗ /rate [что]"); return
+    if not command.args: await message.reply("⚠️ /rate [что]"); return
     score = random.randint(0, 10)
     await message.reply(
-        f"📊 <b>{command.args}</b>\n{'⭐'*score+'☆'*(10-score)}\nОценка: <b>{score}/10</b>", parse_mode="HTML")
+        f"⭐ <b>{command.args}</b>\n{'🌟'*score+'☆'*(10-score)}\nОценка: <b>{score}/10</b>", parse_mode="HTML")
 
 @dp.message(Command("iq"))
 async def cmd_iq(message: Message):
@@ -1575,7 +1543,7 @@ async def cmd_gay(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     p    = random.randint(0, 100)
     await message.reply(
-        f"🏳️‍🌈 {user.mention_html()}\n{'🌈'*(p//10)+'⬜'*(10-p//10)}\n<b>{p}%</b> — это шутка 😄",
+        f"🌈 {user.mention_html()}\n{'🟣'*(p//10)+'⬜'*(10-p//10)}\n<b>{p}%</b> — это шутка 😄",
         parse_mode="HTML")
 
 @dp.message(Command("truth"))
@@ -1592,14 +1560,14 @@ async def cmd_dare(message: Message):
 
 @dp.message(Command("wyr"))
 async def cmd_wyr(message: Message):
-    await message.reply(f"🤯 <b>Выбор без выбора:</b>\n\n{random.choice(WOULD_YOU_RATHER)}", parse_mode="HTML")
+    await message.reply(f"🎯 <b>Выбор без выбора:</b>\n\n{random.choice(WOULD_YOU_RATHER)}", parse_mode="HTML")
 
 @dp.message(Command("rps"))
 async def cmd_rps(message: Message, command: CommandObject):
-    choices = {"к":"🪨 Камень","н":"✂️ Ножницы","б":"📄 Бумага"}
+    choices = {"к":"✊ Камень","н":"✌️ Ножницы","б":"🖐 Бумага"}
     wins    = {"к":"н","н":"б","б":"к"}
     if not command.args or command.args.lower() not in choices:
-        await message.reply("✂️ /rps к — камень, /rps н — ножницы, /rps б — бумага"); return
+        await message.reply("✊ /rps к — камень, /rps н — ножницы, /rps б — бумага"); return
     p = command.args.lower(); b = random.choice(list(choices.keys()))
     res = "🤝 Ничья!" if p==b else ("🎉 Ты выиграл!" if wins[p]==b else "😈 Я выиграл!")
     await message.reply(f"Ты: {choices[p]}\nЯ: {choices[b]}\n\n{res}")
@@ -1617,9 +1585,9 @@ async def cmd_slot(message: Message):
 @dp.message(Command("choose"))
 async def cmd_choose(message: Message, command: CommandObject):
     if not command.args or "|" not in command.args:
-        await message.reply("❗ /choose вар1|вар2|вар3"); return
+        await message.reply("⚠️ /choose вар1|вар2|вар3"); return
     options = [o.strip() for o in command.args.split("|") if o.strip()]
-    if len(options) < 2: await message.reply("❗ Минимум 2 варианта."); return
+    if len(options) < 2: await message.reply("⚠️ Минимум 2 варианта."); return
     await message.reply(f"🎯 Выбираю... ✅ <b>{random.choice(options)}</b>!", parse_mode="HTML")
 
 @dp.message(Command("horoscope"))
@@ -1648,13 +1616,13 @@ async def cmd_compatibility(message: Message):
     elif percent >= 20: verdict = "😬 Сложно, но возможно..."
     else:               verdict = "💔 Катастрофа! Держитесь подальше!"
     await message.reply(
-        f"💘 <b>Совместимость:</b>\n\n👤 {user1.mention_html()}\n💞 {bar}\n👤 {user2.mention_html()}\n\n<b>{percent}%</b> — {verdict}",
+        f"💘 <b>Совместимость:</b>\n\n👤 {user1.mention_html()}\n{bar}\n👤 {user2.mention_html()}\n\n<b>{percent}%</b> — {verdict}",
         parse_mode="HTML")
 
 @dp.message(Command("compliment"))
 async def cmd_compliment(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
-    await message.reply(f"💐 {user.mention_html()}, {random.choice(COMPLIMENTS)}", parse_mode="HTML")
+    await message.reply(f"🌸 {user.mention_html()}, {random.choice(COMPLIMENTS)}", parse_mode="HTML")
 
 @dp.message(Command("botstats"))
 async def cmd_botstats(message: Message):
@@ -1662,15 +1630,12 @@ async def cmd_botstats(message: Message):
     total_msgs  = sum(sum(v.values()) for v in chat_stats.values())
     total_warns = sum(sum(v.values()) for v in warnings.values())
     await message.reply(
-        f"📊 <b>Статистика бота</b>\n\n💬 Сообщений: <b>{total_msgs}</b>\n"
-        f"⚠️ Варнов: <b>{total_warns}</b>\n😴 AFK: <b>{len(afk_users)}</b>\n"
+        f"📈 <b>Статистика бота</b>\n\n💬 Сообщений: <b>{total_msgs}</b>\n"
+        f"⚡ Варнов: <b>{total_warns}</b>\n😴 AFK: <b>{len(afk_users)}</b>\n"
         f"🌐 Чатов: <b>{len(chat_stats)}</b>\n"
         f"🧼 Антимат: <b>{'вкл' if ANTI_MAT_ENABLED else 'выкл'}</b>\n"
         f"🤖 Автокик: <b>{'вкл' if AUTO_KICK_BOTS else 'выкл'}</b>", parse_mode="HTML")
 
-# ═══════════════════════════════════════════
-#         АУТИСТ КОМАНДЫ
-# ═══════════════════════════════════════════
 @dp.message(F.text & ~F.text.startswith("/"))
 async def autist_commands(message: Message):
     if not message.text: return
@@ -1721,7 +1686,7 @@ async def autist_commands(message: Message):
         elif action == "кик":
             await bot.ban_chat_member(cid, target.id)
             await bot.unban_chat_member(cid, target.id)
-            await message.reply(f"👢 {tname} кикнут из чата!\n📝 Причина: {reason}", parse_mode="HTML")
+            await message.reply(f"👟 {tname} кикнут из чата!\n📝 Причина: {reason}", parse_mode="HTML")
         elif action == "мут":
             mins = duration_mins or 60; label = duration_label or "1 ч."
             await bot.restrict_chat_member(cid, target.id,
@@ -1736,13 +1701,13 @@ async def autist_commands(message: Message):
                 await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
                 await message.reply(f"🔨 {tname} — {MAX_WARNINGS} варна, автобан!\n📝 Причина: {reason}", parse_mode="HTML")
             else:
-                await message.reply(f"⚠️ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
+                await message.reply(f"⚡ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
         elif action in ("снять варн", "снятьварн"):
             if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1
-            await message.reply(f"✅ С {tname} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>", parse_mode="HTML")
+            await message.reply(f"🌿 С {tname} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>", parse_mode="HTML")
         elif action == "разбан":
             await bot.unban_chat_member(cid, target.id, only_if_banned=True)
-            await message.reply(f"♻️ {tname} разбанен.", parse_mode="HTML")
+            await message.reply(f"🕊 {tname} разбанен.", parse_mode="HTML")
         elif action == "размут":
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
@@ -1750,10 +1715,10 @@ async def autist_commands(message: Message):
             await message.reply(f"🔊 {tname} размучен.", parse_mode="HTML")
         elif action == "удалить":
             try: await message.reply_to_message.delete(); await message.reply("🗑 Сообщение удалено!")
-            except: await message.reply("❗ Не удалось удалить сообщение.")
+            except: await message.reply("⚠️ Не удалось удалить сообщение.")
         elif action == "закрепить":
             try: await bot.pin_chat_message(cid, message.reply_to_message.message_id); await message.reply("📌 Сообщение закреплено!")
-            except: await message.reply("❗ Не удалось закрепить сообщение.")
+            except: await message.reply("⚠️ Не удалось закрепить сообщение.")
         elif action == "предупредить":
             text_warn = rest.strip() or "Нарушение правил"
             await message.reply(f"⚠️ Внимание {tname}!\n📝 {text_warn}", parse_mode="HTML")
@@ -1769,17 +1734,17 @@ async def autist_commands(message: Message):
                     "member":"👤 Участник","restricted":"🔇 Ограничен","kicked":"🔨 Забанен"}
             username = f"@{target.username}" if target.username else "нет"
             await message.reply(
-                f"👤 <b>Инфо:</b>\n{tname}\n🔗 Юзернейм: <b>{username}</b>\n"
-                f"🆔 ID: <code>{target.id}</code>\n📌 {smap.get(member.status, member.status)}\n"
-                f"⚠️ Варнов: <b>{warnings[cid].get(target.id,0)}/{MAX_WARNINGS}</b>\n"
-                f"⭐ Репутация: <b>{reputation[cid].get(target.id,0):+d}</b>\n"
+                f"🔍 <b>Инфо:</b>\n{tname}\n🔗 Юзернейм: <b>{username}</b>\n"
+                f"🪪 ID: <code>{target.id}</code>\n📌 {smap.get(member.status, member.status)}\n"
+                f"⚡ Варнов: <b>{warnings[cid].get(target.id,0)}/{MAX_WARNINGS}</b>\n"
+                f"🌟 Репутация: <b>{reputation[cid].get(target.id,0):+d}</b>\n"
                 f"💬 Сообщений: <b>{chat_stats[cid].get(target.id,0)}</b>", parse_mode="HTML")
         elif action == "варны":
             count = warnings[cid].get(target.id, 0)
-            await message.reply(f"⚠️ Варнов у {tname}: <b>{count}/{MAX_WARNINGS}</b>", parse_mode="HTML")
+            await message.reply(f"⚡ Варнов у {tname}: <b>{count}/{MAX_WARNINGS}</b>", parse_mode="HTML")
         elif action == "репутация":
             rep = reputation[cid].get(target.id, 0)
-            await message.reply(f"⭐ Репутация {tname}: <b>{rep:+d}</b>", parse_mode="HTML")
+            await message.reply(f"🌟 Репутация {tname}: <b>{rep:+d}</b>", parse_mode="HTML")
         elif action == "обозвать":
             обзывалки = ["🤡 клоун","🥴 тупица","🐸 лягушка","🦆 утка","🐷 хрюша","🤪 псих",
                          "🦊 хитрая лиса","🐌 улитка","🦄 единорог","🤖 сломанный робот","🥔 картошка","🧟 зомби"]
@@ -1832,11 +1797,8 @@ async def autist_commands(message: Message):
         elif action == "проверить":
             await message.reply(f"ℹ️ Функция проверки (капча) отключена.", parse_mode="HTML")
     except Exception as e:
-        await message.reply(f"❗ Ошибка: {e}")
+        await message.reply(f"⚠️ Ошибка: {e}")
 
-# ═══════════════════════════════════════════
-#         ЗАПУСК
-# ═══════════════════════════════════════════
 async def main():
     load_data()
     asyncio.create_task(birthday_checker())
@@ -1847,8 +1809,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
-
