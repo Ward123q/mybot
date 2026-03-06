@@ -448,31 +448,37 @@ async def get_weather(city: str) -> str:
         return "⛈ Ошибка при получении погоды."
 
 def kb_back(tid: int) -> list:
-    return [InlineKeyboardButton(text="🔙 Назад", callback_data=f"panel:back:{tid}")]
+    return [InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:back:{tid}")]
 
 def kb_main_menu(tid: int = 0) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Управление участником", callback_data=f"panel:select:{tid}"),
-         InlineKeyboardButton(text="✉️ Сообщения",             callback_data=f"panel:messages:{tid}")],
-        [InlineKeyboardButton(text="👥 Участники",             callback_data=f"panel:members:{tid}"),
-         InlineKeyboardButton(text="⚙️ Чат",                   callback_data=f"panel:chat:{tid}")],
-        [InlineKeyboardButton(text="🎮 Игры",                  callback_data=f"panel:games:{tid}"),
-         InlineKeyboardButton(text="📊 Статистика",            callback_data=f"panel:botstats2:{tid}")],
-        [InlineKeyboardButton(text="✖️ Закрыть",               callback_data="panel:close:0")],
+        [InlineKeyboardButton(text="👤 Участник",     callback_data=f"panel:select:{tid}"),
+         InlineKeyboardButton(text="✉️ Сообщения",    callback_data=f"panel:messages:{tid}")],
+        [InlineKeyboardButton(text="👥 Участники",    callback_data=f"panel:members:{tid}"),
+         InlineKeyboardButton(text="⚙️ Настройки чата", callback_data=f"panel:chat:{tid}")],
+        [InlineKeyboardButton(text="🎮 Игры",         callback_data=f"panel:games:{tid}"),
+         InlineKeyboardButton(text="📊 Статистика",   callback_data=f"panel:botstats2:{tid}")],
+        [InlineKeyboardButton(text="🏆 Топ чата",     callback_data=f"members:top:{tid}"),
+         InlineKeyboardButton(text="📋 Список банов", callback_data=f"members:banlist:{tid}")],
+        [InlineKeyboardButton(text="✖️ Закрыть",      callback_data="panel:close:0")],
     ])
 
 def kb_user_panel(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔇 Мут",         callback_data=f"panel:mute:{tid}"),
-         InlineKeyboardButton(text="🔊 Размут",      callback_data=f"panel:unmute:{tid}")],
-        [InlineKeyboardButton(text="⚡ Варн",        callback_data=f"panel:warn:{tid}"),
-         InlineKeyboardButton(text="🌿 Снять варн",  callback_data=f"panel:unwarn:{tid}")],
-        [InlineKeyboardButton(text="🔨 Бан",         callback_data=f"panel:ban:{tid}"),
-         InlineKeyboardButton(text="🕊 Разбан",      callback_data=f"panel:unban:{tid}")],
-        [InlineKeyboardButton(text="🔍 Информация",  callback_data=f"panel:info:{tid}"),
-         InlineKeyboardButton(text="🗑 Удалить сообщ", callback_data=f"panel:del:{tid}")],
-        [InlineKeyboardButton(text="🎭 Приколы",     callback_data=f"panel:fun:{tid}"),
-         InlineKeyboardButton(text="🔙 Назад",       callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="🔇 Мут",           callback_data=f"panel:mute:{tid}"),
+         InlineKeyboardButton(text="🔊 Размут",         callback_data=f"panel:unmute:{tid}")],
+        [InlineKeyboardButton(text="⚡ Варн",           callback_data=f"panel:warn:{tid}"),
+         InlineKeyboardButton(text="🌿 Снять варн",     callback_data=f"panel:unwarn:{tid}")],
+        [InlineKeyboardButton(text="🔨 Бан",            callback_data=f"panel:ban:{tid}"),
+         InlineKeyboardButton(text="🕊 Разбан",          callback_data=f"panel:unban:{tid}")],
+        [InlineKeyboardButton(text="⏳ Темпбан 24ч",   callback_data=f"ban:{tid}:tempban24"),
+         InlineKeyboardButton(text="📵 Мут 24ч (реклама)", callback_data=f"members:warn24:{tid}")],
+        [InlineKeyboardButton(text="🔍 Информация",     callback_data=f"panel:info:{tid}"),
+         InlineKeyboardButton(text="🗑 Удалить сообщ",  callback_data=f"panel:del:{tid}")],
+        [InlineKeyboardButton(text="📋 История",        callback_data=f"panel:modhistory:{tid}"),
+         InlineKeyboardButton(text="🏷 Выдать тег",     callback_data=f"panel:promote:{tid}")],
+        [InlineKeyboardButton(text="🎭 Приколы",        callback_data=f"panel:fun:{tid}"),
+         InlineKeyboardButton(text="◀️ Назад",          callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_mute(tid: int) -> InlineKeyboardMarkup:
@@ -491,13 +497,14 @@ def kb_mute(tid: int) -> InlineKeyboardMarkup:
 
 def kb_warn(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🤬 Мат",          callback_data=f"warn:{tid}:Мат в чате"),
-         InlineKeyboardButton(text="📨 Спам",          callback_data=f"warn:{tid}:Спам")],
-        [InlineKeyboardButton(text="😡 Оскорбление",   callback_data=f"warn:{tid}:Оскорбление"),
-         InlineKeyboardButton(text="🌊 Флуд",          callback_data=f"warn:{tid}:Флуд")],
-        [InlineKeyboardButton(text="📣 Реклама",       callback_data=f"warn:{tid}:Реклама"),
-         InlineKeyboardButton(text="🔞 Контент 18+",   callback_data=f"warn:{tid}:Контент 18+")],
-        [InlineKeyboardButton(text="✏️ Своя причина",  callback_data=f"warn:{tid}:custom")],
+        [InlineKeyboardButton(text="🤬 Мат",           callback_data=f"warn:{tid}:Мат в чате"),
+         InlineKeyboardButton(text="📨 Спам",           callback_data=f"warn:{tid}:Спам")],
+        [InlineKeyboardButton(text="😡 Оскорбление",    callback_data=f"warn:{tid}:Оскорбление"),
+         InlineKeyboardButton(text="🌊 Флуд",           callback_data=f"warn:{tid}:Флуд")],
+        [InlineKeyboardButton(text="📣 Реклама",        callback_data=f"warn:{tid}:Реклама"),
+         InlineKeyboardButton(text="🔞 Контент 18+",    callback_data=f"warn:{tid}:Контент 18+")],
+        [InlineKeyboardButton(text="🚫 Провокация",     callback_data=f"warn:{tid}:Провокация"),
+         InlineKeyboardButton(text="✏️ Своя причина",   callback_data=f"warn:{tid}:custom")],
         kb_back(tid),
     ])
 
@@ -508,22 +515,17 @@ def kb_ban(tid: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🔞 Контент 18+",       callback_data=f"ban:{tid}:Контент 18+"),
          InlineKeyboardButton(text="🤖 Бот/накрутка",      callback_data=f"ban:{tid}:Бот или накрутка")],
         [InlineKeyboardButton(text="⏰ Бан на 24 часа",    callback_data=f"ban:{tid}:tempban24"),
-         InlineKeyboardButton(text="✏️ Своя причина",      callback_data=f"ban:{tid}:custom")],
+         InlineKeyboardButton(text="⏰ Бан на 7 дней",     callback_data=f"ban:{tid}:tempban168")],
+        [InlineKeyboardButton(text="✏️ Своя причина",      callback_data=f"ban:{tid}:custom")],
         kb_back(tid),
     ])
 
 def kb_fun(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎲 Шуточный бан",     callback_data=f"fun:rban:{tid}"),
-         InlineKeyboardButton(text="🧠 Проверить IQ",     callback_data=f"fun:iq:{tid}")],
-        [InlineKeyboardButton(text="🌈 % гейства",        callback_data=f"fun:gay:{tid}"),
-         InlineKeyboardButton(text="🌸 Комплимент",        callback_data=f"fun:compliment:{tid}")],
-        [InlineKeyboardButton(text="🔮 Предсказание",     callback_data=f"fun:predict:{tid}"),
-         InlineKeyboardButton(text="🌌 Гороскоп",         callback_data=f"fun:horoscope:{tid}")],
-        [InlineKeyboardButton(text="⭐ Оценить",          callback_data=f"fun:rate:{tid}"),
-         InlineKeyboardButton(text="🤔 Вопрос правды",    callback_data=f"fun:truth:{tid}")],
-        [InlineKeyboardButton(text="😈 Задание",          callback_data=f"fun:dare:{tid}"),
-         InlineKeyboardButton(text="🎯 Выбор без выбора", callback_data=f"fun:wyr:{tid}")],
+         InlineKeyboardButton(text="🔮 Предсказание",      callback_data=f"fun:predict:{tid}")],
+        [InlineKeyboardButton(text="🌌 Гороскоп",          callback_data=f"fun:horoscope:{tid}"),
+         InlineKeyboardButton(text="🌸 Комплимент",         callback_data=f"fun:compliment:{tid}")],
         kb_back(tid),
     ])
 
@@ -546,35 +548,40 @@ def kb_members(tid: int) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="🏆 Топ активности",      callback_data=f"members:top:{tid}")],
         [InlineKeyboardButton(text="📵 Мут 24ч за рекламу",  callback_data=f"members:warn24:{tid}"),
          InlineKeyboardButton(text="⚠️ Варны участника",     callback_data=f"members:warninfo:{tid}")],
+        [InlineKeyboardButton(text="📋 Список банов",        callback_data=f"members:banlist:{tid}"),
+         InlineKeyboardButton(text="📊 Топ МВП",             callback_data=f"members:mvpstats:{tid}")],
         [InlineKeyboardButton(text="🔙 Назад",              callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_chat(tid: int) -> InlineKeyboardMarkup:
-    ms = "✅ вкл" if ANTI_MAT_ENABLED else "❌ выкл"
-    ks = "✅ вкл" if AUTO_KICK_BOTS   else "❌ выкл"
+    ms = "✅" if ANTI_MAT_ENABLED else "❌"
+    ks = "✅" if AUTO_KICK_BOTS   else "❌"
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔒 Заблокировать чат",  callback_data=f"chat:lock:{tid}"),
-         InlineKeyboardButton(text="🔓 Разблокировать",     callback_data=f"chat:unlock:{tid}")],
-        [InlineKeyboardButton(text="🐢 Slowmode 10с",       callback_data=f"chat:slow:10:{tid}"),
-         InlineKeyboardButton(text="🐢 Slowmode 30с",       callback_data=f"chat:slow:30:{tid}")],
-        [InlineKeyboardButton(text="🐢 Slowmode 60с",       callback_data=f"chat:slow:60:{tid}"),
-         InlineKeyboardButton(text="🐇 Выкл slowmode",      callback_data=f"chat:slow:0:{tid}")],
-        [InlineKeyboardButton(text=f"🧼 Антимат: {ms}",    callback_data=f"chat:antimat:{tid}"),
-         InlineKeyboardButton(text=f"🤖 Автокик: {ks}",    callback_data=f"chat:autokick:{tid}")],
-        [InlineKeyboardButton(text="📜 Правила",             callback_data=f"chat:rules:{tid}"),
-         InlineKeyboardButton(text="📈 Статистика",          callback_data=f"chat:botstats:{tid}")],
-        [InlineKeyboardButton(text="🔙 Назад",              callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="🔒 Заблокировать чат",   callback_data=f"chat:lock:{tid}"),
+         InlineKeyboardButton(text="🔓 Разблокировать чат",  callback_data=f"chat:unlock:{tid}")],
+        [InlineKeyboardButton(text="🐢 Slowmode 10с",        callback_data=f"chat:slow:10:{tid}"),
+         InlineKeyboardButton(text="🐢 Slowmode 30с",        callback_data=f"chat:slow:30:{tid}")],
+        [InlineKeyboardButton(text="🐢 Slowmode 60с",        callback_data=f"chat:slow:60:{tid}"),
+         InlineKeyboardButton(text="🐇 Выкл slowmode",       callback_data=f"chat:slow:0:{tid}")],
+        [InlineKeyboardButton(text=f"🧼 Антимат {ms}",       callback_data=f"chat:antimat:{tid}"),
+         InlineKeyboardButton(text=f"🤖 Автокик {ks}",       callback_data=f"chat:autokick:{tid}")],
+        [InlineKeyboardButton(text="📜 Правила чата",         callback_data=f"chat:rules:{tid}"),
+         InlineKeyboardButton(text="📈 Статистика бота",      callback_data=f"chat:botstats:{tid}")],
+        [InlineKeyboardButton(text="🎪 Турнир старт",         callback_data=f"chat:tournament_start:{tid}"),
+         InlineKeyboardButton(text="🏁 Турнир стоп",          callback_data=f"chat:tournament_stop:{tid}")],
+        [InlineKeyboardButton(text="🔙 Назад",               callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_games(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎲 Кубик d6",           callback_data=f"game:roll:{tid}"),
          InlineKeyboardButton(text="🪙 Монетка",            callback_data=f"game:flip:{tid}")],
-        [InlineKeyboardButton(text="🎱 Шар предсказаний",   callback_data=f"game:8ball:{tid}")],
+        [InlineKeyboardButton(text="🎱 Шар предсказаний",   callback_data=f"game:8ball:{tid}"),
+         InlineKeyboardButton(text="🧩 Викторина",          callback_data=f"game:trivia:{tid}")],
         [InlineKeyboardButton(text="✊ КНБ — Камень",       callback_data=f"game:rps_k:{tid}"),
          InlineKeyboardButton(text="✌️ КНБ — Ножницы",      callback_data=f"game:rps_n:{tid}")],
         [InlineKeyboardButton(text="🖐 КНБ — Бумага",       callback_data=f"game:rps_b:{tid}"),
-         InlineKeyboardButton(text="📖 Цитата дня",         callback_data=f"game:quote:{tid}")],
+         InlineKeyboardButton(text="🎯 Угадай число",        callback_data=f"game:guess:{tid}")],
         [InlineKeyboardButton(text="🌤 Погода — Москва",    callback_data=f"game:weather_Москва:{tid}"),
          InlineKeyboardButton(text="🌍 Свой город",          callback_data=f"game:weather_custom:{tid}")],
         [InlineKeyboardButton(text="⏱ Отсчёт 5 сек",       callback_data=f"game:countdown5:{tid}"),
@@ -1334,22 +1341,31 @@ async def cmd_panel(message: Message):
         msgs   = chat_stats[message.chat.id].get(target.id, 0)
         afk    = f"\n😴 AFK: {afk_users[target.id]}" if target.id in afk_users else ""
         await reply_auto_delete(message, 
-            f"👤 <b>Панель участника</b>\n\n🔎 {target.mention_html()}{afk}\n"
+            "✨ <b>CHAT GUARD</b> — Участник\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👤 {target.mention_html()}{afk}\n"
             f"🪪 ID: <code>{target.id}</code>\n"
             f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
-            f"🌟 Репутация: <b>{rep:+d}</b>\n"
-            f"💬 Сообщений: <b>{msgs}</b>\n\nВыбери действие:",
+            f"⭐ Репутация: <b>{rep:+d}</b>\n"
+            f"💬 Сообщений: <b>{msgs}</b>\n"
+            f"🏅 Уровень: <b>{xp_data[message.chat.id].get(target.id, 0)} XP</b>\n\n"
+            "▸ Выбери действие:",
+            
             parse_mode="HTML", reply_markup=kb_user_panel(target.id))
     else:
         total_msgs  = sum(chat_stats[message.chat.id].values())
         total_warns = sum(warnings[message.chat.id].values())
         await reply_auto_delete(message, 
-            f"⚙️ <b>Панель управления</b>\n\n"
+            "✨ <b>CHAT GUARD</b> — Панель управления\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"💬 Чат: <b>{message.chat.title}</b>\n"
+            f"👥 Участников: <b>{len(chat_stats[message.chat.id])}</b> активных\n"
             f"📨 Сообщений: <b>{total_msgs}</b>\n"
-            f"⚡ Варнов: <b>{total_warns}</b>\n"
+            f"⚡ Варнов выдано: <b>{total_warns}</b>\n"
             f"🧼 Антимат: <b>{'✅ вкл' if ANTI_MAT_ENABLED else '❌ выкл'}</b>\n"
-            f"🤖 Автокик: <b>{'✅ вкл' if AUTO_KICK_BOTS else '❌ выкл'}</b>\n\nВыбери раздел:",
+            f"🤖 Автокик: <b>{'✅ вкл' if AUTO_KICK_BOTS else '❌ выкл'}</b>\n\n"
+            "▸ Выбери раздел:",
+            
             parse_mode="HTML", reply_markup=kb_main_menu())
 
 @dp.message(Command("ban"))
