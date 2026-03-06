@@ -78,6 +78,9 @@ pending       = {}
 chat_stats    = defaultdict(lambda: defaultdict(int))
 reputation    = defaultdict(lambda: defaultdict(int))
 rep_cooldown  = {}
+rep_transfer_cooldown = {}   # {uid_cid: timestamp}
+known_chats   = {}           # {cid: title} — все чаты где есть бот
+role_of_day   = {}           # {cid: {uid: {date: role}}}
 reminders     = {}
 birthdays     = {}
 levels        = defaultdict(lambda: defaultdict(int))
@@ -527,6 +530,7 @@ class StatsMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if isinstance(event, Message) and event.from_user and event.chat.type in ("group","supergroup"):
             chat_stats[event.chat.id][event.from_user.id] += 1
+            known_chats[event.chat.id] = event.chat.title or str(event.chat.id)
             uid, cid = event.from_user.id, event.chat.id
             xp_data[cid][uid] += random.randint(1, 5)
             from datetime import datetime, timedelta
@@ -2070,9 +2074,6 @@ async def cmd_top(message: Message):
         lines.append(f"{medals[i]} <b>{uname}</b> — {count} сообщений")
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
 
-@dp.message(Command("quote"))
-async def cmd_quote(message: Message):
-    await reply_auto_delete(message, f"📖 {random.choice(QUOTES)}")
 
 @dp.message(Command("roll"))
 async def cmd_roll(message: Message, command: CommandObject):
@@ -2185,10 +2186,6 @@ async def cmd_compatibility(message: Message):
         f"💘 <b>Совместимость:</b>\n\n👤 {user1.mention_html()}\n{bar}\n👤 {user2.mention_html()}\n\n<b>{percent}%</b> — {verdict}",
         parse_mode="HTML")
 
-@dp.message(Command("compliment"))
-async def cmd_compliment(message: Message):
-    user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
-    await reply_auto_delete(message, f"🌸 {user.mention_html()}, {random.choice(COMPLIMENTS)}", parse_mode="HTML")
 
 @dp.message(Command("botstats"))
 async def cmd_botstats(message: Message):
@@ -3361,7 +3358,7 @@ async def ask_ai(messages: list, system: str = "Ты дружелюбный ас
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "grok-4-latest",
+            "model": "grok-3-fast-beta",
             "max_tokens": max_tokens,
             "messages": [{"role": "system", "content": system}] + messages
         }
@@ -3605,7 +3602,7 @@ async def handle_ai_reply(message: Message):
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "grok-4-latest",
+            "model": "grok-3-fast-beta",
             "max_tokens": 512,
             "messages": [{"role": "system", "content": "Ты дружелюбный ассистент в Telegram чате. Отвечай кратко, на русском."}] + ai_conversations[uid]
         }
@@ -3621,6 +3618,308 @@ async def handle_ai_reply(message: Message):
     except:
         try: await thinking_msg.delete()
         except: pass
+
+
+# ===== 💸 ПЕРЕВОД РЕПУТАЦИИ =====
+@dp.message(Command("giverep"))
+async def cmd_giverep(message: Message, command: CommandObject):
+    if not message.reply_to_message:
+        await reply_auto_delete(message,
+            "💸 Реплайни на сообщение и напиши:\n<code>/giverep 50</code>",
+            parse_mode="HTML"); return
+    if not command.args:
+        await reply_auto_delete(message, "⚠️ Укажи сумму: <code>/giverep 50</code>", parse_mode="HTML"); return
+    try:
+        amount = int(command.args.strip())
+        if amount <= 0: raise ValueError
+    except:
+        await reply_auto_delete(message, "❌ Сумма должна быть числом больше 0"); return
+    uid = message.from_user.id
+    cid = message.chat.id
+    target = message.reply_to_message.from_user
+    if target.id == uid:
+        await reply_auto_delete(message, "❌ Нельзя переводить самому себе!"); return
+    if target.is_bot:
+        await reply_auto_delete(message, "❌ Нельзя переводить боту!"); return
+    from time import time
+    now = time()
+    cd_key = f"{uid}_{cid}"
+    if cd_key in rep_transfer_cooldown and now - rep_transfer_cooldown[cd_key] < 3600:
+        left = int(3600 - (now - rep_transfer_cooldown[cd_key])) // 60
+        await reply_auto_delete(message, f"⏳ Следующий перевод через {left} мин."); return
+    sender_rep = reputation[cid].get(uid, 0)
+    if sender_rep < amount:
+        await reply_auto_delete(message,
+            f"❌ Недостаточно репутации!\nУ тебя: <b>{sender_rep}</b> | Нужно: <b>{amount}</b>",
+            parse_mode="HTML"); return
+    reputation[cid][uid] -= amount
+    reputation[cid][target.id] = reputation[cid].get(target.id, 0) + amount
+    rep_transfer_cooldown[cd_key] = now
+    save_data()
+    await reply_auto_delete(message,
+        "╔═══════════════════╗\n"
+        "💸  <b>ПЕРЕВОД РЕПУТАЦИИ</b>\n"
+        "╚═══════════════════╝\n\n"
+        f"👤 От: {message.from_user.mention_html()}\n"
+        f"🎯 Кому: {target.mention_html()}\n"
+        f"💰 Сумма: <b>{amount:+d}</b>\n\n"
+        f"📊 Твой баланс: <b>{reputation[cid][uid]:+d}</b>",
+        parse_mode="HTML")
+    try:
+        await bot.send_message(target.id,
+            f"💸 <b>{message.from_user.full_name}</b> перевёл тебе <b>{amount:+d}</b> репутации!\n"
+            f"📊 Твой новый баланс: <b>{reputation[cid][target.id]:+d}</b>",
+            parse_mode="HTML")
+    except: pass
+
+
+# ===== 🎭 РОЛЬ/ПРОФЕССИЯ ДНЯ =====
+ROLES_LIST = [
+    ("👑", "Король чата"), ("🤡", "Клоун дня"), ("🧙", "Маг слова"),
+    ("🕵", "Тайный агент"), ("🦸", "Супергерой"), ("🤖", "Робот-советник"),
+    ("🐉", "Дракон"), ("🧛", "Вампир"), ("🧝", "Эльф"),
+    ("🏴‍☠️", "Пират"), ("🥷", "Ниндзя"), ("🧑‍🚀", "Космонавт"),
+    ("🎭", "Актёр"), ("🧪", "Учёный"), ("🎸", "Рок-звезда"),
+    ("🍕", "Профессиональный едок"), ("😴", "Главный соня"),
+    ("🔮", "Провидец"), ("🤠", "Ковбой"), ("👻", "Призрак чата"),
+    ("🦊", "Хитрый лис"), ("🐺", "Одинокий волк"), ("🌪", "Хаос"),
+    ("🧠", "Главный умник"), ("💀", "Тёмный лорд"), ("🌈", "Радужный"),
+    ("🎯", "Снайпер слова"), ("🦋", "Свободная душа"), ("🔥", "Огонь"),
+    ("❄️", "Ледяной"),
+]
+
+@dp.message(Command("role"))
+async def cmd_role(message: Message):
+    uid = message.from_user.id
+    cid = message.chat.id
+    from datetime import datetime
+    today = datetime.now().strftime("%d.%m.%Y")
+    key = f"{cid}_{uid}_{today}"
+    if key in role_of_day:
+        emoji, role = role_of_day[key]
+        await reply_auto_delete(message,
+            f"🎭 {message.from_user.mention_html()}, твоя роль сегодня:\n\n"
+            f"{emoji} <b>{role}</b>\n\n"
+            f"<i>Роль меняется каждый день в полночь</i>",
+            parse_mode="HTML"); return
+    random.seed(f"{uid}{today}")
+    emoji, role = random.choice(ROLES_LIST)
+    role_of_day[key] = (emoji, role)
+    await reply_auto_delete(message,
+        f"╔═══════════════════╗\n"
+        f"🎭  <b>РОЛЬ ДНЯ</b>\n"
+        f"╚═══════════════════╝\n\n"
+        f"👤 {message.from_user.mention_html()}\n\n"
+        f"Сегодня ты — {emoji} <b>{role}</b>!\n\n"
+        f"<i>Роль меняется каждый день</i>",
+        parse_mode="HTML")
+
+
+# ===== 📸 МЕМ-ГЕНЕРАТОР =====
+@dp.message(Command("meme"))
+async def cmd_meme(message: Message, command: CommandObject):
+    if not command.args:
+        await reply_auto_delete(message,
+            "📸 Формат: <code>/meme верхний текст | нижний текст</code>\n"
+            "Пример: <code>/meme когда пишешь /help | и читаешь всё</code>",
+            parse_mode="HTML"); return
+    parts = command.args.split("|", 1)
+    top_text = parts[0].strip().upper()
+    bot_text = parts[1].strip().upper() if len(parts) > 1 else ""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        import io
+        # Создаём мем-картинку
+        W, H = 600, 400
+        img = Image.new("RGB", (W, H), color=(30, 30, 30))
+        draw = ImageDraw.Draw(img)
+        # Градиентный фон
+        for y in range(H):
+            r = int(20 + (y / H) * 40)
+            g = int(20 + (y / H) * 20)
+            b = int(40 + (y / H) * 60)
+            draw.line([(0, y), (W, y)], fill=(r, g, b))
+        # Попробуем шрифт
+        try:
+            font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
+            font_sm  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36)
+        except:
+            font_big = ImageFont.load_default()
+            font_sm  = font_big
+
+        def draw_text_with_outline(draw, text, font, y, color=(255,255,255), outline=(0,0,0)):
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw = bbox[2] - bbox[0]
+            x = (W - tw) // 2
+            for dx in [-2, -1, 0, 1, 2]:
+                for dy in [-2, -1, 0, 1, 2]:
+                    draw.text((x+dx, y+dy), text, font=font, fill=outline)
+            draw.text((x, y), text, font=font, fill=color)
+
+        # Верхний текст
+        if top_text:
+            draw_text_with_outline(draw, top_text, font_big, 30)
+        # Нижний текст
+        if bot_text:
+            draw_text_with_outline(draw, bot_text, font_big, H - 80)
+        # Логотип
+        draw_text_with_outline(draw, "© МЕМ-ГЕНЕРАТОР", font_sm, H // 2 - 20,
+                                color=(200, 200, 200), outline=(0, 0, 0))
+
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        try: await message.delete()
+        except: pass
+        from aiogram.types import BufferedInputFile
+        await bot.send_photo(
+            message.chat.id,
+            BufferedInputFile(buf.read(), filename="meme.png"),
+            caption=f"📸 Мем от {message.from_user.mention_html()}",
+            parse_mode="HTML")
+    except ImportError:
+        # Без Pillow — текстовый мем
+        try: await message.delete()
+        except: pass
+        lines = []
+        if top_text:
+            lines.append(f"<b>{top_text}</b>")
+        lines.append("\n" + "─" * 20 + "\n")
+        if bot_text:
+            lines.append(f"<b>{bot_text}</b>")
+        await bot.send_message(message.chat.id,
+            f"📸 <b>МЕМ</b> от {message.from_user.mention_html()}\n\n" + "\n".join(lines),
+            parse_mode="HTML")
+    except Exception as e:
+        await reply_auto_delete(message, f"⚠️ Ошибка генерации: {e}")
+
+
+# ===== 🌡 НАСТРОЕНИЕ ЧАТА =====
+@dp.message(Command("mood"))
+async def cmd_mood(message: Message):
+    if not GROK_API_KEY:
+        await reply_auto_delete(message, "⚠️ Для этой команды нужен GROK_API_KEY"); return
+    cid = message.chat.id
+    # Берём последние сообщения из кеша
+    recent = [
+        v["text"] for v in message_cache.values()
+        if v.get("chat_id") == cid and v.get("text")
+    ][-30:]
+    if len(recent) < 5:
+        await reply_auto_delete(message,
+            "📊 Недостаточно сообщений для анализа.\nНужно минимум 5 сообщений!"); return
+    thinking = await message.reply("🌡 Анализирую настроение чата...")
+    sample = "\n".join(recent[-20:])
+    try:
+        headers = {
+            "Authorization": f"Bearer {GROK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "grok-3-fast-beta",
+            "max_tokens": 300,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Ты анализируешь настроение чата. "
+                        "Дай краткий анализ (3-4 предложения) на русском языке. "
+                        "Укажи общее настроение (позитивное/негативное/нейтральное), "
+                        "основные темы и атмосферу. Используй эмодзи. "
+                        "Не используй Markdown разметку."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Проанализируй настроение этого чата по последним сообщениям:\n\n{sample}"
+                }
+            ]
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.x.ai/v1/chat/completions",
+                headers=headers, json=payload
+            ) as resp:
+                data = await resp.json()
+        analysis = data["choices"][0]["message"]["content"]
+        # Определяем эмодзи настроения
+        mood_emoji = "😐"
+        low = analysis.lower()
+        if any(w in low for w in ["позитив", "весел", "радост", "хорош", "отлич"]):
+            mood_emoji = "😄"
+        elif any(w in low for w in ["негатив", "агресс", "злост", "плохо", "конфликт"]):
+            mood_emoji = "😤"
+        elif any(w in low for w in ["спокой", "нейтрал", "тихо"]):
+            mood_emoji = "😌"
+        elif any(w in low for w in ["весел", "юмор", "смех", "шутк"]):
+            mood_emoji = "😂"
+        await thinking.edit_text(
+            f"╔═══════════════════╗\n"
+            f"🌡  <b>НАСТРОЕНИЕ ЧАТА</b>\n"
+            f"╚═══════════════════╝\n\n"
+            f"{mood_emoji} <b>Анализ последних {len(recent)} сообщений:</b>\n\n"
+            f"{analysis}",
+            parse_mode="HTML")
+    except Exception as e:
+        await thinking.edit_text(f"⚠️ Ошибка анализа: {e}")
+
+
+# ===== 📢 РАССЫЛКА ПО ВСЕМ ЧАТАМ (только владелец) =====
+@dp.message(Command("broadcast"))
+async def cmd_broadcast(message: Message, command: CommandObject):
+    if message.from_user.id != OWNER_ID:
+        await reply_auto_delete(message, "🚫 Только для владельца бота!"); return
+    if not command.args:
+        await reply_auto_delete(message,
+            "📢 Формат: <code>/broadcast текст</code>\n\n"
+            f"Бот находится в <b>{len(known_chats)}</b> чатах.",
+            parse_mode="HTML"); return
+    text = command.args.strip()
+    if len(text) < 3:
+        await reply_auto_delete(message, "⚠️ Слишком короткий текст!"); return
+    broadcast_text = (
+        "╔═══════════════════╗\n"
+        "📢  <b>ОБЪЯВЛЕНИЕ</b>\n"
+        "╚═══════════════════╝\n\n"
+        f"{text}\n\n"
+        f"<i>— Администрация бота</i>"
+    )
+    status_msg = await message.reply(f"📤 Начинаю рассылку в {len(known_chats)} чатов...")
+    sent_ok = 0
+    sent_fail = 0
+    for cid in list(known_chats.keys()):
+        try:
+            await bot.send_message(cid, broadcast_text, parse_mode="HTML")
+            sent_ok += 1
+            await asyncio.sleep(0.05)  # anti-flood
+        except:
+            sent_fail += 1
+    await status_msg.edit_text(
+        f"╔═══════════════════╗\n"
+        f"📢  <b>РАССЫЛКА ЗАВЕРШЕНА</b>\n"
+        f"╚═══════════════════╝\n\n"
+        f"✅ Доставлено: <b>{sent_ok}</b> чатов\n"
+        f"❌ Ошибок: <b>{sent_fail}</b>\n"
+        f"📊 Всего чатов: <b>{len(known_chats)}</b>",
+        parse_mode="HTML")
+
+
+@dp.message(Command("chats"))
+async def cmd_chats(message: Message):
+    if message.from_user.id != OWNER_ID:
+        await reply_auto_delete(message, "🚫 Только для владельца бота!"); return
+    lines = [
+        "╔═══════════════════╗",
+        "🌐  <b>ЧАТЫ БОТА</b>",
+        "╚═══════════════════╝",
+        f"\nВсего чатов: <b>{len(known_chats)}</b>\n"
+    ]
+    for cid, title in list(known_chats.items())[:30]:
+        msgs = sum(chat_stats[cid].values())
+        lines.append(f"• <b>{title}</b> ({msgs} сообщений)")
+    if len(known_chats) > 30:
+        lines.append(f"\n<i>...и ещё {len(known_chats)-30} чатов</i>")
+    await message.reply("\n".join(lines), parse_mode="HTML")
 
 
 async def main():
