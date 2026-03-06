@@ -1523,10 +1523,34 @@ async def cmd_slowmode(message: Message, command: CommandObject):
 @dp.message(Command("promote"))
 async def cmd_promote(message: Message, command: CommandObject):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "↩️ Ответь на сообщение."); return
-    title = command.args or "Участник"; target = message.reply_to_message.from_user
-    await bot.set_chat_administrator_custom_title(message.chat.id, target.id, title)
-    await reply_auto_delete(message, f"🏅 {target.mention_html()} получил тег: <b>{title}</b>", parse_mode="HTML")
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Ответь на сообщение."); return
+    title = command.args or "Участник"
+    if len(title) > 16:
+        await reply_auto_delete(message, "⚠️ Тег максимум 16 символов."); return
+    target = message.reply_to_message.from_user
+    cid = message.chat.id
+    try:
+        # Сначала выдаём права администратора (без реальных прав — только тег)
+        await bot.promote_chat_member(
+            cid, target.id,
+            can_change_info=False,
+            can_post_messages=False,
+            can_edit_messages=False,
+            can_delete_messages=False,
+            can_invite_users=False,
+            can_restrict_members=False,
+            can_pin_messages=False,
+            can_promote_members=False)
+        # Потом устанавливаем тег
+        await bot.set_chat_administrator_custom_title(cid, target.id, title)
+        await reply_auto_delete(message,
+            f"🏅 {target.mention_html()} получил тег: <b>{title}</b>",
+            parse_mode="HTML")
+    except Exception as e:
+        await reply_auto_delete(message,
+            f"⚠️ Не удалось выдать тег: <code>{e}</code>",
+            parse_mode="HTML")
 
 @dp.message(Command("poll"))
 async def cmd_poll(message: Message, command: CommandObject):
