@@ -1252,7 +1252,8 @@ async def cmd_help(message: Message):
 
             "👥 <b>Участники:</b>\n"
             "👮 /adminlist — список администраторов\n"
-            "🏅 /promote [тег] — выдать тег участнику\n"
+            "🏅 /promote [тег] — выдать тег участнику (реплай)\n"
+            "🗑 /removetag — убрать тег участника (реплай)\n"
             "📋 /modhistory — история модераций участника (реплай)\n"
             "🔇 /tempban [дни] [причина] — временный бан (реплай)\n"
             "👥 /banlist — список всех забаненных\n"
@@ -1525,32 +1526,64 @@ async def cmd_promote(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not message.reply_to_message:
         await reply_auto_delete(message, "↩️ Ответь на сообщение."); return
-    title = command.args or "Участник"
-    if len(title) > 16:
-        await reply_auto_delete(message, "⚠️ Тег максимум 16 символов."); return
+    if not command.args:
+        await reply_auto_delete(message, "⚠️ Пример: /promote Модератор"); return
+    title = command.args.strip()
+    if len(title) > 32:
+        await reply_auto_delete(message, "⚠️ Тег максимум 32 символа."); return
     target = message.reply_to_message.from_user
     cid = message.chat.id
     try:
-        # Сначала выдаём права администратора (без реальных прав — только тег)
-        await bot.promote_chat_member(
-            cid, target.id,
-            can_change_info=False,
-            can_post_messages=False,
-            can_edit_messages=False,
-            can_delete_messages=False,
-            can_invite_users=False,
-            can_restrict_members=False,
-            can_pin_messages=False,
-            can_promote_members=False)
-        # Потом устанавливаем тег
-        await bot.set_chat_administrator_custom_title(cid, target.id, title)
-        await reply_auto_delete(message,
-            f"🏅 {target.mention_html()} получил тег: <b>{title}</b>",
-            parse_mode="HTML")
+        # Новый Bot API 9.5 метод setChatMemberTag
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            url = f"https://api.telegram.org/bot{TOKEN}/setChatMemberTag"
+            data = {"chat_id": cid, "user_id": target.id, "tag": title}
+            async with session.post(url, json=data) as resp:
+                result = await resp.json()
+        if result.get("ok"):
+            await reply_auto_delete(message,
+                f"🏷 {target.mention_html()} получил тег: <b>{title}</b>",
+                parse_mode="HTML")
+        else:
+            # Fallback — старый способ через custom title (только для админов)
+            await bot.promote_chat_member(
+                cid, target.id,
+                can_change_info=False, can_post_messages=False,
+                can_edit_messages=False, can_delete_messages=False,
+                can_invite_users=False, can_restrict_members=False,
+                can_pin_messages=False, can_promote_members=False)
+            await bot.set_chat_administrator_custom_title(cid, target.id, title[:16])
+            await reply_auto_delete(message,
+                f"🏅 {target.mention_html()} получил тег: <b>{title}</b>",
+                parse_mode="HTML")
     except Exception as e:
         await reply_auto_delete(message,
-            f"⚠️ Не удалось выдать тег: <code>{e}</code>",
-            parse_mode="HTML")
+            f"⚠️ Ошибка: <code>{e}</code>", parse_mode="HTML")
+
+@dp.message(Command("removetag"))
+async def cmd_removetag(message: Message):
+    if not await require_admin(message): return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Ответь на сообщение."); return
+    target = message.reply_to_message.from_user
+    cid = message.chat.id
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            url = f"https://api.telegram.org/bot{TOKEN}/setChatMemberTag"
+            data = {"chat_id": cid, "user_id": target.id, "tag": ""}
+            async with session.post(url, json=data) as resp:
+                result = await resp.json()
+        if result.get("ok"):
+            await reply_auto_delete(message,
+                f"🗑 Тег {target.mention_html()} удалён.", parse_mode="HTML")
+        else:
+            await reply_auto_delete(message,
+                f"⚠️ {result.get('description', 'Ошибка')}", parse_mode="HTML")
+    except Exception as e:
+        await reply_auto_delete(message,
+            f"⚠️ Ошибка: <code>{e}</code>", parse_mode="HTML")
 
 @dp.message(Command("poll"))
 async def cmd_poll(message: Message, command: CommandObject):
