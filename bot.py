@@ -68,6 +68,9 @@ notes         = defaultdict(dict)
 mod_history   = defaultdict(lambda: defaultdict(list))  # {cid: {uid: [{"action":..., "reason":..., "by":..., "time":...}]}}
 warn_expiry   = defaultdict(lambda: defaultdict(list))  # {cid: {uid: [expiry_timestamp, ...]}}
 mute_timers   = {}  # {(cid, uid): task} — активные задачи автоснятия мута
+ban_list      = defaultdict(dict)   # {cid: {uid: {"name":..., "reason":..., "by":..., "time":..., "until":...}}}
+mod_reasons   = defaultdict(lambda: defaultdict(dict))  # {cid: {uid: {"mute":..., "ban":...}}}
+tempban_timers = {}  # {(cid, uid): task}
 afk_users     = {}
 pending       = {}
 chat_stats    = defaultdict(lambda: defaultdict(int))
@@ -259,6 +262,8 @@ def add_mod_history(cid: int, uid: int, action: str, reason: str, by_name: str):
     })
     if len(mod_history[cid][uid]) > 20:
         mod_history[cid][uid] = mod_history[cid][uid][-20:]
+    # 👮 Считаем статистику модератора
+    mod_stats[cid][by_name] += 1
 
 WARN_EXPIRY_DAYS = 30  # варн сгорает через 30 дней
 
@@ -1245,6 +1250,11 @@ async def cmd_help(message: Message):
             "👮 /adminlist — список администраторов\n"
             "🏅 /promote [тег] — выдать тег участнику\n"
             "📋 /modhistory — история модераций участника (реплай)\n"
+            "🔇 /tempban [дни] [причина] — временный бан (реплай)\n"
+            "👥 /banlist — список всех забаненных\n"
+            "🧾 /modexport — экспорт истории модераций в файл\n"
+            "👮 /modtop — топ самых активных модераторов\n"
+            "📝 /warnmenu — выдать варн по шаблону (реплай)\n"
             "📈 /botstats — статистика бота\n"
             "🔄 /mvpreset — сбросить МВП голоса\n\n"
 
@@ -1312,6 +1322,14 @@ async def cmd_ban(message: Message, command: CommandObject):
     await reply_auto_delete(message, reply, parse_mode="HTML")
     await log_action(f"🔨 <b>БАН</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nПричина: {reason}\nЧат: {message.chat.title}")
     add_mod_history(cid, target.id, "🔨 Бан", reason, message.from_user.full_name)
+    from datetime import datetime
+    ban_list[cid][target.id] = {
+        "name": target.full_name, "reason": reason,
+        "by": message.from_user.full_name,
+        "time": datetime.now().strftime("%d.%m.%Y %H:%M"),
+        "temp": False
+    }
+    mod_reasons[cid][target.id]["ban"] = reason
 
 @dp.message(Command("unban"))
 async def cmd_unban(message: Message):
@@ -1349,6 +1367,7 @@ async def cmd_mute(message: Message, command: CommandObject):
     await reply_auto_delete(message, reply, parse_mode="HTML")
     await log_action(f"🔇 <b>МУТ</b>\nКто: {message.from_user.mention_html()}\nКого: {target.mention_html()}\nВремя: {label}\nЧат: {message.chat.title}")
     add_mod_history(cid, target.id, f"🔇 Мут {label}", command.args or "—", message.from_user.full_name)
+    mod_reasons[cid][target.id]["mute"] = f"{label} — {command.args or 'Нарушение правил'}"
     # 🔄 Запуск автоснятия мута
     schedule_unmute(cid, target.id, mins, target.full_name)
 
@@ -1701,7 +1720,7 @@ async def cmd_modhistory(message: Message):
     cid = message.chat.id
     history = mod_history[cid].get(target.id, [])
     if not history:
-        await reply_auto_delete(message, 
+        await reply_auto_delete(message,
             f"📋 История модераций {target.mention_html()}:\n\n✅ Чисто — нарушений не найдено.",
             parse_mode="HTML"); return
     lines = [f"📋 <b>История модераций {target.mention_html()}:</b>\n"]
@@ -1714,6 +1733,193 @@ async def cmd_modhistory(message: Message):
             f"🕐 {entry['time']}"
         )
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+@dp.message(Command("tempban"))
+async def cmd_tempban(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Ответь на сообщение. Пример: /tempban 3 спам"); return
+    target = message.reply_to_message.from_user
+    if await is_admin_by_id(message.chat.id, target.id):
+        await reply_auto_delete(message, "🚫 Нельзя забанить администратора!"); return
+    args = (command.args or "").split(None, 1)
+    try:
+        days = int(args[0])
+        reason = args[1] if len(args) > 1 else "Нарушение правил"
+    except (ValueError, IndexError):
+        await reply_auto_delete(message, "⚠️ Пример: /tempban 3 спам"); return
+    if days < 1 or days > 365:
+        await reply_auto_delete(message, "⚠️ Срок от 1 до 365 дней."); return
+    cid = message.chat.id
+    from datetime import datetime
+    # ЛС до бана
+    await dm_warn_user(target.id, target.full_name, reason,
+                       message.chat.title, f"🔇 Временный бан на {days} дн.", message.from_user.full_name)
+    await bot.ban_chat_member(cid, target.id)
+    ban_list[cid][target.id] = {
+        "name": target.full_name, "reason": reason,
+        "by": message.from_user.full_name,
+        "time": datetime.now().strftime("%d.%m.%Y %H:%M"),
+        "until": (datetime.now().timestamp() + days * 86400),
+        "temp": True, "days": days
+    }
+    mod_reasons[cid][target.id]["ban"] = reason
+    add_mod_history(cid, target.id, f"🔇 Темпбан {days} дн.", reason, message.from_user.full_name)
+    # Запускаем таймер снятия
+    key = (cid, target.id)
+    old = tempban_timers.get(key)
+    if old: old.cancel()
+    tempban_timers[key] = asyncio.create_task(tempban_unban(cid, target.id, target.full_name, days))
+    await reply_auto_delete(message,
+        f"🔇 <b>{target.mention_html()}</b> временно забанен на <b>{days} дн.</b>\n"
+        f"📝 Причина: {reason}\n"
+        f"🔓 Разбан: автоматически через {days} дн.", parse_mode="HTML")
+    await log_action(
+        f"🔇 <b>ТЕМПБАН</b>\nКто: {message.from_user.mention_html()}\n"
+        f"Кого: {target.mention_html()}\nСрок: {days} дн.\nПричина: {reason}\nЧат: {message.chat.title}")
+
+@dp.message(Command("banlist"))
+async def cmd_banlist(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    bans = ban_list[cid]
+    if not bans:
+        await reply_auto_delete(message, "👥 Список забаненных пуст."); return
+    from datetime import datetime
+    lines = [f"👥 <b>Забаненные участники ({len(bans)}):</b>\n"]
+    for uid, info in list(bans.items()):
+        until = ""
+        if info.get("temp") and info.get("until"):
+            dt = datetime.fromtimestamp(info["until"]).strftime("%d.%m.%Y %H:%M")
+            until = f" (до {dt})"
+        lines.append(
+            f"{'─'*18}\n"
+            f"👤 <b>{info['name']}</b> (<code>{uid}</code>)\n"
+            f"📝 Причина: {info['reason']}\n"
+            f"👮 Кто: {info['by']}\n"
+            f"🕐 {info['time']}{until}"
+        )
+    text = "\n".join(lines)
+    if len(text) > 4000:
+        text = text[:4000] + "\n\n<i>...список обрезан</i>"
+    await reply_auto_delete(message, text, parse_mode="HTML")
+
+@dp.message(Command("modexport"))
+async def cmd_modexport(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    target_uid = None
+    if message.reply_to_message:
+        target_uid = message.reply_to_message.from_user.id
+
+    from datetime import datetime
+    import io
+    lines = [f"=== ИСТОРИЯ МОДЕРАЦИЙ | {message.chat.title} ===",
+             f"Экспорт: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"]
+
+    if target_uid:
+        history = mod_history[cid].get(target_uid, [])
+        lines.append(f"--- Участник ID {target_uid} ({len(history)} записей) ---")
+        for e in history:
+            lines.append(f"[{e['time']}] {e['action']} | Причина: {e['reason']} | Модератор: {e['by']}")
+    else:
+        total = 0
+        for uid, history in mod_history[cid].items():
+            if not history: continue
+            lines.append(f"\n--- ID {uid} ({len(history)} записей) ---")
+            for e in history:
+                lines.append(f"[{e['time']}] {e['action']} | Причина: {e['reason']} | Модератор: {e['by']}")
+            total += len(history)
+        lines.append(f"\nИтого записей: {total}")
+
+    content = "\n".join(lines).encode("utf-8")
+    file = io.BytesIO(content)
+    file.name = f"modhistory_{cid}_{datetime.now().strftime('%Y%m%d')}.txt"
+    from aiogram.types import BufferedInputFile
+    sent = await message.reply_document(
+        BufferedInputFile(content, filename=file.name),
+        caption="🧾 История модераций экспортирована")
+    asyncio.create_task(auto_delete(message, sent))
+
+@dp.message(Command("modtop"))
+async def cmd_modtop(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    stats = mod_stats[cid]
+    if not stats:
+        await reply_auto_delete(message, "👮 Пока никто ничего не модерировал."); return
+    sorted_mods = sorted(stats.items(), key=lambda x: x[1], reverse=True)
+    medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    lines = ["👮 <b>Топ модераторов:</b>\n"]
+    for i, (name, count) in enumerate(sorted_mods[:10]):
+        medal = medals[i] if i < len(medals) else f"{i+1}."
+        lines.append(f"{medal} <b>{name}</b> — {count} действий")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+def kb_warn_templates(target_id: int) -> InlineKeyboardMarkup:
+    rows = []
+    items = list(WARN_TEMPLATES.items())
+    for i in range(0, len(items), 2):
+        row = []
+        for tid, tmpl in items[i:i+2]:
+            row.append(InlineKeyboardButton(
+                text=tmpl["label"],
+                callback_data=f"wt:{tid}:{target_id}"))
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data=f"wt:cancel:{target_id}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+@dp.message(Command("warnmenu"))
+async def cmd_warnmenu(message: Message):
+    if not await require_admin(message): return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Ответь на сообщение нарушителя."); return
+    target = message.reply_to_message.from_user
+    if await is_admin_by_id(message.chat.id, target.id):
+        await reply_auto_delete(message, "🚫 Нельзя варнить администратора!"); return
+    sent = await message.reply(
+        f"📝 <b>Шаблон предупреждения для {target.mention_html()}</b>\n\n"
+        f"Выбери причину — варн выдастся автоматически:",
+        parse_mode="HTML",
+        reply_markup=kb_warn_templates(target.id))
+    asyncio.create_task(auto_delete(message, sent))
+
+@dp.callback_query(F.data.startswith("wt:"))
+async def cb_warn_template(call: CallbackQuery):
+    parts = call.data.split(":")
+    tid, target_id = parts[1], int(parts[2])
+    if tid == "cancel":
+        await call.message.delete(); await call.answer(); return
+    if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
+        await call.answer("🚫 Только для администраторов!", show_alert=True); return
+    tmpl = WARN_TEMPLATES.get(tid)
+    if not tmpl:
+        await call.answer("❌ Шаблон не найден!", show_alert=True); return
+    cid = call.message.chat.id
+    reason = tmpl["text"]
+    clean_expired_warns(cid, target_id)
+    add_warn_with_expiry(cid, target_id)
+    count = warnings[cid][target_id]
+    save_data()
+    add_mod_history(cid, target_id, f"⚡ Варн {count}/{MAX_WARNINGS}", reason, call.from_user.full_name)
+    await dm_warn_user(target_id, f"ID{target_id}", reason, call.message.chat.title,
+                       f"⚡ Варн {count}/{MAX_WARNINGS}", call.from_user.full_name)
+    if count >= MAX_WARNINGS:
+        await bot.ban_chat_member(cid, target_id)
+        warn_expiry[cid][target_id].clear(); warnings[cid][target_id] = 0
+        await call.message.edit_text(
+            f"🔨 <b>Автобан!</b> Достигнут лимит {MAX_WARNINGS} варнов.\n📝 {reason}",
+            parse_mode="HTML")
+        await log_action(f"🔨 <b>АВТОБАН</b> (шаблон)\nКого: <code>{target_id}</code>\nПричина: {reason}\nЧат: {call.message.chat.title}")
+    else:
+        await call.message.edit_text(
+            f"⚡ <b>Варн выдан!</b> {tmpl['label']}\n"
+            f"📝 {reason}\n"
+            f"⚠️ Варнов: <b>{count}/{MAX_WARNINGS}</b>",
+            parse_mode="HTML")
+        await log_action(f"⚡ <b>ВАРН</b> (шаблон)\nКто: {call.from_user.mention_html()}\nКому: <code>{target_id}</code>\nПричина: {reason}\nЧат: {call.message.chat.title}")
+    asyncio.create_task(auto_delete(call.message))
+    await call.answer(f"✅ {tmpl['label']}")
 
 @dp.message(Command("rep"))
 async def cmd_rep(message: Message):
@@ -2426,13 +2632,17 @@ async def cmd_profile(message: Message):
         "🔰 Участник" if lvl >= 1 else "🐣 Новичок")
     shop_title = user_titles[uid].get("title")
     title_line = f"🎭 Титул магазина: <b>{shop_title}</b>\n" if shop_title else ""
-    await reply_auto_delete(message, 
+    reasons = mod_reasons[cid].get(uid, {})
+    mute_reason = f"🔇 Последний мут: <i>{reasons['mute']}</i>\n" if reasons.get("mute") else ""
+    ban_reason  = f"🔨 Последний бан: <i>{reasons['ban']}</i>\n"  if reasons.get("ban")  else ""
+    await reply_auto_delete(message,
         f"👤 <b>Профиль {user.mention_html()}</b>\n\n"
         f"🏅 Уровень: <b>{title}</b> (lvl {lvl})\n"
         f"✨ Опыт: <b>{xp_current}/100</b>\n[{bar}]\n\n"
         f"{title_line}"
         f"🌟 Репутация: <b>{rep:+d}</b>\n💬 Сообщений: <b>{msgs}</b>\n"
-        f"🔥 Серия: <b>{streak}</b> дней\n⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>",
+        f"🔥 Серия: <b>{streak}</b> дней\n⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
+        f"{mute_reason}{ban_reason}",
         parse_mode="HTML")
 
 @dp.message(Command("addrep"))
@@ -2581,6 +2791,40 @@ async def warn_expiry_checker():
                             f"⏳ Варны участника <code>{uid}</code> истекли и сброшены автоматически.",
                             parse_mode="HTML")
                     except: pass
+
+mod_stats = defaultdict(lambda: defaultdict(int))  # {cid: {admin_name: count}}
+
+# ===== ШАБЛОНЫ ПРЕДУПРЕЖДЕНИЙ =====
+WARN_TEMPLATES = {
+    "1": {"label": "🔞 Контент 18+",      "text": "Нарушение: публикация материалов 18+ без соответствующего разрешения"},
+    "2": {"label": "📢 Реклама",           "text": "Нарушение: реклама и самопиар без разрешения администрации"},
+    "3": {"label": "💬 Спам",              "text": "Нарушение: спам и флуд в чате"},
+    "4": {"label": "🤬 Оскорбления",       "text": "Нарушение: оскорбления участников чата"},
+    "5": {"label": "🔗 Ссылки",            "text": "Нарушение: публикация сторонних ссылок без разрешения"},
+    "6": {"label": "🚫 Провокации",        "text": "Нарушение: провокации и разжигание конфликтов"},
+    "7": {"label": "👤 Личные данные",     "text": "Нарушение: публикация личных данных других участников"},
+    "8": {"label": "🤖 Флуд ботами",       "text": "Нарушение: использование ботов и спам-команд"},
+    "9": {"label": "🗣 Оффтоп",            "text": "Нарушение: систематический оффтоп и мусор в чате"},
+    "10": {"label": "⚠️ Правила",          "text": "Нарушение правил чата"},
+}
+
+async def tempban_unban(cid: int, uid: int, uname: str, days: int):
+    """Снимает временный бан по истечению"""
+    await asyncio.sleep(days * 86400)
+    try:
+        await bot.unban_chat_member(cid, uid, only_if_banned=True)
+        await bot.send_message(
+            cid,
+            f"🔓 Временный бан <b>{uname}</b> истёк — участник может вернуться.",
+            parse_mode="HTML")
+        await log_action(
+            f"🔓 <b>ТЕМПБАН ИСТЁК</b>\n"
+            f"👤 <b>{uname}</b>\n"
+            f"⏱ Срок {days} дн. истёк автоматически")
+        ban_list[cid].pop(uid, None)
+    except: pass
+    finally:
+        tempban_timers.pop((cid, uid), None)
 
 async def send_weekly_stats():
     while True:
