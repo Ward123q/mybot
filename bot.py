@@ -3509,82 +3509,35 @@ async def cmd_topactive(message: Message):
 @dp.message(Command("ai"))
 async def cmd_ai(message: Message, command: CommandObject):
     if not GROK_API_KEY:
-        await reply_auto_delete(message,
-            "⚠️ ИИ не настроен. Добавь GROK_API_KEY в переменные окружения."); return
+        await reply_auto_delete(message, 'ИИ не настроен. Добавь GROK_API_KEY.'); return
     if not command.args:
-        await reply_auto_delete(message,
-            "🤖 Задай вопрос:\n<code>/ai Как дела?</code>\n\n"
-            "💬 /aichat — включить режим диалога\n"
-            "🗑 /aireset — сбросить историю",
-            parse_mode="HTML"); return
+        await reply_auto_delete(message, 'Задай вопрос: /ai текст'); return
     uid = message.from_user.id
     question = command.args.strip()
-    thinking_msg = await message.reply("🤖 Думаю...")
-    ai_conversations[uid].append({"role": "user", "content": question})
+    thinking_msg = await message.reply('🤖 Думаю...')
+    ai_conversations[uid].append({'role': 'user', 'content': question})
     if len(ai_conversations[uid]) > 20:
         ai_conversations[uid] = ai_conversations[uid][-20:]
     try:
-        headers = {
-            "Authorization": f"Bearer {GROK_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        headers = {'Authorization': 'Bearer ' + GROK_API_KEY, 'Content-Type': 'application/json'}
         payload = {
-            "model": "grok-3-fast-beta",
-            "max_tokens": 1024,
-            "messages": [
-                {"role": "system", "content": "Ты умный и дружелюбный ассистент в Telegram чате. Отвечай кратко и по делу, на русском языке. Используй эмодзи уместно."}
-            ] + ai_conversations[uid]
+            'model': 'grok-3-fast-beta',
+            'max_tokens': 1024,
+            'messages': [{'role': 'system', 'content': 'Ты умный ассистент в Telegram. Отвечай кратко на русском.'}] + ai_conversations[uid]
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.x.ai/v1/chat/completions",
-                headers=headers, json=payload
-            ) as resp:
+            async with session.post('https://api.x.ai/v1/chat/completions', headers=headers, json=payload) as resp:
                 raw = await resp.text()
-        try:
-            data = json.loads(raw)
-        except:
-            await thinking_msg.edit_text(f"⚠️ Ответ API: {raw[:300]}"); return
-        if isinstance(data, dict) and "choices" in data and data["choices"]:
-            answer = data["choices"][0]["message"]["content"]
-            ai_conversations[uid].append({"role": "assistant", "content": answer})
-            await thinking_msg.edit_text(
-                f"🤖 <b>Grok отвечает:</b>\n\n{answer}", parse_mode="HTML")
+        data = json.loads(raw)
+        if 'choices' in data and data['choices']:
+            answer = data['choices'][0]['message']['content']
+            ai_conversations[uid].append({'role': 'assistant', 'content': answer})
+            await thinking_msg.edit_text('🤖 ' + answer)
         else:
-            err = data.get("error", {}).get("message", str(data)[:300]) if isinstance(data, dict) else str(data)[:300]
-            await thinking_msg.edit_text(f"⚠️ Ошибка API: {err}")
+            err = data.get('error', {}).get('message', raw[:200]) if isinstance(data, dict) else raw[:200]
+            await thinking_msg.edit_text('Ошибка: ' + str(err))
     except Exception as e:
-        await thinking_msg.edit_text(f"⚠️ Ошибка: {e}")
-
-
-@dp.message(Command("aireset"))
-async def cmd_aireset(message: Message):
-    uid = message.from_user.id
-    ai_conversations[uid] = []
-    await reply_auto_delete(message, "🗑 История диалога с ИИ сброшена!")
-
-
-@dp.message(Command("aichat"))
-async def cmd_aichat(message: Message):
-    cid = message.chat.id
-    if cid in ai_enabled_chats:
-        ai_enabled_chats.discard(cid)
-        await reply_auto_delete(message, "🤖 Режим ИИ-диалога <b>выключен</b>.", parse_mode="HTML")
-    else:
-        if not GROK_API_KEY:
-            await reply_auto_delete(message, "⚠️ ИИ не настроен. Добавь GROK_API_KEY."); return
-        ai_enabled_chats.add(cid)
-        await reply_auto_delete(message,
-            "🤖 Режим ИИ-диалога <b>включён</b>!\n"
-            "Отвечай на мои сообщения чтобы общаться с ИИ.\n"
-            "Выключить: /aichat",
-            parse_mode="HTML")
-
-
-@dp.message(F.text & F.reply_to_message)
-async def handle_ai_reply(message: Message):
-    if not GROK_API_KEY: return
-    if message.chat.id not in ai_enabled_chats: return
+        await thinking_msg.edit_text('Ошибка: ' + str(e))
     if not message.reply_to_message: return
     try:
         bot_me = await bot.get_me()
