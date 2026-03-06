@@ -234,7 +234,7 @@ async def log_action(text: str):
     except:
         pass
 
-AUTO_DELETE_DELAY = 30  # секунд
+AUTO_DELETE_DELAY = 90  # секунд
 
 async def auto_delete(*msgs):
     """Удаляет сообщения через AUTO_DELETE_DELAY секунд"""
