@@ -50,8 +50,6 @@ def save_data():
 LOG_CHANNEL_ID   = -1003832428474
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-GROK_API_KEY      = os.getenv("GROK_API_KEY", "")
 OWNER_ID         = 7823802800
 MAX_WARNINGS     = 3
 FLOOD_LIMIT      = 5
@@ -88,8 +86,6 @@ xp_data       = defaultdict(lambda: defaultdict(int))
 streaks       = defaultdict(lambda: defaultdict(int))
 streak_dates  = defaultdict(lambda: defaultdict(str))
 # ИИ чат
-ai_conversations = defaultdict(list)   # {uid: [{role:..,content:..}]} — история диалога
-ai_enabled_chats = set()               # чаты где включён ИИ режим
 # Расширенная статистика
 hourly_stats  = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))  # {cid: {uid: {hour: count}}}
 word_stats    = defaultdict(lambda: defaultdict(int))  # {cid: {word: count}}
@@ -532,7 +528,10 @@ class StatsMiddleware(BaseMiddleware):
             chat_stats[event.chat.id][event.from_user.id] += 1
             known_chats[event.chat.id] = event.chat.title or str(event.chat.id)
             uid, cid = event.from_user.id, event.chat.id
-            xp_data[cid][uid] += random.randint(1, 5)
+            from datetime import datetime as _dt
+            _xp = random.randint(1, 5)
+            if _dt.now().weekday() >= 5: _xp *= 2  # x2 в выходные
+            xp_data[cid][uid] += _xp
             from datetime import datetime, timedelta
             today = datetime.now().strftime("%d.%m.%Y")
             last = streak_dates[cid][uid]
@@ -3349,48 +3348,6 @@ async def cmd_report(message: Message, command: CommandObject):
 
 
 
-async def ask_ai(messages: list, system: str = "Ты дружелюбный ассистент в Telegram чате. Отвечай кратко, на русском.", max_tokens: int = 1024) -> str:
-    """Универсальная функция — использует Grok если есть, иначе Claude"""
-    if GROK_API_KEY:
-        # Grok (OpenAI-совместимый API)
-        headers = {
-            "Authorization": f"Bearer {GROK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "grok-3-fast-beta",
-            "max_tokens": max_tokens,
-            "messages": [{"role": "system", "content": system}] + messages
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.x.ai/v1/chat/completions",
-                headers=headers, json=payload
-            ) as resp:
-                data = await resp.json()
-        return data["choices"][0]["message"]["content"]
-    elif ANTHROPIC_API_KEY:
-        # Claude (Anthropic API)
-        headers = {
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
-        }
-        payload = {
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": max_tokens,
-            "system": system,
-            "messages": messages
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.anthropic.com/v1/messages",
-                headers=headers, json=payload
-            ) as resp:
-                data = await resp.json()
-        return data["content"][0]["text"]
-    return ""
-
 # ===== РАСШИРЕННАЯ СТАТИСТИКА =====
 @dp.message(Command("chatstats"))
 async def cmd_chatstats(message: Message):
@@ -3504,74 +3461,6 @@ async def cmd_topactive(message: Message):
         lines.append("Сегодня ещё никто не писал!")
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
 
-
-# ===== ИИ ЧАТ-БОТ =====
-@dp.message(Command("ai"))
-async def cmd_ai(message: Message, command: CommandObject):
-    if not GROK_API_KEY:
-        await reply_auto_delete(message, 'ИИ не настроен. Добавь GROK_API_KEY.'); return
-    if not command.args:
-        await reply_auto_delete(message, 'Задай вопрос: /ai текст'); return
-    uid = message.from_user.id
-    question = command.args.strip()
-    thinking_msg = await message.reply('🤖 Думаю...')
-    ai_conversations[uid].append({'role': 'user', 'content': question})
-    if len(ai_conversations[uid]) > 20:
-        ai_conversations[uid] = ai_conversations[uid][-20:]
-    try:
-        headers = {'Authorization': 'Bearer ' + GROK_API_KEY, 'Content-Type': 'application/json'}
-        payload = {
-            'model': 'grok-3-fast-beta',
-            'max_tokens': 1024,
-            'messages': [{'role': 'system', 'content': 'Ты умный ассистент в Telegram. Отвечай кратко на русском.'}] + ai_conversations[uid]
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.post('https://api.x.ai/v1/chat/completions', headers=headers, json=payload) as resp:
-                raw = await resp.text()
-        data = json.loads(raw)
-        if 'choices' in data and data['choices']:
-            answer = data['choices'][0]['message']['content']
-            ai_conversations[uid].append({'role': 'assistant', 'content': answer})
-            await thinking_msg.edit_text('🤖 ' + answer)
-        else:
-            err = data.get('error', {}).get('message', raw[:200]) if isinstance(data, dict) else raw[:200]
-            await thinking_msg.edit_text('Ошибка: ' + str(err))
-    except Exception as e:
-        await thinking_msg.edit_text('Ошибка: ' + str(e))
-    if not message.reply_to_message: return
-    try:
-        bot_me = await bot.get_me()
-        if message.reply_to_message.from_user.id != bot_me.id: return
-    except: return
-    uid = message.from_user.id
-    question = message.text.strip()
-    if not question or question.startswith("/"): return
-    thinking_msg = await message.reply("🤖 Думаю...")
-    ai_conversations[uid].append({"role": "user", "content": question})
-    if len(ai_conversations[uid]) > 20:
-        ai_conversations[uid] = ai_conversations[uid][-20:]
-    try:
-        headers = {
-            "Authorization": f"Bearer {GROK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "grok-3-fast-beta",
-            "max_tokens": 512,
-            "messages": [{"role": "system", "content": "Ты дружелюбный ассистент в Telegram чате. Отвечай кратко, на русском."}] + ai_conversations[uid]
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.x.ai/v1/chat/completions",
-                headers=headers, json=payload
-            ) as resp:
-                data = await resp.json()
-        answer = data["choices"][0]["message"]["content"]
-        ai_conversations[uid].append({"role": "assistant", "content": answer})
-        await thinking_msg.edit_text(f"🤖 {answer}", parse_mode="HTML")
-    except:
-        try: await thinking_msg.delete()
-        except: pass
 
 
 # ===== 💸 ПЕРЕВОД РЕПУТАЦИИ =====
@@ -3748,75 +3637,6 @@ async def cmd_meme(message: Message, command: CommandObject):
         await reply_auto_delete(message, f"⚠️ Ошибка генерации: {e}")
 
 
-# ===== 🌡 НАСТРОЕНИЕ ЧАТА =====
-@dp.message(Command("mood"))
-async def cmd_mood(message: Message):
-    if not GROK_API_KEY:
-        await reply_auto_delete(message, "⚠️ Для этой команды нужен GROK_API_KEY"); return
-    cid = message.chat.id
-    # Берём последние сообщения из кеша
-    recent = [
-        v["text"] for v in message_cache.values()
-        if v.get("chat_id") == cid and v.get("text")
-    ][-30:]
-    if len(recent) < 5:
-        await reply_auto_delete(message,
-            "📊 Недостаточно сообщений для анализа.\nНужно минимум 5 сообщений!"); return
-    thinking = await message.reply("🌡 Анализирую настроение чата...")
-    sample = "\n".join(recent[-20:])
-    try:
-        headers = {
-            "Authorization": f"Bearer {GROK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "grok-3-fast-beta",
-            "max_tokens": 300,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "Ты анализируешь настроение чата. "
-                        "Дай краткий анализ (3-4 предложения) на русском языке. "
-                        "Укажи общее настроение (позитивное/негативное/нейтральное), "
-                        "основные темы и атмосферу. Используй эмодзи. "
-                        "Не используй Markdown разметку."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": f"Проанализируй настроение этого чата по последним сообщениям:\n\n{sample}"
-                }
-            ]
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.x.ai/v1/chat/completions",
-                headers=headers, json=payload
-            ) as resp:
-                data = await resp.json()
-        analysis = data["choices"][0]["message"]["content"]
-        # Определяем эмодзи настроения
-        mood_emoji = "😐"
-        low = analysis.lower()
-        if any(w in low for w in ["позитив", "весел", "радост", "хорош", "отлич"]):
-            mood_emoji = "😄"
-        elif any(w in low for w in ["негатив", "агресс", "злост", "плохо", "конфликт"]):
-            mood_emoji = "😤"
-        elif any(w in low for w in ["спокой", "нейтрал", "тихо"]):
-            mood_emoji = "😌"
-        elif any(w in low for w in ["весел", "юмор", "смех", "шутк"]):
-            mood_emoji = "😂"
-        await thinking.edit_text(
-            f"╔═══════════════════╗\n"
-            f"🌡  <b>НАСТРОЕНИЕ ЧАТА</b>\n"
-            f"╚═══════════════════╝\n\n"
-            f"{mood_emoji} <b>Анализ последних {len(recent)} сообщений:</b>\n\n"
-            f"{analysis}",
-            parse_mode="HTML")
-    except Exception as e:
-        await thinking.edit_text(f"⚠️ Ошибка анализа: {e}")
-
 
 # ===== 📢 РАССЫЛКА ПО ВСЕМ ЧАТАМ (только владелец) =====
 @dp.message(Command("broadcast"))
@@ -3876,11 +3696,762 @@ async def cmd_chats(message: Message):
     await message.reply("\n".join(lines), parse_mode="HTML")
 
 
+# ══════════════════════════════════════════════════════
+#  НОВЫЕ ДАННЫЕ
+# ══════════════════════════════════════════════════════
+reactions_data   = defaultdict(lambda: defaultdict(set))   # {msg_id: {"👍": {uid,...}}}
+referrals        = defaultdict(set)    # {uid: {invited_uid,...}}
+referral_used    = {}                  # {uid: inviter_uid}
+boosters         = defaultdict(dict)   # {uid: {"booster_id": expires_ts}}
+avatars          = {}                  # {uid: emoji}
+clans            = {}                  # {clan_id: {name,tag,leader,members,rep,created}}
+clan_members     = {}                  # {uid: clan_id}
+lottery_tickets  = defaultdict(set)    # {cid: {uid,...}}
+lottery_last     = {}                  # {cid: date}
+stock_invested   = defaultdict(dict)   # {cid: {uid: amount}}
+stock_last       = {}                  # {cid: date}
+quotes_data      = defaultdict(list)   # {cid: [{text,author,date,msg_id}]}
+journal_data     = defaultdict(list)   # {uid: [{date,text}]}
+artifacts        = defaultdict(list)   # {uid: [{id,name,emoji,rarity,obtained}]}
+event_subs       = defaultdict(set)    # {cid: {uid}} — подписаны на события
+trivia_active    = {}                  # {cid: {q,a,reward,msg_id,answerer}}
+color_titles     = {}                  # {uid: color_emoji}
+
+BOOSTERS_SHOP = {
+    "b1": {"name": "⚡ Ускоритель XP",   "desc": "x2 опыт на 1 час",      "price": 50,  "duration": 3600,  "type": "xp2"},
+    "b2": {"name": "🍀 Удача",            "desc": "+20% к казино на 2 часа","price": 80,  "duration": 7200,  "type": "luck"},
+    "b3": {"name": "🛡 Щит репы",         "desc": "Защита от потерь 30 мин","price": 100, "duration": 1800,  "type": "shield"},
+    "b4": {"name": "🎯 Снайпер",          "desc": "x3 опыт на 30 мин",     "price": 150, "duration": 1800,  "type": "xp3"},
+    "b5": {"name": "💰 Магнит репы",      "desc": "+5 репы каждые 10 мин", "price": 200, "duration": 3600,  "type": "rep_magnet"},
+}
+
+ARTIFACTS_LIST = [
+    ("🗡️", "Меч Судьбы",      "legendary", "+15% к дуэлям"),
+    ("🔮", "Хрустальный шар", "epic",      "Предсказывает победу в казино"),
+    ("👑", "Корона Хаоса",    "divine",    "x2 репа от всех источников 24ч"),
+    ("🌙", "Лунный амулет",   "rare",      "+10 репы каждую ночь"),
+    ("🔑", "Ключ удачи",      "epic",      "Открывает секретный бонус"),
+    ("📜", "Древний свиток",  "legendary", "+50 репы при получении"),
+    ("🐉", "Чешуя дракона",   "divine",    "Иммунитет к потерям репы 1ч"),
+    ("⚗️", "Зелье силы",      "rare",      "x2 XP на 2 часа"),
+    ("🎭", "Маска обмана",    "epic",      "+30% в дуэлях на 1 день"),
+    ("💎", "Алмаз вечности",  "divine",    "Постоянный +2 репы в час"),
+]
+
+TRIVIA_QUESTIONS = [
+    ("Сколько планет в Солнечной системе?", "8", 20),
+    ("Столица Франции?", "Париж", 15),
+    ("Сколько сторон у шестиугольника?", "6", 10),
+    ("Какой газ мы вдыхаем?", "Кислород", 15),
+    ("Автор 'Войны и мира'?", "Толстой", 20),
+    ("2 в степени 10?", "1024", 25),
+    ("Самая большая страна мира?", "Россия", 15),
+    ("Химический символ золота?", "Au", 25),
+    ("Сколько цветов у радуги?", "7", 10),
+    ("Самый быстрый наземный зверь?", "Гепард", 20),
+    ("Сколько нот в октаве?", "7", 15),
+    ("Год основания Москвы?", "1147", 30),
+]
+
+# ══════════════════════════════════════════════════════
+#  📣 РЕАКЦИИ НА СООБЩЕНИЯ
+# ══════════════════════════════════════════════════════
+@dp.message(Command("like"))
+async def cmd_like(message: Message):
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "👍 Реплайни на сообщение!"); return
+    target_msg = message.reply_to_message
+    mid = target_msg.message_id
+    uid = message.from_user.id
+    if target_msg.from_user and target_msg.from_user.id == uid:
+        await reply_auto_delete(message, "❌ Нельзя лайкать себя!"); return
+    if uid in reactions_data[mid]["👍"]:
+        reactions_data[mid]["👍"].discard(uid)
+        await reply_auto_delete(message, "👎 Лайк убран")
+    else:
+        reactions_data[mid]["👍"].add(uid)
+        reactions_data[mid]["👎"].discard(uid)
+        if target_msg.from_user:
+            reputation[message.chat.id][target_msg.from_user.id] += 1
+        await reply_auto_delete(message, f"👍 +1 репутация для {target_msg.from_user.mention_html() if target_msg.from_user else 'автора'}!", parse_mode="HTML")
+    save_data()
+
+@dp.message(Command("dislike"))
+async def cmd_dislike(message: Message):
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "👎 Реплайни на сообщение!"); return
+    target_msg = message.reply_to_message
+    mid = target_msg.message_id
+    uid = message.from_user.id
+    if target_msg.from_user and target_msg.from_user.id == uid:
+        await reply_auto_delete(message, "❌ Нельзя дизлайкать себя!"); return
+    if uid in reactions_data[mid]["👎"]:
+        reactions_data[mid]["👎"].discard(uid)
+        await reply_auto_delete(message, "✅ Дизлайк убран")
+    else:
+        reactions_data[mid]["👎"].add(uid)
+        reactions_data[mid]["👍"].discard(uid)
+        if target_msg.from_user:
+            reputation[message.chat.id][target_msg.from_user.id] -= 1
+        await reply_auto_delete(message, f"👎 -1 репутация для {target_msg.from_user.mention_html() if target_msg.from_user else 'автора'}!", parse_mode="HTML")
+    save_data()
+
+# ══════════════════════════════════════════════════════
+#  🔗 РЕФЕРАЛЬНАЯ СИСТЕМА
+# ══════════════════════════════════════════════════════
+@dp.message(Command("ref"))
+async def cmd_ref(message: Message):
+    uid = str(message.from_user.id)
+    bot_me = await bot.get_me()
+    ref_link = f"https://t.me/{bot_me.username}?start=ref_{uid}"
+    invited = len(referrals.get(uid, set()))
+    await reply_auto_delete(message,
+        "╔═══════════════════╗\n"
+        "🔗  <b>РЕФЕРАЛЬНАЯ СИСТЕМА</b>\n"
+        "╚═══════════════════╝\n\n"
+        f"👥 Ты пригласил: <b>{invited}</b> чел.\n"
+        f"💰 Заработано: <b>{invited * 30}</b> репы\n\n"
+        f"🔗 Твоя ссылка:\n<code>{ref_link}</code>\n\n"
+        f"<i>За каждого приглашённого +30 репы!</i>",
+        parse_mode="HTML")
+
+@dp.message(Command("start"))
+async def cmd_start_ref(message: Message, command: CommandObject):
+    if not command.args or not command.args.startswith("ref_"): return
+    inviter_id = command.args.replace("ref_", "").strip()
+    uid = str(message.from_user.id)
+    if uid == inviter_id: return
+    if uid in referral_used: return
+    referral_used[uid] = inviter_id
+    referrals[inviter_id].add(uid)
+    cid = message.chat.id
+    reputation[cid][int(inviter_id)] = reputation[cid].get(int(inviter_id), 0) + 30
+    save_data()
+    try:
+        await bot.send_message(int(inviter_id),
+            f"🎉 {message.from_user.full_name} зашёл по твоей ссылке!\n+30 репы тебе!")
+    except: pass
+
+# ══════════════════════════════════════════════════════
+#  🌈 ЦВЕТНЫЕ ТИТУЛЫ / АВАТАРКА
+# ══════════════════════════════════════════════════════
+COLOR_BADGES = [
+    (0,   "⬜", "Новичок"),
+    (50,  "🟩", "Участник"),
+    (200, "🟦", "Активный"),
+    (500, "🟪", "Ветеран"),
+    (1000,"🟨", "Элита"),
+    (3000,"🔴", "Легенда"),
+    (10000,"💎","Бог чата"),
+]
+
+def get_color_badge(rep: int) -> tuple:
+    badge = COLOR_BADGES[0]
+    for threshold, emoji, title in COLOR_BADGES:
+        if rep >= threshold:
+            badge = (emoji, title)
+    return badge
+
+AVATAR_EMOJIS = ["😎","🐉","👑","🔥","💎","🌙","⚡","🦊","🐺","🎭","🌌","💀","🤖","🦋","🌈","❄️","🎯","🗡️","🔮","🌸"]
+
+@dp.message(Command("avatar"))
+async def cmd_avatar(message: Message, command: CommandObject):
+    uid = str(message.from_user.id)
+    if not command.args:
+        current = avatars.get(uid, "👤")
+        rows = []
+        for i in range(0, len(AVATAR_EMOJIS), 5):
+            rows.append([InlineKeyboardButton(text=e, callback_data=f"setavatar:{e}") for e in AVATAR_EMOJIS[i:i+5]])
+        await message.reply(
+            f"📸 <b>Выбери аватар</b>\nТекущий: {current}\n\n",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        return
+    emoji = command.args.strip()
+    if emoji in AVATAR_EMOJIS:
+        avatars[uid] = emoji
+        await reply_auto_delete(message, f"✅ Аватар установлен: {emoji}")
+    else:
+        await reply_auto_delete(message, f"❌ Выбери из списка: {' '.join(AVATAR_EMOJIS)}")
+
+@dp.callback_query(F.data.startswith("setavatar:"))
+async def cb_setavatar(call: CallbackQuery):
+    uid = str(call.from_user.id)
+    emoji = call.data.split(":")[1]
+    avatars[uid] = emoji
+    await call.message.edit_text(f"✅ Аватар установлен: {emoji}")
+    await call.answer()
+
+# ══════════════════════════════════════════════════════
+#  🍭 МАГАЗИН БУСТЕРОВ
+# ══════════════════════════════════════════════════════
+@dp.message(Command("boost"))
+async def cmd_boost(message: Message, command: CommandObject):
+    uid = str(message.from_user.id)
+    cid = message.chat.id
+    if not command.args:
+        from time import time
+        now = time()
+        lines = [
+            "╔═══════════════════╗",
+            "🍭  <b>МАГАЗИН БУСТЕРОВ</b>",
+            "╚═══════════════════╝",
+            f"\n💰 Твоя репа: <b>{reputation[cid].get(message.from_user.id, 0)}</b>\n"
+        ]
+        for bid, b in BOOSTERS_SHOP.items():
+            active = boosters[uid].get(bid, 0)
+            status = f"✅ активен ещё {int((active-now)//60)} мин" if active > now else "⬜ неактивен"
+            lines.append(f"<b>{b['name']}</b> — {b['price']} репы\n  {b['desc']} | {status}")
+        lines.append("\nКупить: <code>/boost b1</code> (или b2..b5)")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+        return
+    bid = command.args.strip().lower()
+    if bid not in BOOSTERS_SHOP:
+        await reply_auto_delete(message, "❌ Такого бустера нет. /boost — список"); return
+    b = BOOSTERS_SHOP[bid]
+    rep = reputation[cid].get(message.from_user.id, 0)
+    if rep < b["price"]:
+        await reply_auto_delete(message, f"❌ Нужно {b['price']} репы, у тебя {rep}"); return
+    from time import time
+    now = time()
+    reputation[cid][message.from_user.id] -= b["price"]
+    boosters[uid][bid] = now + b["duration"]
+    save_data()
+    await reply_auto_delete(message,
+        f"✅ Куплен {b['name']}!\n{b['desc']}\nДействует {b['duration']//60} минут.", parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════
+#  🎲 РУЛЕТКА РЕПУТАЦИИ
+# ══════════════════════════════════════════════════════
+roulette_cd = {}
+
+@dp.message(Command("roulette"))
+async def cmd_roulette(message: Message, command: CommandObject):
+    uid = message.from_user.id
+    cid = message.chat.id
+    from time import time
+    now = time()
+    if uid in roulette_cd and now - roulette_cd[uid] < 1800:
+        left = int((1800 - (now - roulette_cd[uid])) // 60)
+        await reply_auto_delete(message, f"⏳ Рулетка кулдаун: {left} мин."); return
+    if not command.args:
+        await reply_auto_delete(message, "🎲 Формат: <code>/roulette 50</code>\nПоставь репу — x2 или потеряешь всё!", parse_mode="HTML"); return
+    try:
+        bet = int(command.args.strip())
+        if bet <= 0: raise ValueError
+    except:
+        await reply_auto_delete(message, "❌ Ставка должна быть числом больше 0"); return
+    rep = reputation[cid].get(uid, 0)
+    if rep < bet:
+        await reply_auto_delete(message, f"❌ Недостаточно репы! У тебя {rep}"); return
+    roulette_cd[uid] = now
+    # Спин
+    result = random.randint(0, 36)
+    win = result % 2 == 0 and result != 0  # чётное = победа
+    if win:
+        reputation[cid][uid] += bet
+        outcome = f"🎉 <b>ПОБЕДА!</b> Выпало {result}!\n+{bet} репы → баланс: {reputation[cid][uid]:+d}"
+    else:
+        reputation[cid][uid] -= bet
+        outcome = f"💀 <b>ПРОИГРЫШ!</b> Выпало {result}.\n-{bet} репы → баланс: {reputation[cid][uid]:+d}"
+    save_data()
+    # Анимация
+    symbols = ["🔴","⚫","🔴","⚫","🔴","⚫","🟢"]
+    spin_display = " ".join(random.choices(symbols, k=7))
+    await reply_auto_delete(message,
+        f"╔═══════════════════╗\n"
+        f"🎲  <b>РУЛЕТКА</b>\n"
+        f"╚═══════════════════╝\n\n"
+        f"{spin_display}\n\n"
+        f"🎯 Ставка: <b>{bet}</b> репы\n\n"
+        f"{outcome}",
+        parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════
+#  🧙 МАГИЧЕСКИЙ АРТЕФАКТ
+# ══════════════════════════════════════════════════════
+artifact_cd = {}
+
+@dp.message(Command("artifact"))
+async def cmd_artifact(message: Message):
+    uid = str(message.from_user.id)
+    cid = message.chat.id
+    from time import time
+    now = time()
+    # Показать инвентарь артефактов
+    inv = artifacts.get(uid, [])
+    if inv:
+        lines = ["╔═══════════════════╗", "🧙  <b>АРТЕФАКТЫ</b>", "╚═══════════════════╝", ""]
+        for a in inv:
+            lines.append(f"{a['emoji']} <b>{a['name']}</b> [{a['rarity']}]\n   {a['effect']}")
+        lines.append(f"\n🎰 /artifact_roll — попытать удачу (кулдаун 6ч, стоит 100 репы)")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+    else:
+        await reply_auto_delete(message,
+            "🧙 У тебя нет артефактов!\n\n"
+            "🎰 Используй <code>/artifact_roll</code> чтобы попытать удачу!\nСтоит 100 репы, кулдаун 6 часов.",
+            parse_mode="HTML")
+
+@dp.message(Command("artifact_roll"))
+async def cmd_artifact_roll(message: Message):
+    uid = str(message.from_user.id)
+    cid = message.chat.id
+    from time import time
+    now = time()
+    if uid in artifact_cd and now - artifact_cd[uid] < 21600:
+        left = int((21600 - (now - artifact_cd[uid])) // 3600)
+        await reply_auto_delete(message, f"⏳ Следующий ролл через {left} ч."); return
+    rep = reputation[cid].get(message.from_user.id, 0)
+    if rep < 100:
+        await reply_auto_delete(message, "❌ Нужно 100 репы для ролла артефакта!"); return
+    reputation[cid][message.from_user.id] -= 100
+    artifact_cd[uid] = now
+    # Шанс получить артефакт 40%
+    if random.random() < 0.4:
+        art = random.choice(ARTIFACTS_LIST)
+        emoji, name, rarity, effect = art
+        artifacts[uid].append({"emoji": emoji, "name": name, "rarity": rarity, "effect": effect, "obtained": __import__('datetime').datetime.now().strftime("%d.%m.%Y")})
+        save_data()
+        await reply_auto_delete(message,
+            f"╔═══════════════════╗\n"
+            f"🧙  <b>АРТЕФАКТ НАЙДЕН!</b>\n"
+            f"╚═══════════════════╝\n\n"
+            f"{emoji} <b>{name}</b>\n"
+            f"✨ Редкость: {rarity}\n"
+            f"⚡ Эффект: {effect}",
+            parse_mode="HTML")
+    else:
+        save_data()
+        await reply_auto_delete(message, "💨 Артефакт не найден... Попробуй снова через 6 часов.")
+
+# ══════════════════════════════════════════════════════
+#  🎰 ЛОТЕРЕЯ
+# ══════════════════════════════════════════════════════
+@dp.message(Command("lottery"))
+async def cmd_lottery(message: Message):
+    cid = message.chat.id
+    uid = message.from_user.id
+    from datetime import datetime
+    today = datetime.now().strftime("%d.%m.%Y")
+    tickets = lottery_tickets[cid]
+    participants = len(tickets)
+    prize = participants * 20
+    last = lottery_last.get(cid)
+    already_in = uid in tickets
+    await reply_auto_delete(message,
+        f"╔═══════════════════╗\n"
+        f"🎰  <b>ЛОТЕРЕЯ</b>\n"
+        f"╚═══════════════════╝\n\n"
+        f"🎫 Участников: <b>{participants}</b>\n"
+        f"💰 Призовой фонд: <b>{prize}</b> репы\n"
+        f"📅 Розыгрыш: сегодня в 23:00\n\n"
+        f"{'✅ Ты уже участвуешь!' if already_in else 'Купить билет: /lottery_buy (цена: 20 репы)'}",
+        parse_mode="HTML")
+
+@dp.message(Command("lottery_buy"))
+async def cmd_lottery_buy(message: Message):
+    cid = message.chat.id
+    uid = message.from_user.id
+    if uid in lottery_tickets[cid]:
+        await reply_auto_delete(message, "✅ Ты уже купил билет на сегодня!"); return
+    rep = reputation[cid].get(uid, 0)
+    if rep < 20:
+        await reply_auto_delete(message, "❌ Нужно 20 репы для билета!"); return
+    reputation[cid][uid] -= 20
+    lottery_tickets[cid].add(uid)
+    save_data()
+    await reply_auto_delete(message,
+        f"🎫 Билет куплен! Ты участник #{len(lottery_tickets[cid])}\n"
+        f"💰 Призовой фонд: {len(lottery_tickets[cid])*20} репы\n"
+        f"🎲 Розыгрыш сегодня в 23:00!")
+
+async def run_lottery():
+    """Запускается каждый день в 23:00"""
+    while True:
+        from datetime import datetime
+        now = datetime.now()
+        # Ждём до 23:00
+        target = now.replace(hour=23, minute=0, second=0, microsecond=0)
+        if now >= target:
+            import datetime as dt
+            target += dt.timedelta(days=1)
+        wait_secs = (target - now).total_seconds()
+        await asyncio.sleep(wait_secs)
+        # Розыгрыш во всех чатах
+        for cid, tickets in lottery_tickets.items():
+            if not tickets: continue
+            winner_id = random.choice(list(tickets))
+            prize = len(tickets) * 20
+            reputation[cid][winner_id] = reputation[cid].get(winner_id, 0) + prize
+            try:
+                m = await bot.get_chat_member(cid, winner_id)
+                winner_name = m.user.mention_html()
+            except:
+                winner_name = f"ID{winner_id}"
+            try:
+                await bot.send_message(cid,
+                    f"🎰 <b>РОЗЫГРЫШ ЛОТЕРЕИ!</b>\n\n"
+                    f"🎉 Победитель: {winner_name}\n"
+                    f"💰 Приз: <b>{prize}</b> репы!\n"
+                    f"🎫 Участвовало: {len(tickets)} человек",
+                    parse_mode="HTML")
+            except: pass
+        lottery_tickets.clear()
+        save_data()
+
+# ══════════════════════════════════════════════════════
+#  📈 БИРЖА РЕПУТАЦИИ
+# ══════════════════════════════════════════════════════
+stock_cd = {}
+
+@dp.message(Command("stock"))
+async def cmd_stock(message: Message):
+    cid = message.chat.id
+    uid = message.from_user.id
+    invested = stock_invested[cid].get(uid, 0)
+    rep = reputation[cid].get(uid, 0)
+    await reply_auto_delete(message,
+        f"╔═══════════════════╗\n"
+        f"📈  <b>БИРЖА РЕПУТАЦИИ</b>\n"
+        f"╚═══════════════════╝\n\n"
+        f"💰 Твоя репа: <b>{rep}</b>\n"
+        f"📊 Вложено: <b>{invested}</b>\n\n"
+        f"📉 Риск: каждый день в 20:00 биржа выплачивает\n"
+        f"от -50% до +100% от вложенной суммы\n\n"
+        f"/stock_invest [сумма] — вложить\n"
+        f"/stock_withdraw — вывести всё",
+        parse_mode="HTML")
+
+@dp.message(Command("stock_invest"))
+async def cmd_stock_invest(message: Message, command: CommandObject):
+    cid = message.chat.id
+    uid = message.from_user.id
+    if not command.args:
+        await reply_auto_delete(message, "📈 Формат: <code>/stock_invest 100</code>", parse_mode="HTML"); return
+    try:
+        amount = int(command.args.strip())
+        if amount <= 0: raise ValueError
+    except:
+        await reply_auto_delete(message, "❌ Введи число больше 0"); return
+    rep = reputation[cid].get(uid, 0)
+    if rep < amount:
+        await reply_auto_delete(message, f"❌ Недостаточно репы! У тебя {rep}"); return
+    reputation[cid][uid] -= amount
+    stock_invested[cid][uid] = stock_invested[cid].get(uid, 0) + amount
+    save_data()
+    await reply_auto_delete(message,
+        f"✅ Вложено <b>{amount}</b> репы на биржу!\n"
+        f"📊 Итого вложено: <b>{stock_invested[cid][uid]}</b>\n"
+        f"💸 Выплата сегодня в 20:00",
+        parse_mode="HTML")
+
+@dp.message(Command("stock_withdraw"))
+async def cmd_stock_withdraw(message: Message):
+    cid = message.chat.id
+    uid = message.from_user.id
+    invested = stock_invested[cid].get(uid, 0)
+    if invested == 0:
+        await reply_auto_delete(message, "❌ У тебя нет вложений!"); return
+    # Вывод с штрафом 10%
+    withdraw = int(invested * 0.9)
+    reputation[cid][uid] = reputation[cid].get(uid, 0) + withdraw
+    stock_invested[cid][uid] = 0
+    save_data()
+    await reply_auto_delete(message,
+        f"💸 Выведено <b>{withdraw}</b> репы (штраф 10% за досрочный вывод)\n"
+        f"💰 Баланс: <b>{reputation[cid][uid]:+d}</b>",
+        parse_mode="HTML")
+
+async def run_stock():
+    """Биржа — выплаты каждый день в 20:00"""
+    while True:
+        from datetime import datetime
+        now = datetime.now()
+        target = now.replace(hour=20, minute=0, second=0, microsecond=0)
+        if now >= target:
+            import datetime as dt
+            target += dt.timedelta(days=1)
+        await asyncio.sleep((target - now).total_seconds())
+        for cid, investors in stock_invested.items():
+            for uid, amount in list(investors.items()):
+                if amount <= 0: continue
+                # -50% до +100%
+                multiplier = random.uniform(-0.5, 1.0)
+                change = int(amount * multiplier)
+                reputation[cid][uid] = reputation[cid].get(uid, 0) + amount + change
+                stock_invested[cid][uid] = 0
+                result_text = f"📈 +{change}" if change >= 0 else f"📉 {change}"
+                try:
+                    await bot.send_message(uid,
+                        f"📊 <b>Биржа — выплата!</b>\n"
+                        f"Вложено: {amount} | {result_text} репы\n"
+                        f"Итого получено: {amount + change}",
+                        parse_mode="HTML")
+                except: pass
+        save_data()
+
+# ══════════════════════════════════════════════════════
+#  💬 ЦИТАТНИК
+# ══════════════════════════════════════════════════════
+@dp.message(Command("quote_save"))
+async def cmd_quote_save(message: Message):
+    if not message.reply_to_message or not message.reply_to_message.text:
+        await reply_auto_delete(message, "💬 Реплайни на текстовое сообщение!"); return
+    cid = message.chat.id
+    author = message.reply_to_message.from_user
+    text = message.reply_to_message.text
+    if len(text) > 300:
+        await reply_auto_delete(message, "❌ Цитата слишком длинная (макс 300 символов)"); return
+    from datetime import datetime
+    quotes_data[cid].append({
+        "text": text,
+        "author": author.full_name if author else "Аноним",
+        "date": datetime.now().strftime("%d.%m.%Y"),
+    })
+    if len(quotes_data[cid]) > 100:
+        quotes_data[cid] = quotes_data[cid][-100:]
+    await reply_auto_delete(message,
+        f"💬 Цитата сохранена!\n\n"
+        f"«{text[:100]}{'...' if len(text)>100 else ''}»\n"
+        f"— {author.full_name if author else 'Аноним'}")
+
+@dp.message(Command("quote_random"))
+async def cmd_quote_random(message: Message):
+    cid = message.chat.id
+    if not quotes_data[cid]:
+        await reply_auto_delete(message, "💬 Цитат пока нет! Сохрани через /quote_save (реплай)"); return
+    q = random.choice(quotes_data[cid])
+    await reply_auto_delete(message,
+        f"╔═══════════════════╗\n"
+        f"💬  <b>ЦИТАТА ЧА ТА</b>\n"
+        f"╚═══════════════════╝\n\n"
+        f"«{q['text']}»\n\n"
+        f"— <b>{q['author']}</b>, {q['date']}",
+        parse_mode="HTML")
+
+@dp.message(Command("quotes"))
+async def cmd_quotes(message: Message):
+    cid = message.chat.id
+    total = len(quotes_data[cid])
+    if not total:
+        await reply_auto_delete(message, "💬 Цитат пока нет!"); return
+    last5 = quotes_data[cid][-5:]
+    lines = [f"╔═══════════════════╗\n💬  <b>ЦИТАТНИК</b> ({total} цитат)\n╚═══════════════════╝\n"]
+    for q in reversed(last5):
+        lines.append(f"«{q['text'][:80]}{'...' if len(q['text'])>80 else ''}»\n— {q['author']}\n")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════
+#  📝 ДНЕВНИК ЧАТА
+# ══════════════════════════════════════════════════════
+@dp.message(Command("journal"))
+async def cmd_journal(message: Message, command: CommandObject):
+    uid = str(message.from_user.id)
+    from datetime import datetime
+    if command.args:
+        text = command.args.strip()
+        if len(text) < 3:
+            await reply_auto_delete(message, "⚠️ Слишком короткая запись!"); return
+        journal_data[uid].append({
+            "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
+            "text": text
+        })
+        if len(journal_data[uid]) > 50:
+            journal_data[uid] = journal_data[uid][-50:]
+        await reply_auto_delete(message, f"📝 Запись сохранена!\n\n_{text[:100]}_", parse_mode="HTML")
+        return
+    entries = journal_data.get(uid, [])
+    if not entries:
+        await reply_auto_delete(message,
+            "📝 <b>Твой дневник пуст!</b>\n\nДобавь запись:\n<code>/journal сегодня был отличный день</code>",
+            parse_mode="HTML"); return
+    lines = [f"╔═══════════════════╗\n📝  <b>МОЙ ДНЕВНИК</b> ({len(entries)} записей)\n╚═══════════════════╝\n"]
+    for e in reversed(entries[-5:]):
+        lines.append(f"🗓 <b>{e['date']}</b>\n{e['text']}\n")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════
+#  🧩 ВИКТОРИНА
+# ══════════════════════════════════════════════════════
+@dp.message(Command("trivia"))
+async def cmd_trivia(message: Message):
+    cid = message.chat.id
+    if cid in trivia_active:
+        q = trivia_active[cid]
+        await reply_auto_delete(message,
+            f"❓ Уже идёт викторина!\n\n<b>{q['q']}</b>\n\nОтвечай в чате!", parse_mode="HTML"); return
+    question, answer, reward = random.choice(TRIVIA_QUESTIONS)
+    trivia_active[cid] = {"q": question, "a": answer.lower(), "reward": reward, "answerer": None}
+    await message.answer(
+        f"╔═══════════════════╗\n"
+        f"🧩  <b>ВИКТОРИНА</b>\n"
+        f"╚═══════════════════╝\n\n"
+        f"❓ <b>{question}</b>\n\n"
+        f"💰 Награда: <b>{reward}</b> репы\n"
+        f"⏰ Есть 60 секунд!",
+        parse_mode="HTML")
+    await asyncio.sleep(60)
+    if cid in trivia_active and trivia_active[cid]["answerer"] is None:
+        del trivia_active[cid]
+        try:
+            await bot.send_message(cid,
+                f"⏰ Время вышло! Правильный ответ: <b>{answer}</b>", parse_mode="HTML")
+        except: pass
+
+@dp.message(F.text & ~F.text.startswith("/"))
+async def handle_trivia_answer(message: Message):
+    cid = message.chat.id
+    if cid not in trivia_active: return
+    q = trivia_active[cid]
+    if q["answerer"] is not None: return
+    if message.text.strip().lower() == q["a"]:
+        uid = message.from_user.id
+        q["answerer"] = uid
+        reputation[cid][uid] = reputation[cid].get(uid, 0) + q["reward"]
+        save_data()
+        del trivia_active[cid]
+        await message.reply(
+            f"🎉 <b>{message.from_user.mention_html()} ответил правильно!</b>\n"
+            f"✅ Ответ: <b>{q['a'].capitalize()}</b>\n"
+            f"💰 +{q['reward']} репы!",
+            parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════
+#  🤝 КЛАНЫ
+# ══════════════════════════════════════════════════════
+@dp.message(Command("clan"))
+async def cmd_clan(message: Message, command: CommandObject):
+    uid = message.from_user.id
+    cid = message.chat.id
+    my_clan_id = clan_members.get(uid)
+    if not command.args:
+        if my_clan_id and my_clan_id in clans:
+            c = clans[my_clan_id]
+            members_rep = sum(reputation[cid].get(m, 0) for m in c["members"])
+            await reply_auto_delete(message,
+                f"╔═══════════════════╗\n"
+                f"🤝  <b>КЛАН {c['tag']}</b>\n"
+                f"╚═══════════════════╝\n\n"
+                f"🏷 Название: <b>{c['name']}</b>\n"
+                f"👥 Участников: <b>{len(c['members'])}</b>\n"
+                f"💰 Суммарная репа: <b>{members_rep}</b>\n\n"
+                f"/clan_leave — покинуть клан",
+                parse_mode="HTML")
+        else:
+            await reply_auto_delete(message,
+                "🤝 <b>КЛАНЫ</b>\n\n"
+                "/clan_create [тег] [название] — создать клан\n"
+                "/clan_join [тег] — вступить\n"
+                "/clan_top — топ кланов\n\n"
+                "<i>Создание клана стоит 200 репы</i>",
+                parse_mode="HTML")
+        return
+
+@dp.message(Command("clan_create"))
+async def cmd_clan_create(message: Message, command: CommandObject):
+    uid = message.from_user.id
+    cid = message.chat.id
+    if uid in clan_members:
+        await reply_auto_delete(message, "❌ Ты уже в клане! /clan_leave чтобы выйти"); return
+    if not command.args or len(command.args.split()) < 2:
+        await reply_auto_delete(message, "⚠️ Формат: <code>/clan_create ТЕГ Название клана</code>", parse_mode="HTML"); return
+    parts = command.args.split(maxsplit=1)
+    tag = parts[0].upper()[:5]
+    name = parts[1].strip()[:30]
+    if any(c["tag"] == tag for c in clans.values()):
+        await reply_auto_delete(message, f"❌ Тег [{tag}] уже занят!"); return
+    rep = reputation[cid].get(uid, 0)
+    if rep < 200:
+        await reply_auto_delete(message, "❌ Нужно 200 репы для создания клана!"); return
+    reputation[cid][uid] -= 200
+    clan_id = f"clan_{uid}_{int(__import__('time').time())}"
+    clans[clan_id] = {"name": name, "tag": tag, "leader": uid, "members": [uid], "created": __import__('datetime').datetime.now().strftime("%d.%m.%Y")}
+    clan_members[uid] = clan_id
+    save_data()
+    await reply_auto_delete(message,
+        f"✅ Клан <b>[{tag}] {name}</b> создан!\n"
+        f"👑 Ты лидер\n"
+        f"📢 Другие могут вступить через /clan_join {tag}",
+        parse_mode="HTML")
+
+@dp.message(Command("clan_join"))
+async def cmd_clan_join(message: Message, command: CommandObject):
+    uid = message.from_user.id
+    if uid in clan_members:
+        await reply_auto_delete(message, "❌ Ты уже в клане!"); return
+    if not command.args:
+        await reply_auto_delete(message, "⚠️ Формат: <code>/clan_join ТЕГ</code>", parse_mode="HTML"); return
+    tag = command.args.strip().upper()
+    target_clan = next(((cid, c) for cid, c in clans.items() if c["tag"] == tag), None)
+    if not target_clan:
+        await reply_auto_delete(message, f"❌ Клан [{tag}] не найден!"); return
+    clan_id, c = target_clan
+    c["members"].append(uid)
+    clan_members[uid] = clan_id
+    save_data()
+    await reply_auto_delete(message, f"✅ Ты вступил в клан <b>[{tag}] {c['name']}</b>!", parse_mode="HTML")
+
+@dp.message(Command("clan_leave"))
+async def cmd_clan_leave(message: Message):
+    uid = message.from_user.id
+    clan_id = clan_members.get(uid)
+    if not clan_id or clan_id not in clans:
+        await reply_auto_delete(message, "❌ Ты не в клане!"); return
+    c = clans[clan_id]
+    if c["leader"] == uid:
+        await reply_auto_delete(message, "❌ Лидер не может покинуть клан! Используй /clan_disband"); return
+    c["members"].remove(uid)
+    del clan_members[uid]
+    save_data()
+    await reply_auto_delete(message, f"✅ Ты покинул клан [{c['tag']}]")
+
+@dp.message(Command("clan_top"))
+async def cmd_clan_top(message: Message):
+    cid = message.chat.id
+    if not clans:
+        await reply_auto_delete(message, "🤝 Кланов пока нет!"); return
+    clan_scores = []
+    for clan_id, c in clans.items():
+        total_rep = sum(reputation[cid].get(m, 0) for m in c["members"])
+        clan_scores.append((c["tag"], c["name"], len(c["members"]), total_rep))
+    clan_scores.sort(key=lambda x: x[3], reverse=True)
+    medals = ["🥇","🥈","🥉","4️⃣","5️⃣"]
+    lines = ["╔═══════════════════╗", "🤝  <b>ТОП КЛАНОВ</b>", "╚═══════════════════╝", ""]
+    for i, (tag, name, members, rep) in enumerate(clan_scores[:5]):
+        m = medals[i] if i < len(medals) else f"{i+1}."
+        lines.append(f"{m} <b>[{tag}]</b> {name}\n   👥 {members} чел | 💰 {rep} репы")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════
+#  🥇 ДВОЙНОЙ ОПЫТ В ВЫХОДНЫЕ
+# ══════════════════════════════════════════════════════
+# (встроено в StatsMiddleware — проверяем день недели)
+
+# ══════════════════════════════════════════════════════
+#  🔔 ПОДПИСКА НА СОБЫТИЯ
+# ══════════════════════════════════════════════════════
+@dp.message(Command("subscribe"))
+async def cmd_subscribe(message: Message):
+    uid = message.from_user.id
+    cid = message.chat.id
+    if uid in event_subs[cid]:
+        event_subs[cid].discard(uid)
+        await reply_auto_delete(message, "🔕 Ты отписался от уведомлений о событиях")
+    else:
+        event_subs[cid].add(uid)
+        await reply_auto_delete(message,
+            "🔔 Ты подписан на события!\n"
+            "Получишь уведомление о днях рождения участников чата.\n"
+            "Отписаться: /subscribe")
+
+
 async def main():
     load_data()
     asyncio.create_task(birthday_checker())
     asyncio.create_task(send_weekly_stats())
     asyncio.create_task(warn_expiry_checker())
+    asyncio.create_task(run_lottery())
+    asyncio.create_task(run_stock())
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
     print("✅ Бот запущен!")
