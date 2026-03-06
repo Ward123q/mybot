@@ -3201,7 +3201,8 @@ def kb_shop(cid: int, uid: int, page: int = 0) -> InlineKeyboardMarkup:
 async def cmd_shop(message: Message):
     uid = message.from_user.id; cid = message.chat.id
     rep = reputation[cid].get(uid, 0)
-    await reply_auto_delete(message, 
+    await message.delete()
+    await message.answer(
         f"🏪 <b>Магазин титулов</b>\n\n"
         f"💰 Твоя репутация: <b>{rep:+d}</b>\n\n"
         f"🟢 — активный | ✅ — куплено | 🛒 — купить\n"
