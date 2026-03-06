@@ -20,32 +20,95 @@ from pathlib import Path
 DATA_FILE = "data.json"
 
 def load_data():
-    global warnings, reputation, notes
-    if Path(DATA_FILE).exists():
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            for cid, users in data.get("warnings", {}).items():
-                for uid, count in users.items():
-                    warnings[int(cid)][int(uid)] = count
-            for cid, users in data.get("reputation", {}).items():
-                for uid, score in users.items():
-                    reputation[int(cid)][int(uid)] = score
-            for cid, nts in data.get("notes", {}).items():
-                notes[int(cid)] = nts
-        except:
-            pass
+    global warnings, reputation, notes, xp_data, streaks, birthdays, afk_users
+    global user_titles, mvp_votes, known_chats, referrals, referral_used
+    global boosters, avatars, clans, clan_members, lottery_tickets, stock_invested
+    global quotes_data, journal_data, artifacts, color_titles, role_of_day
+    global rep_transfer_cooldown, confession_reactions, confession_voters
+    if not Path(DATA_FILE).exists():
+        return
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+
+        for cid, users in d.get("warnings", {}).items():
+            for uid, count in users.items():
+                warnings[int(cid)][int(uid)] = count
+        for cid, users in d.get("reputation", {}).items():
+            for uid, score in users.items():
+                reputation[int(cid)][int(uid)] = score
+        for cid, nts in d.get("notes", {}).items():
+            notes[int(cid)] = nts
+        for cid, users in d.get("xp_data", {}).items():
+            for uid, xp in users.items():
+                xp_data[int(cid)][int(uid)] = xp
+        for cid, users in d.get("streaks", {}).items():
+            for uid, s in users.items():
+                streaks[int(cid)][int(uid)] = s
+        for uid, bday in d.get("birthdays", {}).items():
+            birthdays[int(uid)] = bday
+        for uid, data in d.get("user_titles", {}).items():
+            user_titles[int(uid)] = data
+        for cid, title in d.get("known_chats", {}).items():
+            known_chats[int(cid)] = title
+        for uid, inv in d.get("referrals", {}).items():
+            referrals[uid] = set(inv)
+        referral_used.update(d.get("referral_used", {}))
+        for uid, bdata in d.get("boosters", {}).items():
+            boosters[uid] = bdata
+        avatars.update(d.get("avatars", {}))
+        clans.update(d.get("clans", {}))
+        clan_members.update({int(k): v for k, v in d.get("clan_members", {}).items()})
+        for cid, tickets in d.get("lottery_tickets", {}).items():
+            lottery_tickets[int(cid)] = set(tickets)
+        for cid, investors in d.get("stock_invested", {}).items():
+            for uid, amt in investors.items():
+                stock_invested[int(cid)][int(uid)] = amt
+        for cid, qs in d.get("quotes_data", {}).items():
+            quotes_data[int(cid)] = qs
+        for uid, entries in d.get("journal_data", {}).items():
+            journal_data[uid] = entries
+        for uid, arts in d.get("artifacts", {}).items():
+            artifacts[uid] = arts
+        color_titles.update(d.get("color_titles", {}))
+        role_of_day.update(d.get("role_of_day", {}))
+        mvp_votes.update(d.get("mvp_votes", {}))
+        rep_transfer_cooldown.update(d.get("rep_transfer_cooldown", {}))
+    except Exception as e:
+        print(f"[load_data error] {e}")
+
 
 def save_data():
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump({
-                "warnings":   {str(cid): {str(uid): c for uid, c in users.items()} for cid, users in warnings.items()},
-                "reputation": {str(cid): {str(uid): s for uid, s in users.items()} for cid, users in reputation.items()},
-                "notes":      {str(cid): nts for cid, nts in notes.items()},
+                "warnings":     {str(cid): {str(uid): c for uid, c in users.items()} for cid, users in warnings.items()},
+                "reputation":   {str(cid): {str(uid): s for uid, s in users.items()} for cid, users in reputation.items()},
+                "notes":        {str(cid): nts for cid, nts in notes.items()},
+                "xp_data":      {str(cid): {str(uid): x for uid, x in users.items()} for cid, users in xp_data.items()},
+                "streaks":      {str(cid): {str(uid): s for uid, s in users.items()} for cid, users in streaks.items()},
+                "birthdays":    {str(uid): b for uid, b in birthdays.items()},
+                "user_titles":  {str(uid): d for uid, d in user_titles.items()},
+                "known_chats":  {str(cid): t for cid, t in known_chats.items()},
+                "referrals":    {uid: list(inv) for uid, inv in referrals.items()},
+                "referral_used": referral_used,
+                "boosters":     dict(boosters),
+                "avatars":      avatars,
+                "clans":        clans,
+                "clan_members": {str(uid): cid for uid, cid in clan_members.items()},
+                "lottery_tickets": {str(cid): list(t) for cid, t in lottery_tickets.items()},
+                "stock_invested": {str(cid): {str(uid): a for uid, a in inv.items()} for cid, inv in stock_invested.items()},
+                "quotes_data":  {str(cid): q for cid, q in quotes_data.items()},
+                "journal_data": dict(journal_data),
+                "artifacts":    dict(artifacts),
+                "color_titles": color_titles,
+                "role_of_day":  role_of_day,
+                "mvp_votes":    mvp_votes,
+                "rep_transfer_cooldown": rep_transfer_cooldown,
             }, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+    except Exception as e:
+        print(f"[save_data error] {e}")
+
 
 LOG_CHANNEL_ID   = -1003832428474
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
@@ -4362,12 +4425,21 @@ async def cmd_subscribe(message: Message):
             "Отписаться: /subscribe")
 
 
+async def autosave_loop():
+    """Автосохранение каждые 5 минут"""
+    while True:
+        await asyncio.sleep(300)
+        save_data()
+        print('[autosave] данные сохранены')
+
+
 async def main():
     load_data()
     asyncio.create_task(birthday_checker())
     asyncio.create_task(send_weekly_stats())
     asyncio.create_task(warn_expiry_checker())
     asyncio.create_task(run_lottery())
+    asyncio.create_task(autosave_loop())
     asyncio.create_task(run_stock())
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
