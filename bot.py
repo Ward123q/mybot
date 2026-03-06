@@ -247,7 +247,7 @@ async def auto_delete(*msgs):
 
 async def reply_auto_delete(message: Message, text: str, **kwargs) -> Message:
     """Отвечает на сообщение и удаляет оба через 30 секунд"""
-    sent = await reply_auto_delete(message, text, **kwargs)
+    sent = await message.reply(text, **kwargs)
     asyncio.create_task(auto_delete(message, sent))
     return sent
 
