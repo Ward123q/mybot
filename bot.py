@@ -3540,14 +3540,18 @@ async def cmd_ai(message: Message, command: CommandObject):
                 "https://api.x.ai/v1/chat/completions",
                 headers=headers, json=payload
             ) as resp:
-                data = await resp.json()
-        if "choices" in data and data["choices"]:
+                raw = await resp.text()
+        try:
+            data = json.loads(raw)
+        except:
+            await thinking_msg.edit_text(f"⚠️ Ответ API: {raw[:300]}"); return
+        if isinstance(data, dict) and "choices" in data and data["choices"]:
             answer = data["choices"][0]["message"]["content"]
             ai_conversations[uid].append({"role": "assistant", "content": answer})
             await thinking_msg.edit_text(
                 f"🤖 <b>Grok отвечает:</b>\n\n{answer}", parse_mode="HTML")
         else:
-            err = data.get("error", {}).get("message", str(data))
+            err = data.get("error", {}).get("message", str(data)[:300]) if isinstance(data, dict) else str(data)[:300]
             await thinking_msg.edit_text(f"⚠️ Ошибка API: {err}")
     except Exception as e:
         await thinking_msg.edit_text(f"⚠️ Ошибка: {e}")
