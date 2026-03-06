@@ -1537,7 +1537,7 @@ async def cmd_promote(message: Message, command: CommandObject):
         # Новый Bot API 9.5 метод setChatMemberTag
         import aiohttp
         async with aiohttp.ClientSession() as session:
-            url = f"https://api.telegram.org/bot{TOKEN}/setChatMemberTag"
+            url = f"https://api.telegram.org/bot{BOT_TOKEN}/setChatMemberTag"
             data = {"chat_id": cid, "user_id": target.id, "tag": title}
             async with session.post(url, json=data) as resp:
                 result = await resp.json()
@@ -1571,7 +1571,7 @@ async def cmd_removetag(message: Message):
     try:
         import aiohttp
         async with aiohttp.ClientSession() as session:
-            url = f"https://api.telegram.org/bot{TOKEN}/setChatMemberTag"
+            url = f"https://api.telegram.org/bot{BOT_TOKEN}/setChatMemberTag"
             data = {"chat_id": cid, "user_id": target.id, "tag": ""}
             async with session.post(url, json=data) as resp:
                 result = await resp.json()
