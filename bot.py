@@ -3525,33 +3525,30 @@ async def cmd_ai(message: Message, command: CommandObject):
         ai_conversations[uid] = ai_conversations[uid][-20:]
     try:
         headers = {
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
+            "Authorization": f"Bearer {GROK_API_KEY}",
+            "Content-Type": "application/json"
         }
         payload = {
-            "model": "claude-haiku-4-5-20251001",
+            "model": "grok-3-fast-beta",
             "max_tokens": 1024,
-            "system": (
-                "Ты умный и дружелюбный ассистент в Telegram чате. "
-                "Отвечай кратко и по делу, на русском языке. "
-                "Используй эмодзи уместно. Не используй Markdown разметку."
-            ),
-            "messages": ai_conversations[uid]
+            "messages": [
+                {"role": "system", "content": "Ты умный и дружелюбный ассистент в Telegram чате. Отвечай кратко и по делу, на русском языке. Используй эмодзи уместно."}
+            ] + ai_conversations[uid]
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                "https://api.anthropic.com/v1/messages",
+                "https://api.x.ai/v1/chat/completions",
                 headers=headers, json=payload
             ) as resp:
                 data = await resp.json()
-        if "content" in data and data["content"]:
-            answer = data["content"][0]["text"]
+        if "choices" in data and data["choices"]:
+            answer = data["choices"][0]["message"]["content"]
             ai_conversations[uid].append({"role": "assistant", "content": answer})
             await thinking_msg.edit_text(
-                f"🤖 <b>ИИ отвечает:</b>\n\n{answer}", parse_mode="HTML")
+                f"🤖 <b>Grok отвечает:</b>\n\n{answer}", parse_mode="HTML")
         else:
-            await thinking_msg.edit_text("⚠️ ИИ не смог ответить. Попробуй ещё раз.")
+            err = data.get("error", {}).get("message", str(data))
+            await thinking_msg.edit_text(f"⚠️ Ошибка API: {err}")
     except Exception as e:
         await thinking_msg.edit_text(f"⚠️ Ошибка: {e}")
 
