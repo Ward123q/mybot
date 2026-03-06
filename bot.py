@@ -50,6 +50,8 @@ def save_data():
 LOG_CHANNEL_ID   = -1003832428474
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+GROK_API_KEY      = os.getenv("GROK_API_KEY", "")
 OWNER_ID         = 7823802800
 MAX_WARNINGS     = 3
 FLOOD_LIMIT      = 5
@@ -82,6 +84,16 @@ levels        = defaultdict(lambda: defaultdict(int))
 xp_data       = defaultdict(lambda: defaultdict(int))
 streaks       = defaultdict(lambda: defaultdict(int))
 streak_dates  = defaultdict(lambda: defaultdict(str))
+# ИИ чат
+ai_conversations = defaultdict(list)   # {uid: [{role:..,content:..}]} — история диалога
+ai_enabled_chats = set()               # чаты где включён ИИ режим
+# Расширенная статистика
+hourly_stats  = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))  # {cid: {uid: {hour: count}}}
+word_stats    = defaultdict(lambda: defaultdict(int))  # {cid: {word: count}}
+daily_stats   = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))  # {cid: {uid: {date: count}}}
+# Исповеди с реакциями
+confession_reactions = defaultdict(lambda: defaultdict(int))  # {msg_id: {emoji: count}}
+confession_voters    = defaultdict(set)   # {msg_id: {uid}}
 
 RULES_TEXT = (
     "🌌 <b>Правила анон чата</b>\n\n"
@@ -550,6 +562,14 @@ class StatsMiddleware(BaseMiddleware):
                     "user_id": event.from_user.id, "chat_id": event.chat.id,
                     "chat_title": event.chat.title,
                 }
+                # Расширенная статистика
+                from datetime import datetime
+                hour = datetime.now().hour
+                hourly_stats[cid][uid][hour] += 1
+                daily_stats[cid][uid][datetime.now().strftime("%d.%m.%Y")] += 1
+                for word in event.text.lower().split():
+                    if len(word) > 3:
+                        word_stats[cid][word] += 1
         return await handler(event, data)
 
 class AntiFloodMiddleware(BaseMiddleware):
@@ -3329,6 +3349,279 @@ async def cmd_report(message: Message, command: CommandObject):
         await sent.delete()
         await message.delete()
     except: pass
+
+
+
+async def ask_ai(messages: list, system: str = "Ты дружелюбный ассистент в Telegram чате. Отвечай кратко, на русском.", max_tokens: int = 1024) -> str:
+    """Универсальная функция — использует Grok если есть, иначе Claude"""
+    if GROK_API_KEY:
+        # Grok (OpenAI-совместимый API)
+        headers = {
+            "Authorization": f"Bearer {GROK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "grok-4-latest",
+            "max_tokens": max_tokens,
+            "messages": [{"role": "system", "content": system}] + messages
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.x.ai/v1/chat/completions",
+                headers=headers, json=payload
+            ) as resp:
+                data = await resp.json()
+        return data["choices"][0]["message"]["content"]
+    elif ANTHROPIC_API_KEY:
+        # Claude (Anthropic API)
+        headers = {
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+        payload = {
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": messages
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=headers, json=payload
+            ) as resp:
+                data = await resp.json()
+        return data["content"][0]["text"]
+    return ""
+
+# ===== РАСШИРЕННАЯ СТАТИСТИКА =====
+@dp.message(Command("chatstats"))
+async def cmd_chatstats(message: Message):
+    cid = message.chat.id
+    from datetime import datetime
+    from collections import Counter
+    hour_totals = Counter()
+    for uid_hours in hourly_stats[cid].values():
+        for h, cnt in uid_hours.items():
+            hour_totals[h] += cnt
+    top_hours = hour_totals.most_common(3)
+    hours_text = "  ".join(f"{h}:00 ({c})" for h, c in top_hours) if top_hours else "нет данных"
+    top_words = word_stats[cid].most_common(10) if word_stats[cid] else []
+    words_text = ", ".join(f"<b>{w}</b> ({c})" for w, c in top_words) if top_words else "нет данных"
+    today = datetime.now().strftime("%d.%m.%Y")
+    today_msgs = sum(uid_days.get(today, 0) for uid_days in daily_stats[cid].values())
+    total_msgs = sum(chat_stats[cid].values())
+    top_user_id = max(chat_stats[cid], key=chat_stats[cid].get) if chat_stats[cid] else None
+    if top_user_id:
+        try:
+            member = await bot.get_chat_member(cid, top_user_id)
+            top_name = member.user.full_name
+            top_count = chat_stats[cid][top_user_id]
+        except:
+            top_name = f"ID{top_user_id}"
+            top_count = chat_stats[cid][top_user_id]
+    else:
+        top_name, top_count = "—", 0
+    unique_users = len(chat_stats[cid])
+    lines = [
+        "╔═══════════════════╗",
+        "📊  <b>СТАТИСТИКА ЧАТА</b>",
+        "╚═══════════════════╝",
+        "",
+        f"💬 <b>Всего сообщений:</b> {total_msgs}",
+        f"📅 <b>Сегодня:</b> {today_msgs}",
+        f"👥 <b>Участников:</b> {unique_users}",
+        "",
+        f"🏆 <b>Самый активный:</b>",
+        f"    {top_name} — {top_count} сообщений",
+        "",
+        f"⏰ <b>Пиковые часы:</b>",
+        f"    {hours_text}",
+        "",
+        f"🔤 <b>Топ слова:</b>",
+        f"    {words_text}",
+    ]
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+@dp.message(Command("mystats"))
+async def cmd_mystats(message: Message):
+    uid = message.from_user.id
+    cid = message.chat.id
+    from datetime import datetime
+    total = chat_stats[cid].get(uid, 0)
+    today = datetime.now().strftime("%d.%m.%Y")
+    today_count = daily_stats[cid][uid].get(today, 0)
+    my_hours = hourly_stats[cid][uid]
+    if my_hours:
+        best_hour = max(my_hours, key=my_hours.get)
+        best_hour_str = f"{best_hour}:00–{best_hour+1}:00"
+    else:
+        best_hour_str = "нет данных"
+    active_days = len(daily_stats[cid][uid])
+    streak = streaks[cid].get(uid, 0)
+    level = levels[cid].get(uid, 0)
+    xp = xp_data[cid].get(uid, 0)
+    sorted_users = sorted(chat_stats[cid].items(), key=lambda x: x[1], reverse=True)
+    rank = next((i+1 for i, (u, _) in enumerate(sorted_users) if u == uid), 0)
+    lines = [
+        "╔═══════════════════╗",
+        "📈  <b>МОЯ СТАТИСТИКА</b>",
+        "╚═══════════════════╝",
+        "",
+        f"👤 {message.from_user.mention_html()}",
+        "",
+        f"💬 <b>Всего сообщений:</b> {total}",
+        f"📅 <b>Сегодня:</b> {today_count}",
+        f"🗓 <b>Активных дней:</b> {active_days}",
+        f"🔥 <b>Стрик:</b> {streak} дней",
+        f"⚡ <b>Уровень:</b> {level} (XP: {xp})",
+        f"🏅 <b>Ранг в чате:</b> #{rank}",
+        f"⏰ <b>Лучшее время:</b> {best_hour_str}",
+    ]
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+@dp.message(Command("topactive"))
+async def cmd_topactive(message: Message):
+    cid = message.chat.id
+    from datetime import datetime
+    today = datetime.now().strftime("%d.%m.%Y")
+    today_scores = [
+        (uid, days.get(today, 0))
+        for uid, days in daily_stats[cid].items()
+        if days.get(today, 0) > 0
+    ]
+    today_scores.sort(key=lambda x: x[1], reverse=True)
+    medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+    lines = ["╔═══════════════════╗", "🔥  <b>ТОП АКТИВНЫХ СЕГОДНЯ</b>", "╚═══════════════════╝", ""]
+    for i, (uid, cnt) in enumerate(today_scores[:10]):
+        try:
+            m = await bot.get_chat_member(cid, int(uid))
+            name = m.user.full_name
+        except:
+            name = f"ID{uid}"
+        medal = medals[i] if i < len(medals) else f"{i+1}."
+        lines.append(f"{medal} <b>{name}</b> — {cnt} сообщений")
+    if not today_scores:
+        lines.append("Сегодня ещё никто не писал!")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+# ===== ИИ ЧАТ-БОТ =====
+@dp.message(Command("ai"))
+async def cmd_ai(message: Message, command: CommandObject):
+    if not GROK_API_KEY:
+        await reply_auto_delete(message,
+            "⚠️ ИИ не настроен. Добавь GROK_API_KEY в переменные окружения."); return
+    if not command.args:
+        await reply_auto_delete(message,
+            "🤖 Задай вопрос:\n<code>/ai Как дела?</code>\n\n"
+            "💬 /aichat — включить режим диалога\n"
+            "🗑 /aireset — сбросить историю",
+            parse_mode="HTML"); return
+    uid = message.from_user.id
+    question = command.args.strip()
+    thinking_msg = await message.reply("🤖 Думаю...")
+    ai_conversations[uid].append({"role": "user", "content": question})
+    if len(ai_conversations[uid]) > 20:
+        ai_conversations[uid] = ai_conversations[uid][-20:]
+    try:
+        headers = {
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+        payload = {
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 1024,
+            "system": (
+                "Ты умный и дружелюбный ассистент в Telegram чате. "
+                "Отвечай кратко и по делу, на русском языке. "
+                "Используй эмодзи уместно. Не используй Markdown разметку."
+            ),
+            "messages": ai_conversations[uid]
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=headers, json=payload
+            ) as resp:
+                data = await resp.json()
+        if "content" in data and data["content"]:
+            answer = data["content"][0]["text"]
+            ai_conversations[uid].append({"role": "assistant", "content": answer})
+            await thinking_msg.edit_text(
+                f"🤖 <b>ИИ отвечает:</b>\n\n{answer}", parse_mode="HTML")
+        else:
+            await thinking_msg.edit_text("⚠️ ИИ не смог ответить. Попробуй ещё раз.")
+    except Exception as e:
+        await thinking_msg.edit_text(f"⚠️ Ошибка: {e}")
+
+
+@dp.message(Command("aireset"))
+async def cmd_aireset(message: Message):
+    uid = message.from_user.id
+    ai_conversations[uid] = []
+    await reply_auto_delete(message, "🗑 История диалога с ИИ сброшена!")
+
+
+@dp.message(Command("aichat"))
+async def cmd_aichat(message: Message):
+    cid = message.chat.id
+    if cid in ai_enabled_chats:
+        ai_enabled_chats.discard(cid)
+        await reply_auto_delete(message, "🤖 Режим ИИ-диалога <b>выключен</b>.", parse_mode="HTML")
+    else:
+        if not GROK_API_KEY:
+            await reply_auto_delete(message, "⚠️ ИИ не настроен. Добавь GROK_API_KEY."); return
+        ai_enabled_chats.add(cid)
+        await reply_auto_delete(message,
+            "🤖 Режим ИИ-диалога <b>включён</b>!\n"
+            "Отвечай на мои сообщения чтобы общаться с ИИ.\n"
+            "Выключить: /aichat",
+            parse_mode="HTML")
+
+
+@dp.message(F.text & F.reply_to_message)
+async def handle_ai_reply(message: Message):
+    if not GROK_API_KEY: return
+    if message.chat.id not in ai_enabled_chats: return
+    if not message.reply_to_message: return
+    try:
+        bot_me = await bot.get_me()
+        if message.reply_to_message.from_user.id != bot_me.id: return
+    except: return
+    uid = message.from_user.id
+    question = message.text.strip()
+    if not question or question.startswith("/"): return
+    thinking_msg = await message.reply("🤖 Думаю...")
+    ai_conversations[uid].append({"role": "user", "content": question})
+    if len(ai_conversations[uid]) > 20:
+        ai_conversations[uid] = ai_conversations[uid][-20:]
+    try:
+        headers = {
+            "Authorization": f"Bearer {GROK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "grok-4-latest",
+            "max_tokens": 512,
+            "messages": [{"role": "system", "content": "Ты дружелюбный ассистент в Telegram чате. Отвечай кратко, на русском."}] + ai_conversations[uid]
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.x.ai/v1/chat/completions",
+                headers=headers, json=payload
+            ) as resp:
+                data = await resp.json()
+        answer = data["choices"][0]["message"]["content"]
+        ai_conversations[uid].append({"role": "assistant", "content": answer})
+        await thinking_msg.edit_text(f"🤖 {answer}", parse_mode="HTML")
+    except:
+        try: await thinking_msg.delete()
+        except: pass
+
 
 async def main():
     load_data()
