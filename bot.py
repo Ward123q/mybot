@@ -507,8 +507,7 @@ def kb_games(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎲 Кубик d6",           callback_data=f"game:roll:{tid}"),
          InlineKeyboardButton(text="🪙 Монетка",            callback_data=f"game:flip:{tid}")],
-        [InlineKeyboardButton(text="🎰 Слот-машина",        callback_data=f"game:slot:{tid}"),
-         InlineKeyboardButton(text="🎱 Шар предсказаний",   callback_data=f"game:8ball:{tid}")],
+        [InlineKeyboardButton(text="🎱 Шар предсказаний",   callback_data=f"game:8ball:{tid}")],
         [InlineKeyboardButton(text="✊ КНБ — Камень",       callback_data=f"game:rps_k:{tid}"),
          InlineKeyboardButton(text="✌️ КНБ — Ножницы",      callback_data=f"game:rps_n:{tid}")],
         [InlineKeyboardButton(text="🖐 КНБ — Бумага",       callback_data=f"game:rps_b:{tid}"),
@@ -1110,7 +1109,6 @@ async def cb_game(call: CallbackQuery):
             f"🎲 Бросаю кубик... выпало: <b>{random.randint(1,6)}</b>!", parse_mode="HTML", reply_markup=back_kb)
     elif action == "flip":
         await call.message.edit_text(random.choice(["🦅 Орёл!", "🪙 Решка!"]), reply_markup=back_kb)
-    elif action == "slot":
         symbols = ["🍒","🍋","🍊","🍇","⭐","7️⃣","💎"]
         s1,s2,s3 = random.choice(symbols),random.choice(symbols),random.choice(symbols)
         if s1==s2==s3=="💎":              res = "💰 ДЖЕКПОТ!!"
@@ -1436,7 +1434,10 @@ async def cmd_unwarn(message: Message):
 async def cmd_del(message: Message):
     if not await require_admin(message): return
     if not message.reply_to_message: await reply_auto_delete(message, "↩️ Ответь на сообщение."); return
-    await message.reply_to_message.delete(); await message.delete()
+    try: await message.reply_to_message.delete()
+    except: pass
+    try: await message.delete()
+    except: pass
 
 @dp.message(Command("clear"))
 async def cmd_clear(message: Message, command: CommandObject):
@@ -1458,7 +1459,10 @@ async def cmd_announce(message: Message, command: CommandObject):
     if not command.args:
         pending[message.from_user.id] = {"action":"announce_text","target_id":0,"target_name":"","chat_id":message.chat.id}
         await reply_auto_delete(message, "📢 Напиши текст объявления:"); return
-    await message.delete()
+    try:
+        try: await message.delete()
+        except: pass
+    except: pass
     await message.answer(
         f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{command.args}\n\n— {message.from_user.mention_html()}", parse_mode="HTML")
 
@@ -1580,7 +1584,8 @@ async def cmd_poll(message: Message, command: CommandObject):
         await reply_auto_delete(message, "⚠️ /poll Вопрос|Вар1|Вар2"); return
     parts = [p.strip() for p in command.args.split("|")]
     if len(parts) < 3: await reply_auto_delete(message, "⚠️ Нужно минимум 2 варианта."); return
-    await message.delete()
+    try: await message.delete()
+    except: pass
     await bot.send_poll(message.chat.id, question=parts[0], options=parts[1:], is_anonymous=False)
 
 @dp.message(Command("antimat"))
@@ -2103,16 +2108,6 @@ async def cmd_rps(message: Message, command: CommandObject):
     res = "🤝 Ничья!" if p==b else ("🎉 Ты выиграл!" if wins[p]==b else "😈 Я выиграл!")
     await reply_auto_delete(message, f"Ты: {choices[p]}\nЯ: {choices[b]}\n\n{res}")
 
-@dp.message(Command("slot"))
-async def cmd_slot(message: Message):
-    symbols = ["🍒","🍋","🍊","🍇","⭐","7️⃣","💎"]
-    s1,s2,s3 = random.choice(symbols),random.choice(symbols),random.choice(symbols)
-    if s1==s2==s3=="💎":              res = "💰 ДЖЕКПОТ!! Три бриллианта!"
-    elif s1==s2==s3:                  res = f"🎉 Три {s1}! Выиграл!"
-    elif s1==s2 or s2==s3 or s1==s3:  res = "😐 Два одинаковых. Почти!"
-    else:                             res = "😢 Не повезло. Попробуй ещё!"
-    await reply_auto_delete(message, f"🎰 [ {s1} | {s2} | {s3} ]\n\n{res}")
-
 @dp.message(Command("choose"))
 async def cmd_choose(message: Message, command: CommandObject):
     if not command.args or "|" not in command.args:
@@ -2502,61 +2497,14 @@ async def cmd_secret(message: Message, command: CommandObject):
     if not target:
         await reply_auto_delete(message, "❌ Участник не найден в чате!"); return
     try:
-        await message.delete()
+        try: await message.delete()
+        except: pass
         await bot.send_message(target.id,
             f"💌 <b>Тебе анонимное сообщение!</b>\n\n<i>{text}</i>\n\n🔒 <i>Автор неизвестен</i>",
             parse_mode="HTML")
         await bot.send_message(message.chat.id, "📩 Анонимное сообщение отправлено!")
     except:
         await reply_auto_delete(message, "⚠️ Не удалось отправить — участник должен написать боту в лс хотя бы раз!")
-
-# ===== КАЗИНО =====
-@dp.message(Command("casino"))
-async def cmd_casino(message: Message, command: CommandObject):
-    cid = message.chat.id
-    uid = message.from_user.id
-    if not command.args:
-        await reply_auto_delete(message, 
-            "🎰 Формат: /casino [сумма]\n"
-            "Пример: <code>/casino 10</code>\n\n"
-            f"💰 Твоя репутация: <b>{reputation[cid].get(uid, 0):+d}</b>",
-            parse_mode="HTML"); return
-    try:
-        bet = int(command.args.strip())
-    except:
-        await reply_auto_delete(message, "⚠️ Укажи число! Пример: /casino 10"); return
-    if bet <= 0:
-        await reply_auto_delete(message, "⚠️ Ставка должна быть больше 0!"); return
-    current_rep = reputation[cid].get(uid, 0)
-    if current_rep < bet:
-        await reply_auto_delete(message, 
-            f"💸 Недостаточно репутации!\n"
-            f"💰 У тебя: <b>{current_rep:+d}</b>",
-            parse_mode="HTML"); return
-    symbols = ["🍒","🍋","🍊","🍇","⭐","7️⃣","💎"]
-    s1,s2,s3 = random.choice(symbols),random.choice(symbols),random.choice(symbols)
-    if s1==s2==s3=="💎":
-        mult = 5; res = "💰 ДЖЕКПОТ!! Три бриллианта!"
-    elif s1==s2==s3:
-        mult = 3; res = f"🎉 Три {s1}! Выиграл x3!"
-    elif s1==s2 or s2==s3 or s1==s3:
-        mult = 2; res = "😊 Два одинаковых! Выиграл x2!"
-    else:
-        mult = 0; res = "😢 Не повезло! Проиграл!"
-    if mult > 0:
-        win = bet * mult
-        reputation[cid][uid] = current_rep + win
-        result = f"✅ +{win} к репутации!"
-    else:
-        reputation[cid][uid] = current_rep - bet
-        result = f"❌ -{bet} к репутации!"
-    save_data()
-    await reply_auto_delete(message, 
-        f"🎰 [ {s1} | {s2} | {s3} ]\n\n"
-        f"{res}\n{result}\n\n"
-        f"💰 Репутация: <b>{reputation[cid][uid]:+d}</b>",
-        parse_mode="HTML")
-
 # ===== ДУЭЛИ =====
 duel_requests = {}
 
@@ -3182,7 +3130,10 @@ def kb_shop(cid: int, uid: int, page: int = 0) -> InlineKeyboardMarkup:
 async def cmd_shop(message: Message):
     uid = message.from_user.id; cid = message.chat.id
     rep = reputation[cid].get(uid, 0)
-    await message.delete()
+    try:
+        try: await message.delete()
+        except: pass
+    except: pass
     await message.answer(
         f"🏪 <b>Магазин титулов</b>\n\n"
         f"💰 Твоя репутация: <b>{rep:+d}</b>\n\n"
@@ -3308,7 +3259,8 @@ async def cmd_report(message: Message, command: CommandObject):
     await asyncio.sleep(10)
     try:
         await sent.delete()
-        await message.delete()
+        try: await message.delete()
+        except: pass
     except: pass
 
 
@@ -3684,7 +3636,7 @@ color_titles     = {}                  # {uid: color_emoji}
 
 BOOSTERS_SHOP = {
     "b1": {"name": "⚡ Ускоритель XP",   "desc": "x2 опыт на 1 час",      "price": 50,  "duration": 3600,  "type": "xp2"},
-    "b2": {"name": "🍀 Удача",            "desc": "+20% к казино на 2 часа","price": 80,  "duration": 7200,  "type": "luck"},
+    "b2": {"name": "🍀 Удача",            "desc": "+20% к дуэлям на 2 часа","price": 80,  "duration": 7200,  "type": "luck"},
     "b3": {"name": "🛡 Щит репы",         "desc": "Защита от потерь 30 мин","price": 100, "duration": 1800,  "type": "shield"},
     "b4": {"name": "🎯 Снайпер",          "desc": "x3 опыт на 30 мин",     "price": 150, "duration": 1800,  "type": "xp3"},
     "b5": {"name": "💰 Магнит репы",      "desc": "+5 репы каждые 10 мин", "price": 200, "duration": 3600,  "type": "rep_magnet"},
@@ -3692,7 +3644,7 @@ BOOSTERS_SHOP = {
 
 ARTIFACTS_LIST = [
     ("🗡️", "Меч Судьбы",      "legendary", "+15% к дуэлям"),
-    ("🔮", "Хрустальный шар", "epic",      "Предсказывает победу в казино"),
+    ("🔮", "Хрустальный шар", "epic",      "Приносит удачу в играх"),
     ("👑", "Корона Хаоса",    "divine",    "x2 репа от всех источников 24ч"),
     ("🌙", "Лунный амулет",   "rare",      "+10 репы каждую ночь"),
     ("🔑", "Ключ удачи",      "epic",      "Открывает секретный бонус"),
