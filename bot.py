@@ -110,6 +110,150 @@ def save_data():
         print(f"[save_data error] {e}")
 
 
+
+
+
+# ══════════════════════════════════════════
+#  СИСТЕМА УРОВНЕЙ (500 уровней)
+# ══════════════════════════════════════════
+LEVEL_TITLES = {
+    # 1-10 Новички
+    1:  ("🌱", "Росток"),        2:  ("🌿", "Новичок"),
+    3:  ("🍃", "Участник"),      4:  ("🌾", "Активный"),
+    5:  ("⚡", "Энергичный"),    6:  ("🔥", "Горячий"),
+    7:  ("💫", "Звёздный"),      8:  ("🎯", "Меткий"),
+    9:  ("🛡", "Защитник"),      10: ("⚔️", "Воин"),
+    # 11-20
+    11: ("🗡", "Дуэлянт"),       12: ("🏹", "Лучник"),
+    13: ("🔮", "Мистик"),        14: ("🧙", "Маг"),
+    15: ("🌙", "Лунный"),        16: ("☄️", "Кометный"),
+    17: ("🌟", "Звезда"),        18: ("💎", "Бриллиант"),
+    19: ("👁", "Всевидящий"),    20: ("🏆", "Чемпион"),
+    # 21-30
+    21: ("🦁", "Лев"),           22: ("🐉", "Дракон"),
+    23: ("🦅", "Орёл"),          24: ("🌊", "Волна"),
+    25: ("⚜️", "Элита"),         26: ("🔱", "Посейдон"),
+    27: ("🌌", "Космос"),        28: ("🌠", "Метеор"),
+    29: ("🎖", "Медаль"),        30: ("👑", "Король"),
+    # 31-40
+    31: ("🏰", "Замок"),         32: ("⚡", "Молния"),
+    33: ("🔥", "Пламя"),         34: ("💀", "Тёмный"),
+    35: ("🌑", "Тень"),          36: ("🌀", "Вихрь"),
+    37: ("🎇", "Фейерверк"),     38: ("🧬", "Мутант"),
+    39: ("🤖", "Киборг"),        40: ("🛸", "Инопланетянин"),
+    # 41-50
+    41: ("🌍", "Хранитель"),     42: ("🌞", "Солнечный"),
+    43: ("🌈", "Радужный"),      44: ("⚗️", "Алхимик"),
+    45: ("🔯", "Чародей"),       46: ("🌺", "Сакура"),
+    47: ("🏯", "Сёгун"),         48: ("🐲", "Повелитель"),
+    49: ("💠", "Абсолют"),       50: ("👾", "Полубог"),
+    # 51-75
+    51: ("🌋", "Вулкан"),        55: ("🏔", "Горный"),
+    60: ("🌪", "Торнадо"),       65: ("🧊", "Ледяной"),
+    70: ("🦄", "Единорог"),      75: ("🦊", "Лис"),
+    # 76-100
+    76: ("🐺", "Волк"),          80: ("🦋", "Бабочка"),
+    85: ("🦂", "Скорпион"),      90: ("🐍", "Змей"),
+    95: ("🦁", "Царь зверей"),
+    100: ("🌠", "✨ СОТЫЙ ✨"),
+    # 101-150
+    105: ("💣", "Бомба"),        110: ("🚀", "Ракета"),
+    115: ("🧠", "Гений"),        120: ("🎓", "Профессор"),
+    125: ("💻", "Хакер"),        130: ("🕹", "Геймер"),
+    135: ("🎬", "Режиссёр"),     140: ("🎸", "Рокер"),
+    145: ("🥋", "Мастер"),
+    150: ("💀", "✨ ПОЛТОРА СТА ✨"),
+    # 151-200
+    155: ("🔥", "Адское пламя"),  160: ("⚡", "Гром"),
+    165: ("🌊", "Цунами"),        170: ("🌋", "Апокалипсис"),
+    175: ("☄️", "Астероид"),      180: ("🌌", "Галактика"),
+    185: ("🛸", "Вселенная"),     190: ("🌠", "Сверхновая"),
+    195: ("💥", "Большой взрыв"),
+    200: ("👁", "✨ ДВУХСОТЫЙ ✨"),
+    # 201-250
+    205: ("🌍", "Хранитель мира"), 210: ("⚜️", "Верховный"),
+    215: ("🏆", "Великий"),        220: ("💎", "Алмазный"),
+    225: ("👑", "Император"),      230: ("🐉", "Повелитель драконов"),
+    235: ("🌞", "Бессмертный"),    240: ("💠", "Вечный"),
+    245: ("🔯", "Всемогущий"),     249: ("👾", "Предел"),
+    250: ("✨", "✨ ДВЕСТИ ПЯТЬДЕСЯТ ✨"),
+    # 251-300
+    255: ("🌑", "Тёмный бог"),     260: ("☠️", "Смерть"),
+    265: ("👻", "Призрак"),        270: ("🔮", "Оракул"),
+    275: ("🌀", "Бездна"),         280: ("🧿", "Провидец"),
+    285: ("🌌", "Межзвёздный"),    290: ("⚫", "Чёрная дыра"),
+    295: ("🌠", "Квазар"),
+    300: ("🔱", "✨ ТРЁХСОТЫЙ ✨"),
+    # 301-350
+    305: ("🏯", "Сёгун II"),       310: ("🐲", "Дракон-бог"),
+    315: ("⚔️", "Легендарный воин"), 320: ("🗡", "Тёмный клинок"),
+    325: ("🛡", "Непоколебимый"),  330: ("🔥", "Феникс"),
+    335: ("❄️", "Вечная мерзлота"), 340: ("⚡", "Повелитель молний"),
+    345: ("🌊", "Нептун"),
+    350: ("🌟", "✨ ТРИСТА ПЯТЬДЕСЯТ ✨"),
+    # 351-400
+    355: ("🌋", "Вулкан-бог"),     360: ("☄️", "Комета смерти"),
+    365: ("🌌", "Повелитель космоса"), 370: ("💀", "Жнец"),
+    375: ("👑", "Верховный король"), 380: ("🐉", "Первородный дракон"),
+    385: ("🌞", "Бог солнца"),     390: ("🌑", "Бог тьмы"),
+    395: ("💎", "Кристальный"),
+    400: ("👾", "✨ ЧЕТЫРЁХСОТЫЙ ✨"),
+    # 401-450
+    405: ("🔯", "Архимаг II"),     410: ("🌠", "Астральный"),
+    415: ("⚜️", "Высший"),         420: ("🏆", "Абсолютный чемпион"),
+    425: ("💠", "Кристальный бог"), 430: ("🌈", "Спектр"),
+    435: ("🌀", "Хаос"),           440: ("🔥", "Вечный огонь"),
+    445: ("🌌", "Бесконечность"),
+    450: ("✨", "✨ ЧЕТЫРЕСТА ПЯТЬДЕСЯТ ✨"),
+    # 451-500
+    455: ("💥", "Сингулярность"),  460: ("⚫", "Абсолютная тьма"),
+    465: ("🌟", "Абсолютный свет"), 470: ("🐲", "Бог драконов"),
+    475: ("👁", "Всевидящий бог"),  480: ("🔱", "Посейдон II"),
+    485: ("👑", "Бог богов"),       490: ("🌌", "Создатель"),
+    495: ("💠", "Источник"),        499: ("🌠", "Грань"),
+    500: ("🆚", "⚡ БОГ ЧАТА ⚡"),
+}
+
+def get_level_title(level: int) -> tuple:
+    result = ("🌱", "Участник")
+    for lvl in sorted(LEVEL_TITLES.keys()):
+        if level >= lvl:
+            result = LEVEL_TITLES[lvl]
+    return result
+
+# XP для каждого уровня (нарастающая сложность)
+LEVEL_XP = {}
+xp = 0
+for lvl in range(1, 501):
+    if lvl <= 10:    xp += 80
+    elif lvl <= 25:  xp += 150
+    elif lvl <= 50:  xp += 300
+    elif lvl <= 75:  xp += 500
+    elif lvl <= 100: xp += 800
+    elif lvl <= 150: xp += 1500
+    elif lvl <= 200: xp += 2500
+    elif lvl <= 250: xp += 4000
+    elif lvl <= 300: xp += 6000
+    elif lvl <= 350: xp += 8500
+    elif lvl <= 400: xp += 12000
+    elif lvl <= 450: xp += 17000
+    else:            xp += 25000
+    LEVEL_XP[lvl] = xp
+
+def get_level(total_xp: int) -> int:
+    level = 0
+    for lvl, needed in LEVEL_XP.items():
+        if total_xp >= needed:
+            level = lvl
+        else:
+            break
+    return level
+
+def get_xp_for_next(level: int) -> int:
+    return LEVEL_XP.get(level + 1, LEVEL_XP[500])
+
+
+
 LOG_CHANNEL_ID   = -1003832428474
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
@@ -140,6 +284,7 @@ chat_stats    = defaultdict(lambda: defaultdict(int))
 reputation    = defaultdict(lambda: defaultdict(int))
 rep_cooldown  = {}
 rep_transfer_cooldown = {}   # {uid_cid: timestamp}
+xp_cooldowns          = {}   # {cid_uid: timestamp} кулдаун XP
 known_chats   = {}           # {cid: title} — все чаты где есть бот
 role_of_day   = {}           # {cid: {uid: {date: role}}}
 reminders     = {}
@@ -597,36 +742,53 @@ class StatsMiddleware(BaseMiddleware):
             chat_stats[event.chat.id][event.from_user.id] += 1
             known_chats[event.chat.id] = event.chat.title or str(event.chat.id)
             uid, cid = event.from_user.id, event.chat.id
-            from datetime import datetime as _dt
-            _xp = random.randint(1, 5)
-            if _dt.now().weekday() >= 5: _xp *= 2  # x2 в выходные
-            xp_data[cid][uid] += _xp
             from datetime import datetime, timedelta
-            today = datetime.now().strftime("%d.%m.%Y")
+            import time as _time
+            now_dt = datetime.now()
+            today  = now_dt.strftime("%d.%m.%Y")
+
+            # ── Кулдаун XP: 1 раз в минуту ──
+            xp_cd_key = f"{cid}_{uid}"
+            now_ts = _time.time()
+            if now_ts - xp_cooldowns.get(xp_cd_key, 0) >= 60:
+                xp_cooldowns[xp_cd_key] = now_ts
+                text = event.text or ""
+                length = len(text)
+                if length == 0:         _xp = 1
+                elif length < 10:       _xp = random.randint(1, 3)
+                elif length < 50:       _xp = random.randint(3, 6)
+                elif length < 150:      _xp = random.randint(5, 10)
+                else:                   _xp = random.randint(8, 15)
+                streak = streaks[cid].get(uid, 0)
+                if streak >= 30:        _xp = int(_xp * 2.0)
+                elif streak >= 14:      _xp = int(_xp * 1.5)
+                elif streak >= 7:       _xp = int(_xp * 1.25)
+                if now_dt.weekday() >= 5: _xp = int(_xp * 2)
+                uid_str = str(uid)
+                b = boosters.get(uid_str, {})
+                if b.get("b1", 0) > now_ts or b.get("b4", 0) > now_ts: _xp = int(_xp * 2)
+                xp_data[cid][uid] += _xp
+
+            # ── Стрик ──
             last = streak_dates[cid][uid]
             if last != today:
-                yesterday = (datetime.now() - timedelta(days=1)).strftime("%d.%m.%Y")
-                if last == yesterday:
-                    streaks[cid][uid] += 1
-                elif last == "":
-                    streaks[cid][uid] = 1
-                else:
-                    streaks[cid][uid] = 1
+                yesterday = (now_dt - timedelta(days=1)).strftime("%d.%m.%Y")
+                streaks[cid][uid] = streaks[cid].get(uid, 0) + 1 if last == yesterday else 1
                 streak_dates[cid][uid] = today
-            old_level = levels[cid][uid]
-            new_level = xp_data[cid][uid] // 100
+
+            # ── Уровень ──
+            old_level = levels[cid].get(uid, 0)
+            new_level = get_level(xp_data[cid][uid])
             if new_level > old_level:
                 levels[cid][uid] = new_level
-                title = (
-                    "👑 Элита" if new_level >= 20 else
-                    "🏆 Легенда" if new_level >= 10 else
-                    "⚔️ Ветеран" if new_level >= 5 else
-                    "🌱 Активный" if new_level >= 3 else
-                    "🔰 Участник")
+                emoji, title = get_level_title(new_level)
+                bonus_rep = new_level * 5
+                reputation[cid][uid] = reputation[cid].get(uid, 0) + bonus_rep
                 try:
                     await event.answer(
                         f"🎉 {event.from_user.mention_html()} достиг <b>{new_level} уровня</b>!\n"
-                        f"🏅 Титул: <b>{title}</b>", parse_mode="HTML")
+                        f"{emoji} Титул: <b>{title}</b>\n"
+                        f"💰 Бонус: <b>+{bonus_rep} репы</b>", parse_mode="HTML")
                 except: pass
             if event.text:
                 message_cache[event.message_id] = {
@@ -1289,7 +1451,7 @@ async def cmd_help(message: Message):
         "▸ /meme верх|низ — мем-генератор\n\n"
 
         "📊 <b>СТАТИСТИКА</b>\n"
-        "▸ /chatstats · /mystats · /topactive\n\n"
+        "▸ /chatstats · /mystats · /topactive\n""▸ /topxp — таблица лидеров по XP\n\n"
 
         "🕵️ <b>АНОНИМНО</b>\n"
         "▸ /ask — открыть АСК\n"
@@ -2688,30 +2850,54 @@ async def cmd_toprep(message: Message):
 async def cmd_profile(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     uid, cid = user.id, message.chat.id
-    xp = xp_data[cid][uid]; lvl = levels[cid][uid]
-    xp_current = xp % 100
-    bar = "🟩" * (xp_current // 10) + "⬜" * (10 - xp_current // 10)
-    rep = reputation[cid].get(uid, 0)
-    warns = warnings[cid].get(uid, 0)
-    msgs = chat_stats[cid].get(uid, 0)
-    streak = streaks[cid][uid]
-    title = (
-        "👑 Элита" if lvl >= 20 else "🏆 Легенда" if lvl >= 10 else
-        "⚔️ Ветеран" if lvl >= 5 else "🌱 Активный" if lvl >= 3 else
-        "🔰 Участник" if lvl >= 1 else "🐣 Новичок")
-    shop_title = user_titles[uid].get("title")
-    title_line = f"🎭 Титул магазина: <b>{shop_title}</b>\n" if shop_title else ""
-    reasons = mod_reasons[cid].get(uid, {})
-    mute_reason = f"🔇 Последний мут: <i>{reasons['mute']}</i>\n" if reasons.get("mute") else ""
-    ban_reason  = f"🔨 Последний бан: <i>{reasons['ban']}</i>\n"  if reasons.get("ban")  else ""
+
+    xp     = xp_data[cid].get(uid, 0)
+    lvl    = get_level(xp)
+    levels[cid][uid] = lvl
+    emoji_lvl, title_lvl = get_level_title(lvl)
+    rep    = reputation[cid].get(uid, 0)
+    warns  = warnings[cid].get(uid, 0)
+    msgs   = chat_stats[cid].get(uid, 0)
+    streak = streaks[cid].get(uid, 0)
+
+    # Прогресс до следующего уровня
+    cur_xp  = LEVEL_XP.get(lvl, 0)
+    next_xp = get_xp_for_next(lvl)
+    prog    = xp - cur_xp
+    needed  = next_xp - cur_xp
+    pct     = min(int((prog / needed) * 12), 12) if needed > 0 else 12
+    bar     = "█" * pct + "░" * (12 - pct)
+
+    # Ранг по XP в чате
+    sorted_xp = sorted(xp_data[cid].items(), key=lambda x: x[1], reverse=True)
+    rank_xp = next((i+1 for i,(u,_) in enumerate(sorted_xp) if u == uid), "?")
+
+    # Ранг по репе в чате
+    sorted_rep = sorted(reputation[cid].items(), key=lambda x: x[1], reverse=True)
+    rank_rep = next((i+1 for i,(u,_) in enumerate(sorted_rep) if u == uid), "?")
+
+    # Доп инфо
+    avatar     = avatars.get(str(uid), "👤")
+    shop_title = user_titles[uid].get("title", "")
+    clan_id    = clan_members.get(uid)
+    clan_line  = f"🤝 Клан: <b>[{clans[clan_id]['tag']}] {clans[clan_id]['name']}</b>\n" if clan_id and clan_id in clans else ""
+    title_line = f"🎭 Титул: <b>{shop_title}</b>\n" if shop_title else ""
+    arts_count = len(artifacts.get(str(uid), []))
+    color_badge, _ = get_color_badge(rep)
+
     await reply_auto_delete(message,
-        f"👤 <b>Профиль {user.mention_html()}</b>\n\n"
-        f"🏅 Уровень: <b>{title}</b> (lvl {lvl})\n"
-        f"✨ Опыт: <b>{xp_current}/100</b>\n[{bar}]\n\n"
+        f"{avatar} <b>{user.mention_html()}</b> {color_badge}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{emoji_lvl} <b>{title_lvl}</b>  •  Уровень <b>{lvl}</b> / 250\n"
+        f"<code>[{bar}]</code> {prog}/{needed} XP\n\n"
         f"{title_line}"
-        f"🌟 Репутация: <b>{rep:+d}</b>\n💬 Сообщений: <b>{msgs}</b>\n"
-        f"🔥 Серия: <b>{streak}</b> дней\n⚠️ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
-        f"{mute_reason}{ban_reason}",
+        f"{clan_line}"
+        f"⭐ Репутация: <b>{rep:+d}</b>  (#{rank_rep} в чате)\n"
+        f"📊 XP ранг: <b>#{rank_xp}</b>  •  Всего XP: <b>{xp}</b>\n"
+        f"💬 Сообщений: <b>{msgs}</b>\n"
+        f"🔥 Стрик: <b>{streak}</b> дней\n"
+        f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
+        f"🧙 Артефактов: <b>{arts_count}</b>\n",
         parse_mode="HTML")
 
 @dp.message(Command("addrep"))
@@ -3176,6 +3362,33 @@ SHOP_ITEMS = {
     "248": {"name": "🕴 Агент",             "price": 355,   "type": "title"},
     "249": {"name": "🧑‍⚖️ Судья",           "price": 385,   "type": "title"},
     "250": {"name": "🌈 Легенда чата",      "price": 999,   "type": "title"},
+
+    # ── Роли (специальные теги) ──
+    "r1":  {"name": "🔥 [ОГОНЬ]",        "price": 500,    "type": "role", "desc": "Тег в профиле"},
+    "r2":  {"name": "❄️ [ЛЁД]",           "price": 500,    "type": "role", "desc": "Тег в профиле"},
+    "r3":  {"name": "⚡ [ГРОМ]",          "price": 500,    "type": "role", "desc": "Тег в профиле"},
+    "r4":  {"name": "🌙 [НОЧЬ]",          "price": 500,    "type": "role", "desc": "Тег в профиле"},
+    "r5":  {"name": "☀️ [СОЛНЦЕ]",        "price": 500,    "type": "role", "desc": "Тег в профиле"},
+    "r6":  {"name": "💀 [ТЬМА]",          "price": 750,    "type": "role", "desc": "Тег в профиле"},
+    "r7":  {"name": "👑 [КОРОЛЬ]",         "price": 1000,   "type": "role", "desc": "Тег в профиле"},
+    "r8":  {"name": "🐉 [ДРАКОН]",        "price": 1000,   "type": "role", "desc": "Тег в профиле"},
+    "r9":  {"name": "🌈 [РАДУГА]",        "price": 1500,   "type": "role", "desc": "Тег в профиле"},
+    "r10": {"name": "✨ [ЛЕГЕНДА]",        "price": 5000,   "type": "role", "desc": "Эксклюзивный тег"},
+    # ── Цвета ника ──
+    "c1":  {"name": "🔴 Красный ник",     "price": 800,    "type": "color", "desc": "Цветной бейдж в профиле"},
+    "c2":  {"name": "🔵 Синий ник",       "price": 800,    "type": "color", "desc": "Цветной бейдж в профиле"},
+    "c3":  {"name": "🟢 Зелёный ник",     "price": 800,    "type": "color", "desc": "Цветной бейдж в профиле"},
+    "c4":  {"name": "🟡 Золотой ник",     "price": 1200,   "type": "color", "desc": "Премиум цвет"},
+    "c5":  {"name": "🟣 Фиолетовый ник",  "price": 1200,   "type": "color", "desc": "Премиум цвет"},
+    "c6":  {"name": "⚫ Чёрный ник",      "price": 2000,   "type": "color", "desc": "Редкий цвет"},
+    "c7":  {"name": "🌈 Радужный ник",    "price": 10000,  "type": "color", "desc": "Легендарный цвет"},
+    # ── Эффекты ──
+    "e1":  {"name": "💫 Эффект: Звезда",  "price": 2000,   "type": "effect", "desc": "+15% к репе постоянно"},
+    "e2":  {"name": "🔮 Эффект: Магия",   "price": 3000,   "type": "effect", "desc": "+20% к XP постоянно"},
+    "e3":  {"name": "🛡 Эффект: Щит",    "price": 5000,   "type": "effect", "desc": "Защита от -репы"},
+    "e4":  {"name": "⚡ Эффект: Молния",  "price": 7500,   "type": "effect", "desc": "x1.5 XP навсегда"},
+    "e5":  {"name": "👑 Эффект: Корона",  "price": 50000,  "type": "effect", "desc": "x2 ко всему навсегда"},
+
 }
 user_titles = defaultdict(dict)  # {uid: {"title": "...", "purchased": [...]}}
 
@@ -4447,6 +4660,72 @@ async def autosave_loop():
         await asyncio.sleep(300)
         save_data()
         print('[autosave] данные сохранены')
+
+
+@dp.message(Command("topxp"))
+async def cmd_topxp(message: Message):
+    cid = message.chat.id
+    if not xp_data[cid]:
+        await reply_auto_delete(message, "📊 XP пока нет!"); return
+    sorted_u = sorted(xp_data[cid].items(), key=lambda x: x[1], reverse=True)[:10]
+    medals   = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+    lines    = [
+        "✨ <b>CHAT GUARD</b> — Топ XP",
+        "━━━━━━━━━━━━━━━━━━━━━━",
+        ""
+    ]
+    for i, (uid, xp) in enumerate(sorted_u):
+        lvl = get_level(xp)
+        emoji_lvl, title = get_level_title(lvl)
+        try:
+            m = await bot.get_chat_member(cid, uid)
+            uname = m.user.full_name[:18]
+        except:
+            uname = f"ID {uid}"
+        lines.append(f"{medals[i]} <b>{uname}</b>\n   {emoji_lvl} Ур.{lvl} • {xp} XP")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+@dp.message(F.chat.type == "private")
+async def handle_private_message(message: Message):
+    uid  = message.from_user.id
+    text = message.text or ""
+
+    if text.startswith("/"): return  # команды обрабатываются отдельно
+
+    responses = [
+        "👋 Привет! Я работаю в групповых чатах.\nДобавь меня в группу и используй /help",
+        "🤖 Я бот для чатов! Используй меня в группе.\nКоманды: /help",
+        "💬 Хочешь поговорить? Я работаю в группах!\nПропиши /help в своём чате.",
+        "🎮 Все мои функции доступны в групповых чатах!\nДобавь меня туда: /help",
+        f"👤 Твой ID: <code>{uid}</code>\n\n🤖 Я групповой бот. Добавь меня в чат!",
+    ]
+
+    # Проверяем слова
+    tl = text.lower()
+    if any(w in tl for w in ["помог", "help", "помощь", "что умеешь"]):
+        reply = (
+            "🤖 <b>Я CHAT GUARD!</b>\n\n"
+            "Умею:\n"
+            "⭐ Система репутации и XP\n"
+            "🏆 Уровни до 250\n"
+            "🤝 Кланы\n"
+            "🎰 Лотерея и биржа\n"
+            "🧙 Артефакты и бустеры\n"
+            "👮 Модерация чата\n\n"
+            "Добавь меня в группу и используй /help!"
+        )
+    elif any(w in tl for w in ["привет", "хай", "здарова", "hi", "hello"]):
+        reply = f"👋 Привет, {message.from_user.first_name}!\nЯ работаю в групповых чатах. Добавь меня туда!"
+    elif any(w in tl for w in ["репа", "репутация", "уровень", "xp"]):
+        reply = "⭐ Репутация и XP доступны только в групповых чатах!\nДобавь меня в свою группу."
+    elif any(w in tl for w in ["спасибо", "благодар", "thanks"]):
+        reply = f"😊 Пожалуйста, {message.from_user.first_name}! Рад помочь!"
+    else:
+        import random as _r
+        reply = _r.choice(responses)
+
+    await message.answer(reply, parse_mode="HTML")
 
 
 async def main():
