@@ -467,6 +467,31 @@ async def auto_delete(*msgs):
         except:
             pass
 
+async def schedule_delete(msg, delay: int = AUTO_DELETE_DELAY):
+    """Удаляет одно сообщение через delay секунд"""
+    await asyncio.sleep(delay)
+    try:
+        await msg.delete()
+    except:
+        pass
+
+
+async def answer_auto_delete(message: Message, text: str, **kwargs) -> Message:
+    """Отправляет сообщение и удаляет через 30 секунд (без удаления исходного)"""
+    sent = await message.answer(text, **kwargs)
+    asyncio.create_task(schedule_delete(sent))
+    return sent
+
+async def cb_auto_delete(call: CallbackQuery, text: str, **kwargs):
+    """Редактирует сообщение колбэка и удаляет через 30 секунд"""
+    try:
+        sent = await call.message.edit_text(text, **kwargs)
+        asyncio.create_task(auto_delete(call.message))
+    except:
+        sent = await call.message.answer(text, **kwargs)
+        asyncio.create_task(auto_delete(sent))
+    return sent
+
 async def reply_auto_delete(message: Message, text: str, **kwargs) -> Message:
     """Отвечает на сообщение и удаляет оба через 30 секунд"""
     sent = await message.reply(text, **kwargs)
@@ -782,8 +807,6 @@ class StatsMiddleware(BaseMiddleware):
                 if b.get("b1", 0) > now_ts or b.get("b4", 0) > now_ts: _xp = int(_xp * 2)
                 xp_data[cid][uid] += _xp
 
-            # ── Ачивки ──
-            asyncio.create_task(check_achievements(cid, uid, bot))
             # ── Стрик ──
             last = streak_dates[cid][uid]
             if last != today:
@@ -1012,6 +1035,7 @@ async def cb_panel(call: CallbackQuery):
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
                 can_send_other_messages=True, can_add_web_page_previews=True))
             await call.message.edit_text(f"🔊 <b>{tname}</b> размучен.", parse_mode="HTML")
+            asyncio.create_task(schedule_delete(call.message))
             await log_action(f"╔═══════════════════╗\n🔊  <b>РАЗМУТ</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         elif action == "warn":
             await call.message.edit_text(f"⚡ <b>Варн для {tname}</b>\n\nВыбери причину:",
@@ -1021,17 +1045,20 @@ async def cb_panel(call: CallbackQuery):
             await call.message.edit_text(
                 f"🌿 С <b>{tname}</b> снят варн. Осталось: <b>{warnings[cid][tid]}/{MAX_WARNINGS}</b>",
                 parse_mode="HTML")
+            asyncio.create_task(schedule_delete(call.message))
         elif action == "ban":
             await call.message.edit_text(f"🔨 <b>Бан для {tname}</b>\n\nВыбери причину:",
                 parse_mode="HTML", reply_markup=kb_ban(tid))
         elif action == "unban":
             await bot.unban_chat_member(cid, tid, only_if_banned=True)
             await call.message.edit_text(f"🕊 <b>{tname}</b> разбанен.", parse_mode="HTML")
+            asyncio.create_task(schedule_delete(call.message))
             await log_action(f"╔═══════════════════╗\n🕊  <b>РАЗБАН</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         elif action == "del":
             try: await call.message.reply_to_message.delete()
             except: pass
             await call.message.edit_text("🗑 Сообщение удалено.")
+            asyncio.create_task(auto_delete(call.message))
         elif action == "info":
             tm2 = await bot.get_chat_member(cid, tid); u = tm2.user
             smap = {"creator":"👑 Создатель","administrator":"🛡 Администратор",
@@ -1092,6 +1119,7 @@ async def cb_mute(call: CallbackQuery):
             f"✏️ Введи время мута для <b>{tname}</b>:\n"
             f"Примеры: <code>10</code>, <code>30m</code>, <code>2h</code>, <code>1d</code>",
             parse_mode="HTML")
+        asyncio.create_task(schedule_delete(call.message))
         await call.answer(); return
     mins  = int(tval)
     label = f"{mins} мин." if mins < 60 else (f"{mins//60} ч." if mins < 1440 else f"{mins//1440} дн.")
@@ -1112,6 +1140,7 @@ async def cb_warn(call: CallbackQuery):
     if reason == "custom":
         pending[call.from_user.id] = {"action":"warn_custom","target_id":tid,"target_name":tname,"chat_id":cid}
         await call.message.edit_text(f"✏️ Напиши причину варна для <b>{tname}</b>:", parse_mode="HTML")
+        asyncio.create_task(auto_delete(call.message))
         await call.answer(); return
     warnings[cid][tid] += 1; count = warnings[cid][tid]
     if count >= MAX_WARNINGS:
@@ -1123,6 +1152,7 @@ async def cb_warn(call: CallbackQuery):
             name=f"<b>{tname}</b>", count=count, max=MAX_WARNINGS, reason=reason)
         await log_action(f"╔═══════════════════╗\n⚡  <b>ВАРН</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     await call.message.edit_text(msg, parse_mode="HTML")
+    asyncio.create_task(schedule_delete(call.message))
     await call.answer("Варн выдан!")
 
 @dp.callback_query(F.data.startswith("ban:"))
@@ -1135,10 +1165,12 @@ async def cb_ban(call: CallbackQuery):
     if reason == "custom":
         pending[call.from_user.id] = {"action":"ban_custom","target_id":tid,"target_name":tname,"chat_id":cid}
         await call.message.edit_text(f"✏️ Напиши причину бана для <b>{tname}</b>:", parse_mode="HTML")
+        asyncio.create_task(auto_delete(call.message))
         await call.answer(); return
     if reason == "tempban24":
         await bot.ban_chat_member(cid, tid, until_date=timedelta(hours=24))
         await call.message.edit_text(f"⏰ <b>{tname}</b> забанен на <b>24 часа</b>.", parse_mode="HTML")
+        asyncio.create_task(auto_delete(call.message))
         await log_action(f"╔═══════════════════╗\n⏰  <b>БАН 24ч</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n⏱ <b>Время:</b> 24 часа\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         await call.answer(); return
     await bot.ban_chat_member(cid, tid)
@@ -1165,6 +1197,7 @@ async def cb_fun(call: CallbackQuery):
         iq = random.randint(1, 200)
         c  = "🥔 Картошка умнее." if iq<70 else ("🐒 Обезьяна лучше." if iq<100 else ("😐 Сойдёт." if iq<130 else ("🧠 Умный!" if iq<160 else "🤖 Настоящий гений!")))
         await call.message.edit_text(f"🧠 IQ {mention}: <b>{iq}</b>\n{c}", parse_mode="HTML", reply_markup=back_kb)
+        asyncio.create_task(auto_delete(call.message))
     elif action == "gay":
         p = random.randint(0, 100)
         await call.message.edit_text(
@@ -1180,6 +1213,7 @@ async def cb_fun(call: CallbackQuery):
         sign, text = random.choice(list(HOROSCOPES.items()))
         await call.message.edit_text(
             f"{sign} <b>Гороскоп для {mention}:</b>\n\n{text}", parse_mode="HTML", reply_markup=back_kb)
+        asyncio.create_task(schedule_delete(call.message))
     elif action == "rate":
         score = random.randint(0, 10)
         await call.message.edit_text(
@@ -1271,6 +1305,7 @@ async def cb_members(call: CallbackQuery):
                 permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(hours=24))
             await call.message.edit_text(
                 f"📵 <b>{tname}</b> — мут на <b>24 часа</b> за рекламу.", parse_mode="HTML")
+            asyncio.create_task(schedule_delete(call.message))
             await log_action(f"╔═══════════════════╗\n📵  <b>МУТ 24ч</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n⏱ <b>Время:</b> 24 часа\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         else: await call.answer("⚠️ Открой панель реплаем на участника.", show_alert=True)
     elif action == "warninfo":
@@ -1356,6 +1391,7 @@ async def cb_game(call: CallbackQuery):
             f"🎲 Бросаю кубик... выпало: <b>{random.randint(1,6)}</b>!", parse_mode="HTML", reply_markup=back_kb)
     elif action == "flip":
         await call.message.edit_text(random.choice(["🦅 Орёл!", "🪙 Решка!"]), reply_markup=back_kb)
+        asyncio.create_task(auto_delete(call.message))
         symbols = ["🍒","🍋","🍊","🍇","⭐","7️⃣","💎"]
         s1,s2,s3 = random.choice(symbols),random.choice(symbols),random.choice(symbols)
         if s1==s2==s3=="💎":              res = "💰 ДЖЕКПОТ!!"
@@ -1363,6 +1399,7 @@ async def cb_game(call: CallbackQuery):
         elif s1==s2 or s2==s3 or s1==s3:  res = "😐 Два одинаковых. Почти!"
         else:                             res = "😢 Не повезло. Попробуй ещё!"
         await call.message.edit_text(f"🎰 [ {s1} | {s2} | {s3} ]\n\n{res}", reply_markup=back_kb)
+        asyncio.create_task(auto_delete(call.message))
     elif action == "8ball":
         await call.message.edit_text(
             f"🎱 <b>Ответ шара:</b>\n\n{random.choice(BALL_ANSWERS)}", parse_mode="HTML", reply_markup=back_kb)
@@ -1372,8 +1409,10 @@ async def cb_game(call: CallbackQuery):
         key = action.split("_")[1]; pk,pl = mp[key]; bk,bl = random.choice(list(mp.values()))
         res = "🤝 Ничья!" if pk==bk else ("🎉 Ты выиграл!" if wins[pk]==bk else "😈 Я выиграл!")
         await call.message.edit_text(f"Ты: {pl}\nЯ: {bl}\n\n{res}", reply_markup=back_kb)
+        asyncio.create_task(auto_delete(call.message))
     elif action == "quote":
         await call.message.edit_text(f"📖 {random.choice(QUOTES)}", reply_markup=back_kb)
+        asyncio.create_task(auto_delete(call.message))
     elif action.startswith("weather_"):
         city = action.replace("weather_","")
         if city == "custom":
@@ -1383,9 +1422,11 @@ async def cb_game(call: CallbackQuery):
                     [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
             await call.answer(); return
         await call.message.edit_text(await get_weather(city), parse_mode="HTML", reply_markup=back_kb)
+        asyncio.create_task(auto_delete(call.message))
     elif action.startswith("countdown"):
         n = int(action.replace("countdown",""))
         await call.message.edit_text(f"⏱ <b>{n}...</b>", parse_mode="HTML")
+        asyncio.create_task(auto_delete(call.message))
         for i in range(n-1, 0, -1):
             await asyncio.sleep(1)
             try: await call.message.edit_text(f"⏱ <b>{i}...</b>", parse_mode="HTML")
@@ -1719,7 +1760,7 @@ async def cmd_announce(message: Message, command: CommandObject):
         try: await message.delete()
         except: pass
     except: pass
-    await message.answer(
+    await answer_auto_delete(
         f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{command.args}\n\n— {message.from_user.mention_html()}", parse_mode="HTML")
 
 @dp.message(Command("pin"))
@@ -2220,6 +2261,7 @@ async def cb_warn_template(call: CallbackQuery):
         await call.message.edit_text(
             f"🔨 <b>Автобан!</b> Достигнут лимит {MAX_WARNINGS} варнов.\n📝 {reason}",
             parse_mode="HTML")
+        asyncio.create_task(schedule_delete(call.message))
         await log_action(f"╔═══════════════════╗\n🔨  <b>АВТОБАН</b> (шаблон)\n╚═══════════════════╝\n\n🎯 <b>Кого:</b> <code>{target_id}</code>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     else:
         await call.message.edit_text(
@@ -2227,8 +2269,8 @@ async def cb_warn_template(call: CallbackQuery):
             f"📝 {reason}\n"
             f"⚠️ Варнов: <b>{count}/{MAX_WARNINGS}</b>",
             parse_mode="HTML")
+        asyncio.create_task(schedule_delete(call.message))
         await log_action(f"╔═══════════════════╗\n⚡  <b>ВАРН</b> (шаблон)\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кому:</b> <code>{target_id}</code>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
-    asyncio.create_task(auto_delete(call.message))
     await call.answer(f"✅ {tmpl['label']}")
 
 @dp.message(Command("rep"))
@@ -3441,7 +3483,7 @@ async def cmd_shop(message: Message):
         try: await message.delete()
         except: pass
     except: pass
-    await message.answer(
+    await answer_auto_delete(
         f"🏪 <b>Магазин титулов</b>\n\n"
         f"💰 Твоя репутация: <b>{rep:+d}</b>\n\n"
         f"🟢 — активный | ✅ — куплено | 🛒 — купить\n"
@@ -4129,6 +4171,7 @@ async def cb_setavatar(call: CallbackQuery):
     emoji = call.data.split(":")[1]
     avatars[uid] = emoji
     await call.message.edit_text(f"✅ Аватар установлен: {emoji}")
+    asyncio.create_task(auto_delete(call.message))
     await call.answer()
 
 # ══════════════════════════════════════════════════════
@@ -4531,7 +4574,7 @@ async def cmd_trivia(message: Message):
             f"❓ Уже идёт викторина!\n\n<b>{q['q']}</b>\n\nОтвечай в чате!", parse_mode="HTML"); return
     question, answer, reward = random.choice(TRIVIA_QUESTIONS)
     trivia_active[cid] = {"q": question, "a": answer.lower(), "reward": reward, "answerer": None}
-    await message.answer(
+    await answer_auto_delete(
         f"╔═══════════════════╗\n"
         f"🧩  <b>ВИКТОРИНА</b>\n"
         f"╚═══════════════════╝\n\n"
@@ -4765,7 +4808,7 @@ async def handle_private_message(message: Message):
         import random as _r
         reply = _r.choice(responses)
 
-    await message.answer(reply, parse_mode="HTML")
+    await answer_auto_delete(reply, parse_mode="HTML")
 
 
 # ══════════════════════════════════════════
@@ -4790,110 +4833,6 @@ async def cmd_topxp(message: Message):
         emoji, title = get_level_title(lvl)
         lines.append(f"{medals[i]} <b>{name}</b>\n   {emoji} Ур. {lvl} · {xp} XP")
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
-
-
-# ══════════════════════════════════════════
-#  🏅 ДОСТИЖЕНИЯ
-# ══════════════════════════════════════════
-achievements_data = {}
-
-ACHIEVEMENTS = {
-    "first_message":  ("💬", "Первое слово",       "Отправил первое сообщение",   1),
-    "msg_100":        ("📨", "Болтун",             "100 сообщений в чате",        50),
-    "msg_500":        ("📢", "Говорун",            "500 сообщений",               100),
-    "msg_1000":       ("📣", "Легенда чата",       "1000 сообщений",              250),
-    "msg_5000":       ("🔊", "Мегафон",            "5000 сообщений",              500),
-    "rep_100":        ("⭐", "Уважаемый",          "100 репутации",               30),
-    "rep_500":        ("🌟", "Авторитет",          "500 репутации",               75),
-    "rep_1000":       ("💫", "Легенда",            "1000 репутации",              150),
-    "rep_5000":       ("✨", "Икона",              "5000 репутации",              500),
-    "streak_7":       ("🔥", "Недельный",          "7 дней подряд",               50),
-    "streak_30":      ("🔥🔥", "Месячный",         "30 дней подряд",              200),
-    "streak_100":     ("🔥🔥🔥", "Неугасимый",     "100 дней подряд",             1000),
-    "level_10":       ("⚔️", "Воин",              "Достиг 10 уровня",            50),
-    "level_50":       ("👑", "Полубог",            "Достиг 50 уровня",            250),
-    "level_100":      ("🌠", "Сотый",             "Достиг 100 уровня",           1000),
-    "level_250":      ("✨", "Двести пятый",       "Достиг 250 уровня",           5000),
-    "level_500":      ("⚡", "БОГ ЧАТА",          "Достиг 500 уровня",           25000),
-    "clan_founder":   ("🤝", "Основатель",        "Создал клан",                 100),
-    "artifact_first": ("🧙", "Коллекционер",      "Получил первый артефакт",     50),
-    "lottery_win":    ("🎰", "Счастливчик",       "Выиграл лотерею",             100),
-    "trivia_10":      ("🧩", "Эрудит",            "Ответил правильно 10 раз",    100),
-    "quote_saved":    ("💬", "Цитатчик",          "Сохранил первую цитату",      25),
-    "invited_5":      ("🔗", "Рекрутёр",          "Пригласил 5 человек",         200),
-}
-
-trivia_wins = defaultdict(int)  # {uid: wins}
-
-async def check_achievements(cid: int, uid: int, bot_obj):
-    uid_str = str(uid)
-    if uid_str not in achievements_data:
-        achievements_data[uid_str] = []
-    earned = achievements_data[uid_str]
-    msgs   = chat_stats[cid].get(uid, 0)
-    rep    = reputation[cid].get(uid, 0)
-    streak = streaks[cid].get(uid, 0)
-    lvl    = get_level(xp_data[cid].get(uid, 0))
-    invited = len(referrals.get(uid_str, set()))
-    checks = [
-        ("first_message",  msgs >= 1),
-        ("msg_100",        msgs >= 100),
-        ("msg_500",        msgs >= 500),
-        ("msg_1000",       msgs >= 1000),
-        ("msg_5000",       msgs >= 5000),
-        ("rep_100",        rep >= 100),
-        ("rep_500",        rep >= 500),
-        ("rep_1000",       rep >= 1000),
-        ("rep_5000",       rep >= 5000),
-        ("streak_7",       streak >= 7),
-        ("streak_30",      streak >= 30),
-        ("streak_100",     streak >= 100),
-        ("level_10",       lvl >= 10),
-        ("level_50",       lvl >= 50),
-        ("level_100",      lvl >= 100),
-        ("level_250",      lvl >= 250),
-        ("level_500",      lvl >= 500),
-        ("clan_founder",   uid in clan_members),
-        ("artifact_first", len(artifacts.get(uid_str, [])) >= 1),
-        ("invited_5",      invited >= 5),
-        ("trivia_10",      trivia_wins.get(uid, 0) >= 10),
-        ("quote_saved",    any(q.get("author") for q in quotes_data.get(cid, []))),
-    ]
-    for ach_id, condition in checks:
-        if condition and ach_id not in earned:
-            earned.append(ach_id)
-            emoji, name, desc, bonus = ACHIEVEMENTS[ach_id]
-            reputation[cid][uid] = reputation[cid].get(uid, 0) + bonus
-            save_data()
-            try:
-                m = await bot_obj.get_chat_member(cid, uid)
-                mention = m.user.mention_html()
-            except:
-                mention = f"ID {uid}"
-            try:
-                await bot_obj.send_message(cid,
-                    f"🏅 <b>АЧИВКА ПОЛУЧЕНА!</b>\n\n"
-                    f"{emoji} <b>{name}</b>\n"
-                    f"▸ {desc}\n"
-                    f"💰 Бонус: +{bonus} репы\n\n"
-                    f"🎉 {mention}", parse_mode="HTML")
-            except:
-                pass
-
-@dp.message(Command("achievements"))
-async def cmd_achievements(message: Message):
-    uid_str = str(message.from_user.id)
-    earned  = achievements_data.get(uid_str, [])
-    total   = len(ACHIEVEMENTS)
-    got     = len(earned)
-    lines   = [f"✨ <b>CHAT GUARD</b> — Достижения\n━━━━━━━━━━━━━━━━━━━━━━\n🏅 Получено: <b>{got}/{total}</b>\n"]
-    for ach_id, (emoji, name, desc, bonus) in ACHIEVEMENTS.items():
-        if ach_id in earned:
-            lines.append(f"✅ {emoji} <b>{name}</b> — {desc}")
-        else:
-            lines.append(f"🔒 ❓ <i>???</i>")
-    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
-
 
 # ══════════════════════════════════════════
 #  🎪 ИВЕНТЫ
@@ -5033,6 +4972,7 @@ async def cb_silentban(call: CallbackQuery):
         await log_action(f"🔕 <b>ТИХИЙ БАН</b>\n👤 Модер: {call.from_user.mention_html()}\n🎯 Цель: ID{tid}\n💬 Чат: {call.message.chat.title}", parse_mode="HTML")
         await call.answer("✅ Тихий бан применён", show_alert=False)
         await call.message.edit_text("🔕 Тихий бан применён.\n<i>Сообщение в чат не отправлено.</i>", parse_mode="HTML")
+        asyncio.create_task(auto_delete(call.message))
     except Exception as e:
         await call.answer(f"❌ Ошибка: {e}", show_alert=True)
 
@@ -5159,6 +5099,7 @@ async def cb_report_action(call: CallbackQuery):
     if action == "reject":
         queue.pop(idx)
         await call.message.edit_text("❌ Жалоба отклонена.")
+        asyncio.create_task(auto_delete(call.message))
         await call.answer("Отклонено")
         return
     try:
@@ -5178,6 +5119,7 @@ async def cb_report_action(call: CallbackQuery):
         save_data()
         await call.message.edit_text(
             f"✅ <b>Жалоба обработана</b>\n{result}\n👮 Модер: {call.from_user.full_name}", parse_mode="HTML")
+        asyncio.create_task(schedule_delete(call.message))
         await call.answer("✅ Готово")
     except Exception as e:
         await call.answer(f"❌ {e}", show_alert=True)
@@ -5221,6 +5163,7 @@ async def cb_panel_economy(call: CallbackQuery):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")
             ]]))
+        asyncio.create_task(schedule_delete(call.message))
     except: pass
     await call.answer()
 
