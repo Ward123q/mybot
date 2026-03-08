@@ -283,6 +283,9 @@ pending       = {}
 chat_stats    = defaultdict(lambda: defaultdict(int))
 reputation    = defaultdict(lambda: defaultdict(int))
 rep_cooldown  = {}
+user_notes       = defaultdict(dict)   # {cid: {uid: [notes]}}
+report_queue     = defaultdict(list)   # {cid: [{reporter,target,text,ts,msg_id}]}
+silent_bans      = {}                  # {uid: True}
 rep_transfer_cooldown = {}   # {uid_cid: timestamp}
 xp_cooldowns          = {}   # {cid_uid: timestamp} кулдаун XP
 known_chats   = {}           # {cid: title} — все чаты где есть бот
@@ -597,33 +600,37 @@ def kb_back(tid: int) -> list:
 
 def kb_main_menu(tid: int = 0) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Участник",     callback_data=f"panel:select:{tid}"),
-         InlineKeyboardButton(text="✉️ Сообщения",    callback_data=f"panel:messages:{tid}")],
-        [InlineKeyboardButton(text="👥 Участники",    callback_data=f"panel:members:{tid}"),
-         InlineKeyboardButton(text="⚙️ Настройки чата", callback_data=f"panel:chat:{tid}")],
-        [InlineKeyboardButton(text="🎮 Игры",         callback_data=f"panel:games:{tid}"),
-         InlineKeyboardButton(text="📊 Статистика",   callback_data=f"panel:botstats2:{tid}")],
-        [InlineKeyboardButton(text="🏆 Топ чата",     callback_data=f"members:top:{tid}"),
-         InlineKeyboardButton(text="📋 Список банов", callback_data=f"members:banlist:{tid}")],
-        [InlineKeyboardButton(text="✖️ Закрыть",      callback_data="panel:close:0")],
+        [InlineKeyboardButton(text="👤 Участник",       callback_data=f"panel:select:{tid}"),
+         InlineKeyboardButton(text="✉️ Сообщения",      callback_data=f"panel:messages:{tid}")],
+        [InlineKeyboardButton(text="👥 Участники",      callback_data=f"panel:members:{tid}"),
+         InlineKeyboardButton(text="⚙️ Настройки",     callback_data=f"panel:chat:{tid}")],
+        [InlineKeyboardButton(text="🎮 Игры",           callback_data=f"panel:games:{tid}"),
+         InlineKeyboardButton(text="📊 Статистика",     callback_data=f"panel:botstats2:{tid}")],
+        [InlineKeyboardButton(text="🚨 Жалобы",         callback_data=f"panel:reports:{tid}"),
+         InlineKeyboardButton(text="📈 Экономика",      callback_data=f"panel:economy:{tid}")],
+        [InlineKeyboardButton(text="🏆 Топ XP",         callback_data=f"panel:topxp:{tid}"),
+         InlineKeyboardButton(text="📋 Список банов",   callback_data=f"members:banlist:{tid}")],
+        [InlineKeyboardButton(text="✖️ Закрыть",        callback_data="panel:close:0")],
     ])
 
 def kb_user_panel(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔇 Мут",           callback_data=f"panel:mute:{tid}"),
-         InlineKeyboardButton(text="🔊 Размут",         callback_data=f"panel:unmute:{tid}")],
-        [InlineKeyboardButton(text="⚡ Варн",           callback_data=f"panel:warn:{tid}"),
-         InlineKeyboardButton(text="🌿 Снять варн",     callback_data=f"panel:unwarn:{tid}")],
-        [InlineKeyboardButton(text="🔨 Бан",            callback_data=f"panel:ban:{tid}"),
-         InlineKeyboardButton(text="🕊 Разбан",          callback_data=f"panel:unban:{tid}")],
-        [InlineKeyboardButton(text="⏳ Темпбан 24ч",   callback_data=f"ban:{tid}:tempban24"),
-         InlineKeyboardButton(text="📵 Мут 24ч (реклама)", callback_data=f"members:warn24:{tid}")],
-        [InlineKeyboardButton(text="🔍 Информация",     callback_data=f"panel:info:{tid}"),
-         InlineKeyboardButton(text="🗑 Удалить сообщ",  callback_data=f"panel:del:{tid}")],
-        [InlineKeyboardButton(text="📋 История",        callback_data=f"panel:modhistory:{tid}"),
-         InlineKeyboardButton(text="🏷 Выдать тег",     callback_data=f"panel:promote:{tid}")],
-        [InlineKeyboardButton(text="🎭 Приколы",        callback_data=f"panel:fun:{tid}"),
-         InlineKeyboardButton(text="◀️ Назад",          callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="🔇 Мут",              callback_data=f"panel:mute:{tid}"),
+         InlineKeyboardButton(text="🔊 Размут",            callback_data=f"panel:unmute:{tid}")],
+        [InlineKeyboardButton(text="⚡ Варн",              callback_data=f"panel:warn:{tid}"),
+         InlineKeyboardButton(text="🌿 Снять варн",        callback_data=f"panel:unwarn:{tid}")],
+        [InlineKeyboardButton(text="🔨 Бан",               callback_data=f"panel:ban:{tid}"),
+         InlineKeyboardButton(text="🕊 Разбан",             callback_data=f"panel:unban:{tid}")],
+        [InlineKeyboardButton(text="🔕 Тихий бан",         callback_data=f"panel:silentban:{tid}"),
+         InlineKeyboardButton(text="⏳ Темпбан 24ч",       callback_data=f"ban:{tid}:tempban24")],
+        [InlineKeyboardButton(text="📵 Мут 24ч (реклама)", callback_data=f"members:warn24:{tid}"),
+         InlineKeyboardButton(text="🗑 Удалить сообщ",     callback_data=f"panel:del:{tid}")],
+        [InlineKeyboardButton(text="🔍 Информация",        callback_data=f"panel:info:{tid}"),
+         InlineKeyboardButton(text="📋 История",            callback_data=f"panel:modhistory:{tid}")],
+        [InlineKeyboardButton(text="📝 Заметки",           callback_data=f"panel:usernotes:{tid}"),
+         InlineKeyboardButton(text="🏷 Выдать тег",        callback_data=f"panel:promote:{tid}")],
+        [InlineKeyboardButton(text="🎭 Приколы",           callback_data=f"panel:fun:{tid}"),
+         InlineKeyboardButton(text="◀️ Назад",             callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_mute(tid: int) -> InlineKeyboardMarkup:
@@ -691,10 +698,12 @@ def kb_members(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👮 Список админов",      callback_data=f"members:adminlist:{tid}"),
          InlineKeyboardButton(text="🏆 Топ активности",      callback_data=f"members:top:{tid}")],
-        [InlineKeyboardButton(text="📵 Мут 24ч за рекламу",  callback_data=f"members:warn24:{tid}"),
+        [InlineKeyboardButton(text="📈 Топ XP",              callback_data=f"members:topxp:{tid}"),
+         InlineKeyboardButton(text="📊 Топ МВП",             callback_data=f"members:mvpstats:{tid}")],
+        [InlineKeyboardButton(text="📵 Мут 24ч реклама",     callback_data=f"members:warn24:{tid}"),
          InlineKeyboardButton(text="⚠️ Варны участника",     callback_data=f"members:warninfo:{tid}")],
         [InlineKeyboardButton(text="📋 Список банов",        callback_data=f"members:banlist:{tid}"),
-         InlineKeyboardButton(text="📊 Топ МВП",             callback_data=f"members:mvpstats:{tid}")],
+         InlineKeyboardButton(text="📊 Отчёт модератора",    callback_data=f"members:modreport:{tid}")],
         [InlineKeyboardButton(text="🔙 Назад",              callback_data=f"panel:mainmenu:0")],
     ])
 
@@ -764,11 +773,17 @@ class StatsMiddleware(BaseMiddleware):
                 elif streak >= 14:      _xp = int(_xp * 1.5)
                 elif streak >= 7:       _xp = int(_xp * 1.25)
                 if now_dt.weekday() >= 5: _xp = int(_xp * 2)
+                ev = current_event.get(cid)
+                import time as _t2
+                if ev and _t2.time() < ev.get("end_ts", 0):
+                    _xp = int(_xp * ev.get("multiplier", 1))
                 uid_str = str(uid)
                 b = boosters.get(uid_str, {})
                 if b.get("b1", 0) > now_ts or b.get("b4", 0) > now_ts: _xp = int(_xp * 2)
                 xp_data[cid][uid] += _xp
 
+            # ── Ачивки ──
+            asyncio.create_task(check_achievements(cid, uid, bot))
             # ── Стрик ──
             last = streak_dates[cid][uid]
             if last != today:
@@ -3558,6 +3573,31 @@ async def cmd_report(message: Message, command: CommandObject):
 
 
 # ===== РАСШИРЕННАЯ СТАТИСТИКА =====
+    # Добавить в очередь жалоб
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target = message.reply_to_message.from_user
+        import time as _t
+        report_queue[message.chat.id].append({
+            'reporter': message.from_user.id,
+            'target': target.id,
+            'text': command.args or 'Без причины',
+            'ts': _t.time()
+        })
+        # Уведомить всех админов
+        try:
+            admins = await bot.get_chat_administrators(message.chat.id)
+            for admin in admins:
+                if not admin.user.is_bot:
+                    try:
+                        await bot.send_message(admin.user.id,
+                            f"🚨 <b>ЖАЛОБА в {message.chat.title}</b>\n"
+                            f"👤 На: {target.mention_html()}\n"
+                            f"📝 Причина: {command.args or 'Без причины'}\n"
+                            f"👮 Обработай через /panel → 🚨 Жалобы",
+                            parse_mode='HTML')
+                    except: pass
+        except: pass
+
 @dp.message(Command("chatstats"))
 async def cmd_chatstats(message: Message):
     cid = message.chat.id
@@ -4728,6 +4768,522 @@ async def handle_private_message(message: Message):
     await message.answer(reply, parse_mode="HTML")
 
 
+# ══════════════════════════════════════════
+#  📈 ТОП XP
+# ══════════════════════════════════════════
+@dp.message(Command("топxp"))
+async def cmd_topxp(message: Message):
+    cid = message.chat.id
+    stats = xp_data[cid]
+    if not stats:
+        await reply_auto_delete(message, "📈 XP статистика пока пуста!"); return
+    sorted_u = sorted(stats.items(), key=lambda x: x[1], reverse=True)[:10]
+    medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+    lines = ["✨ <b>CHAT GUARD</b> — Топ по XP\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for i, (uid, xp) in enumerate(sorted_u):
+        try:
+            m = await bot.get_chat_member(cid, uid)
+            name = m.user.full_name
+        except:
+            name = f"ID {uid}"
+        lvl = get_level(xp)
+        emoji, title = get_level_title(lvl)
+        lines.append(f"{medals[i]} <b>{name}</b>\n   {emoji} Ур. {lvl} · {xp} XP")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+# ══════════════════════════════════════════
+#  🏅 ДОСТИЖЕНИЯ
+# ══════════════════════════════════════════
+achievements_data = {}
+
+ACHIEVEMENTS = {
+    "first_message":  ("💬", "Первое слово",       "Отправил первое сообщение",   1),
+    "msg_100":        ("📨", "Болтун",             "100 сообщений в чате",        50),
+    "msg_500":        ("📢", "Говорун",            "500 сообщений",               100),
+    "msg_1000":       ("📣", "Легенда чата",       "1000 сообщений",              250),
+    "msg_5000":       ("🔊", "Мегафон",            "5000 сообщений",              500),
+    "rep_100":        ("⭐", "Уважаемый",          "100 репутации",               30),
+    "rep_500":        ("🌟", "Авторитет",          "500 репутации",               75),
+    "rep_1000":       ("💫", "Легенда",            "1000 репутации",              150),
+    "rep_5000":       ("✨", "Икона",              "5000 репутации",              500),
+    "streak_7":       ("🔥", "Недельный",          "7 дней подряд",               50),
+    "streak_30":      ("🔥🔥", "Месячный",         "30 дней подряд",              200),
+    "streak_100":     ("🔥🔥🔥", "Неугасимый",     "100 дней подряд",             1000),
+    "level_10":       ("⚔️", "Воин",              "Достиг 10 уровня",            50),
+    "level_50":       ("👑", "Полубог",            "Достиг 50 уровня",            250),
+    "level_100":      ("🌠", "Сотый",             "Достиг 100 уровня",           1000),
+    "level_250":      ("✨", "Двести пятый",       "Достиг 250 уровня",           5000),
+    "level_500":      ("⚡", "БОГ ЧАТА",          "Достиг 500 уровня",           25000),
+    "clan_founder":   ("🤝", "Основатель",        "Создал клан",                 100),
+    "artifact_first": ("🧙", "Коллекционер",      "Получил первый артефакт",     50),
+    "lottery_win":    ("🎰", "Счастливчик",       "Выиграл лотерею",             100),
+    "trivia_10":      ("🧩", "Эрудит",            "Ответил правильно 10 раз",    100),
+    "quote_saved":    ("💬", "Цитатчик",          "Сохранил первую цитату",      25),
+    "invited_5":      ("🔗", "Рекрутёр",          "Пригласил 5 человек",         200),
+}
+
+trivia_wins = defaultdict(int)  # {uid: wins}
+
+async def check_achievements(cid: int, uid: int, bot_obj):
+    uid_str = str(uid)
+    if uid_str not in achievements_data:
+        achievements_data[uid_str] = []
+    earned = achievements_data[uid_str]
+    msgs   = chat_stats[cid].get(uid, 0)
+    rep    = reputation[cid].get(uid, 0)
+    streak = streaks[cid].get(uid, 0)
+    lvl    = get_level(xp_data[cid].get(uid, 0))
+    invited = len(referrals.get(uid_str, set()))
+    checks = [
+        ("first_message",  msgs >= 1),
+        ("msg_100",        msgs >= 100),
+        ("msg_500",        msgs >= 500),
+        ("msg_1000",       msgs >= 1000),
+        ("msg_5000",       msgs >= 5000),
+        ("rep_100",        rep >= 100),
+        ("rep_500",        rep >= 500),
+        ("rep_1000",       rep >= 1000),
+        ("rep_5000",       rep >= 5000),
+        ("streak_7",       streak >= 7),
+        ("streak_30",      streak >= 30),
+        ("streak_100",     streak >= 100),
+        ("level_10",       lvl >= 10),
+        ("level_50",       lvl >= 50),
+        ("level_100",      lvl >= 100),
+        ("level_250",      lvl >= 250),
+        ("level_500",      lvl >= 500),
+        ("clan_founder",   uid in clan_members),
+        ("artifact_first", len(artifacts.get(uid_str, [])) >= 1),
+        ("invited_5",      invited >= 5),
+        ("trivia_10",      trivia_wins.get(uid, 0) >= 10),
+        ("quote_saved",    any(q.get("author") for q in quotes_data.get(cid, []))),
+    ]
+    for ach_id, condition in checks:
+        if condition and ach_id not in earned:
+            earned.append(ach_id)
+            emoji, name, desc, bonus = ACHIEVEMENTS[ach_id]
+            reputation[cid][uid] = reputation[cid].get(uid, 0) + bonus
+            save_data()
+            try:
+                m = await bot_obj.get_chat_member(cid, uid)
+                mention = m.user.mention_html()
+            except:
+                mention = f"ID {uid}"
+            try:
+                await bot_obj.send_message(cid,
+                    f"🏅 <b>АЧИВКА ПОЛУЧЕНА!</b>\n\n"
+                    f"{emoji} <b>{name}</b>\n"
+                    f"▸ {desc}\n"
+                    f"💰 Бонус: +{bonus} репы\n\n"
+                    f"🎉 {mention}", parse_mode="HTML")
+            except:
+                pass
+
+@dp.message(Command("achievements"))
+async def cmd_achievements(message: Message):
+    uid_str = str(message.from_user.id)
+    earned  = achievements_data.get(uid_str, [])
+    total   = len(ACHIEVEMENTS)
+    got     = len(earned)
+    lines   = [f"✨ <b>CHAT GUARD</b> — Достижения\n━━━━━━━━━━━━━━━━━━━━━━\n🏅 Получено: <b>{got}/{total}</b>\n"]
+    for ach_id, (emoji, name, desc, bonus) in ACHIEVEMENTS.items():
+        if ach_id in earned:
+            lines.append(f"✅ {emoji} <b>{name}</b> — {desc}")
+        else:
+            lines.append(f"🔒 ❓ <i>???</i>")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+# ══════════════════════════════════════════
+#  🎪 ИВЕНТЫ
+# ══════════════════════════════════════════
+current_event = {}
+
+EVENT_TYPES = [
+    ("⚡ Час молнии",        3, 3600,  "x3 XP целый час!"),
+    ("🔥 Огненный вечер",    2, 7200,  "x2 XP на 2 часа!"),
+    ("🌟 Звёздная ночь",     3, 10800, "x3 XP на 3 часа!"),
+    ("💎 Бриллиантовый час", 5, 3600,  "x5 XP целый час!"),
+    ("🎪 Карнавал чата",     2, 14400, "x2 XP на 4 часа!"),
+]
+
+async def run_events():
+    while True:
+        import datetime as dt
+        now = dt.datetime.now()
+        days_until_wed = (2 - now.weekday()) % 7 or 7
+        target = now.replace(hour=19, minute=0, second=0, microsecond=0) + dt.timedelta(days=days_until_wed)
+        await asyncio.sleep((target - now).total_seconds())
+        name, mult, duration, desc = random.choice(EVENT_TYPES)
+        import time as _t
+        end_ts = _t.time() + duration
+        for cid in list(known_chats.keys()):
+            current_event[cid] = {"active": True, "end_ts": end_ts, "multiplier": mult, "name": name}
+            try:
+                await bot.send_message(cid,
+                    f"🎪 <b>ИВЕНТ НАЧАЛСЯ!</b>\n\n"
+                    f"{name}\n✨ {desc}\n"
+                    f"⏰ Длительность: {duration//3600}ч {(duration%3600)//60}мин\n\n"
+                    f"<i>Пиши сообщения и получай больше XP!</i>", parse_mode="HTML")
+            except: pass
+        await asyncio.sleep(duration)
+        for cid in list(current_event.keys()):
+            current_event.pop(cid, None)
+            try:
+                await bot.send_message(cid, f"⏰ Ивент <b>{name}</b> завершён!", parse_mode="HTML")
+            except: pass
+
+@dp.message(Command("event"))
+async def cmd_event(message: Message):
+    cid = message.chat.id
+    import time as _t
+    ev = current_event.get(cid)
+    if not ev or _t.time() > ev.get("end_ts", 0):
+        await reply_auto_delete(message, "🎪 Сейчас ивентов нет.\n⏰ Следующий — в среду в 19:00!"); return
+    left = int(ev["end_ts"] - _t.time())
+    h, m = left // 3600, (left % 3600) // 60
+    await reply_auto_delete(message,
+        f"🎪 <b>АКТИВНЫЙ ИВЕНТ!</b>\n\n{ev['name']}\n"
+        f"⚡ Множитель: x{ev['multiplier']} XP\n⏰ Осталось: {h}ч {m}мин", parse_mode="HTML")
+
+
+# ══════════════════════════════════════════
+#  🌍 КАРТА АКТИВНОСТИ
+# ══════════════════════════════════════════
+@dp.message(Command("activity"))
+async def cmd_activity(message: Message):
+    cid = message.chat.id
+    if not hourly_stats[cid]:
+        await reply_auto_delete(message, "📊 Данных пока нет!"); return
+    hour_totals = defaultdict(int)
+    for uid, hours in hourly_stats[cid].items():
+        for h, count in hours.items():
+            hour_totals[int(h)] += count
+    if not hour_totals:
+        await reply_auto_delete(message, "📊 Данных пока нет!"); return
+    max_val = max(hour_totals.values()) or 1
+    lines = ["✨ <b>CHAT GUARD</b> — Карта активности\n━━━━━━━━━━━━━━━━━━━━━━"]
+    periods = [("🌙 Ночь", range(0,6)), ("🌅 Утро", range(6,12)), ("☀️ День", range(12,18)), ("🌆 Вечер", range(18,24))]
+    for period_name, hours in periods:
+        lines.append(f"\n<b>{period_name}</b>")
+        for h in hours:
+            count = hour_totals.get(h, 0)
+            bar = "█" * int((count/max_val)*10) + "░" * (10 - int((count/max_val)*10))
+            lines.append(f"{h:02d}:00 [{bar}] {count}")
+    peak_hour = max(hour_totals, key=hour_totals.get)
+    lines.append(f"\n📊 Всего: <b>{sum(hour_totals.values())}</b> | 🔥 Пик: <b>{peak_hour:02d}:00</b>")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+# ══════════════════════════════════════════
+#  🗞 ГАЗЕТА ЧАТА — 09:00 КАЖДЫЙ ДЕНЬ
+# ══════════════════════════════════════════
+async def run_newspaper():
+    while True:
+        import datetime as dt
+        now = dt.datetime.now()
+        target = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        if now >= target:
+            target += dt.timedelta(days=1)
+        await asyncio.sleep((target - now).total_seconds())
+        for cid in list(known_chats.keys()):
+            try:
+                yesterday = (dt.datetime.now() - dt.timedelta(days=1)).strftime("%d.%m.%Y")
+                top_users = sorted(
+                    [(uid, days.get(yesterday, 0)) for uid, days in daily_stats[cid].items() if days.get(yesterday, 0) > 0],
+                    key=lambda x: x[1], reverse=True)[:3]
+                medals = ["🥇","🥈","🥉"]
+                top_lines = []
+                for i, (uid, count) in enumerate(top_users):
+                    try:
+                        m = await bot.get_chat_member(cid, uid); name = m.user.full_name
+                    except:
+                        name = f"ID {uid}"
+                    top_lines.append(f"{medals[i]} {name} — {count} сообщ.")
+                quote_line = ""
+                if quotes_data[cid]:
+                    q = random.choice(quotes_data[cid])
+                    quote_line = f"\n\n💬 <b>Цитата дня:</b>\n«{q['text'][:100]}»\n— {q['author']}"
+                ev = current_event.get(cid)
+                event_line = f"\n\n🎪 Активен ивент: <b>{ev['name']}</b>!" if ev else ""
+                await bot.send_message(cid,
+                    f"🗞 <b>ГАЗЕТА ЧАТА</b> — {dt.datetime.now().strftime('%d.%m.%Y')}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"🏆 <b>Топ вчера:</b>\n"
+                    + ("\n".join(top_lines) if top_lines else "Нет данных")
+                    + quote_line + event_line +
+                    f"\n\n📊 /топxp · /toprep · /activity",
+                    parse_mode="HTML")
+            except: pass
+
+
+# ══════════════════════════════════════════════════════
+#  🔕 ТИХИЙ БАН
+# ══════════════════════════════════════════════════════
+@dp.callback_query(F.data.startswith("panel:silentban:"))
+async def cb_silentban(call: CallbackQuery):
+    if not await check_admin(call.message): return
+    tid = int(call.data.split(":")[2])
+    cid = call.message.chat.id
+    try:
+        await bot.ban_chat_member(cid, tid)
+        silent_bans[tid] = True
+        add_mod_history(cid, tid, "🔕 Тихий бан", "Без причины", call.from_user.full_name)
+        await log_action(f"🔕 <b>ТИХИЙ БАН</b>\n👤 Модер: {call.from_user.mention_html()}\n🎯 Цель: ID{tid}\n💬 Чат: {call.message.chat.title}", parse_mode="HTML")
+        await call.answer("✅ Тихий бан применён", show_alert=False)
+        await call.message.edit_text("🔕 Тихий бан применён.\n<i>Сообщение в чат не отправлено.</i>", parse_mode="HTML")
+    except Exception as e:
+        await call.answer(f"❌ Ошибка: {e}", show_alert=True)
+
+# ══════════════════════════════════════════════════════
+#  📝 ЗАМЕТКИ НА УЧАСТНИКА (/usernote)
+# ══════════════════════════════════════════════════════
+@dp.message(Command("usernote"))
+async def cmd_usernote(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "📝 Реплайни на сообщение участника!"); return
+    target = message.reply_to_message.from_user
+    uid = target.id
+    if not command.args:
+        notes_list = user_notes[cid].get(uid, [])
+        if not notes_list:
+            await reply_auto_delete(message, f"📝 Заметок на {target.full_name} нет.\nДобавить: <code>/usernote текст</code>", parse_mode="HTML"); return
+        lines = [f"📝 <b>Заметки на {target.full_name}:</b>\n"]
+        for i, n in enumerate(notes_list, 1):
+            lines.append(f"{i}. {n['text']} <i>({n['date']} — {n['by']})</i>")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML"); return
+    from datetime import datetime
+    if uid not in user_notes[cid]:
+        user_notes[cid][uid] = []
+    user_notes[cid][uid].append({
+        "text": command.args.strip(),
+        "date": datetime.now().strftime("%d.%m.%Y"),
+        "by": message.from_user.full_name
+    })
+    save_data()
+    await reply_auto_delete(message, f"✅ Заметка добавлена к профилю {target.mention_html()}!", parse_mode="HTML")
+
+@dp.callback_query(F.data.startswith("panel:usernotes:"))
+async def cb_usernotes(call: CallbackQuery):
+    tid = int(call.data.split(":")[2])
+    cid = call.message.chat.id
+    notes_list = user_notes[cid].get(tid, [])
+    if not notes_list:
+        await call.answer("📝 Заметок нет. Добавь через /usernote (реплай)", show_alert=True); return
+    lines = [f"📝 <b>Заметки на ID{tid}:</b>\n"]
+    for i, n in enumerate(notes_list, 1):
+        lines.append(f"{i}. {n['text']} <i>({n['date']} — {n['by']})</i>")
+    try:
+        await call.message.edit_text("\n".join(lines), parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:back:{tid}")
+            ]]))
+    except: pass
+    await call.answer()
+
+# ══════════════════════════════════════════════════════
+#  📊 ОТЧЁТ МОДЕРАТОРА (/modreport)
+# ══════════════════════════════════════════════════════
+@dp.message(Command("modreport"))
+async def cmd_modreport(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    from datetime import datetime, timedelta
+    week_ago = datetime.now() - timedelta(days=7)
+    history = mod_history.get(cid, [])
+    recent = [h for h in history if True]  # берём все последние
+    recent = recent[-50:]  # последние 50 действий
+    if not recent:
+        await reply_auto_delete(message, "📊 Нет данных за последнюю неделю."); return
+    # Статистика по модераторам
+    mod_stats = defaultdict(lambda: defaultdict(int))
+    for h in recent:
+        mod_stats[h.get("by","?")][h.get("action","?")] += 1
+    lines = ["✨ <b>CHAT GUARD</b> — Отчёт модерации\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for mod_name, actions in sorted(mod_stats.items(), key=lambda x: sum(x[1].values()), reverse=True):
+        total = sum(actions.values())
+        lines.append(f"👮 <b>{mod_name}</b> — {total} действий")
+        for action, count in sorted(actions.items(), key=lambda x: x[1], reverse=True):
+            lines.append(f"   ▸ {action}: {count}")
+    # Топ нарушителей
+    violators = defaultdict(int)
+    for h in recent:
+        if h.get("uid"):
+            violators[h["uid"]] += 1
+    if violators:
+        lines.append("\n🚨 <b>Топ нарушителей:</b>")
+        for uid, count in sorted(violators.items(), key=lambda x: x[1], reverse=True)[:5]:
+            try:
+                m = await bot.get_chat_member(cid, uid)
+                name = m.user.full_name
+            except:
+                name = f"ID{uid}"
+            lines.append(f"   ▸ {name}: {count} нарушений")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+@dp.callback_query(F.data.startswith("members:modreport:"))
+async def cb_modreport(call: CallbackQuery):
+    if not await check_admin(call.message): return
+    await cmd_modreport(call.message)
+    await call.answer()
+
+@dp.callback_query(F.data.startswith("members:topxp:"))
+async def cb_topxp_panel(call: CallbackQuery):
+    await cmd_topxp(call.message)
+    await call.answer()
+
+# ══════════════════════════════════════════════════════
+#  🚨 СИСТЕМА ЖАЛОБ — УЛУЧШЕННАЯ
+# ══════════════════════════════════════════════════════
+def kb_report_action(reporter_id: int, target_id: int, idx: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Принять — варн",   callback_data=f"rpt:warn:{target_id}:{idx}"),
+         InlineKeyboardButton(text="🔇 Принять — мут",    callback_data=f"rpt:mute:{target_id}:{idx}")],
+        [InlineKeyboardButton(text="🔨 Принять — бан",    callback_data=f"rpt:ban:{target_id}:{idx}"),
+         InlineKeyboardButton(text="❌ Отклонить",         callback_data=f"rpt:reject:{target_id}:{idx}")],
+    ])
+
+@dp.callback_query(F.data.startswith("rpt:"))
+async def cb_report_action(call: CallbackQuery):
+    if not await check_admin(call.message): return
+    parts = call.data.split(":")
+    action, target_id, idx = parts[1], int(parts[2]), int(parts[3])
+    cid = call.message.chat.id
+    queue = report_queue.get(cid, [])
+    if idx >= len(queue):
+        await call.answer("❌ Жалоба уже обработана", show_alert=True); return
+    report = queue[idx]
+    if action == "reject":
+        queue.pop(idx)
+        await call.message.edit_text("❌ Жалоба отклонена.")
+        await call.answer("Отклонено")
+        return
+    try:
+        if action == "warn":
+            warnings[cid][target_id] += 1
+            result = f"⚡ Варн выдан (ID{target_id})"
+        elif action == "mute":
+            from datetime import datetime, timedelta
+            until = datetime.now() + timedelta(minutes=60)
+            from aiogram.types import ChatPermissions
+            await bot.restrict_chat_member(cid, target_id, ChatPermissions(can_send_messages=False), until_date=until)
+            result = f"🔇 Мут 1ч (ID{target_id})"
+        elif action == "ban":
+            await bot.ban_chat_member(cid, target_id)
+            result = f"🔨 Бан применён (ID{target_id})"
+        queue.pop(idx)
+        save_data()
+        await call.message.edit_text(
+            f"✅ <b>Жалоба обработана</b>\n{result}\n👮 Модер: {call.from_user.full_name}", parse_mode="HTML")
+        await call.answer("✅ Готово")
+    except Exception as e:
+        await call.answer(f"❌ {e}", show_alert=True)
+
+@dp.callback_query(F.data.startswith("panel:reports:"))
+async def cb_panel_reports(call: CallbackQuery):
+    if not await check_admin(call.message): return
+    cid = call.message.chat.id
+    queue = report_queue.get(cid, [])
+    if not queue:
+        await call.answer("✅ Жалоб нет!", show_alert=True); return
+    text_lines = [f"🚨 <b>Очередь жалоб</b> ({len(queue)} шт.)\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for i, r in enumerate(queue[:5]):
+        text_lines.append(f"#{i+1} 👤 На ID{r['target']} от ID{r['reporter']}\n💬 {r['text'][:80]}")
+    try:
+        await call.message.edit_text("\n".join(text_lines), parse_mode="HTML",
+            reply_markup=kb_report_action(queue[0]["reporter"], queue[0]["target"], 0) if queue else None)
+    except: pass
+    await call.answer()
+
+# ══════════════════════════════════════════════════════
+#  📈 ЭКОНОМИКА ПАНЕЛЬ
+# ══════════════════════════════════════════════════════
+@dp.callback_query(F.data.startswith("panel:economy:"))
+async def cb_panel_economy(call: CallbackQuery):
+    if not await check_admin(call.message): return
+    cid = call.message.chat.id
+    total_rep = sum(reputation[cid].values())
+    total_invested = sum(stock_invested[cid].values())
+    lottery_count = len(lottery_tickets[cid])
+    clan_count = sum(1 for c in clans.values() if any(m in reputation[cid] for m in c.get("members", [])))
+    try:
+        await call.message.edit_text(
+            "✨ <b>CHAT GUARD</b> — Экономика\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"💰 Всего репы в чате: <b>{total_rep}</b>\n"
+            f"📈 Вложено на бирже: <b>{total_invested}</b>\n"
+            f"🎰 Билетов в лотерее: <b>{lottery_count}</b>\n"
+            f"🤝 Активных кланов: <b>{clan_count}</b>\n\n"
+            "▸ /toprep · /топxp · /stock · /lottery",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")
+            ]]))
+    except: pass
+    await call.answer()
+
+@dp.callback_query(F.data.startswith("panel:topxp:"))
+async def cb_panel_topxp(call: CallbackQuery):
+    await cmd_topxp(call.message)
+    await call.answer()
+
+# ══════════════════════════════════════════════════════
+#  🍬 МАГАЗИН ПОДАРКОВ
+# ══════════════════════════════════════════════════════
+@dp.message(Command("gift"))
+async def cmd_gift(message: Message, command: CommandObject):
+    cid = message.chat.id
+    uid = message.from_user.id
+    if not message.reply_to_message:
+        lines = [
+            "🍬 <b>Магазин подарков</b>\n━━━━━━━━━━━━━━━━━━━━━━\n",
+            "Реплайни на сообщение и отправь подарок!\n",
+        ]
+        for bid, b in BOOSTERS_SHOP.items():
+            lines.append(f"▸ <code>/gift {bid}</code> — {b['name']} ({b['price']} репы)")
+        lines.append("\n▸ <code>/gift artifact</code> — случайный артефакт (150 репы)")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML"); return
+    target = message.reply_to_message.from_user
+    if target.id == uid:
+        await reply_auto_delete(message, "❌ Нельзя дарить самому себе!"); return
+    if not command.args:
+        await reply_auto_delete(message, "⚠️ Укажи что дарить. Пример: <code>/gift b1</code>", parse_mode="HTML"); return
+    arg = command.args.strip().lower()
+    import time as _t
+    now = _t.time()
+    if arg == "artifact":
+        rep = reputation[cid].get(uid, 0)
+        if rep < 150:
+            await reply_auto_delete(message, "❌ Нужно 150 репы!"); return
+        reputation[cid][uid] -= 150
+        art = random.choice(ARTIFACTS_LIST)
+        emoji, name, rarity, effect = art
+        uid_str = str(target.id)
+        artifacts[uid_str].append({"emoji": emoji, "name": name, "rarity": rarity, "effect": effect, "obtained": __import__('datetime').datetime.now().strftime("%d.%m.%Y")})
+        save_data()
+        await reply_auto_delete(message, f"🎁 {message.from_user.mention_html()} подарил {target.mention_html()} артефакт!\n{emoji} <b>{name}</b> [{rarity}]", parse_mode="HTML")
+        try:
+            await bot.send_message(target.id, f"🎁 Тебе подарили артефакт!\n{emoji} <b>{name}</b>\n⚡ {effect}", parse_mode="HTML")
+        except: pass
+    elif arg in BOOSTERS_SHOP:
+        b = BOOSTERS_SHOP[arg]
+        rep = reputation[cid].get(uid, 0)
+        if rep < b["price"]:
+            await reply_auto_delete(message, f"❌ Нужно {b['price']} репы!"); return
+        reputation[cid][uid] -= b["price"]
+        uid_str = str(target.id)
+        boosters[uid_str][arg] = now + b["duration"]
+        save_data()
+        await reply_auto_delete(message, f"🎁 {message.from_user.mention_html()} подарил {target.mention_html()}!\n{b['name']} — {b['desc']}", parse_mode="HTML")
+        try:
+            await bot.send_message(target.id, f"🎁 Тебе подарили бустер!\n{b['name']}\n{b['desc']}", parse_mode="HTML")
+        except: pass
+    else:
+        await reply_auto_delete(message, "❌ Неверный подарок. /gift — список", parse_mode="HTML")
+
+
 async def main():
     load_data()
     asyncio.create_task(birthday_checker())
@@ -4735,6 +5291,8 @@ async def main():
     asyncio.create_task(warn_expiry_checker())
     asyncio.create_task(run_lottery())
     asyncio.create_task(autosave_loop())
+    asyncio.create_task(run_events())
+    asyncio.create_task(run_newspaper())
     asyncio.create_task(run_stock())
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
