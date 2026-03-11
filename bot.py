@@ -74,6 +74,29 @@ def load_data():
         role_of_day.update(d.get("role_of_day", {}))
         mvp_votes.update(d.get("mvp_votes", {}))
         rep_transfer_cooldown.update(d.get("rep_transfer_cooldown", {}))
+        # Новые поля
+        for cid, users in d.get("mod_history", {}).items():
+            for uid, h in users.items():
+                mod_history[int(cid)][int(uid)] = h
+        for cid, users in d.get("user_notes", {}).items():
+            for uid, n in users.items():
+                user_notes[int(cid)][int(uid)] = n
+        for cid, uids in d.get("ban_list", {}).items():
+            ban_list[int(cid)] = set(uids)
+        for cid, users in d.get("levels", {}).items():
+            for uid, l in users.items():
+                levels[int(cid)][int(uid)] = l
+        for cid, users in d.get("chat_stats", {}).items():
+            for uid, c in users.items():
+                chat_stats[int(cid)][int(uid)] = c
+        for cid, users in d.get("last_seen", {}).items():
+            for uid, ts in users.items():
+                last_seen[int(cid)][int(uid)] = ts
+        for cid, users in d.get("user_activity", {}).items():
+            for uid, days in users.items():
+                user_activity[int(cid)][int(uid)] = defaultdict(int, days)
+        for cid, v in d.get("crown_holders", {}).items():
+            crown_holders[int(cid)] = v
     except Exception as e:
         print(f"[load_data error] {e}")
 
@@ -105,6 +128,15 @@ def save_data():
                 "role_of_day":  role_of_day,
                 "mvp_votes":    mvp_votes,
                 "rep_transfer_cooldown": rep_transfer_cooldown,
+                # Новые поля
+                "mod_history":  {str(cid): {str(uid): h for uid, h in users.items()} for cid, users in mod_history.items()},
+                "user_notes":   {str(cid): {str(uid): n for uid, n in users.items()} for cid, users in user_notes.items()},
+                "ban_list":     {str(cid): list(uids) for cid, uids in ban_list.items()},
+                "levels":       {str(cid): {str(uid): l for uid, l in users.items()} for cid, users in levels.items()},
+                "chat_stats":   {str(cid): {str(uid): c for uid, c in users.items()} for cid, users in chat_stats.items()},
+                "last_seen":    {str(cid): {str(uid): ts for uid, ts in users.items()} for cid, users in last_seen.items()},
+                "user_activity":{str(cid): {str(uid): dict(days) for uid, days in users.items()} for cid, users in user_activity.items()},
+                "crown_holders":{str(cid): v for cid, v in crown_holders.items()},
             }, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[save_data error] {e}")
@@ -290,6 +322,8 @@ mirror_chats     = {}                  # {cid: expire_ts}
 magnet_targets   = {}                  # {cid_uid: expire_ts}
 target_doubles   = {}                  # {cid_uid: expire_ts}
 crown_holders    = {}                  # {cid: {uid, name, expire}}
+last_seen        = defaultdict(dict)   # {cid: {uid: ts}}
+user_activity    = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))  # {cid:{uid:{date:count}}}
 
 rep_transfer_cooldown = {}   # {uid_cid: timestamp}
 xp_cooldowns          = {}   # {cid_uid: timestamp} кулдаун XP
@@ -856,6 +890,9 @@ class StatsMiddleware(BaseMiddleware):
                 # Хранить только последние 500 сообщений на юзера
                 if len(user_msg_ids[cid][uid]) > 500:
                     user_msg_ids[cid][uid] = user_msg_ids[cid][uid][-500:]
+                # last_seen и активность по дням
+                last_seen[cid][uid] = _tc.time()
+                user_activity[cid][uid][today] += 1
                 # Расширенная статистика
                 from datetime import datetime
                 hour = datetime.now().hour
@@ -1560,30 +1597,77 @@ async def cmd_help(message: Message):
             "\n━━━━━━━━━━━━━━━━━━━━━━\n"
             "👮 <b>АДМИНИСТРАТОРАМ</b>\n\n"
 
-            "🔨 <b>МОДЕРАЦИЯ</b>\n"
-            "▸ /ban · /unban · /mute · /unmute\n"
-            "▸ /warn · /unwarn · /warn24 · /warnmenu\n"
-            "▸ /tempban · /rban · /banlist · /panel\n"
-            "▸ /status — отчёт за сегодня\n\n"
+            "🔨 <b>SLASH-МОДЕРАЦИЯ</b>\n"
+            "▸ /warn @user — предупреждение\n"
+            "▸ /unwarn @user — снять варн\n"
+            "▸ /ban @user — бан\n"
+            "▸ /unban @user — разбан\n"
+            "▸ /mute @user — мут\n"
+            "▸ /unmute @user — размут\n"
+            "▸ /tempban @user 1ч — временный бан\n"
+            "▸ /warn24 @user — варн на 24ч\n"
+            "▸ /rban @user — разбан по ID\n"
+            "▸ /warnmenu — меню варнов\n"
+            "▸ /banlist — список банов\n"
+            "▸ /panel — панель управления\n\n"
 
-            "✉️ <b>СООБЩЕНИЯ И ЧАТ</b>\n"
-            "▸ /del · /clear · /pin · /unpin\n"
+            "✉️ <b>ЧАТ И СООБЩЕНИЯ</b>\n"
+            "▸ /del — удалить сообщение <i>(реплай)</i>\n"
+            "▸ /clear N — удалить N сообщений\n"
+            "▸ /pin — закрепить <i>(реплай)</i>\n"
+            "▸ /unpin — открепить\n"
             "▸ /announce текст — объявление\n"
-            "▸ /poll · /lock · /unlock · /slowmode\n"
-            "▸ /antimat · /autokick\n\n"
+            "▸ /poll — создать опрос\n"
+            "▸ /lock · /unlock — закрыть/открыть чат\n"
+            "▸ /slowmode N — замедление (сек)\n"
+            "▸ /antimat — антимат вкл/выкл\n"
+            "▸ /autokick — автокик ботов\n\n"
 
-            "👥 <b>УЧАСТНИКИ</b>\n"
-            "▸ /adminlist · /promote · /removetag\n"
-            "▸ /modhistory · /modtop · /modexport\n"
-            "▸ /modreport · /usernote · /report\n"
+            "👥 <b>УЧАСТНИКИ И СТАТИСТИКА</b>\n"
+            "▸ /adminlist — список админов\n"
+            "▸ /promote @user тег — выдать тег\n"
+            "▸ /removetag @user — убрать тег\n"
+            "▸ /modhistory @user — история модерации\n"
+            "▸ /modtop — топ модераторов\n"
+            "▸ /modexport — экспорт истории\n"
+            "▸ /modreport — отчёт модерации\n"
+            "▸ /usernote @user — заметки\n"
+            "▸ /report — жалобы\n"
+            "▸ /status — отчёт за сегодня\n"
             "▸ /botstats · /broadcast · /chats\n\n"
 
-            "🤖 <b>АУТИСТ-КОМАНДЫ (мод)</b>\n"
-            "▸ аутист варн/разварн @user причина\n"
-            "▸ аутист мут/размут @user 1ч\n"
-            "▸ аутист бан/разбан @user причина\n"
-            "▸ аутист статус · поиск · чистка\n"
-            "▸ аутист антиспам вкл/выкл\n\n"
+            "🤖 <b>АУТИСТ-КОМАНДЫ (модерация)</b>\n"
+            "▸ аутист варн @user причина\n"
+            "▸ аутист варн @user 30м причина — с автосбросом\n"
+            "▸ аутист разварн @user\n"
+            "▸ аутист мут @user 1ч причина\n"
+            "▸ аутист размут @user\n"
+            "▸ аутист бан @user причина\n"
+            "▸ аутист разбан @user\n"
+            "▸ аутист кик @user\n"
+            "▸ аутист мут навсегда @user\n\n"
+
+            "🔍 <b>АУТИСТ-КОМАНДЫ (инфо)</b>\n"
+            "▸ аутист инфо @user — карточка юзера\n"
+            "▸ аутист варны @user — кол-во варнов\n"
+            "▸ аутист поиск @user — полное досье\n"
+            "▸ аутист история — 20 последних действий\n"
+            "▸ аутист статус — отчёт за сегодня\n"
+            "▸ аутист пересмотр @user — история варнов\n"
+            "▸ аутист последний @user — когда писал\n"
+            "▸ аутист причина @user — причина последнего варна\n"
+            "▸ аутист топ нарушителей — топ-10\n\n"
+
+            "🛠 <b>АУТИСТ-КОМАНДЫ (действия)</b>\n"
+            "▸ аутист чистка @user 30м — удалить сообщения\n"
+            "▸ аутист заморозка @user — мут на 24ч\n"
+            "▸ аутист только чтение @user — навсегда\n"
+            "▸ аутист медиамут @user — без медиа/стикеров\n"
+            "▸ аутист антиспам вкл/выкл — только текст\n"
+            "▸ аутист уровень @user +5 — изменить уровень\n"
+            "▸ аутист объяви @user причина — публичное предупреждение\n"
+            "▸ аутист алерт текст — предупреждение всему чату\n"
+            "▸ аутист напомни мод 1ч текст — напомнить всем модераторам\n\n"
 
             "🎪 <b>ТУРНИРЫ</b>\n"
             "▸ /tournament start · begin · next · stop\n"
@@ -1593,26 +1677,51 @@ async def cmd_help(message: Message):
             "\n━━━━━━━━━━━━━━━━━━━━━━\n"
             "👑 <b>ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА</b>\n\n"
 
-            "💣 аутист ядерка @user\n"
-            "🔐 аутист локдаун / локдаун выкл\n"
-            "📢 аутист анонс текст · /announce\n"
-            "🎭 аутист маска @user текст\n"
-            "🤡 аутист клоун @user (10 мин)\n"
-            "👁 аутист слежка @user\n"
-            "💰 аутист дать репу @user 100\n"
-            "⚙️ аутист сброс @user · /sbros\n"
-            "🌪 аутист хаос\n"
-            "💀 аутист смерть @user\n"
-            "🔁 аутист зеркало (5 мин)\n"
-            "👑 аутист корона @user · /corona\n"
-            "🎤 аутист вызов @user вопрос\n"
-            "📸 аутист скрин · шпион · жребий\n"
-            "🧨 аутист взрыв (50 сообщ)\n"
-            "🔊 аутист громко текст\n"
-            "⚡ аутист молния @user\n"
-            "🧲 аутист магнит @user (10 мин)\n"
-            "🎯 аутист цель @user (варны x2, 30 мин)\n"
-            "🎰 аутист лотерея — принудит. розыгрыш\n"
+            "💣 <b>ЖЁСТКАЯ МОДЕРАЦИЯ</b>\n"
+            "▸ аутист ядерка @user — варн+мут+удалить всё\n"
+            "▸ аутист молния @user — удалить все сообщения юзера\n"
+            "▸ аутист взрыв — удалить последние 50 сообщений\n"
+            "▸ аутист локдаун — закрыть чат\n"
+            "▸ аутист локдаун выкл — открыть чат\n"
+            "▸ аутист тишина 10м — закрыть на N мин, авторазмут\n"
+            "▸ /yaderna @user — ядерка через слэш\n\n"
+
+            "🎭 <b>ПРИКОЛЫ</b>\n"
+            "▸ аутист клоун @user — 🤡 под сообщениями 10 мин\n"
+            "▸ аутист смерть @user — некролог в чат\n"
+            "▸ аутист маска @user текст — пишет от чужого имени\n"
+            "▸ аутист магнит @user — 👍 под сообщениями 10 мин\n"
+            "▸ аутист цель @user — варны x2 на 30 мин\n"
+            "▸ аутист зеркало — повторяет все сообщения 5 мин\n"
+            "▸ аутист хаос — случайное действие над случайным юзером\n\n"
+
+            "👑 <b>ВЛАСТЬ</b>\n"
+            "▸ аутист корона @user — титул Король чата 24ч\n"
+            "▸ аутист анонс текст — объявление от бота\n"
+            "▸ аутист вызов @user вопрос — публичный вызов\n"
+            "▸ аутист громко текст — CAPS LOCK сообщение\n"
+            "▸ аутист закреп текст — красивое закреплённое\n"
+            "▸ аутист голос Вопрос? | Вар1 | Вар2 — голосование\n"
+            "▸ /corona @user · /announce текст\n\n"
+
+            "💰 <b>ЭКОНОМИКА</b>\n"
+            "▸ аутист дать репу @user 100 — репа вручную\n"
+            "▸ аутист сброс @user — обнулить всё\n"
+            "▸ аутист лотерея — принудит. розыгрыш\n"
+            "▸ /sbros @user\n\n"
+
+            "🕵️ <b>СЛЕЖКА И РАЗВЕДКА</b>\n"
+            "▸ аутист слежка @user — сообщения в личку\n"
+            "▸ аутист шпион — топ активных за час в личку\n"
+            "▸ аутист скрин — статистика чата в личку\n"
+            "▸ аутист рост @user — график активности 14 дней\n\n"
+
+            "🎲 <b>РАНДОМ</b>\n"
+            "▸ аутист жребий — случайный участник\n"
+            "▸ аутист хаос — случайное действие\n\n"
+
+            "⏰ <b>НАПОМИНАНИЯ</b>\n"
+            "▸ аутист напомни 30м текст — напомнит тебе в личку\n"
         )
     await reply_auto_delete(message, text, parse_mode="HTML")
 
@@ -2565,10 +2674,13 @@ async def autist_commands(message: Message):
                 "обозвать","поженить","проверить","казнить","диагноз","профессия","похитить","дуэль","экзамен",
                 # 🛡 Модераторские
                 "статус","чистка","поиск","антиспам",
+                "алерт","пересмотр","последний","заморозка",
+                "объяви","история","уровень","только чтение","топ нарушителей","медиамут","причина","напомни мод",
                 # 👑 Owner
                 "ядерка","анонс","локдаун","маска","клоун",
                 "слежка","дать репу","хаос","сброс","лотерея","смерть","зеркало",
-                "скрин","взрыв","корона","вызов","шпион","жребий","громко","молния","магнит","цель"]:
+                "скрин","взрыв","корона","вызов","шпион","жребий","громко","молния","магнит","цель",
+                "напомни","закреп","голос","рост","тишина"]:
         if rest.startswith(cmd):
             action = cmd; rest = rest[len(cmd):].strip(); break
     if not action: return
@@ -3159,6 +3271,264 @@ async def autist_commands(message: Message):
             target_doubles[f"{cid}_{target.id}"] = __import__('time').time() + 1800
             await reply_auto_delete(message,
                 f"🎯 <b>Цель установлена!</b>\n{tname} — следующие 30 мин все варны x2!", parse_mode="HTML")
+
+        # ══════════════════════════════════════════
+        #  🛡 НОВЫЕ МОДЕРАТОРСКИЕ КОМАНДЫ
+        # ══════════════════════════════════════════
+        elif action == "алерт":
+            text_alert = rest.strip() or "Внимание!"
+            try: await message.delete()
+            except: pass
+            await bot.send_message(cid,
+                f"⚠️ <b>ВНИМАНИЕ!</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"{text_alert}\n\n━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML")
+
+        elif action == "пересмотр":
+            w = warnings[cid].get(target.id, 0)
+            history = mod_history[cid].get(target.id, [])
+            warn_history = [h for h in history if "варн" in h.get("action","").lower() or "warn" in h.get("action","").lower()]
+            lines = [f"🔄 <b>Пересмотр варнов: {tname}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n",
+                     f"⚡ Активных варнов: <b>{w}/{MAX_WARNINGS}</b>\n"]
+            if warn_history:
+                lines.append(f"📋 История ({len(warn_history)} варнов):")
+                for h in warn_history:
+                    lines.append(f"  ▸ {h.get('time','?')} — {h.get('reason','?')} (by {h.get('by','?')})")
+            else:
+                lines.append("📋 История варнов пуста")
+            await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+        elif action == "последний":
+            import time as _tl
+            from datetime import datetime
+            ts = last_seen[cid].get(target.id, 0)
+            if ts:
+                dt = datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%M")
+                ago = int((_tl.time() - ts) / 60)
+                if ago < 60:    ago_str = f"{ago} мин. назад"
+                elif ago < 1440: ago_str = f"{ago//60} ч. назад"
+                else:           ago_str = f"{ago//1440} дн. назад"
+                await reply_auto_delete(message,
+                    f"🕐 <b>Последняя активность:</b>\n👤 {tname}\n📅 {dt}\n⏰ {ago_str}", parse_mode="HTML")
+            else:
+                await reply_auto_delete(message,
+                    f"🕐 {tname} — активность не зафиксирована (с момента запуска бота)", parse_mode="HTML")
+
+        elif action == "заморозка":
+            await bot.restrict_chat_member(cid, target.id,
+                permissions=ChatPermissions(can_send_messages=False),
+                until_date=timedelta(hours=24))
+            save_data()
+            await reply_auto_delete(message,
+                f"🧊 <b>ЗАМОРОЗКА</b>\n\n"
+                f"👤 {tname}\n"
+                f"❄️ Замолчал на <b>24 часа</b>\n"
+                f"🕐 Размут автоматически через 24ч", parse_mode="HTML")
+            await log_action(f"🧊 <b>ЗАМОРОЗКА</b>\n👤 {tname}\n⏱ 24ч\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
+
+        elif action == "объяви":
+            violation = rest.strip() or "нарушение правил"
+            try: await message.delete()
+            except: pass
+            await bot.send_message(cid,
+                f"📣 <b>ВНИМАНИЕ ЧАТУ!</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"👤 Участник {tname}\n"
+                f"📝 Нарушение: <b>{violation}</b>\n\n"
+                f"⚠️ Просим соблюдать правила чата → /rules\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━", parse_mode="HTML")
+
+        elif action == "история":
+            all_actions = []
+            for uid2, actions in mod_history[cid].items():
+                for h in actions:
+                    all_actions.append(h)
+            all_actions.sort(key=lambda x: x.get("time", ""), reverse=True)
+            last20 = all_actions[:20]
+            lines = [f"⏳ <b>Последние 20 действий в чате</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+            for h in last20:
+                lines.append(f"▸ {h.get('time','?')} | {h.get('action','?')} | {h.get('by','?')}")
+            if not last20:
+                lines.append("Действий пока нет")
+            await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+        elif action == "уровень":
+            import re as _re3
+            m4 = _re3.match(r"^([+-]?\d+)", rest)
+            if not m4:
+                await reply_auto_delete(message, "⚠️ Формат: <b>аутист уровень @user +5</b> или <b>-3</b> или <b>10</b>", parse_mode="HTML"); return
+            val = int(m4.group(1))
+            if val > 0 and not rest.startswith("+") and not rest.startswith("-"):
+                levels[cid][target.id] = val  # установить абсолютно
+                action_str = f"установлен на {val}"
+            else:
+                levels[cid][target.id] = max(0, levels[cid].get(target.id, 0) + val)
+                action_str = f"{'повышен' if val > 0 else 'понижен'} на {abs(val)}"
+            save_data()
+            await reply_auto_delete(message,
+                f"🚦 {tname} — уровень {action_str}\n"
+                f"📊 Новый уровень: <b>{levels[cid][target.id]}</b>", parse_mode="HTML")
+
+        elif action == "только чтение":
+            await bot.restrict_chat_member(cid, target.id,
+                permissions=ChatPermissions(
+                    can_send_messages=False, can_send_media_messages=False,
+                    can_send_polls=False, can_send_other_messages=False))
+            save_data()
+            await reply_auto_delete(message,
+                f"🔒 {tname} — <b>режим только чтение</b>\n"
+                f"👁 Видит чат, но не может писать (навсегда)", parse_mode="HTML")
+            await log_action(f"🔒 <b>ТОЛЬКО ЧТЕНИЕ</b>\n👤 {tname}\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
+
+        elif action == "топ нарушителей":
+            top = sorted(warnings[cid].items(), key=lambda x: x[1], reverse=True)[:10]
+            lines = [f"📊 <b>Топ нарушителей чата</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+            for i, (uid2, w) in enumerate(top, 1):
+                if w == 0: continue
+                try: tm2 = await bot.get_chat_member(cid, uid2); uname2 = tm2.user.full_name
+                except: uname2 = f"ID{uid2}"
+                lines.append(f"{i}. {uname2} — ⚡ <b>{w}</b> варн.")
+            if len(lines) == 1:
+                lines.append("Нарушителей нет 🎉")
+            await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+        elif action == "медиамут":
+            await bot.restrict_chat_member(cid, target.id,
+                permissions=ChatPermissions(
+                    can_send_messages=True,
+                    can_send_media_messages=False,
+                    can_send_polls=False,
+                    can_send_other_messages=False,
+                    can_add_web_page_previews=False))
+            save_data()
+            await reply_auto_delete(message,
+                f"🤐 {tname} — <b>медиамут</b>\n"
+                f"✍️ Может писать текст\n🚫 Медиа, стикеры, гифки — запрещены", parse_mode="HTML")
+            await log_action(f"🤐 <b>МЕДИАМУТ</b>\n👤 {tname}\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
+
+        elif action == "причина":
+            history = mod_history[cid].get(target.id, [])
+            warn_acts = [h for h in history if "варн" in h.get("action","").lower()]
+            if warn_acts:
+                last_warn = warn_acts[-1]
+                await reply_auto_delete(message,
+                    f"💬 <b>Последний варн {tname}:</b>\n\n"
+                    f"📝 Причина: <b>{last_warn.get('reason','не указана')}</b>\n"
+                    f"👮 Выдал: {last_warn.get('by','?')}\n"
+                    f"🕐 Время: {last_warn.get('time','?')}", parse_mode="HTML")
+            else:
+                await reply_auto_delete(message, f"💬 У {tname} нет варнов в истории", parse_mode="HTML")
+
+        elif action == "напомни мод":
+            import re as _re4
+            m5 = _re4.match(r"^(\d+)\s*(д|ч|м)\s*(.*)", rest)
+            if not m5:
+                await reply_auto_delete(message, "⚠️ Формат: <b>аутист напомни мод 1ч текст</b>", parse_mode="HTML"); return
+            num3, unit3, text3 = int(m5.group(1)), m5.group(2), m5.group(3).strip() or "Напоминание для модераторов!"
+            if unit3 == "д":   mins3 = num3 * 1440; lbl3 = f"{num3} дн."
+            elif unit3 == "ч": mins3 = num3 * 60;   lbl3 = f"{num3} ч."
+            else:              mins3 = num3;          lbl3 = f"{num3} мин."
+            async def _remind_mods(c, delay, txt, mod_name):
+                await asyncio.sleep(delay * 60)
+                try:
+                    admins = await bot.get_chat_administrators(c)
+                    for adm in admins:
+                        if not adm.user.is_bot:
+                            try:
+                                await bot.send_message(adm.user.id,
+                                    f"🔔 <b>Напоминание модераторам!</b>\n\n{txt}\n\n"
+                                    f"<i>Установил: {mod_name}</i>", parse_mode="HTML")
+                            except: pass
+                except: pass
+            asyncio.create_task(_remind_mods(cid, mins3, text3, message.from_user.full_name))
+            await reply_auto_delete(message,
+                f"🔔 Все модераторы получат напоминание через <b>{lbl3}</b>!", parse_mode="HTML")
+
+        # ══════════════════════════════════════════
+        #  👑 НОВЫЕ OWNER КОМАНДЫ
+        # ══════════════════════════════════════════
+        elif action == "напомни":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            # Формат: аутист напомни 30м текст
+            import re as _re2
+            m3 = _re2.match(r"^(\d+)\s*(д|ч|м)\s*(.*)", rest)
+            if not m3:
+                await reply_auto_delete(message, "⚠️ Формат: <b>аутист напомни 30м текст</b>", parse_mode="HTML"); return
+            num2, unit2, text2 = int(m3.group(1)), m3.group(2), m3.group(3).strip() or "Напоминание!"
+            if unit2 == "д":   mins2 = num2 * 1440; lbl2 = f"{num2} дн."
+            elif unit2 == "ч": mins2 = num2 * 60;   lbl2 = f"{num2} ч."
+            else:              mins2 = num2;          lbl2 = f"{num2} мин."
+            async def _remind(delay, txt):
+                await asyncio.sleep(delay * 60)
+                try: await bot.send_message(OWNER_ID, f"⏰ <b>Напоминание!</b>\n\n{txt}", parse_mode="HTML")
+                except: pass
+            asyncio.create_task(_remind(mins2, text2))
+            await reply_auto_delete(message, f"⏰ Напомню тебе через <b>{lbl2}</b>!", parse_mode="HTML")
+
+        elif action == "закреп":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            text_pin = rest.strip()
+            if not text_pin and not message.reply_to_message:
+                await reply_auto_delete(message, "⚠️ Укажи текст или реплайни на сообщение", parse_mode="HTML"); return
+            try: await message.delete()
+            except: pass
+            if message.reply_to_message and not text_pin:
+                await bot.pin_chat_message(cid, message.reply_to_message.message_id, disable_notification=False)
+                await reply_auto_delete(message, "📌 Сообщение закреплено!")
+            else:
+                sent = await bot.send_message(cid,
+                    f"📌 <b>ЗАКРЕПЛЕНО</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n{text_pin}\n\n━━━━━━━━━━━━━━━━━━━━━━",
+                    parse_mode="HTML")
+                await bot.pin_chat_message(cid, sent.message_id, disable_notification=False)
+
+        elif action == "голос":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            # Формат: аутист голос Вопрос? | Вариант1 | Вариант2
+            parts_poll = rest.split("|")
+            if len(parts_poll) < 3:
+                await reply_auto_delete(message,
+                    "⚠️ Формат: <b>аутист голос Вопрос? | Вариант1 | Вариант2</b>", parse_mode="HTML"); return
+            question_poll = parts_poll[0].strip()
+            options_poll = [o.strip() for o in parts_poll[1:] if o.strip()]
+            try: await message.delete()
+            except: pass
+            await bot.send_poll(cid, question=question_poll, options=options_poll, is_anonymous=False)
+
+        elif action == "рост":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            activity = user_activity[cid].get(target.id, {})
+            if not activity:
+                await reply_auto_delete(message, f"📈 {tname} — нет данных об активности", parse_mode="HTML"); return
+            sorted_days = sorted(activity.items())[-14:]  # последние 14 дней
+            lines = [f"📈 <b>Активность {tname}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+            max_count = max(c for _, c in sorted_days) or 1
+            for date, count in sorted_days:
+                bar_len = int((count / max_count) * 12)
+                bar = "█" * bar_len + "░" * (12 - bar_len)
+                lines.append(f"{date}: {bar} <b>{count}</b>")
+            await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+        elif action == "тишина":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            mins_silence = duration_mins or 5
+            label_silence = duration_label or f"{mins_silence} мин."
+            await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
+            await reply_auto_delete(message,
+                f"🔇 <b>ТИШИНА на {label_silence}!</b>\nЧат закрыт для всех.", parse_mode="HTML")
+            async def _unsilence(c, delay):
+                await asyncio.sleep(delay * 60)
+                try:
+                    await bot.set_chat_permissions(c, ChatPermissions(
+                        can_send_messages=True, can_send_media_messages=True,
+                        can_send_polls=True, can_send_other_messages=True,
+                        can_add_web_page_previews=True))
+                    await bot.send_message(c, "🔊 <b>Тишина закончилась!</b> Можно говорить.", parse_mode="HTML")
+                except: pass
+            asyncio.create_task(_unsilence(cid, mins_silence))
     except Exception as e:
         await reply_auto_delete(message, f"⚠️ Ошибка: {e}")
 
