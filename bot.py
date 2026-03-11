@@ -998,9 +998,43 @@ class PendingInputMiddleware(BaseMiddleware):
             return
         return await handler(event, data)
 
+class AntiNSFWMiddleware(BaseMiddleware):
+    """Удаляет NSFW стикеры и гифки"""
+    async def __call__(self, handler, event: Message, data):
+        if isinstance(event, Message) and event.chat.type in ("group", "supergroup"):
+            # Проверка стикеров
+            if event.sticker:
+                sticker = event.sticker
+                is_nsfw = False
+                # Проверяем флаг набора
+                if sticker.set_name:
+                    try:
+                        sticker_set = await bot.get_sticker_set(sticker.set_name)
+                        if getattr(sticker_set, 'is_nsfw', False):
+                            is_nsfw = True
+                    except: pass
+                # Emoji-стикеры без набора или premium nsfw
+                if getattr(sticker, 'is_video', False) and not sticker.set_name:
+                    pass  # не трогаем обычные видео-стикеры без набора
+                if is_nsfw:
+                    try: await event.delete()
+                    except: pass
+                    return  # не передаём дальше
+            # Проверка анимаций (гифки через animation)
+            if event.animation:
+                anim = event.animation
+                # Telegram помечает NSFW анимации через has_spoiler или mime
+                if getattr(anim, 'file_name', '').lower() in ('nsfw', 'adult') or \
+                   getattr(event, 'has_media_spoiler', False):
+                    try: await event.delete()
+                    except: pass
+                    return
+        return await handler(event, data)
+
 dp.message.middleware(PendingInputMiddleware())
 dp.message.middleware(StatsMiddleware())
 dp.message.middleware(SpecialEffectsMiddleware())
+dp.message.middleware(AntiNSFWMiddleware())
 dp.message.middleware(AntiMatMiddleware())
 
 @dp.message(F.new_chat_members)
