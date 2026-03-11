@@ -2511,7 +2511,8 @@ async def autist_commands(message: Message):
     text_lower = message.text.strip().lower()
     if not text_lower.startswith("аутист"): return
     fun_only = ["обозвать", "поженить", "казнить", "диагноз", "профессия", "похитить", "дуэль"]
-    is_admin = await check_admin(message)
+    is_owner = message.from_user.id == OWNER_ID
+    is_admin = is_owner or await check_admin(message)
     is_fun = any(f in text_lower for f in fun_only)
     if not is_admin and not is_fun: return
     parts = text_lower.split(maxsplit=1)
@@ -2520,12 +2521,22 @@ async def autist_commands(message: Message):
     action = None
     for cmd in ["снять варн","разварн","размут","разбан","варн","мут навсегда","мут","бан","захуесосить","кик",
                 "тег","убрать тег","очистить","удалить","закрепить","предупредить","инфо","варны","репутация",
-                "обозвать","поженить","проверить","казнить","диагноз","профессия","похитить","дуэль","экзамен"]:
+                "обозвать","поженить","проверить","казнить","диагноз","профессия","похитить","дуэль","экзамен",
+                # 🛡 Модераторские
+                "статус","чистка","поиск","антиспам",
+                # 👑 Owner
+                "ядерка","анонс","локдаун","маска","клоун",
+                "слежка","дать репу","хаос","сброс","лотерея","смерть","зеркало",
+                "скрин","взрыв","корона","вызов","шпион","жребий","громко","молния","магнит","цель"]:
         if rest.startswith(cmd):
             action = cmd; rest = rest[len(cmd):].strip(); break
     if not action: return
     cid = message.chat.id
     target = None
+
+    # Команды которым target не нужен
+    NO_TARGET_CMDS = {"статус", "хаос", "скрин", "взрыв", "шпион", "жребий", "громко",
+                      "антиспам", "зеркало", "локдаун", "анонс", "лотерея"}
 
     # ── Поиск цели: реплай или @юзернейм или ID ──
     import re as _re
@@ -2533,7 +2544,7 @@ async def autist_commands(message: Message):
         target = message.reply_to_message.from_user
     else:
         # Пробуем найти @username или числовой ID в rest
-        username_match = _re.match(r"^@?(\w+)", rest)
+        username_match = _re.match(r"^@?([A-Za-z]\w{3,})", rest)
         id_match = _re.match(r"^(-?\d+)", rest)
         if id_match:
             try:
@@ -2544,13 +2555,11 @@ async def autist_commands(message: Message):
             except: pass
         elif username_match:
             uname = username_match.group(1).lstrip("@")
-            # Ищем в известных участниках чата
             try:
                 tm = await bot.get_chat_member(cid, f"@{uname}")
                 target = tm.user
                 rest = rest[username_match.end():].strip()
             except:
-                # Поиск по сохранённым данным
                 for uid in chat_stats[cid]:
                     try:
                         tm = await bot.get_chat_member(cid, uid)
@@ -2560,7 +2569,7 @@ async def autist_commands(message: Message):
                             break
                     except: pass
 
-    if not target:
+    if not target and action not in NO_TARGET_CMDS:
         await reply_auto_delete(message, "↩️ Ответь на сообщение или укажи @юзернейм / ID."); return
 
     duration_mins = None; duration_label = None; reason = "Нарушение правил"
@@ -2574,7 +2583,7 @@ async def autist_commands(message: Message):
         if reason_part: reason = reason_part
     else:
         if rest.strip(): reason = rest.strip()
-    tname = target.mention_html()
+    tname = target.mention_html() if target else "участник"
     try:
         if action == "бан":
             if duration_mins:
@@ -3108,55 +3117,7 @@ async def autist_commands(message: Message):
         await reply_auto_delete(message, f"⚠️ Ошибка: {e}")
 
 
-@dp.message(F.text & ~F.text.startswith("/"))
-async def clown_reactor(message: Message):
-    """Ставит 🤡 под сообщения клоунов"""
-    if not message.from_user or not message.chat: return
-    if message.chat.type not in ("group", "supergroup"): return
-    cid = message.chat.id; uid = message.from_user.id
-    key = f"{cid}_{uid}"
-    import time as _t
-    expire = clown_targets.get(key, 0)
-    if expire and _t.time() < expire:
-        try:
-            await bot.send_message(cid, "🤡", reply_to_message_id=message.message_id)
-        except: pass
-    elif expire and _t.time() >= expire:
-        del clown_targets[key]
 
-
-@dp.message(F.text & ~F.text.startswith("/"))
-async def mirror_reactor(message: Message):
-    """Зеркало, слежка, магнит"""
-    if not message.from_user or not message.chat: return
-    if message.chat.type not in ("group", "supergroup"): return
-    cid = message.chat.id; uid = message.from_user.id
-    import time as _t; now = _t.time()
-    # Зеркало
-    if mirror_chats.get(cid, 0) > now and message.text:
-        try: await bot.send_message(cid, message.text)
-        except: pass
-    elif cid in mirror_chats and mirror_chats[cid] <= now:
-        del mirror_chats[cid]
-    # Слежка
-    spy_key = f"{cid}_{uid}"
-    if spy_key in spy_targets and message.text:
-        owner = spy_targets[spy_key]
-        try:
-            await bot.send_message(owner,
-                f"👁 <b>Слежка</b> [{message.chat.title}]\n"
-                f"👤 {message.from_user.full_name}:\n{message.text}", parse_mode="HTML")
-        except: pass
-    # Магнит — реакция 👍
-    mag_key = f"{cid}_{uid}"
-    if magnet_targets.get(mag_key, 0) > now:
-        try:
-            from aiogram.types import ReactionTypeEmoji
-            await bot.set_message_reaction(cid, message.message_id,
-                [ReactionTypeEmoji(emoji="👍")])
-        except: pass
-    elif mag_key in magnet_targets and magnet_targets[mag_key] <= now:
-        del magnet_targets[mag_key]
 
 # ===== УГАДАЙ ЧИСЛО =====
 guess_games = {}
