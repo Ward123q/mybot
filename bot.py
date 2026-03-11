@@ -262,46 +262,7 @@ MAX_WARNINGS     = 3
 FLOOD_LIMIT      = 5
 FLOOD_TIME       = 5
 ANTI_MAT_ENABLED  = False
-ANTI_DRUG_ENABLED = True   # Антинаркотик всегда включён
 
-DRUG_WORDS = {
-    # Общие
-    "наркотик", "наркотики", "наркота", "нарк", "наркош", "торгаш",
-    "закладка", "закладки", "клад", "кладмен", "кладмены",
-    "магазин наркотиков", "купить наркотики", "продам наркотики",
-    "наркошоп", "darknet", "даркнет", "даркнэт",
-    # Каннабис
-    "травка", "трава", "шишки", "марихуана", "marijuana",
-    "гашиш", "гаш", "hash", "weed", "cannabis", "план", "дурь",
-    "конопля", "джойнт", "косяк", "забить косяк", "курнуть траву",
-    # Стимуляторы
-    "меф", "мефедрон", "mephedrone", "соль", "соли", "альфа-пвп", "пвп",
-    "спайс", "спайсы", "spice", "синтетика",
-    "амфетамин", "амф", "амфет", "amphetamine", "скорость", "фен",
-    "первитин", "перв", "винт",
-    "mdma", "мдма", "экстази", "экстаз", "экс", "ecstasy", "molly",
-    # Опиаты
-    "героин", "герыч", "гера", "heroin",
-    "дезоморфин", "крокодил", "ханка", "опиум", "опий", "opium",
-    "морфин", "метадон", "methadone",
-    "бупренорфин", "суббутекс", "субутекс", "subutex", "кодеин",
-    # Кокаин
-    "кокаин", "кокс", "кока", "cocaine", "coke", "крэк", "крек", "crack",
-    # Психоделики
-    "лсд", "lsd", "кислота", "марка", "марки",
-    "грибы", "псилоцибин", "psilocybin", "shrooms",
-    "дмт", "dmt", "мескалин",
-    # Диссоциативы
-    "кетамин", "ketamine", "кет", "pcp",
-    # Действия
-    "нюхать", "ширяться", "ширнуться", "уколоться",
-    "вмазаться", "закинуться", "торчать", "торчок", "торчки",
-    # Люди / сделки
-    "наркоман", "нарик", "нарики", "барыга", "барыги",
-    "дилер", "dealer", "купить траву", "продаю траву",
-    # Прочее
-    "гидропоника", "реагент", "белый порошок",
-}
 MAT_MUTE_MINUTES = 5
 AUTO_KICK_BOTS   = True
 
@@ -939,61 +900,6 @@ class AntiMatMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 
-class AntiDrugMiddleware(BaseMiddleware):
-    async def __call__(self, handler, event: Message, data):
-        if not isinstance(event, Message): return await handler(event, data)
-        if not ANTI_DRUG_ENABLED: return await handler(event, data)
-        if event.chat.type not in ("group", "supergroup"): return await handler(event, data)
-        if not event.text or event.text.startswith("/"): return await handler(event, data)
-        if not event.from_user: return await handler(event, data)
-        if event.new_chat_members or event.left_chat_member: return await handler(event, data)
-        uid, cid = event.from_user.id, event.chat.id
-        # Администраторы не проверяются
-        try:
-            m = await bot.get_chat_member(cid, uid)
-            if m.status in ("administrator", "creator"): return await handler(event, data)
-        except: pass
-        # Проверяем текст на наркослова
-        text_lower = event.text.lower()
-        found_word = None
-        for word in DRUG_WORDS:
-            if word in text_lower:
-                found_word = word
-                break
-        if found_word:
-            name = event.from_user.mention_html()
-            # Удалить сообщение
-            try: await event.delete()
-            except: pass
-            # Выдать варн
-            warnings[cid][uid] += 1
-            count = warnings[cid][uid]
-            # Сообщение
-            if count >= MAX_WARNINGS:
-                await bot.ban_chat_member(cid, uid)
-                warnings[cid][uid] = 0
-                await bot.send_message(cid,
-                    f"🚫 <b>БАН</b>\n\n"
-                    f"👤 {name}\n"
-                    f"📝 Причина: упоминание наркотиков\n"
-                    f"🥴 Тема наркотиков строго запрещена в чате.", parse_mode="HTML")
-            else:
-                await bot.send_message(cid,
-                    f"🥴 <b>АНТИНАРКОТИК</b>\n\n"
-                    f"👤 {name}\n"
-                    f"⚡ Варн: <b>{count}/{MAX_WARNINGS}</b>\n"
-                    f"🗑 Сообщение удалено\n\n"
-                    f"<i>Тема наркотиков запрещена — /rules</i>", parse_mode="HTML")
-            await log_action(
-                f"🥴 <b>АНТИНАРКОТИК</b>\n"
-                f"👤 {name}\n"
-                f"💬 Слово: <code>{found_word}</code>\n"
-                f"⚡ Варн: {count}/{MAX_WARNINGS}\n"
-                f"🏠 Чат: {event.chat.title}")
-            add_mod_history(cid, uid, "🥴 Антинаркотик", f"Слово: {found_word}", "AutoMod")
-            return  # не передаём дальше
-        return await handler(event, data)
-
 class PendingInputMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if not isinstance(event, Message): return await handler(event, data)
@@ -1047,7 +953,6 @@ dp.message.middleware(PendingInputMiddleware())
 dp.message.middleware(StatsMiddleware())
 dp.message.middleware(AntiFloodMiddleware())
 dp.message.middleware(AntiMatMiddleware())
-dp.message.middleware(AntiDrugMiddleware())
 
 @dp.message(F.new_chat_members)
 async def on_new_member(message: Message):
@@ -2011,27 +1916,7 @@ async def cmd_antimat(message: Message, command: CommandObject):
     a = command.args.strip().lower()
     if a == "on": ANTI_MAT_ENABLED = True; await reply_auto_delete(message, "🧼 Антимат <b>включён</b>.", parse_mode="HTML")
     elif a == "off": ANTI_MAT_ENABLED  = False
-ANTI_DRUG_ENABLED = True   # Антинаркотик всегда включён
 
-DRUG_WORDS = {
-    # Общие
-    "наркотик", "наркота", "нарк", "наркош", "торгаш", "закладка", "закладки",
-    "клад", "магазин наркотиков", "купить наркотики",
-    # Вещества
-    "травка", "трава", "шишки", "марихуана", "гашиш", "гаш", "план", "дурь",
-    "меф", "мефедрон", "соль", "соли", "спайс", "спайсы", "синтетика",
-    "амфетамин", "амф", "скорость", "фен", "герыч", "героин", "гера",
-    "кокаин", "кокс", "крэк", "крек", "экстази", "экс", "мдма", "mdma",
-    "лсд", "lsd", "кислота", "грибы", "псилоцибин", "дмт", "dmt",
-    "кетамин", "кетамін", "rophynol", "pcp", "первитин", "винт",
-    "дезоморфин", "крокодил", "ханка", "опиум", "опий", "морфин",
-    "метадон", "бупренорфин", "суббутекс", "субутекс",
-    "нюхать", "ширяться", "ширнуться", "курнуть дурь", "забить косяк",
-    "забить косяк", "косяк", "бонг", "трубка для курения",
-    "закинуться", "вмазаться", "торчать", "торчок", "наркоман",
-    "нарик", "нариков", "барыга", "сделка", "купить траву",
-    "гидропоника", "реагент", "порошок", "белый порошок",
-}
 
 async def _antimat_disabled_reply(message, text):
     await reply_auto_delete(message, text, parse_mode="HTML")
