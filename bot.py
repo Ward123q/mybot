@@ -2733,7 +2733,8 @@ async def autist_commands(message: Message):
 
     # Команды которым target не нужен
     NO_TARGET_CMDS = {"статус", "хаос", "скрин", "взрыв", "шпион", "жребий", "громко",
-                      "антиспам", "зеркало", "локдаун", "анонс", "лотерея"}
+                      "антиспам", "зеркало", "локдаун", "анонс", "лотерея",
+                      "тишина", "история", "топ нарушителей"}
 
     # ── Поиск цели: реплай или @юзернейм или ID ──
     import re as _re
@@ -3558,8 +3559,17 @@ async def autist_commands(message: Message):
         elif action == "тишина":
             if message.from_user.id != OWNER_ID:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
-            mins_silence = duration_mins or 5
-            label_silence = duration_label or f"{mins_silence} мин."
+            # Парсим время прямо из rest если target не найден
+            import re as _re5
+            t_match = _re5.match(r"^(\d+)\s*(д|ч|м)", rest)
+            if t_match:
+                num_s = int(t_match.group(1)); unit_s = t_match.group(2)
+                if unit_s == "д":   mins_silence = num_s * 1440; label_silence = f"{num_s} дн."
+                elif unit_s == "ч": mins_silence = num_s * 60;   label_silence = f"{num_s} ч."
+                else:               mins_silence = num_s;          label_silence = f"{num_s} мин."
+            else:
+                mins_silence = duration_mins or 5
+                label_silence = duration_label or f"{mins_silence} мин."
             await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
             await reply_auto_delete(message,
                 f"🔇 <b>ТИШИНА на {label_silence}!</b>\nЧат закрыт для всех.", parse_mode="HTML")
