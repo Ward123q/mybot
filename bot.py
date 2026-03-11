@@ -259,8 +259,6 @@ BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
 OWNER_ID         = 7823802800
 MAX_WARNINGS     = 3
-FLOOD_LIMIT      = 5
-FLOOD_TIME       = 5
 ANTI_MAT_ENABLED  = False
 
 MAT_MUTE_MINUTES = 5
@@ -271,7 +269,6 @@ bot = Bot(token=BOT_TOKEN)
 dp  = Dispatcher()
 
 warnings      = defaultdict(lambda: defaultdict(int))
-flood_tracker = defaultdict(lambda: defaultdict(list))
 notes         = defaultdict(dict)
 mod_history   = defaultdict(lambda: defaultdict(list))  # {cid: {uid: [{"action":..., "reason":..., "by":..., "time":...}]}}
 warn_expiry   = defaultdict(lambda: defaultdict(list))  # {cid: {uid: [expiry_timestamp, ...]}}
@@ -889,33 +886,6 @@ class SpecialEffectsMiddleware(BaseMiddleware):
                     except: pass
                 # 🎯 Цель — x2 варн обрабатывается в autist_commands
         return await handler(event, data)
-    async def __call__(self, handler, event: Message, data):
-        if not isinstance(event, Message): return await handler(event, data)
-        if event.chat.type not in ("group","supergroup"): return await handler(event, data)
-        if event.text and event.text.startswith("/"): return await handler(event, data)
-        if not event.from_user: return await handler(event, data)
-        if event.new_chat_members or event.left_chat_member: return await handler(event, data)
-        uid, cid = event.from_user.id, event.chat.id
-        try:
-            m = await bot.get_chat_member(cid, uid)
-            if m.status in ("administrator","creator"): return await handler(event, data)
-        except: pass
-        now = time()
-        flood_tracker[cid][uid] = [t for t in flood_tracker[cid][uid] if now - t < FLOOD_TIME]
-        flood_tracker[cid][uid].append(now)
-        if len(flood_tracker[cid][uid]) >= FLOOD_LIMIT:
-            try:
-                await event.delete()
-                sent = await bot.send_message(cid,
-                    f"🌊 {event.from_user.mention_html()}, флуд запрещён! Мут на 5 минут.",
-                    parse_mode="HTML")
-                flood_tracker[cid][uid].clear()
-                await asyncio.sleep(8)
-                try: await sent.delete()
-                except: pass
-            except: pass
-            return
-        return await handler(event, data)
 
 class AntiMatMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
@@ -985,7 +955,6 @@ class PendingInputMiddleware(BaseMiddleware):
 dp.message.middleware(PendingInputMiddleware())
 dp.message.middleware(StatsMiddleware())
 dp.message.middleware(SpecialEffectsMiddleware())
-dp.message.middleware(AntiFloodMiddleware())
 dp.message.middleware(AntiMatMiddleware())
 
 @dp.message(F.new_chat_members)
@@ -2958,8 +2927,8 @@ async def autist_commands(message: Message):
                 f"👤 <b>{target.full_name}</b>:\n{text}", parse_mode="HTML")
 
         elif action == "клоун":
-            if message.from_user.id != OWNER_ID:
-                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            if not await check_admin(message) and message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для администраторов!"); return
             clown_targets[f"{cid}_{target.id}"] = __import__('time').time() + 600
             await reply_auto_delete(message,
                 f"🤡 {tname} теперь клоун на <b>10 минут</b>!", parse_mode="HTML")
@@ -3164,8 +3133,8 @@ async def autist_commands(message: Message):
                 f"⚡ <b>МОЛНИЯ!</b>\nУдалено ~{deleted} сообщений {tname} за сегодня.", parse_mode="HTML")
 
         elif action == "магнит":
-            if message.from_user.id != OWNER_ID:
-                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            if not await check_admin(message) and message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для администраторов!"); return
             magnet_targets[f"{cid}_{target.id}"] = __import__('time').time() + 600
             await reply_auto_delete(message,
                 f"🧲 <b>Магнит активирован!</b>\nБот будет лайкать каждое сообщение {tname} 10 минут.", parse_mode="HTML")
