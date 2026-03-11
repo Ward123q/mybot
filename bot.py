@@ -1869,6 +1869,25 @@ async def cmd_promote(message: Message, command: CommandObject):
         await reply_auto_delete(message,
             f"⚠️ Ошибка: <code>{e}</code>", parse_mode="HTML")
 
+@dp.callback_query(F.data.startswith("panel:promote:"))
+async def cb_panel_promote(call: CallbackQuery):
+    if not await check_admin(call.message): return
+    tid = int(call.data.split(":")[2])
+    try:
+        await call.message.edit_text(
+            f"🏷 <b>Выдать тег участнику</b>\n\n"
+            f"Напиши команду реплаем на сообщение участника:\n"
+            f"<code>/promote Название тега</code>\n\n"
+            f"Или через аутист команду:\n"
+            f"<code>аутист тег @username Название</code>\n\n"
+            f"⚠️ Бот должен иметь право <b>can_manage_tags</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:back:{tid}")
+            ]]))
+    except: pass
+    await call.answer()
+
 @dp.message(Command("removetag"))
 async def cmd_removetag(message: Message):
     if not await require_admin(message): return
@@ -2493,7 +2512,7 @@ async def autist_commands(message: Message):
     rest = parts[1].strip()
     action = None
     for cmd in ["снять варн","разварн","размут","разбан","варн","мут навсегда","мут","бан","захуесосить","кик",
-                "очистить","удалить","закрепить","предупредить","инфо","варны","репутация",
+                "тег","убрать тег","очистить","удалить","закрепить","предупредить","инфо","варны","репутация",
                 "обозвать","поженить","проверить","казнить","диагноз","профессия","похитить","дуэль","экзамен"]:
         if rest.startswith(cmd):
             action = cmd; rest = rest[len(cmd):].strip(); break
@@ -2605,6 +2624,32 @@ async def autist_commands(message: Message):
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
                 can_send_other_messages=True, can_add_web_page_previews=True))
             await reply_auto_delete(message, f"🔊 {tname} размучен.", parse_mode="HTML")
+        elif action == "тег":
+            tag_text = rest.strip() or reason
+            if not tag_text or tag_text == "Нарушение правил":
+                await reply_auto_delete(message, "⚠️ Укажи название тега. Пример: <code>аутист тег @user Сигма</code>", parse_mode="HTML"); return
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                url = f"https://api.telegram.org/bot{BOT_TOKEN}/setChatMemberTag"
+                data = {"chat_id": cid, "user_id": target.id, "tag": tag_text[:32]}
+                async with session.post(url, json=data) as resp:
+                    result = await resp.json()
+            if result.get("ok"):
+                await reply_auto_delete(message, f"🏷 {tname} получил тег: <b>{tag_text}</b>", parse_mode="HTML")
+            else:
+                err = result.get('description', 'Ошибка')
+                await reply_auto_delete(message, f"⚠️ {err}\n\n<i>Убедись что у бота есть право can_manage_tags</i>", parse_mode="HTML")
+        elif action == "убрать тег":
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                url = f"https://api.telegram.org/bot{BOT_TOKEN}/setChatMemberTag"
+                data = {"chat_id": cid, "user_id": target.id, "tag": ""}
+                async with session.post(url, json=data) as resp:
+                    result = await resp.json()
+            if result.get("ok"):
+                await reply_auto_delete(message, f"🗑 Тег {tname} удалён.", parse_mode="HTML")
+            else:
+                await reply_auto_delete(message, f"⚠️ {result.get('description', 'Ошибка')}", parse_mode="HTML")
         elif action == "удалить":
             try: await message.reply_to_message.delete(); await reply_auto_delete(message, "🗑 Сообщение удалено!")
             except: await reply_auto_delete(message, "⚠️ Не удалось удалить сообщение.")
