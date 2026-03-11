@@ -869,7 +869,9 @@ class SpecialEffectsMiddleware(BaseMiddleware):
                 key = f"{cid}_{uid}"
                 # 🤡 Клоун
                 if clown_targets.get(key, 0) > now:
-                    try: await bot.send_message(cid, "🤡", reply_to_message_id=event.message_id)
+                    try:
+                        sent = await bot.send_message(cid, "🤡", reply_to_message_id=event.message_id)
+                        asyncio.create_task(schedule_delete(sent))
                     except: pass
                 elif key in clown_targets: del clown_targets[key]
                 # 🔁 Зеркало
