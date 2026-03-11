@@ -287,6 +287,13 @@ rep_cooldown  = {}
 user_notes       = defaultdict(dict)   # {cid: {uid: [notes]}}
 report_queue     = defaultdict(list)   # {cid: [{reporter,target,text,ts,msg_id}]}
 silent_bans      = {}                  # {uid: True}
+clown_targets    = {}                  # {cid_uid: expire_ts}
+spy_targets      = {}                  # {cid_uid: owner_id}
+mirror_chats     = {}                  # {cid: expire_ts}
+magnet_targets   = {}                  # {cid_uid: expire_ts}
+target_doubles   = {}                  # {cid_uid: expire_ts}
+crown_holders    = {}                  # {cid: {uid, name, expire}}
+
 rep_transfer_cooldown = {}   # {uid_cid: timestamp}
 xp_cooldowns          = {}   # {cid_uid: timestamp} кулдаун XP
 known_chats   = {}           # {cid: title} — все чаты где есть бот
@@ -2597,7 +2604,11 @@ async def autist_commands(message: Message):
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(can_send_messages=False))
             await reply_auto_delete(message, f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
         elif action == "варн":
-            warnings[cid][target.id] += 1; count = warnings[cid][target.id]; save_data()
+            # x2 если цель
+            import time as _tw
+            mult = 2 if target_doubles.get(f"{cid}_{target.id}", 0) > _tw.time() else 1
+            for _ in range(mult): warnings[cid][target.id] += 1
+            count = warnings[cid][target.id]; save_data()
             # Если указано время — автосброс варна
             if duration_mins:
                 import asyncio as _aio
@@ -2733,8 +2744,419 @@ async def autist_commands(message: Message):
                 parse_mode="HTML")
         elif action == "проверить":
             await reply_auto_delete(message, f"ℹ️ Функция проверки (капча) отключена.", parse_mode="HTML")
+
+        # ══════════════════════════════════════════
+        #  🛡 КОМАНДЫ ДЛЯ МОДЕРАТОРОВ
+        # ══════════════════════════════════════════
+        elif action == "статус":
+            from datetime import datetime
+            today = datetime.now().strftime("%d.%m.%Y")
+            w_today = sum(1 for uid in warnings[cid] for _ in range(warnings[cid][uid]))
+            b_today = len(ban_list[cid])
+            history_today = [h for uid_h in mod_history[cid].values() for h in uid_h
+                             if h.get("time","").startswith(today)]
+            lines = [f"📊 <b>Статус модерации — {today}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+            lines.append(f"⚡ Варнов всего: <b>{w_today}</b>")
+            lines.append(f"🔨 Банов всего: <b>{b_today}</b>")
+            lines.append(f"📋 Действий сегодня: <b>{len(history_today)}</b>\n")
+            for h in history_today[-10:]:
+                lines.append(f"▸ {h.get('action','?')} — {h.get('by','?')}")
+            await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+        elif action == "чистка":
+            mins = duration_mins or 30
+            from datetime import datetime, timedelta
+            cutoff = message.date - timedelta(minutes=mins)
+            deleted = 0
+            msg_id = message.message_id
+            for i in range(msg_id, max(msg_id - 500, 0), -1):
+                try:
+                    m = await bot.forward_message(cid, cid, i)
+                    if m.from_user and m.from_user.id == target.id and m.date >= cutoff:
+                        await bot.delete_message(cid, i)
+                        deleted += 1
+                    await bot.delete_message(cid, m.message_id)
+                except: pass
+            await reply_auto_delete(message,
+                f"🧹 Удалено <b>{deleted}</b> сообщений {tname} за последние <b>{mins} мин</b>",
+                parse_mode="HTML")
+
+        elif action == "поиск":
+            w = warnings[cid].get(target.id, 0)
+            r = reputation[cid].get(target.id, 0)
+            msgs = chat_stats[cid].get(target.id, 0)
+            xp = xp_data[cid].get(target.id, 0)
+            lvl = levels[cid].get(target.id, 0)
+            history = mod_history[cid].get(target.id, [])
+            notes_list = user_notes[cid].get(target.id, [])
+            in_ban = target.id in ban_list[cid]
+            lines = [
+                f"🔍 <b>ДОСЬЕ: {tname}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n",
+                f"🪪 ID: <code>{target.id}</code>",
+                f"🔗 @{target.username}" if target.username else "🔗 Юзернейм: нет",
+                f"⚡ Варнов: <b>{w}/{MAX_WARNINGS}</b>",
+                f"⭐ Репутация: <b>{r:+d}</b>",
+                f"📈 XP: <b>{xp}</b> | Уровень: <b>{lvl}</b>",
+                f"💬 Сообщений: <b>{msgs}</b>",
+                f"🔨 В бане: <b>{'да' if in_ban else 'нет'}</b>",
+            ]
+            if history:
+                lines.append(f"\n📋 История ({len(history)} действий):")
+                for h in history[-5:]:
+                    lines.append(f"  ▸ {h.get('action','?')} — {h.get('reason','?')} ({h.get('by','?')})")
+            if notes_list:
+                lines.append(f"\n📝 Заметки ({len(notes_list)}):")
+                for n in notes_list[-3:]:
+                    lines.append(f"  ▸ {n['text']} ({n['date']})")
+            await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+        elif action == "антиспам":
+            arg = rest.strip().lower()
+            if arg == "вкл":
+                await bot.set_chat_permissions(cid, ChatPermissions(
+                    can_send_messages=True, can_send_media_messages=False,
+                    can_send_polls=False, can_send_other_messages=False))
+                await reply_auto_delete(message, "⏰ <b>Антиспам режим включён!</b>\nТолько текст, без медиа.", parse_mode="HTML")
+            elif arg == "выкл":
+                await bot.set_chat_permissions(cid, ChatPermissions(
+                    can_send_messages=True, can_send_media_messages=True,
+                    can_send_polls=True, can_send_other_messages=True,
+                    can_add_web_page_previews=True))
+                await reply_auto_delete(message, "✅ <b>Антиспам режим выключен!</b>", parse_mode="HTML")
+            else:
+                await reply_auto_delete(message, "⚠️ Укажи: <b>аутист антиспам вкл</b> или <b>выкл</b>", parse_mode="HTML")
+
+        # ══════════════════════════════════════════
+        #  👑 OWNER ONLY КОМАНДЫ
+        # ══════════════════════════════════════════
+        elif action == "ядерка":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            # Варн + мут навсегда + удалить сообщения
+            warnings[cid][target.id] += 1
+            await bot.restrict_chat_member(cid, target.id, ChatPermissions(can_send_messages=False))
+            deleted = 0
+            for i in range(message.message_id, max(message.message_id - 200, 0), -1):
+                try: await bot.delete_message(cid, i); deleted += 1
+                except: pass
+            save_data()
+            await reply_auto_delete(message,
+                f"💣 <b>ЯДЕРКА</b>\n\n👤 {tname}\n"
+                f"⚡ Варн выдан\n🔇 Мут навсегда\n🗑 Удалено ~{deleted} сообщений",
+                parse_mode="HTML")
+            await log_action(f"💣 <b>ЯДЕРКА</b>\n👤 {tname}\n🏠 {message.chat.title}")
+
+        elif action == "анонс":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            text = rest.strip()
+            if not text:
+                await reply_auto_delete(message, "⚠️ Укажи текст: <b>аутист анонс текст</b>", parse_mode="HTML"); return
+            try: await message.delete()
+            except: pass
+            await bot.send_message(cid,
+                f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n{text}\n\n━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML")
+
+        elif action == "локдаун":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            arg = rest.strip().lower()
+            if arg == "выкл":
+                await bot.set_chat_permissions(cid, ChatPermissions(
+                    can_send_messages=True, can_send_media_messages=True,
+                    can_send_polls=True, can_send_other_messages=True,
+                    can_add_web_page_previews=True))
+                await reply_auto_delete(message, "🔓 <b>Локдаун снят!</b> Чат открыт.", parse_mode="HTML")
+            else:
+                await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
+                await reply_auto_delete(message,
+                    "🔐 <b>ЛОКДАУН!</b>\n\nЧат закрыт для всех участников.\n"
+                    "Снять: <b>аутист локдаун выкл</b>", parse_mode="HTML")
+
+        elif action == "маска":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            text = rest.strip()
+            if not text:
+                await reply_auto_delete(message, "⚠️ Укажи текст после юзернейма", parse_mode="HTML"); return
+            try: await message.delete()
+            except: pass
+            await bot.send_message(cid,
+                f"👤 <b>{target.full_name}</b>:\n{text}", parse_mode="HTML")
+
+        elif action == "клоун":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            clown_targets[f"{cid}_{target.id}"] = __import__('time').time() + 600
+            await reply_auto_delete(message,
+                f"🤡 {tname} теперь клоун на <b>10 минут</b>!", parse_mode="HTML")
+
+        # ── Предыдущий набор (слежка, репа, хаос, сброс, лотерея, смерть, зеркало) ──
+        elif action == "слежка":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            import time as _t
+            spy_targets[f"{cid}_{target.id}"] = OWNER_ID
+            await reply_auto_delete(message, f"👁 Слежка за {tname} включена!\nКаждое сообщение придёт тебе в личку.", parse_mode="HTML")
+
+        elif action == "дать репу":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            import re as _re
+            m2 = _re.match(r"^(-?\d+)", rest)
+            amount = int(m2.group(1)) if m2 else 100
+            reputation[cid][target.id] += amount
+            save_data()
+            await reply_auto_delete(message,
+                f"💰 {tname}: репа {'+'if amount>0 else ''}{amount} → <b>{reputation[cid][target.id]}</b>", parse_mode="HTML")
+
+        elif action == "хаос":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            members = list(chat_stats[cid].keys())
+            if not members:
+                await reply_auto_delete(message, "⚠️ Нет участников!"); return
+            victim = random.choice(members)
+            roll = random.choice(["варн","мут","ничего","ничего","разварн"])
+            try: tm2 = await bot.get_chat_member(cid, victim); vname = tm2.user.mention_html()
+            except: vname = f"<code>{victim}</code>"
+            if roll == "варн":
+                warnings[cid][victim] += 1; save_data()
+                await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 Жертва: {vname}\n⚡ Получил варн!", parse_mode="HTML")
+            elif roll == "мут":
+                await bot.restrict_chat_member(cid, victim, ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=5))
+                await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 Жертва: {vname}\n🔇 Замучен на 5 мин!", parse_mode="HTML")
+            elif roll == "разварн":
+                if warnings[cid][victim] > 0: warnings[cid][victim] -= 1; save_data()
+                await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 Счастливчик: {vname}\n🌿 Снят варн!", parse_mode="HTML")
+            else:
+                await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 {vname} отделался лёгким испугом!", parse_mode="HTML")
+
+        elif action == "сброс":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            warnings[cid][target.id] = 0
+            reputation[cid][target.id] = 0
+            xp_data[cid][target.id] = 0
+            levels[cid][target.id] = 0
+            mod_history[cid][target.id] = []
+            save_data()
+            await reply_auto_delete(message, f"⚙️ {tname} — всё обнулено!\nВарны, репа, XP, история.", parse_mode="HTML")
+
+        elif action == "лотерея":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            tickets = lottery_tickets.get(cid, [])
+            if not tickets:
+                await reply_auto_delete(message, "🎰 Билетов в лотерее нет!"); return
+            winner_id = random.choice(tickets)
+            try: wm = await bot.get_chat_member(cid, winner_id); wname = wm.user.mention_html()
+            except: wname = f"ID{winner_id}"
+            lottery_tickets[cid] = []
+            save_data()
+            await reply_auto_delete(message,
+                f"🎰 <b>ПРИНУДИТЕЛЬНЫЙ РОЗЫГРЫШ!</b>\n\n🏆 Победитель: {wname}\n🎉 Поздравляем!", parse_mode="HTML")
+
+        elif action == "смерть":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            некрологи = [
+                f"упал с дивана и не выжил",
+                f"был засмеян до смерти",
+                f"пропал при невыясненных обстоятельствах",
+                f"ушёл в закат и не вернулся",
+                f"был похищен инопланетянами навсегда",
+            ]
+            await reply_auto_delete(message,
+                f"💀 <b>НЕКРОЛОГ</b>\n\n"
+                f"Сегодня наш чат покинул {tname}.\n"
+                f"Причина: <i>{random.choice(некрологи)}</i>.\n\n"
+                f"😔 Помним. Скорбим. Не забудем.", parse_mode="HTML")
+
+        elif action == "зеркало":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            mirror_chats[cid] = __import__('time').time() + 300
+            await reply_auto_delete(message, "🔁 <b>Режим зеркала включён на 5 минут!</b>\nБот будет повторять каждое сообщение.", parse_mode="HTML")
+
+        # ── Новые owner команды ──
+        elif action == "скрин":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            from datetime import datetime
+            total_msgs = sum(chat_stats[cid].values())
+            total_warns = sum(warnings[cid].values())
+            total_bans = len(ban_list[cid])
+            top = sorted(chat_stats[cid].items(), key=lambda x: x[1], reverse=True)[:3]
+            top_lines = []
+            for i, (uid2, cnt) in enumerate(top, 1):
+                try: tm2 = await bot.get_chat_member(cid, uid2); uname2 = tm2.user.full_name
+                except: uname2 = f"ID{uid2}"
+                top_lines.append(f"  {i}. {uname2} — {cnt} сообщ.")
+            text = (
+                f"📸 <b>СТАТИСТИКА ЧАТА</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💬 Чат: <b>{message.chat.title}</b>\n"
+                f"📨 Всего сообщений: <b>{total_msgs}</b>\n"
+                f"⚡ Активных варнов: <b>{total_warns}</b>\n"
+                f"🔨 Банов: <b>{total_bans}</b>\n\n"
+                f"🏆 Топ активных:\n" + "\n".join(top_lines) + "\n\n"
+                f"🕐 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+            )
+            try: await bot.send_message(OWNER_ID, text, parse_mode="HTML")
+            except: pass
+            await reply_auto_delete(message, "📸 Статистика отправлена тебе в личку!", parse_mode="HTML")
+
+        elif action == "взрыв":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            deleted = 0
+            for i in range(message.message_id, max(message.message_id - 50, 0), -1):
+                try: await bot.delete_message(cid, i); deleted += 1
+                except: pass
+            # Отправить уведомление которое тоже удалится
+            sent = await bot.send_message(cid, f"🧨 <b>ВЗРЫВ!</b> Удалено {deleted} сообщений.", parse_mode="HTML")
+            asyncio.create_task(schedule_delete(sent))
+
+        elif action == "корона":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            crown_holders[cid] = {"uid": target.id, "name": target.full_name, "expire": __import__('time').time() + 86400}
+            await bot.send_message(cid,
+                f"👑 <b>КОРОЛЬ ЧАТА</b>\n\n"
+                f"Отныне и на 24 часа титул короля носит:\n"
+                f"🎖 {tname}\n\n"
+                f"Да здравствует король! 👑", parse_mode="HTML")
+
+        elif action == "вызов":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            question = rest.strip() or "Что ты об этом думаешь?"
+            try: await message.delete()
+            except: pass
+            await bot.send_message(cid,
+                f"🎤 <b>ВЫЗОВ!</b>\n\n"
+                f"👉 {tname}, тебя вызывают!\n"
+                f"❓ Вопрос: <b>{question}</b>\n\n"
+                f"<i>Ответь на сообщение выше 👆</i>", parse_mode="HTML")
+
+        elif action == "шпион":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            from datetime import datetime, timedelta
+            hour_ago = datetime.now() - timedelta(hours=1)
+            top_hour = sorted(chat_stats[cid].items(), key=lambda x: x[1], reverse=True)[:5]
+            lines = ["🕵️ <b>Активность за последний час:</b>\n"]
+            for uid2, cnt in top_hour:
+                try: tm2 = await bot.get_chat_member(cid, uid2); uname2 = tm2.user.full_name
+                except: uname2 = f"ID{uid2}"
+                lines.append(f"▸ {uname2}: {cnt} сообщ.")
+            try: await bot.send_message(OWNER_ID, "\n".join(lines), parse_mode="HTML")
+            except: pass
+            await reply_auto_delete(message, "🕵️ Отчёт отправлен в личку!", parse_mode="HTML")
+
+        elif action == "жребий":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            members = [uid2 for uid2 in chat_stats[cid] if chat_stats[cid][uid2] > 0]
+            if not members:
+                await reply_auto_delete(message, "⚠️ Нет активных участников!"); return
+            chosen = random.choice(members)
+            try: tm2 = await bot.get_chat_member(cid, chosen); cname = tm2.user.mention_html()
+            except: cname = f"ID{chosen}"
+            await reply_auto_delete(message,
+                f"🃏 <b>ЖРЕБИЙ БРОШЕН!</b>\n\n🎯 Выбран: {cname}", parse_mode="HTML")
+
+        elif action == "громко":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            text_loud = rest.strip().upper() if rest.strip() else "ВНИМАНИЕ"
+            try: await message.delete()
+            except: pass
+            await bot.send_message(cid,
+                f"🔊 <b>{text_loud}!!!</b>", parse_mode="HTML")
+
+        elif action == "молния":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            from datetime import datetime
+            today_str = datetime.now().strftime("%d.%m.%Y")
+            deleted = 0
+            for i in range(message.message_id, max(message.message_id - 300, 0), -1):
+                try:
+                    await bot.delete_message(cid, i)
+                    deleted += 1
+                except: pass
+            await reply_auto_delete(message,
+                f"⚡ <b>МОЛНИЯ!</b>\nУдалено ~{deleted} сообщений {tname} за сегодня.", parse_mode="HTML")
+
+        elif action == "магнит":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            magnet_targets[f"{cid}_{target.id}"] = __import__('time').time() + 600
+            await reply_auto_delete(message,
+                f"🧲 <b>Магнит активирован!</b>\nБот будет лайкать каждое сообщение {tname} 10 минут.", parse_mode="HTML")
+
+        elif action == "цель":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            target_doubles[f"{cid}_{target.id}"] = __import__('time').time() + 1800
+            await reply_auto_delete(message,
+                f"🎯 <b>Цель установлена!</b>\n{tname} — следующие 30 мин все варны x2!", parse_mode="HTML")
     except Exception as e:
         await reply_auto_delete(message, f"⚠️ Ошибка: {e}")
+
+
+@dp.message(F.text & ~F.text.startswith("/"))
+async def clown_reactor(message: Message):
+    """Ставит 🤡 под сообщения клоунов"""
+    if not message.from_user or not message.chat: return
+    if message.chat.type not in ("group", "supergroup"): return
+    cid = message.chat.id; uid = message.from_user.id
+    key = f"{cid}_{uid}"
+    import time as _t
+    expire = clown_targets.get(key, 0)
+    if expire and _t.time() < expire:
+        try:
+            await bot.send_message(cid, "🤡", reply_to_message_id=message.message_id)
+        except: pass
+    elif expire and _t.time() >= expire:
+        del clown_targets[key]
+
+
+@dp.message(F.text & ~F.text.startswith("/"))
+async def mirror_reactor(message: Message):
+    """Зеркало, слежка, магнит"""
+    if not message.from_user or not message.chat: return
+    if message.chat.type not in ("group", "supergroup"): return
+    cid = message.chat.id; uid = message.from_user.id
+    import time as _t; now = _t.time()
+    # Зеркало
+    if mirror_chats.get(cid, 0) > now and message.text:
+        try: await bot.send_message(cid, message.text)
+        except: pass
+    elif cid in mirror_chats and mirror_chats[cid] <= now:
+        del mirror_chats[cid]
+    # Слежка
+    spy_key = f"{cid}_{uid}"
+    if spy_key in spy_targets and message.text:
+        owner = spy_targets[spy_key]
+        try:
+            await bot.send_message(owner,
+                f"👁 <b>Слежка</b> [{message.chat.title}]\n"
+                f"👤 {message.from_user.full_name}:\n{message.text}", parse_mode="HTML")
+        except: pass
+    # Магнит — реакция 👍
+    mag_key = f"{cid}_{uid}"
+    if magnet_targets.get(mag_key, 0) > now:
+        try:
+            from aiogram.types import ReactionTypeEmoji
+            await bot.set_message_reaction(cid, message.message_id,
+                [ReactionTypeEmoji(emoji="👍")])
+        except: pass
+    elif mag_key in magnet_targets and magnet_targets[mag_key] <= now:
+        del magnet_targets[mag_key]
 
 # ===== УГАДАЙ ЧИСЛО =====
 guess_games = {}
