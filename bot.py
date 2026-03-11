@@ -1073,11 +1073,21 @@ async def on_new_member(message: Message):
             continue
         await message.answer_photo(
             photo=FSInputFile("welcome.jpg"),
-            caption=f"👋 Привет, {member.mention_html()}! Добро пожаловать в чат!\n\n"
-                    f"📜 Ознакомься с правилами чата перед тем как писать.",
+            caption=(
+                f"👋 Привет, {member.mention_html()}!\n"
+                f"Добро пожаловать в <b>{message.chat.title}</b>!\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"📜 <b>Обязательно ознакомься с правилами</b>\n"
+                f"перед тем как начать писать!\n\n"
+                f"🔞 Контент 18+ — варн + мут\n"
+                f"🥴 Наркотики — варн + мут 2 мин\n"
+                f"📢 Реклама — варн + мут / бан\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"<i>Нажми кнопку ниже чтобы прочитать правила 👇</i>"
+            ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-03-2")]
+                [InlineKeyboardButton(text="📜 Читать правила чата", url="https://telegra.ph/Pravila-anon-chata-03-11-3")]
             ])
         )
 
@@ -1570,7 +1580,7 @@ async def cmd_rules(message: Message):
         caption="📜 <b>Правила чата</b>\n\n🔎 Нажми кнопку ниже чтобы прочитать правила:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-03-2")]
+            [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-11-3")]
         ])
     )
 
