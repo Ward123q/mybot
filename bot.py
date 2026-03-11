@@ -862,7 +862,33 @@ class StatsMiddleware(BaseMiddleware):
                         word_stats[cid][word] += 1
         return await handler(event, data)
 
-class AntiFloodMiddleware(BaseMiddleware):
+class SpecialEffectsMiddleware(BaseMiddleware):
+    """Клоун, зеркало, слежка, магнит"""
+    async def __call__(self, handler, event: Message, data):
+        if isinstance(event, Message) and event.from_user and event.chat.type in ("group","supergroup"):
+            if not event.new_chat_members and not event.left_chat_member:
+                import time as _t; now = _t.time()
+                uid, cid = event.from_user.id, event.chat.id
+                key = f"{cid}_{uid}"
+                # 🤡 Клоун
+                if clown_targets.get(key, 0) > now:
+                    try: await bot.send_message(cid, "🤡", reply_to_message_id=event.message_id)
+                    except: pass
+                elif key in clown_targets: del clown_targets[key]
+                # 🔁 Зеркало
+                if mirror_chats.get(cid, 0) > now and event.text and not event.text.startswith("аутист"):
+                    try: await bot.send_message(cid, event.text)
+                    except: pass
+                elif cid in mirror_chats and mirror_chats[cid] <= now: del mirror_chats[cid]
+                # 👁 Слежка
+                if key in spy_targets and event.text:
+                    try:
+                        await bot.send_message(spy_targets[key],
+                            f"👁 <b>Слежка</b> [{event.chat.title}]\n"
+                            f"👤 {event.from_user.full_name}:\n{event.text}", parse_mode="HTML")
+                    except: pass
+                # 🎯 Цель — x2 варн обрабатывается в autist_commands
+        return await handler(event, data)
     async def __call__(self, handler, event: Message, data):
         if not isinstance(event, Message): return await handler(event, data)
         if event.chat.type not in ("group","supergroup"): return await handler(event, data)
@@ -958,6 +984,7 @@ class PendingInputMiddleware(BaseMiddleware):
 
 dp.message.middleware(PendingInputMiddleware())
 dp.message.middleware(StatsMiddleware())
+dp.message.middleware(SpecialEffectsMiddleware())
 dp.message.middleware(AntiFloodMiddleware())
 dp.message.middleware(AntiMatMiddleware())
 
@@ -1558,20 +1585,56 @@ async def cmd_help(message: Message):
             "🔨 <b>МОДЕРАЦИЯ</b>\n"
             "▸ /ban · /unban · /mute · /unmute\n"
             "▸ /warn · /unwarn · /warn24 · /warnmenu\n"
-            "▸ /tempban · /rban · /banlist · /panel\n\n"
+            "▸ /tempban · /rban · /banlist · /panel\n"
+            "▸ /status — отчёт за сегодня\n\n"
 
             "✉️ <b>СООБЩЕНИЯ И ЧАТ</b>\n"
-            "▸ /del · /clear · /pin · /unpin · /announce\n"
+            "▸ /del · /clear · /pin · /unpin\n"
+            "▸ /announce текст — объявление\n"
             "▸ /poll · /lock · /unlock · /slowmode\n"
             "▸ /antimat · /autokick\n\n"
 
             "👥 <b>УЧАСТНИКИ</b>\n"
             "▸ /adminlist · /promote · /removetag\n"
             "▸ /modhistory · /modtop · /modexport\n"
+            "▸ /modreport · /usernote · /report\n"
             "▸ /botstats · /broadcast · /chats\n\n"
+
+            "🤖 <b>АУТИСТ-КОМАНДЫ (мод)</b>\n"
+            "▸ аутист варн/разварн @user причина\n"
+            "▸ аутист мут/размут @user 1ч\n"
+            "▸ аутист бан/разбан @user причина\n"
+            "▸ аутист статус · поиск · чистка\n"
+            "▸ аутист антиспам вкл/выкл\n\n"
 
             "🎪 <b>ТУРНИРЫ</b>\n"
             "▸ /tournament start · begin · next · stop\n"
+        )
+    if message.from_user.id == OWNER_ID:
+        text += (
+            "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+            "👑 <b>ТОЛЬКО ДЛЯ ВЛАДЕЛЬЦА</b>\n\n"
+
+            "💣 аутист ядерка @user\n"
+            "🔐 аутист локдаун / локдаун выкл\n"
+            "📢 аутист анонс текст · /announce\n"
+            "🎭 аутист маска @user текст\n"
+            "🤡 аутист клоун @user (10 мин)\n"
+            "👁 аутист слежка @user\n"
+            "💰 аутист дать репу @user 100\n"
+            "⚙️ аутист сброс @user · /sbros\n"
+            "🌪 аутист хаос\n"
+            "💀 аутист смерть @user\n"
+            "🔁 аутист зеркало (5 мин)\n"
+            "👑 аутист корона @user · /corona\n"
+            "🎤 аутист вызов @user вопрос\n"
+            "📸 аутист скрин · шпион · жребий\n"
+            "🧨 аутист взрыв (50 сообщ)\n"
+            "🔊 аутист громко текст\n"
+            "⚡ аутист молния @user\n"
+            "🧲 аутист магнит @user (10 мин)\n"
+            "🎯 аутист цель @user (варны x2, 30 мин)\n"
+            "🎰 аутист лотерея — принудит. розыгрыш\n"
         )
     await reply_auto_delete(message, text, parse_mode="HTML")
 
@@ -5719,6 +5782,78 @@ async def cmd_gift(message: Message, command: CommandObject):
         except: pass
     else:
         await reply_auto_delete(message, "❌ Неверный подарок. /gift — список", parse_mode="HTML")
+
+
+# ── Slash алиасы для owner/mod команд ──
+@dp.message(Command("yaderna", "nuclear"))
+async def cmd_yaderna_slash(message: Message, command: CommandObject):
+    """Alias: /yaderna = аутист ядерка"""
+    if message.from_user.id != OWNER_ID:
+        await reply_auto_delete(message, "🚫 Только для владельца!"); return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение!"); return
+    target = message.reply_to_message.from_user
+    cid = message.chat.id
+    tname = target.mention_html()
+    warnings[cid][target.id] += 1
+    await bot.restrict_chat_member(cid, target.id, ChatPermissions(can_send_messages=False))
+    deleted = 0
+    for i in range(message.message_id, max(message.message_id - 200, 0), -1):
+        try: await bot.delete_message(cid, i); deleted += 1
+        except: pass
+    save_data()
+    await reply_auto_delete(message, f"💣 <b>ЯДЕРКА</b>\n\n👤 {tname}\n⚡ Варн | 🔇 Мут | 🗑 ~{deleted} сообщ.", parse_mode="HTML")
+
+@dp.message(Command("sbros"))
+async def cmd_sbros_slash(message: Message):
+    if message.from_user.id != OWNER_ID:
+        await reply_auto_delete(message, "🚫 Только для владельца!"); return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение!"); return
+    target = message.reply_to_message.from_user; cid = message.chat.id
+    warnings[cid][target.id] = 0; reputation[cid][target.id] = 0
+    xp_data[cid][target.id] = 0; levels[cid][target.id] = 0
+    mod_history[cid][target.id] = []; save_data()
+    await reply_auto_delete(message, f"⚙️ {target.mention_html()} — всё обнулено!", parse_mode="HTML")
+
+@dp.message(Command("status", "modstatus"))
+async def cmd_modstatus_slash(message: Message):
+    if not await require_admin(message): return
+    from datetime import datetime
+    cid = message.chat.id; today = datetime.now().strftime("%d.%m.%Y")
+    w_today = sum(warnings[cid].values())
+    b_today = len(ban_list[cid])
+    history_today = [h for uid_h in mod_history[cid].values() for h in uid_h if h.get("time","").startswith(today)]
+    lines = [f"📊 <b>Статус модерации — {today}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    lines += [f"⚡ Варнов: <b>{w_today}</b>", f"🔨 Банов: <b>{b_today}</b>", f"📋 Действий: <b>{len(history_today)}</b>"]
+    for h in history_today[-10:]:
+        lines.append(f"▸ {h.get('action','?')} — {h.get('by','?')}")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+@dp.message(Command("announce", "объявление"))
+async def cmd_announce_slash(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    text = command.args or (message.reply_to_message.text if message.reply_to_message else None)
+    if not text:
+        await reply_auto_delete(message, "⚠️ Укажи текст: /announce текст"); return
+    try: await message.delete()
+    except: pass
+    await bot.send_message(message.chat.id,
+        f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n{text}\n\n━━━━━━━━━━━━━━━━━━━━━━",
+        parse_mode="HTML")
+
+@dp.message(Command("corona", "корона"))
+async def cmd_corona_slash(message: Message, command: CommandObject):
+    if message.from_user.id != OWNER_ID:
+        await reply_auto_delete(message, "🚫 Только для владельца!"); return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение!"); return
+    target = message.reply_to_message.from_user; cid = message.chat.id
+    import time as _t
+    crown_holders[cid] = {"uid": target.id, "name": target.full_name, "expire": _t.time() + 86400}
+    await bot.send_message(cid,
+        f"👑 <b>КОРОЛЬ ЧАТА</b>\n\nОтныне и на 24 часа:\n🎖 {target.mention_html()}\n\nДа здравствует король! 👑",
+        parse_mode="HTML")
 
 
 async def main():
