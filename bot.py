@@ -4537,8 +4537,6 @@ async def cmd_report(message: Message, command: CommandObject):
     reporter = message.from_user; target = message.reply_to_message.from_user; cid = message.chat.id
     if target.id == reporter.id:
         await reply_auto_delete(message, "😏 Сам на себя жалуешься?"); return
-    if await is_admin_by_id(cid, target.id):
-        await reply_auto_delete(message, "🚫 Нельзя пожаловаться на администратора!"); return
     now = time(); key = (cid, reporter.id)
     if key in report_cooldown and now - report_cooldown[key] < 300:
         left = int(300 - (now - report_cooldown[key]))
@@ -4554,19 +4552,16 @@ async def cmd_report(message: Message, command: CommandObject):
         f"🔗 Сообщение: <a href='https://t.me/c/{str(cid)[4:]}/{message.reply_to_message.message_id}'>перейти</a>"
     )
     await log_action(report_text)
-    try:
-        admins = await bot.get_chat_administrators(cid)
-        for adm in admins:
-            if adm.user.is_bot: continue
-            try:
-                await bot.send_message(adm.user.id,
-                    f"🚨 <b>РЕПОРТ в чате {message.chat.title}</b>\n\n"
-                    f"👤 От: {reporter.full_name}\n🎯 На: {target.full_name}\n"
-                    f"📝 Причина: <b>{reason}</b>", parse_mode="HTML")
-            except: pass
-    except: pass
-    sent = await reply_auto_delete(message, 
-        f"✅ <b>Жалоба отправлена администраторам!</b>\n"
+    await log_action(
+        f"🚨 <b>РЕПОРТ</b>\n\n"
+        f"👤 От: {reporter.mention_html()}\n"
+        f"🎯 На: {target.mention_html()}\n"
+        f"📝 Причина: <b>{reason}</b>\n"
+        f"💬 Чат: <b>{message.chat.title}</b>\n"
+        f"🔗 <a href='https://t.me/c/{str(cid)[4:]}/{message.reply_to_message.message_id}'>перейти к сообщению</a>"
+    )
+    sent = await reply_auto_delete(message,
+        f"✅ <b>Жалоба отправлена!</b>\n"
         f"🎯 На кого: {target.mention_html()}\n📝 Причина: <b>{reason}</b>",
         parse_mode="HTML")
     await asyncio.sleep(10)
