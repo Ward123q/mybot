@@ -968,13 +968,6 @@ class AntiDrugMiddleware(BaseMiddleware):
             # Выдать варн
             warnings[cid][uid] += 1
             count = warnings[cid][uid]
-            # Мут на 2 минуты
-            from datetime import datetime, timedelta
-            until = datetime.now() + timedelta(minutes=2)
-            try:
-                await bot.restrict_chat_member(cid, uid,
-                    ChatPermissions(can_send_messages=False), until_date=until)
-            except: pass
             # Сообщение
             if count >= MAX_WARNINGS:
                 await bot.ban_chat_member(cid, uid)
@@ -989,14 +982,13 @@ class AntiDrugMiddleware(BaseMiddleware):
                     f"🥴 <b>АНТИНАРКОТИК</b>\n\n"
                     f"👤 {name}\n"
                     f"⚡ Варн: <b>{count}/{MAX_WARNINGS}</b>\n"
-                    f"🔇 Мут: <b>2 минуты</b>\n"
                     f"🗑 Сообщение удалено\n\n"
                     f"<i>Тема наркотиков запрещена — /rules</i>", parse_mode="HTML")
             await log_action(
                 f"🥴 <b>АНТИНАРКОТИК</b>\n"
                 f"👤 {name}\n"
                 f"💬 Слово: <code>{found_word}</code>\n"
-                f"⚡ Варн: {count}/{MAX_WARNINGS} + мут 2 мин\n"
+                f"⚡ Варн: {count}/{MAX_WARNINGS}\n"
                 f"🏠 Чат: {event.chat.title}")
             add_mod_history(cid, uid, "🥴 Антинаркотик", f"Слово: {found_word}", "AutoMod")
             return  # не передаём дальше
