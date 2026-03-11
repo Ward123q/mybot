@@ -2608,18 +2608,53 @@ async def autist_commands(message: Message):
     if len(parts) < 2: return
     rest = parts[1].strip()
     action = None
-    for cmd in ["снять варн","размут","разбан","варн","мут навсегда","мут","бан","захуесосить","кик",
+    for cmd in ["снять варн","разварн","размут","разбан","варн","мут навсегда","мут","бан","захуесосить","кик",
                 "очистить","удалить","закрепить","предупредить","инфо","варны","репутация",
                 "обозвать","поженить","проверить","казнить","диагноз","профессия","похитить","дуэль","экзамен"]:
         if rest.startswith(cmd):
             action = cmd; rest = rest[len(cmd):].strip(); break
     if not action: return
-    if not message.reply_to_message:
-        await reply_auto_delete(message, "↩️ Ответь на сообщение участника."); return
-    target = message.reply_to_message.from_user; cid = message.chat.id
+    cid = message.chat.id
+    target = None
+
+    # ── Поиск цели: реплай или @юзернейм или ID ──
+    import re as _re
+    if message.reply_to_message:
+        target = message.reply_to_message.from_user
+    else:
+        # Пробуем найти @username или числовой ID в rest
+        username_match = _re.match(r"^@?(\w+)", rest)
+        id_match = _re.match(r"^(-?\d+)", rest)
+        if id_match:
+            try:
+                uid_target = int(id_match.group(1))
+                tm = await bot.get_chat_member(cid, uid_target)
+                target = tm.user
+                rest = rest[id_match.end():].strip()
+            except: pass
+        elif username_match:
+            uname = username_match.group(1).lstrip("@")
+            # Ищем в известных участниках чата
+            try:
+                tm = await bot.get_chat_member(cid, f"@{uname}")
+                target = tm.user
+                rest = rest[username_match.end():].strip()
+            except:
+                # Поиск по сохранённым данным
+                for uid in chat_stats[cid]:
+                    try:
+                        tm = await bot.get_chat_member(cid, uid)
+                        if tm.user.username and tm.user.username.lower() == uname.lower():
+                            target = tm.user
+                            rest = rest[username_match.end():].strip()
+                            break
+                    except: pass
+
+    if not target:
+        await reply_auto_delete(message, "↩️ Ответь на сообщение или укажи @юзернейм / ID."); return
+
     duration_mins = None; duration_label = None; reason = "Нарушение правил"
-    import re
-    time_match = re.match(r"^(\d+)\s*(д|ч|м)\s*", rest)
+    time_match = _re.match(r"^(\d+)\s*(д|ч|м)\s*", rest)
     if time_match:
         num = int(time_match.group(1)); unit = time_match.group(2)
         if unit == "д":   duration_mins = num * 1440; duration_label = f"{num} дн."
@@ -2660,15 +2695,23 @@ async def autist_commands(message: Message):
             await reply_auto_delete(message, f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
         elif action == "варн":
             warnings[cid][target.id] += 1; count = warnings[cid][target.id]; save_data()
+            # Если указано время — автосброс варна
+            if duration_mins:
+                import asyncio as _aio
+                async def _auto_unwarn(c, u, delay):
+                    await _aio.sleep(delay * 60)
+                    if warnings[c][u] > 0: warnings[c][u] -= 1; save_data()
+                _aio.create_task(_auto_unwarn(cid, target.id, duration_mins))
             if count >= MAX_WARNINGS:
                 await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
                 await reply_auto_delete(message, f"🔨 {tname} — {MAX_WARNINGS} варна, автобан!\n📝 Причина: {reason}", parse_mode="HTML")
                 await log_action(f"╔═══════════════════╗\n🔨  <b>АВТОБАН</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n🤖 <b>Причина:</b> лимит варнов\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
             else:
-                await reply_auto_delete(message, f"⚡ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
+                time_note = f"\n⏰ Автосброс через: <b>{duration_label}</b>" if duration_mins else ""
+                await reply_auto_delete(message, f"⚡ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}{time_note}", parse_mode="HTML")
                 await log_action(f"╔═══════════════════╗\n⚡  <b>ВАРН</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
-        elif action in ("снять варн", "снятьварн"):
-            if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1
+        elif action in ("снять варн", "разварн"):
+            if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1; save_data()
             await reply_auto_delete(message, f"🌿 С {tname} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>", parse_mode="HTML")
         elif action == "разбан":
             await bot.unban_chat_member(cid, target.id, only_if_banned=True)
