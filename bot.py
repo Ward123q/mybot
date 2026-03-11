@@ -784,6 +784,7 @@ def kb_games(tid: int) -> InlineKeyboardMarkup:
     ])
 
 message_cache = {}
+user_msg_ids  = defaultdict(lambda: defaultdict(list))  # {cid: {uid: [(msg_id, ts)]}}
 
 class StatsMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
@@ -849,6 +850,12 @@ class StatsMiddleware(BaseMiddleware):
                     "user_id": event.from_user.id, "chat_id": event.chat.id,
                     "chat_title": event.chat.title,
                 }
+                # Запомнить ID сообщения для чистки
+                import time as _tc
+                user_msg_ids[cid][uid].append((event.message_id, _tc.time()))
+                # Хранить только последние 500 сообщений на юзера
+                if len(user_msg_ids[cid][uid]) > 500:
+                    user_msg_ids[cid][uid] = user_msg_ids[cid][uid][-500:]
                 # Расширенная статистика
                 from datetime import datetime
                 hour = datetime.now().hour
@@ -2808,18 +2815,23 @@ async def autist_commands(message: Message):
 
         elif action == "чистка":
             mins = duration_mins or 30
-            from datetime import datetime, timedelta
-            cutoff = message.date - timedelta(minutes=mins)
+            import time as _tc
+            cutoff = _tc.time() - (mins * 60)
+            msgs_to_delete = [
+                msg_id for msg_id, ts in user_msg_ids[cid].get(target.id, [])
+                if ts >= cutoff
+            ]
             deleted = 0
-            msg_id = message.message_id
-            for i in range(msg_id, max(msg_id - 500, 0), -1):
+            for msg_id in msgs_to_delete:
                 try:
-                    m = await bot.forward_message(cid, cid, i)
-                    if m.from_user and m.from_user.id == target.id and m.date >= cutoff:
-                        await bot.delete_message(cid, i)
-                        deleted += 1
-                    await bot.delete_message(cid, m.message_id)
+                    await bot.delete_message(cid, msg_id)
+                    deleted += 1
                 except: pass
+            # Очистить удалённые из кэша
+            user_msg_ids[cid][target.id] = [
+                (mid, ts) for mid, ts in user_msg_ids[cid].get(target.id, [])
+                if ts < cutoff
+            ]
             await reply_auto_delete(message,
                 f"🧹 Удалено <b>{deleted}</b> сообщений {tname} за последние <b>{mins} мин</b>",
                 parse_mode="HTML")
