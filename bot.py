@@ -318,6 +318,8 @@ report_queue     = defaultdict(list)   # {cid: [{reporter,target,text,ts,categor
 report_blocked   = set()               # {uid} — заблокированные от репортов
 report_mod_votes = {}                  # {report_key: {mod_id: vote}} — голосование по репортам на админов
 report_mod_stats = defaultdict(lambda: defaultdict(int))  # {cid: {mod_id: handled_count}}
+report_score     = defaultdict(int)    # {uid: score} — доверие репортера
+report_archive   = defaultdict(list)   # {cid: [закрытые репорты]}
 silent_bans      = {}                  # {uid: True}
 clown_targets    = {}                  # {cid_uid: expire_ts}
 spy_targets      = {}                  # {cid_uid: owner_id}
@@ -338,6 +340,41 @@ levels        = defaultdict(lambda: defaultdict(int))
 xp_data       = defaultdict(lambda: defaultdict(int))
 streaks       = defaultdict(lambda: defaultdict(int))
 streak_dates  = defaultdict(lambda: defaultdict(str))
+
+# ══════════════════════════════════════════
+#  🆕 НОВЫЕ ГЛОБАЛЬНЫЕ СТРУКТУРЫ
+# ══════════════════════════════════════════
+# Роли модераторов: {cid: {uid: "junior"/"senior"/"head"}}
+mod_roles = defaultdict(dict)
+
+# Права ролей
+MOD_ROLE_PERMISSIONS = {
+    "junior": {"warn", "mute", "kick", "report_handle"},
+    "senior": {"warn", "mute", "kick", "ban", "report_handle", "clear", "notes"},
+    "head":   {"warn", "mute", "kick", "ban", "unban", "report_handle", "clear",
+               "notes", "announce", "lockdown", "tempban"},
+}
+MOD_ROLE_LABELS = {
+    "junior": "🟢 Junior Mod",
+    "senior": "🔵 Senior Mod",
+    "head":   "🔴 Head Mod",
+}
+
+# Плагины: {cid: {plugin_name: bool}}
+plugins = defaultdict(lambda: {
+    "economy": True, "games": True, "xp": True,
+    "antispam": True, "antimat": True, "reports": True,
+    "events": True, "newspaper": True, "clans": True,
+})
+
+# Связанные чаты: {uid: [cid1, cid2, ...]} — бан везде
+linked_chats_bans = {}  # глобальный список чатов владельца
+
+# Апелляции: {uid: {cid, reason, ts, status}}
+appeals = {}
+
+# Расписание: [{cid, action, text, ts, repeat}]
+scheduled_actions = []
 # ИИ чат
 # Расширенная статистика
 hourly_stats  = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))  # {cid: {uid: {hour: count}}}
@@ -6646,7 +6683,446 @@ async def cmd_corona_slash(message: Message, command: CommandObject):
         parse_mode="HTML")
 
 
-async def main():
+# ══════════════════════════════════════════════════════════
+#  🔐 РОЛИ МОДЕРАТОРОВ (только владелец выдаёт)
+# ══════════════════════════════════════════════════════════
+def has_mod_permission(cid: int, uid: int, perm: str) -> bool:
+    """Проверяет есть ли у юзера права через роль модератора"""
+    role = mod_roles[cid].get(uid)
+    if not role: return False
+    return perm in MOD_ROLE_PERMISSIONS.get(role, set())
+
+def get_mod_role_label(cid: int, uid: int) -> str:
+    role = mod_roles[cid].get(uid)
+    return MOD_ROLE_LABELS.get(role, "") if role else ""
+
+@dp.message(Command("giverole"))
+async def cmd_give_role(message: Message):
+    """аутист дать роль @user junior/senior/head — только владелец"""
+    if message.from_user.id != OWNER_ID:
+        await reply_auto_delete(message, "🚫 Только владелец может выдавать роли!"); return
+    args = message.text.split()[1:] if message.text else []
+    if len(args) < 2:
+        await reply_auto_delete(message,
+            "⚙️ <b>Использование:</b>\n"
+            "<code>/giverole @user junior|senior|head</code>\n\n"
+            "🟢 Junior — варн, мут, кик\n"
+            "🔵 Senior — + бан, заметки, очистка\n"
+            "🔴 Head — + разбан, локдаун, темпбан",
+            parse_mode="HTML"); return
+    role_arg = args[-1].lower()
+    if role_arg not in MOD_ROLE_PERMISSIONS:
+        await reply_auto_delete(message, "⚠️ Роль: junior / senior / head"); return
+    target = None
+    if message.reply_to_message:
+        target = message.reply_to_message.from_user
+    else:
+        uname = args[0].lstrip("@")
+        try:
+            target_member = await bot.get_chat_member(message.chat.id, uname)
+            target = target_member.user
+        except: pass
+    if not target:
+        await reply_auto_delete(message, "⚠️ Юзер не найден"); return
+    cid = message.chat.id
+    mod_roles[cid][target.id] = role_arg
+    save_data()
+    await reply_auto_delete(message,
+        f"✅ {target.mention_html()} получил роль <b>{MOD_ROLE_LABELS[role_arg]}</b>",
+        parse_mode="HTML")
+    await log_action(
+        f"🔐 <b>РОЛЬ ВЫДАНА</b>\n"
+        f"👤 {target.full_name}\n"
+        f"🎖 Роль: {MOD_ROLE_LABELS[role_arg]}\n"
+        f"👑 Кем: {message.from_user.full_name}\n"
+        f"💬 Чат: {message.chat.title}")
+
+@dp.message(Command("takerole"))
+async def cmd_take_role(message: Message):
+    if message.from_user.id != OWNER_ID:
+        await reply_auto_delete(message, "🚫 Только владелец!"); return
+    target = message.reply_to_message.from_user if message.reply_to_message else None
+    if not target:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение"); return
+    cid = message.chat.id
+    if target.id in mod_roles[cid]:
+        old = MOD_ROLE_LABELS.get(mod_roles[cid].pop(target.id), "")
+        save_data()
+        await reply_auto_delete(message,
+            f"❌ У {target.mention_html()} забрана роль <b>{old}</b>", parse_mode="HTML")
+    else:
+        await reply_auto_delete(message, "⚠️ У юзера нет роли")
+
+@dp.message(Command("roles"))
+async def cmd_roles(message: Message):
+    if message.from_user.id != OWNER_ID and not await is_admin_by_id(message.chat.id, message.from_user.id):
+        return
+    cid = message.chat.id
+    roles_in_chat = mod_roles.get(cid, {})
+    if not roles_in_chat:
+        await reply_auto_delete(message, "📋 Ролей нет — выдай через /giverole"); return
+    lines = ["🔐 <b>Роли модераторов</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for uid2, role in roles_in_chat.items():
+        try:
+            tm = await bot.get_chat_member(cid, uid2)
+            uname = tm.user.full_name
+        except: uname = f"ID{uid2}"
+        lines.append(f"{MOD_ROLE_LABELS[role]} — {uname}")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  🧩 ПЛАГИН-СИСТЕМА
+# ══════════════════════════════════════════════════════════
+PLUGIN_LABELS = {
+    "economy":   "💰 Экономика",
+    "games":     "🎮 Игры",
+    "xp":        "⭐ XP система",
+    "antispam":  "🛡 Антиспам",
+    "antimat":   "🧼 Антимат",
+    "reports":   "🚨 Репорты",
+    "events":    "🎉 Ивенты",
+    "newspaper": "📰 Газета",
+    "clans":     "🤝 Кланы",
+}
+
+@dp.message(Command("plugins"))
+async def cmd_plugins(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    cid = message.chat.id
+    p = plugins[cid]
+    rows = []
+    for key, label in PLUGIN_LABELS.items():
+        status = "✅" if p.get(key, True) else "❌"
+        rows.append([InlineKeyboardButton(
+            text=f"{status} {label}",
+            callback_data=f"plugin:toggle:{key}:{cid}"
+        )])
+    rows.append([InlineKeyboardButton(text="✖️ Закрыть", callback_data="plugin:close:_:0")])
+    await message.answer(
+        "🧩 <b>Управление плагинами</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        "Нажми чтобы вкл/выкл модуль:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+@dp.callback_query(F.data.startswith("plugin:"))
+async def cb_plugin(call: CallbackQuery):
+    if call.from_user.id != OWNER_ID:
+        await call.answer("🚫 Только владелец!", show_alert=True); return
+    parts = call.data.split(":")
+    action, key, cid_str = parts[1], parts[2], parts[3]
+    if action == "close":
+        await call.message.delete(); await call.answer(); return
+    cid = int(cid_str)
+    plugins[cid][key] = not plugins[cid].get(key, True)
+    status = "✅ включён" if plugins[cid][key] else "❌ выключен"
+    # Обновить клавиатуру
+    p = plugins[cid]
+    rows = []
+    for k, label in PLUGIN_LABELS.items():
+        st = "✅" if p.get(k, True) else "❌"
+        rows.append([InlineKeyboardButton(text=f"{st} {label}", callback_data=f"plugin:toggle:{k}:{cid}")])
+    rows.append([InlineKeyboardButton(text="✖️ Закрыть", callback_data="plugin:close:_:0")])
+    await call.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    await call.answer(f"{PLUGIN_LABELS.get(key, key)} — {status}")
+
+# ══════════════════════════════════════════════════════════
+#  🔗 СВЯЗАННЫЕ ЧАТЫ — бан в одном = бан везде
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("linkchats"))
+async def cmd_link_chats(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    linked = list(known_chats.keys())
+    linked_chats_bans["owner"] = linked
+    save_data()
+    chat_names = [f"▸ {known_chats[c]}" for c in linked]
+    await reply_auto_delete(message,
+        f"🔗 <b>Связаны {len(linked)} чатов</b>\n\n"
+        + "\n".join(chat_names) +
+        "\n\n⚠️ Теперь бан в одном = бан везде",
+        parse_mode="HTML")
+
+# Хук: глобальный бан через связанные чаты (вызывается из бан-обработчиков)
+async def global_ban_if_linked(uid: int, reason: str = "Глобальный бан"):
+    if "owner" not in linked_chats_bans: return
+    for cid in linked_chats_bans["owner"]:
+        try:
+            await bot.ban_chat_member(cid, uid)
+            ban_list[cid].add(uid)
+        except: pass
+
+# ══════════════════════════════════════════════════════════
+#  🔁 АПЕЛЛЯЦИИ — забаненный оспаривает решение
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("appeal"))
+async def cmd_appeal(message: Message):
+    """Работает в ЛС боту: /appeal причина"""
+    if message.chat.type != "private":
+        await reply_auto_delete(message, "📬 Апелляции подаются в ЛС боту: @твой_бот"); return
+    uid = message.from_user.id
+    if uid in appeals and appeals[uid].get("status") == "pending":
+        await message.answer("⏳ Твоя апелляция уже на рассмотрении. Подожди."); return
+    reason = message.text.replace("/appeal", "").strip()
+    if not reason:
+        await message.answer(
+            "📋 <b>Апелляция</b>\n\nНапиши:\n<code>/appeal причина почему тебя нужно разбанить</code>",
+            parse_mode="HTML"); return
+    appeals[uid] = {
+        "uid": uid, "name": message.from_user.full_name,
+        "reason": reason, "ts": __import__("time").time(), "status": "pending"
+    }
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Разбанить", callback_data=f"appeal:accept:{uid}"),
+        InlineKeyboardButton(text="❌ Отклонить", callback_data=f"appeal:reject:{uid}"),
+    ]])
+    await bot.send_message(OWNER_ID,
+        f"🔁 <b>АПЕЛЛЯЦИЯ</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 {message.from_user.full_name} (<code>{uid}</code>)\n"
+        f"📝 Причина: {reason}",
+        parse_mode="HTML", reply_markup=kb)
+    await message.answer("✅ Апелляция отправлена! Ожидай решения владельца.")
+
+@dp.callback_query(F.data.startswith("appeal:"))
+async def cb_appeal(call: CallbackQuery):
+    if call.from_user.id != OWNER_ID:
+        await call.answer("🚫 Только владелец!", show_alert=True); return
+    parts = call.data.split(":")
+    action, uid = parts[1], int(parts[2])
+    if uid not in appeals:
+        await call.answer("Устарело", show_alert=True); return
+    appeals[uid]["status"] = action
+    if action == "accept":
+        # Разбанить во всех чатах
+        for cid in known_chats:
+            try:
+                await bot.unban_chat_member(cid, uid, only_if_banned=True)
+                ban_list[cid].discard(uid)
+            except: pass
+        save_data()
+        try: await bot.send_message(uid, "✅ Твоя апелляция <b>одобрена</b>! Ты разбанен.", parse_mode="HTML")
+        except: pass
+        await call.message.edit_text(f"✅ Апелляция одобрена — ID{uid} разбанен")
+    else:
+        try: await bot.send_message(uid, "❌ Твоя апелляция <b>отклонена</b>.", parse_mode="HTML")
+        except: pass
+        await call.message.edit_text(f"❌ Апелляция отклонена — ID{uid}")
+    await call.answer("Готово")
+
+# ══════════════════════════════════════════════════════════
+#  📱 ЛИЧНЫЙ КАБИНЕТ — юзер пишет боту в ЛС
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("profile"), F.chat.type == "private")
+async def cmd_profile_dm(message: Message):
+    uid = message.from_user.id
+    lines = [f"👤 <b>Твой профиль</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    lines.append(f"🆔 ID: <code>{uid}</code>")
+    lines.append(f"📛 Имя: {message.from_user.full_name}")
+    total_warns = sum(warnings[cid].get(uid, 0) for cid in warnings)
+    total_rep   = sum(reputation[cid].get(uid, 0) for cid in reputation)
+    total_msgs  = sum(chat_stats[cid].get(uid, 0) for cid in chat_stats)
+    total_xp    = sum(xp_data[cid].get(uid, 0) for cid in xp_data)
+    lines.append(f"\n⚡ Варнов всего: <b>{total_warns}</b>")
+    lines.append(f"⭐ Репутация: <b>{total_rep:+d}</b>")
+    lines.append(f"💬 Сообщений: <b>{total_msgs}</b>")
+    lines.append(f"🏆 XP: <b>{total_xp}</b>")
+    # Роли в чатах
+    roles_list = [(cid, mod_roles[cid][uid]) for cid in mod_roles if uid in mod_roles[cid]]
+    if roles_list:
+        lines.append("\n🎖 <b>Роли:</b>")
+        for cid, role in roles_list:
+            cname = known_chats.get(cid, f"Чат {cid}")
+            lines.append(f"  ▸ {cname}: {MOD_ROLE_LABELS[role]}")
+    # Апелляция
+    if uid in ban_list or any(uid in ban_list[cid] for cid in ban_list):
+        lines.append("\n🔨 Ты забанен в одном из чатов")
+        lines.append("📋 Подать апелляцию: /appeal причина")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📊 Статистика", callback_data=f"profile:stats:{uid}"),
+        InlineKeyboardButton(text="📋 Мои репорты", callback_data=f"profile:reports:{uid}"),
+    ]])
+    await message.answer("\n".join(lines), parse_mode="HTML", reply_markup=kb)
+
+@dp.callback_query(F.data.startswith("profile:"))
+async def cb_profile(call: CallbackQuery):
+    parts = call.data.split(":")
+    action, uid = parts[1], int(parts[2])
+    if call.from_user.id != uid:
+        await call.answer("🚫 Это не твой профиль!", show_alert=True); return
+    if action == "stats":
+        total_xp = sum(xp_data[cid].get(uid, 0) for cid in xp_data)
+        total_msgs = sum(chat_stats[cid].get(uid, 0) for cid in chat_stats)
+        await call.answer(
+            f"📊 Сообщений: {total_msgs}\n🏆 XP: {total_xp}",
+            show_alert=True)
+    elif action == "reports":
+        my_reports = sum(
+            1 for cid in report_queue
+            for r in report_queue[cid] if r.get("reporter") == uid
+        )
+        accepted = sum(
+            1 for cid in report_queue
+            for r in report_queue[cid]
+            if r.get("reporter") == uid and r.get("status") == "accepted"
+        )
+        score = report_score.get(uid, 0)
+        await call.answer(
+            f"🚨 Репортов подано: {my_reports}\n✅ Принято: {accepted}\n⭐ Скор: {score}",
+            show_alert=True)
+
+# ══════════════════════════════════════════════════════════
+#  🌍 МУЛЬТИ-ЧАТ ПАНЕЛЬ — управление всеми чатами из ЛС
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("mypanel"), F.chat.type == "private")
+async def cmd_mypanel(message: Message):
+    if message.from_user.id != OWNER_ID:
+        await message.answer("🚫 Только для владельца!"); return
+    if not known_chats:
+        await message.answer("📭 Бот ещё не добавлен ни в один чат"); return
+    rows = []
+    for cid, title in known_chats.items():
+        total_w = sum(warnings[cid].values())
+        new_r = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
+        label = f"💬 {title[:20]} | ⚡{total_w} 🚨{new_r}"
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"mypanel:chat:{cid}")])
+    rows.append([InlineKeyboardButton(text="🔗 Связать чаты", callback_data="mypanel:link:0")])
+    rows.append([InlineKeyboardButton(text="✖️ Закрыть", callback_data="mypanel:close:0")])
+    await message.answer(
+        f"🌍 <b>Мульти-чат панель</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Чатов: <b>{len(known_chats)}</b>\n\nВыбери чат:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+@dp.callback_query(F.data.startswith("mypanel:"))
+async def cb_mypanel(call: CallbackQuery):
+    if call.from_user.id != OWNER_ID:
+        await call.answer("🚫 Только владелец!", show_alert=True); return
+    parts = call.data.split(":")
+    action, val = parts[1], parts[2]
+    if action == "close":
+        await call.message.delete(); await call.answer(); return
+    elif action == "link":
+        linked = list(known_chats.keys())
+        linked_chats_bans["owner"] = linked
+        save_data()
+        await call.answer(f"🔗 Связано {len(linked)} чатов!", show_alert=True); return
+    elif action == "chat":
+        cid = int(val)
+        title = known_chats.get(cid, f"Чат {cid}")
+        total_msgs  = sum(chat_stats[cid].values())
+        total_warns = sum(warnings[cid].values())
+        new_reports = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
+        bans_count  = len(ban_list.get(cid, set()))
+        roles_count = len(mod_roles.get(cid, {}))
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔇 Мут локдаун",  callback_data=f"mypanel:lockdown:{cid}"),
+             InlineKeyboardButton(text="📢 Анонс",         callback_data=f"mypanel:announce:{cid}")],
+            [InlineKeyboardButton(text="🚨 Репорты",       callback_data=f"mypanel:reports:{cid}"),
+             InlineKeyboardButton(text="🔐 Роли",          callback_data=f"mypanel:roles:{cid}")],
+            [InlineKeyboardButton(text="🧩 Плагины",       callback_data=f"mypanel:plugins:{cid}"),
+             InlineKeyboardButton(text="📊 Статистика",    callback_data=f"mypanel:stats:{cid}")],
+            [InlineKeyboardButton(text="◀️ Назад",         callback_data="mypanel:back:0")],
+        ])
+        await call.message.edit_text(
+            f"💬 <b>{title}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📨 Сообщений: <b>{total_msgs}</b>\n"
+            f"⚡ Варнов: <b>{total_warns}</b>\n"
+            f"🚨 Новых репортов: <b>{new_reports}</b>\n"
+            f"🔨 Банов: <b>{bans_count}</b>\n"
+            f"🎖 Ролей: <b>{roles_count}</b>",
+            parse_mode="HTML", reply_markup=kb)
+    elif action == "back":
+        # Перестроить главное меню
+        rows = []
+        for cid2, title2 in known_chats.items():
+            total_w = sum(warnings[cid2].values())
+            new_r = sum(1 for r in report_queue.get(cid2, []) if r.get("status") == "new")
+            rows.append([InlineKeyboardButton(
+                text=f"💬 {title2[:20]} | ⚡{total_w} 🚨{new_r}",
+                callback_data=f"mypanel:chat:{cid2}")])
+        rows.append([InlineKeyboardButton(text="🔗 Связать чаты", callback_data="mypanel:link:0")])
+        rows.append([InlineKeyboardButton(text="✖️ Закрыть", callback_data="mypanel:close:0")])
+        await call.message.edit_text(
+            f"🌍 <b>Мульти-чат панель</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Чатов: <b>{len(known_chats)}</b>\n\nВыбери чат:",
+            parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    elif action == "lockdown":
+        cid = int(val)
+        try:
+            await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
+            await call.answer(f"🔇 Локдаун в {known_chats.get(cid,'чате')}!", show_alert=True)
+        except Exception as e:
+            await call.answer(f"❌ {e}", show_alert=True)
+    elif action == "announce":
+        cid = int(val)
+        pending[call.from_user.id] = {"action": "mypanel_announce", "chat_id": cid}
+        await call.message.edit_text(
+            "📢 Напиши текст объявления для отправки в чат:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="❌ Отмена", callback_data=f"mypanel:chat:{cid}")
+            ]]))
+    elif action == "reports":
+        cid = int(val)
+        queue = [r for r in report_queue.get(cid, []) if r.get("status") == "new"]
+        if not queue:
+            await call.answer("✅ Новых репортов нет!", show_alert=True); return
+        r = queue[0]
+        await call.message.edit_text(
+            f"🚨 <b>Репорты в {known_chats.get(cid,'чате')}</b>\n"
+            f"Новых: {len(queue)}\n\n"
+            f"🎯 На: {r.get('target_name','?')}\n"
+            f"📝 {r.get('text','')[:80]}",
+            parse_mode="HTML",
+            reply_markup=kb_report_action_v2(cid, report_queue[cid].index(r), r["target"]))
+    elif action == "stats":
+        cid = int(val)
+        from datetime import datetime
+        today = datetime.now().strftime("%d.%m.%Y")
+        today_msgs = sum(daily_stats[cid][uid].get(today, 0) for uid in daily_stats[cid])
+        await call.answer(
+            f"📊 {known_chats.get(cid,'Чат')}\n"
+            f"Сегодня: {today_msgs} сообщ.\n"
+            f"Участников: {len(chat_stats[cid])}",
+            show_alert=True)
+    elif action == "roles":
+        cid = int(val)
+        roles_in = mod_roles.get(cid, {})
+        if not roles_in:
+            await call.answer("Ролей нет. Выдай через /giverole в чате.", show_alert=True); return
+        text = "\n".join(f"{MOD_ROLE_LABELS[r]} — ID{u}" for u, r in roles_in.items())
+        await call.answer(f"🎖 Роли:\n{text}", show_alert=True)
+    elif action == "plugins":
+        cid = int(val)
+        p = plugins[cid]
+        text = "\n".join(f"{'✅' if p.get(k,True) else '❌'} {l}" for k, l in PLUGIN_LABELS.items())
+        await call.answer(f"🧩 Плагины:\n{text}\n\nУпр: /plugins в чате", show_alert=True)
+    await call.answer()
+
+# ══════════════════════════════════════════════════════════
+#  📦 АРХИВ РЕПОРТОВ
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("reportarchive"))
+async def cmd_report_archive(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    args = message.text.split()[1:] if message.text else []
+    # Найти по имени/юзернейму если указано
+    target_filter = args[0].lstrip("@").lower() if args else None
+    closed = [r for r in report_queue.get(cid, [])
+              if r.get("status") in ("accepted", "rejected")]
+    if target_filter:
+        closed = [r for r in closed
+                  if target_filter in r.get("target_name", "").lower()]
+    if not closed:
+        await reply_auto_delete(message, "📦 Архив пуст"); return
+    lines = [f"📦 <b>Архив репортов</b> ({len(closed)} шт.)\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for r in closed[-10:]:
+        status_icon = "✅" if r.get("status") == "accepted" else "❌"
+        import datetime as _dt2
+        ts = _dt2.datetime.fromtimestamp(r.get("ts", 0)).strftime("%d.%m %H:%M")
+        lines.append(
+            f"{status_icon} <b>{r.get('target_name','?')}</b> — {r.get('category','?')}\n"
+            f"  📝 {r.get('text','')[:60]}\n"
+            f"  👮 {r.get('assigned_mod','?')} | 🕐 {ts}\n")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
     global bot_start_time
     import time as _tstart
     bot_start_time = _tstart.time()
