@@ -314,7 +314,10 @@ chat_stats    = defaultdict(lambda: defaultdict(int))
 reputation    = defaultdict(lambda: defaultdict(int))
 rep_cooldown  = {}
 user_notes       = defaultdict(dict)   # {cid: {uid: [notes]}}
-report_queue     = defaultdict(list)   # {cid: [{reporter,target,text,ts,msg_id}]}
+report_queue     = defaultdict(list)   # {cid: [{reporter,target,text,ts,category,priority,anon,context,status,assigned_mod}]}
+report_blocked   = set()               # {uid} — заблокированные от репортов
+report_mod_votes = {}                  # {report_key: {mod_id: vote}} — голосование по репортам на админов
+report_mod_stats = defaultdict(lambda: defaultdict(int))  # {cid: {mod_id: handled_count}}
 silent_bans      = {}                  # {uid: True}
 clown_targets    = {}                  # {cid_uid: expire_ts}
 spy_targets      = {}                  # {cid_uid: owner_id}
@@ -4706,61 +4709,284 @@ async def cb_shop(call: CallbackQuery):
             f"🎭 Активный: {title}\n\n📦 Куплено ({len(purchased)}):\n{bought_str}",
             show_alert=True)
 
-# ===== РЕПОРТЫ =====
+# ===== РЕПОРТЫ — УЛУЧШЕННАЯ СИСТЕМА =====
 report_cooldown = {}
+
+REPORT_CATEGORIES = {
+    "18":     ("🔞", "Контент 18+"),
+    "ads":    ("📢", "Реклама"),
+    "insult": ("💢", "Оскорбления"),
+    "spam":   ("🤖", "Спам"),
+    "other":  ("⚠️", "Другое"),
+}
+
+def kb_report_category(target_id: int, msg_id: int) -> InlineKeyboardMarkup:
+    rows = []
+    items = list(REPORT_CATEGORIES.items())
+    for i in range(0, len(items), 2):
+        row = []
+        for key, (emoji, label) in items[i:i+2]:
+            row.append(InlineKeyboardButton(
+                text=f"{emoji} {label}",
+                callback_data=f"report_cat:{key}:{target_id}:{msg_id}"
+            ))
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="report_cat:cancel:0:0")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+def kb_report_action_v2(cid: int, idx: int, target_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Варн",      callback_data=f"rpt2:warn:{cid}:{idx}:{target_id}"),
+         InlineKeyboardButton(text="🔇 Мут 1ч",   callback_data=f"rpt2:mute:{cid}:{idx}:{target_id}")],
+        [InlineKeyboardButton(text="🔨 Бан",       callback_data=f"rpt2:ban:{cid}:{idx}:{target_id}"),
+         InlineKeyboardButton(text="❌ Отклонить", callback_data=f"rpt2:reject:{cid}:{idx}:{target_id}")],
+        [InlineKeyboardButton(text="📝 Заметка",   callback_data=f"rpt2:note:{cid}:{idx}:{target_id}")],
+    ])
 
 @dp.message(Command("report"))
 async def cmd_report(message: Message, command: CommandObject):
     if not message.reply_to_message:
-        await reply_auto_delete(message, 
+        await reply_auto_delete(message,
             "📋 <b>Как использовать:</b>\n"
-            "↩️ Ответь на сообщение нарушителя и напиши:\n"
-            "<code>/report причина</code>", parse_mode="HTML"); return
-    reporter = message.from_user; target = message.reply_to_message.from_user; cid = message.chat.id
+            "↩️ Ответь на сообщение нарушителя:\n"
+            "<code>/report</code> — выбери категорию\n"
+            "<code>/report причина</code> — с причиной", parse_mode="HTML"); return
+    reporter = message.from_user
+    target = message.reply_to_message.from_user
+    cid = message.chat.id
     if target.id == reporter.id:
         await reply_auto_delete(message, "😏 Сам на себя жалуешься?"); return
+    if reporter.id in report_blocked:
+        await reply_auto_delete(message, "🚫 Твоё право на репорты заблокировано!"); return
     now = time(); key = (cid, reporter.id)
     if key in report_cooldown and now - report_cooldown[key] < 300:
         left = int(300 - (now - report_cooldown[key]))
-        await reply_auto_delete(message, f"⏳ Подожди ещё <b>{left} сек.</b> перед следующим репортом!", parse_mode="HTML"); return
+        await reply_auto_delete(message, f"⏳ Подожди ещё <b>{left} сек.</b>", parse_mode="HTML"); return
     report_cooldown[key] = now
-    reason = command.args or "Без причины"
-    report_text = (
-        f"🚨 <b>НОВЫЙ РЕПОРТ</b>\n\n"
-        f"👤 Жалоба от: {reporter.mention_html()}\n"
-        f"🎯 На кого: {target.mention_html()}\n"
-        f"📝 Причина: <b>{reason}</b>\n"
-        f"💬 Чат: <b>{message.chat.title}</b>\n"
-        f"🔗 Сообщение: <a href='https://t.me/c/{str(cid)[4:]}/{message.reply_to_message.message_id}'>перейти</a>"
-    )
-    await log_action(report_text)
-    await log_action(
-        f"🚨 <b>РЕПОРТ</b>\n\n"
-        f"👤 От: {reporter.mention_html()}\n"
-        f"🎯 На: {target.mention_html()}\n"
-        f"📝 Причина: <b>{reason}</b>\n"
-        f"💬 Чат: <b>{message.chat.title}</b>\n"
-        f"🔗 <a href='https://t.me/c/{str(cid)[4:]}/{message.reply_to_message.message_id}'>перейти к сообщению</a>"
-    )
-    sent = await reply_auto_delete(message,
-        f"✅ <b>Жалоба отправлена!</b>\n"
-        f"🎯 На кого: {target.mention_html()}\n📝 Причина: <b>{reason}</b>",
-        parse_mode="HTML")
-    # Добавить в очередь жалоб для панели
-    import time as _t
-    report_queue[cid].append({
-        'reporter': reporter.id,
-        'target': target.id,
-        'text': reason,
-        'ts': _t.time()
-    })
-    await asyncio.sleep(10)
-    try:
-        await sent.delete()
-        try: await message.delete()
-        except: pass
+    # Контекст сообщений
+    context_msgs = []
+    for mid, ts in user_msg_ids[cid].get(target.id, []):
+        if mid < message.reply_to_message.message_id and mid in message_cache:
+            context_msgs.append(f"  ▸ {message_cache[mid].get('text','[медиа]')[:80]}")
+    context_msgs = context_msgs[-3:]
+    try: await message.delete()
     except: pass
+    cat_msg = await message.answer(
+        f"🚨 <b>Репорт на {target.mention_html()}</b>\nВыбери категорию:",
+        parse_mode="HTML",
+        reply_markup=kb_report_category(target.id, message.reply_to_message.message_id))
+    pending[reporter.id] = {
+        "action": "report_pending",
+        "target_id": target.id, "target_name": target.full_name,
+        "chat_id": cid, "msg_id": message.reply_to_message.message_id,
+        "reason": command.args or "", "context": context_msgs,
+        "reporter_id": reporter.id, "reporter_name": reporter.full_name,
+    }
+    asyncio.create_task(schedule_delete(cat_msg))
 
+@dp.callback_query(F.data.startswith("report_cat:"))
+async def cb_report_category(call: CallbackQuery):
+    parts = call.data.split(":")
+    cat = parts[1]
+    if cat == "cancel":
+        await call.message.delete()
+        if call.from_user.id in pending: del pending[call.from_user.id]
+        await call.answer("Отменено"); return
+    target_id = int(parts[2]); msg_id = int(parts[3])
+    cid = call.message.chat.id
+    p = pending.get(call.from_user.id, {})
+    if not p or p.get("action") != "report_pending":
+        await call.answer("⚠️ Устарело", show_alert=True); return
+    cat_emoji, cat_label = REPORT_CATEGORIES.get(cat, ("⚠️", "Другое"))
+    reason = p.get("reason") or cat_label
+    context = p.get("context", [])
+    reporter_id = p.get("reporter_id", call.from_user.id)
+    reporter_name = p.get("reporter_name", call.from_user.full_name)
+    target_name = p.get("target_name", f"ID{target_id}")
+    import time as _tr
+    existing = [r for r in report_queue[cid] if r.get("target") == target_id]
+    priority = "🔴 HIGH" if len(existing) >= 2 else "🟡 NORMAL"
+    auto_action = ""
+    # Авто-варн при 5+ репортах
+    if len(existing) >= 4:
+        warnings[cid][target_id] += 1
+        auto_action = f"\n⚡ <b>Авто-варн</b> ({len(existing)+1} репортов)"
+        save_data()
+    # Авто-мут при 3+ уникальных репортерах
+    unique_reporters = set(r.get("reporter") for r in existing) | {reporter_id}
+    if len(unique_reporters) >= 3:
+        try:
+            await bot.restrict_chat_member(cid, target_id,
+                ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=10))
+            auto_action += "\n🔇 <b>Авто-мут 10 мин</b> (3+ жалобы)"
+        except: pass
+    report_entry = {
+        "reporter": reporter_id, "reporter_name": reporter_name,
+        "target": target_id, "target_name": target_name,
+        "text": reason, "category": cat_label, "category_emoji": cat_emoji,
+        "priority": priority, "ts": _tr.time(), "msg_id": msg_id,
+        "context": context, "status": "new", "assigned_mod": None, "note": "",
+    }
+    report_queue[cid].append(report_entry)
+    idx = len(report_queue[cid]) - 1
+    ctx_text = "\n".join(context) if context else "  нет данных"
+    is_admin_target = await is_admin_by_id(cid, target_id)
+    report_log = (
+        f"🚨 <b>РЕПОРТ</b> {priority}\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{cat_emoji} <b>{cat_label}</b>\n"
+        f"🎯 На: <b>{target_name}</b> (<code>{target_id}</code>)\n"
+        f"👤 От: 🕵️ анонимно\n"
+        f"📝 Причина: <b>{reason}</b>\n"
+        f"💬 Чат: <b>{call.message.chat.title}</b>\n"
+        f"🔗 <a href=\'https://t.me/c/{str(cid)[4:]}/{msg_id}\'>перейти</a>\n"
+        f"📜 Контекст:\n{ctx_text}{auto_action}"
+    )
+    await log_action(report_log)
+    if is_admin_target:
+        vote_key = f"{cid}_{target_id}_{idx}"
+        report_mod_votes[vote_key] = {}
+        vote_kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"rpt_vote:yes:{vote_key}"),
+            InlineKeyboardButton(text="❌ Отклонить",   callback_data=f"rpt_vote:no:{vote_key}"),
+        ]])
+        await bot.send_message(OWNER_ID,
+            f"⚠️ <b>РЕПОРТ НА АДМИНИСТРАТОРА</b>\n🎯 {target_name}\n{cat_emoji} {cat_label}\n📝 {reason}\nТребует 2 голоса:",
+            parse_mode="HTML", reply_markup=vote_kb)
+        await call.message.edit_text("✅ Жалоба на админа отправлена — ожидает 2 голоса модераторов.")
+    else:
+        await call.message.edit_text(
+            f"✅ <b>Жалоба принята!</b>\n{cat_emoji} {cat_label} | {priority}\n🕐 Модераторы рассмотрят в течение часа.",
+            parse_mode="HTML")
+        try:
+            admins = await bot.get_chat_administrators(cid)
+            for adm in admins:
+                if adm.user.is_bot: continue
+                try:
+                    await bot.send_message(adm.user.id,
+                        f"🚨 <b>НОВЫЙ РЕПОРТ</b> {priority}\n{cat_emoji} {cat_label}\n🎯 На: <b>{target_name}</b>\n📝 {reason}\n💬 {call.message.chat.title}",
+                        parse_mode="HTML", reply_markup=kb_report_action_v2(cid, idx, target_id))
+                except: pass
+        except: pass
+    # Дедлайн 1ч
+    async def _deadline(c, i, tname):
+        await asyncio.sleep(3600)
+        q = report_queue.get(c, [])
+        if i < len(q) and q[i].get("status") == "new":
+            await bot.send_message(OWNER_ID,
+                f"⏰ <b>ДЕДЛАЙН!</b> Репорт на <b>{tname}</b> не обработан за 1ч!", parse_mode="HTML")
+    asyncio.create_task(_deadline(cid, idx, target_name))
+    if call.from_user.id in pending: del pending[call.from_user.id]
+    await call.answer()
+
+@dp.callback_query(F.data.startswith("rpt2:"))
+async def cb_report_action_v2(call: CallbackQuery):
+    if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
+        await call.answer("🚫 Только для администраторов!", show_alert=True); return
+    parts = call.data.split(":")
+    action, cid, idx, target_id = parts[1], int(parts[2]), int(parts[3]), int(parts[4])
+    queue = report_queue.get(cid, [])
+    if idx >= len(queue):
+        await call.answer("❌ Уже обработан", show_alert=True); return
+    report = queue[idx]
+    mod_name = call.from_user.full_name
+    if action == "reject":
+        report["status"] = "rejected"; report["assigned_mod"] = mod_name
+        report_mod_stats[cid][call.from_user.id] += 1
+        try: await bot.send_message(report["reporter"], f"ℹ️ Твоя жалоба на <b>{report['target_name']}</b> отклонена.", parse_mode="HTML")
+        except: pass
+        await call.message.edit_text(
+            f"❌ Отклонено | 👮 {mod_name}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="🔄 Взять снова", callback_data=f"rpt2:takeover:{cid}:{idx}:{target_id}")
+            ]]))
+        await call.answer("Отклонено"); return
+    elif action == "takeover":
+        report["status"] = "new"; report["assigned_mod"] = None
+        await call.message.edit_text(
+            f"🔄 Репорт снова доступен",
+            reply_markup=kb_report_action_v2(cid, idx, target_id))
+        await call.answer("✅ Доступен снова"); return
+    elif action == "note":
+        pending[call.from_user.id] = {"action": "report_note", "chat_id": cid, "report_idx": idx, "target_id": target_id}
+        await call.message.edit_text("📝 Напиши заметку к репорту:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="❌ Отмена", callback_data=f"rpt2:cancel_note:{cid}:{idx}:{target_id}")
+            ]]))
+        await call.answer(); return
+    elif action == "cancel_note":
+        await call.message.edit_text("📋 Репорт:", reply_markup=kb_report_action_v2(cid, idx, target_id))
+        await call.answer(); return
+    if report.get("status") != "new":
+        await call.answer(f"⚠️ Уже обработан: {report.get('assigned_mod','?')}", show_alert=True); return
+    try:
+        result = ""
+        if action == "warn":
+            warnings[cid][target_id] += 1; result = "⚡ Варн"
+        elif action == "mute":
+            await bot.restrict_chat_member(cid, target_id, ChatPermissions(can_send_messages=False), until_date=timedelta(hours=1))
+            result = "🔇 Мут 1ч"
+        elif action == "ban":
+            await bot.ban_chat_member(cid, target_id); result = "🔨 Бан"
+        report["status"] = "accepted"; report["assigned_mod"] = mod_name
+        report_mod_stats[cid][call.from_user.id] += 1
+        save_data()
+        try: await bot.send_message(report["reporter"], f"✅ Жалоба на <b>{report['target_name']}</b> принята! {result}", parse_mode="HTML")
+        except: pass
+        await log_action(f"✅ <b>РЕПОРТ ОБРАБОТАН</b>\n🎯 {report['target_name']}\n👮 {mod_name}\n⚙️ {result}")
+        await call.message.edit_text(f"✅ <b>Обработано</b>\n{result}\n👮 {mod_name}", parse_mode="HTML")
+        await call.answer("✅ Готово")
+    except Exception as e:
+        await call.answer(f"❌ {e}", show_alert=True)
+
+@dp.callback_query(F.data.startswith("rpt_vote:"))
+async def cb_report_vote(call: CallbackQuery):
+    parts = call.data.split(":", 2)
+    vote, vote_key = parts[1], parts[2]
+    if vote_key not in report_mod_votes:
+        await call.answer("Устарело", show_alert=True); return
+    report_mod_votes[vote_key][call.from_user.id] = vote
+    yes_v = sum(1 for v in report_mod_votes[vote_key].values() if v == "yes")
+    no_v  = sum(1 for v in report_mod_votes[vote_key].values() if v == "no")
+    await call.answer(f"Твой голос: {'✅' if vote=='yes' else '❌'}")
+    if yes_v >= 2:
+        await call.message.edit_text("✅ 2 модератора подтвердили репорт на админа. Решение — за владельцем.")
+        await bot.send_message(OWNER_ID, f"⚠️ <b>2 голоса за репорт на админа!</b>\nКлюч: {vote_key}", parse_mode="HTML")
+        del report_mod_votes[vote_key]
+    elif no_v >= 2:
+        await call.message.edit_text("❌ Репорт на администратора отклонён (2 против)")
+        del report_mod_votes[vote_key]
+    else:
+        await call.message.edit_text(f"🗳 Голоса: ✅ {yes_v} / ❌ {no_v} (нужно 2)", reply_markup=call.message.reply_markup)
+
+@dp.message(Command("blockreport"))
+async def cmd_block_report(message: Message):
+    if not await require_admin(message): return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение юзера"); return
+    uid = message.reply_to_message.from_user.id
+    report_blocked.add(uid)
+    await reply_auto_delete(message,
+        f"🚫 {message.reply_to_message.from_user.mention_html()} — право на репорты заблокировано",
+        parse_mode="HTML")
+
+@dp.message(Command("reportstats"))
+async def cmd_report_stats(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    cid = message.chat.id
+    queue = report_queue.get(cid, [])
+    from collections import Counter
+    total = len(queue)
+    new_r = sum(1 for r in queue if r.get("status") == "new")
+    done_r = sum(1 for r in queue if r.get("status") == "accepted")
+    rej_r = sum(1 for r in queue if r.get("status") == "rejected")
+    top_targets = Counter(r["target_name"] for r in queue).most_common(5)
+    lines = [f"📊 <b>Статистика репортов</b>\n━━━━━━━━━━━━━━━━━━━━━━\n",
+             f"📋 Всего: <b>{total}</b> | 🆕 Новых: <b>{new_r}</b>",
+             f"✅ Принято: <b>{done_r}</b> | ❌ Отклонено: <b>{rej_r}</b>\n",
+             "🎯 <b>Чаще жалуются на:</b>"]
+    for name, cnt in top_targets:
+        lines.append(f"  ▸ {name} — {cnt}x")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
 @dp.message(Command("chatstats"))
 async def cmd_chatstats(message: Message):
     cid = message.chat.id
