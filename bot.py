@@ -7123,6 +7123,11 @@ async def cmd_report_archive(message: Message):
             f"  📝 {r.get('text','')[:60]}\n"
             f"  👮 {r.get('assigned_mod','?')} | 🕐 {ts}\n")
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+
+async def main():
+
     global bot_start_time
     import time as _tstart
     bot_start_time = _tstart.time()
