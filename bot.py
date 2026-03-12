@@ -1767,7 +1767,14 @@ async def cmd_help(message: Message):
             "⏰ <b>НАПОМИНАНИЯ</b>\n"
             "▸ аутист напомни 30м текст — напомнит тебе в личку\n"
         )
-    await reply_auto_delete(message, text, parse_mode="HTML")
+    if message.from_user.id == OWNER_ID:
+        chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+        for chunk in chunks:
+            try: await bot.send_message(OWNER_ID, chunk, parse_mode="HTML")
+            except: pass
+        await reply_auto_delete(message, "📬 Справка отправлена тебе в личку!", parse_mode="HTML")
+    else:
+        await reply_auto_delete(message, text, parse_mode="HTML")
 
 @dp.message(Command("panel"))
 async def cmd_panel(message: Message):
