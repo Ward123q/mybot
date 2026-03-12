@@ -1203,6 +1203,62 @@ async def cb_panel(call: CallbackQuery):
                 f"🤖 Автокик: <b>{'вкл' if AUTO_KICK_BOTS else 'выкл'}</b>",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
+
+        elif action == "reports":
+            queue = report_queue.get(cid, [])
+            if not queue:
+                await call.answer("✅ Жалоб нет!", show_alert=True); return
+            text_lines = [f"🚨 <b>Очередь жалоб</b> ({len(queue)} шт.)\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+            for i, r in enumerate(queue[:5]):
+                try:
+                    tm_r = await bot.get_chat_member(cid, r['target'])
+                    rname = tm_r.user.full_name
+                except: rname = f"ID{r['target']}"
+                try:
+                    tm_rep = await bot.get_chat_member(cid, r['reporter'])
+                    repname = tm_rep.user.full_name
+                except: repname = f"ID{r['reporter']}"
+                text_lines.append(f"#{i+1} 👤 На: <b>{rname}</b>\n👮 От: {repname}\n💬 {r['text'][:80]}\n")
+            kb_rep = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Варн",    callback_data=f"rpt:warn:{queue[0]['target']}:0"),
+                 InlineKeyboardButton(text="🔇 Мут",     callback_data=f"rpt:mute:{queue[0]['target']}:0")],
+                [InlineKeyboardButton(text="🔨 Бан",     callback_data=f"rpt:ban:{queue[0]['target']}:0"),
+                 InlineKeyboardButton(text="❌ Отклонить", callback_data=f"rpt:reject:{queue[0]['target']}:0")],
+                [InlineKeyboardButton(text="🔙 Назад",   callback_data="panel:mainmenu:0")]
+            ])
+            await call.message.edit_text("\n".join(text_lines), parse_mode="HTML", reply_markup=kb_rep)
+
+        elif action == "economy":
+            total_rep = sum(reputation[cid].values())
+            total_invested = sum(stock_invested[cid].values())
+            lottery_count = len(lottery_tickets[cid])
+            await call.message.edit_text(
+                "✨ <b>CHAT GUARD</b> — Экономика\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"💰 Всего репы в чате: <b>{total_rep}</b>\n"
+                f"📈 Вложено на бирже: <b>{total_invested}</b>\n"
+                f"🎰 Билетов в лотерее: <b>{lottery_count}</b>\n\n"
+                "▸ /toprep · /топxp · /stock · /lottery",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")
+                ]]))
+
+        elif action == "topxp":
+            await cmd_topxp(call.message)
+
+        elif action == "banlist":
+            bans = ban_list.get(cid, set())
+            lines = [f"🚫 <b>Список банов</b> ({len(bans)} чел.)\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+            for uid2 in list(bans)[:20]:
+                try:
+                    tm2 = await bot.get_chat_member(cid, uid2)
+                    lines.append(f"▸ {tm2.user.full_name} — <code>{uid2}</code>")
+                except: lines.append(f"▸ <code>{uid2}</code>")
+            if not bans: lines.append("Банов нет 🎉")
+            await call.message.edit_text("\n".join(lines), parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")
+                ]]))
     except Exception as e:
         await call.answer(f"⚠️ Ошибка: {e}", show_alert=True)
     await call.answer()
