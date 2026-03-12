@@ -2731,7 +2731,8 @@ async def autist_commands(message: Message):
                 "ядерка","анонс","локдаун","маска","клоун",
                 "слежка","дать репу","хаос","сброс","лотерея","смерть","зеркало",
                 "скрин","взрыв","корона","вызов","шпион","жребий","громко","молния","магнит","цель",
-                "напомни","закреп","голос","рост","тишина"]:
+                "напомни","закреп","голос","рост","тишина",
+                "температура","неделя","режим","лог","рестарт","сос"]:
         if rest.startswith(cmd):
             action = cmd; rest = rest[len(cmd):].strip(); break
     if not action: return
@@ -2741,7 +2742,8 @@ async def autist_commands(message: Message):
     # Команды которым target не нужен
     NO_TARGET_CMDS = {"статус", "хаос", "скрин", "взрыв", "шпион", "жребий", "громко",
                       "антиспам", "зеркало", "локдаун", "анонс", "лотерея",
-                      "тишина", "история", "топ нарушителей"}
+                      "тишина", "история", "топ нарушителей",
+                      "температура", "неделя", "рестарт", "сос", "лог"}
 
     # ── Поиск цели: реплай или @юзернейм или ID ──
     import re as _re
@@ -3590,6 +3592,123 @@ async def autist_commands(message: Message):
                     await bot.send_message(c, "🔊 <b>Тишина закончилась!</b> Можно говорить.", parse_mode="HTML")
                 except: pass
             asyncio.create_task(_unsilence(cid, mins_silence))
+
+        # ══════════════════════════════════════════
+        #  📊 ТЕМПЕРАТУРА, НЕДЕЛЯ, РЕЖИМ, ЛОГ, РЕСТАРТ, СОС
+        # ══════════════════════════════════════════
+        elif action == "температура":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            import time as _tt
+            now_ts = _tt.time()
+            # Считаем сообщения за последние 10 минут
+            active_10 = sum(
+                1 for uid2, msgs in user_msg_ids[cid].items()
+                for mid, ts in msgs if now_ts - ts <= 600
+            )
+            active_60 = sum(
+                1 for uid2, msgs in user_msg_ids[cid].items()
+                for mid, ts in msgs if now_ts - ts <= 3600
+            )
+            if active_10 >= 30:   temp = "🔥🔥🔥 ОГОНЬ"
+            elif active_10 >= 15: temp = "🔥🔥 Горячо"
+            elif active_10 >= 5:  temp = "🔥 Тепло"
+            elif active_10 >= 1:  temp = "😐 Прохладно"
+            else:                 temp = "🧊 Мертво"
+            await reply_auto_delete(message,
+                f"🌡 <b>Температура чата</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"За 10 мин: <b>{active_10}</b> сообщ. — {temp}\n"
+                f"За 1 час: <b>{active_60}</b> сообщений\n"
+                f"Участников в базе: <b>{len(chat_stats[cid])}</b>",
+                parse_mode="HTML")
+
+        elif action == "неделя":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            from datetime import datetime, timedelta as _td
+            lines = [f"📊 <b>Итоги недели — {message.chat.title}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+            # Топ активных за 7 дней
+            week_dates = [(datetime.now() - _td(days=i)).strftime("%d.%m.%Y") for i in range(7)]
+            week_activity = {}
+            for uid2, days in user_activity[cid].items():
+                total = sum(days.get(d, 0) for d in week_dates)
+                if total > 0:
+                    week_activity[uid2] = total
+            top5 = sorted(week_activity.items(), key=lambda x: x[1], reverse=True)[:5]
+            lines.append("🏆 <b>Топ активных:</b>")
+            for i, (uid2, cnt) in enumerate(top5, 1):
+                try: tm2 = await bot.get_chat_member(cid, uid2); uname2 = tm2.user.full_name
+                except: uname2 = f"ID{uid2}"
+                lines.append(f"  {i}. {uname2} — {cnt} сообщ.")
+            # Варны и баны за неделю
+            total_warns = sum(warnings[cid].values())
+            total_bans = len(ban_list[cid])
+            lines.append(f"\n⚡ Всего варнов: <b>{total_warns}</b>")
+            lines.append(f"🔨 Забанено: <b>{total_bans}</b>")
+            lines.append(f"👥 Участников: <b>{len(chat_stats[cid])}</b>")
+            await bot.send_message(OWNER_ID, "\n".join(lines), parse_mode="HTML")
+            await reply_auto_delete(message, "📊 Итоги недели отправлены в личку!", parse_mode="HTML")
+
+        elif action == "режим":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            new_name = rest.strip()
+            if not new_name:
+                await reply_auto_delete(message, "⚠️ Укажи имя: <b>аутист режим Имя</b>", parse_mode="HTML"); return
+            try:
+                await bot.set_my_name(new_name)
+                await reply_auto_delete(message, f"🤖 Имя бота изменено на: <b>{new_name}</b>", parse_mode="HTML")
+            except Exception as ex:
+                await reply_auto_delete(message, f"⚠️ Не удалось: {ex}", parse_mode="HTML")
+
+        elif action == "лог":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            import re as _re6
+            n_log = int(_re6.match(r"^(\d+)", rest).group(1)) if _re6.match(r"^(\d+)", rest) else 10
+            n_log = min(n_log, 30)
+            # Пересылаем последние N сообщений из лог-канала
+            sent_count = 0
+            try:
+                for i in range(n_log):
+                    try:
+                        await bot.forward_message(OWNER_ID, LOG_CHANNEL_ID,
+                            message.message_id - i)
+                        sent_count += 1
+                    except: pass
+            except: pass
+            await reply_auto_delete(message,
+                f"📝 Переслал последние ~<b>{sent_count}</b> записей из лога в личку",
+                parse_mode="HTML")
+
+        elif action == "рестарт":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            await reply_auto_delete(message, "🔄 Перезапускаю бота...", parse_mode="HTML")
+            import os, sys
+            await asyncio.sleep(1)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        elif action == "сос":
+            if message.from_user.id != OWNER_ID:
+                await reply_auto_delete(message, "🚫 Только для владельца!"); return
+            import time as _ts2
+            uptime_sec = int(_ts2.time() - bot_start_time) if 'bot_start_time' in globals() else 0
+            h, m = uptime_sec // 3600, (uptime_sec % 3600) // 60
+            total_warns_all = sum(sum(u.values()) for u in warnings.values())
+            total_bans_all  = sum(len(b) for b in ban_list.values())
+            total_users_all = sum(len(u) for u in chat_stats.values())
+            await bot.send_message(OWNER_ID,
+                f"🚨 <b>SOS — Состояние бота</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"⏱ Аптайм: <b>{h}ч {m}мин</b>\n"
+                f"💬 Чатов: <b>{len(known_chats)}</b>\n"
+                f"👥 Участников: <b>{total_users_all}</b>\n"
+                f"⚡ Всего варнов: <b>{total_warns_all}</b>\n"
+                f"🔨 Всего банов: <b>{total_bans_all}</b>\n"
+                f"📋 Очередей жалоб: <b>{sum(len(q) for q in report_queue.values())}</b>",
+                parse_mode="HTML")
+            await reply_auto_delete(message, "🚨 SOS-отчёт отправлен в личку!", parse_mode="HTML")
+
     except Exception as e:
         await reply_auto_delete(message, f"⚠️ Ошибка: {e}")
 
@@ -6266,6 +6385,9 @@ async def cmd_corona_slash(message: Message, command: CommandObject):
 
 
 async def main():
+    global bot_start_time
+    import time as _tstart
+    bot_start_time = _tstart.time()
     load_data()
     asyncio.create_task(birthday_checker())
     asyncio.create_task(send_weekly_stats())
