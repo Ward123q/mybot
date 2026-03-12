@@ -3547,87 +3547,81 @@ async def autist_commands(message: Message):
             await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
 
         elif action == "медиамут":
-            await bot.restrict_chat_member(cid, target.id,
-                permissions=ChatPermissions(
-                    can_send_messages=True,
-                    can_send_media_messages=False,
-                    can_send_polls=False,
-                    can_send_other_messages=False,
-                    can_add_web_page_previews=False))
+            import re as _rem2
+            time_str2 = rest.strip() if rest else ""
+            time_str2 = _rem2.sub(r"@\S+", "", time_str2).strip()
+            mins2, label2 = parse_duration(time_str2) if time_str2 else (None, None)
+            until2 = timedelta(minutes=mins2) if mins2 else None
+            time_text2 = f"⏱ На: <b>{label2}</b>" if label2 else "⏱ Навсегда"
+            perms2 = ChatPermissions(
+                can_send_messages=True, can_send_media_messages=False,
+                can_send_polls=False, can_send_other_messages=False,
+                can_add_web_page_previews=False)
+            if until2:
+                await bot.restrict_chat_member(cid, target.id, permissions=perms2, until_date=until2)
+            else:
+                await bot.restrict_chat_member(cid, target.id, permissions=perms2)
             save_data()
             await reply_auto_delete(message,
                 f"🤐 {tname} — <b>медиамут</b>\n"
-                f"✍️ Может писать текст\n🚫 Медиа, стикеры, гифки — запрещены", parse_mode="HTML")
-            await log_action(f"🤐 <b>МЕДИАМУТ</b>\n👤 {tname}\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
+                f"✍️ Только текст\n🚫 Медиа, стикеры, гифки — запрещены\n{time_text2}", parse_mode="HTML")
+            await log_action(f"🤐 <b>МЕДИАМУТ</b>\n👤 {tname}\n{time_text2}\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
 
-        elif action == "стикермут":
-            # Стикеры = can_send_other_messages=False, остальное разрешено
-            await bot.restrict_chat_member(cid, target.id,
-                permissions=ChatPermissions(
-                    can_send_messages=True,
-                    can_send_media_messages=True,
-                    can_send_polls=True,
-                    can_send_other_messages=False,
-                    can_add_web_page_previews=True))
-            await reply_auto_delete(message,
-                f"🙅 {tname} — <b>стикермут</b>\n"
-                f"✍️ Текст и медиа — можно\n🚫 Стикеры — запрещены", parse_mode="HTML")
-            await log_action(f"🙅 <b>СТИКЕРМУТ</b>\n👤 {tname}\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
+        elif action in ("стикермут", "гифмут", "войсмут", "всёмут", "медиамут2"):
+            # Парсим время из rest: "аутист стикермут @user 30м"
+            import re as _rem
+            time_str = rest.strip() if rest else ""
+            # Убираем упоминание если осталось
+            time_str = _rem.sub(r"@\S+", "", time_str).strip()
+            mins, label = parse_duration(time_str) if time_str else (None, None)
+            until_date = timedelta(minutes=mins) if mins else None
+            time_text = f"⏱ На: <b>{label}</b>" if label else "⏱ Навсегда"
 
-        elif action == "гифмут":
-            # Гифки/анимации тоже входят в can_send_other_messages
-            await bot.restrict_chat_member(cid, target.id,
-                permissions=ChatPermissions(
-                    can_send_messages=True,
-                    can_send_media_messages=True,
-                    can_send_polls=True,
-                    can_send_other_messages=False,
-                    can_add_web_page_previews=True))
-            await reply_auto_delete(message,
-                f"🎭 {tname} — <b>гифмут</b>\n"
-                f"✍️ Текст и фото — можно\n🚫 Гифки и анимации — запрещены", parse_mode="HTML")
-            await log_action(f"🎭 <b>ГИФМУТ</b>\n👤 {tname}\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
+            if action == "стикермут":
+                perms = ChatPermissions(
+                    can_send_messages=True, can_send_media_messages=True,
+                    can_send_polls=True, can_send_other_messages=False,
+                    can_add_web_page_previews=True)
+                emoji, name, desc = "🙅", "СТИКЕРМУТ", "Стикеры — запрещены\n✍️ Текст и медиа — можно"
 
-        elif action == "войсмут":
-            # Голосовые = can_send_voice_notes (aiogram 3.x)
-            try:
-                await bot.restrict_chat_member(cid, target.id,
-                    permissions=ChatPermissions(
-                        can_send_messages=True,
-                        can_send_media_messages=True,
-                        can_send_polls=True,
-                        can_send_other_messages=True,
+            elif action == "гифмут":
+                perms = ChatPermissions(
+                    can_send_messages=True, can_send_media_messages=True,
+                    can_send_polls=True, can_send_other_messages=False,
+                    can_add_web_page_previews=True)
+                emoji, name, desc = "🎭", "ГИФМУТ", "Гифки и анимации — запрещены\n✍️ Текст и фото — можно"
+
+            elif action == "войсмут":
+                try:
+                    perms = ChatPermissions(
+                        can_send_messages=True, can_send_media_messages=True,
+                        can_send_polls=True, can_send_other_messages=True,
                         can_add_web_page_previews=True,
-                        can_send_voice_notes=False,
-                        can_send_video_notes=False))
-            except Exception:
-                # Fallback для старых версий API
-                await bot.restrict_chat_member(cid, target.id,
-                    permissions=ChatPermissions(
-                        can_send_messages=True,
-                        can_send_media_messages=True,
-                        can_send_polls=True,
-                        can_send_other_messages=False,
-                        can_add_web_page_previews=True))
-            await reply_auto_delete(message,
-                f"🔇 {tname} — <b>войсмут</b>\n"
-                f"✍️ Текст и медиа — можно\n🚫 Голосовые сообщения — запрещены", parse_mode="HTML")
-            await log_action(f"🔇 <b>ВОЙСМУТ</b>\n👤 {tname}\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
+                        can_send_voice_notes=False, can_send_video_notes=False)
+                except Exception:
+                    perms = ChatPermissions(
+                        can_send_messages=True, can_send_media_messages=True,
+                        can_send_polls=True, can_send_other_messages=False,
+                        can_add_web_page_previews=True)
+                emoji, name, desc = "🔇", "ВОЙСМУТ", "Голосовые — запрещены\n✍️ Текст и медиа — можно"
 
-        elif action == "всёмут":
-            # Только текст разрешён — всё остальное запрещено
-            await bot.restrict_chat_member(cid, target.id,
-                permissions=ChatPermissions(
-                    can_send_messages=True,
-                    can_send_media_messages=False,
-                    can_send_polls=False,
-                    can_send_other_messages=False,
-                    can_add_web_page_previews=False))
+            else:  # всёмут
+                perms = ChatPermissions(
+                    can_send_messages=True, can_send_media_messages=False,
+                    can_send_polls=False, can_send_other_messages=False,
+                    can_add_web_page_previews=False)
+                emoji, name, desc = "🚫", "ВСЁМУТ", "Только текст разрешён\n🚫 Медиа, стикеры, гифки, голосовые — запрещены"
+
+            if until_date:
+                await bot.restrict_chat_member(cid, target.id, permissions=perms, until_date=until_date)
+            else:
+                await bot.restrict_chat_member(cid, target.id, permissions=perms)
+
             await reply_auto_delete(message,
-                f"🚫 {tname} — <b>всёмут</b>\n"
-                f"✍️ Только текст разрешён\n"
-                f"🚫 Медиа, стикеры, гифки, голосовые — запрещены", parse_mode="HTML")
-            await log_action(f"🚫 <b>ВСЁМУТ</b>\n👤 {tname}\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
+                f"{emoji} {tname} — <b>{action}</b>\n{desc}\n{time_text}", parse_mode="HTML")
+            await log_action(
+                f"{emoji} <b>{name}</b>\n👤 {tname}\n{time_text}\n"
+                f"👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
 
         elif action == "причина":
             history = mod_history[cid].get(target.id, [])
