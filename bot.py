@@ -4690,40 +4690,20 @@ async def cmd_report(message: Message, command: CommandObject):
         f"✅ <b>Жалоба отправлена!</b>\n"
         f"🎯 На кого: {target.mention_html()}\n📝 Причина: <b>{reason}</b>",
         parse_mode="HTML")
+    # Добавить в очередь жалоб для панели
+    import time as _t
+    report_queue[cid].append({
+        'reporter': reporter.id,
+        'target': target.id,
+        'text': reason,
+        'ts': _t.time()
+    })
     await asyncio.sleep(10)
     try:
         await sent.delete()
         try: await message.delete()
         except: pass
     except: pass
-
-
-
-# ===== РАСШИРЕННАЯ СТАТИСТИКА =====
-    # Добавить в очередь жалоб
-    if message.reply_to_message and message.reply_to_message.from_user:
-        target = message.reply_to_message.from_user
-        import time as _t
-        report_queue[message.chat.id].append({
-            'reporter': message.from_user.id,
-            'target': target.id,
-            'text': command.args or 'Без причины',
-            'ts': _t.time()
-        })
-        # Уведомить всех админов
-        try:
-            admins = await bot.get_chat_administrators(message.chat.id)
-            for admin in admins:
-                if not admin.user.is_bot:
-                    try:
-                        await bot.send_message(admin.user.id,
-                            f"🚨 <b>ЖАЛОБА в {message.chat.title}</b>\n"
-                            f"👤 На: {target.mention_html()}\n"
-                            f"📝 Причина: {command.args or 'Без причины'}\n"
-                            f"👮 Обработай через /panel → 🚨 Жалобы",
-                            parse_mode='HTML')
-                    except: pass
-        except: pass
 
 @dp.message(Command("chatstats"))
 async def cmd_chatstats(message: Message):
