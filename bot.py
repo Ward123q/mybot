@@ -10045,10 +10045,9 @@ async def daily_idea_loop():
         await asyncio.sleep(300)
 
 async def main():
-
+    import time as _tstart
     global bot_start_time
     bot_start_time = _tstart.time()
-    import time as _tstart
     db_init()
     db_friends_init()
     load_data()
