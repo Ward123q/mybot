@@ -300,6 +300,17 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp  = Dispatcher()
 
+@dp.errors()
+async def global_error_handler(event, exception):
+    """Глобальный обработчик ошибок — ловит flood control и другие"""
+    err = str(exception)
+    if "Too Many Requests" in err or "Flood" in err or "retry after" in err.lower():
+        import re as _rfe
+        m = _rfe.search(r"retry after (\d+)", err, _rfe.IGNORECASE)
+        wait = int(m.group(1)) + 1 if m else 5
+        await asyncio.sleep(wait)
+    return True  # помечаем как обработанную
+
 warnings      = defaultdict(lambda: defaultdict(int))
 notes         = defaultdict(dict)
 mod_history   = defaultdict(lambda: defaultdict(list))  # {cid: {uid: [{"action":..., "reason":..., "by":..., "time":...}]}}
@@ -370,6 +381,12 @@ plugins = defaultdict(lambda: {
 # Связанные чаты: {uid: [cid1, cid2, ...]} — бан везде
 linked_chats_bans = {}  # глобальный список чатов владельца
 
+# Глобальный чёрный список — авто-бан во всех чатах
+global_blacklist = set()  # {uid}
+
+# Карантин — авто-мут новых участников
+quarantine_chats = set()  # {cid}
+
 # Апелляции: {uid: {cid, reason, ts, status}}
 appeals = {}
 
@@ -399,6 +416,11 @@ RULES_TEXT = (
     "📢 <b>Реклама</b>\n"
     "▸ Запрещена реклама социальных сетей, брендов,\n"
     "услуг, проектов и любой рекламной деятельности.\n\n"
+
+    "🛡 <b>Оскорбление администрации</b>\n"
+    "▸ Запрещено оскорблять, грубить и хамить\n"
+    "модераторам и администраторам чата.\n"
+    "⚠️ Наказание: варн. При повторном — бан.\n\n"
 
     "━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
@@ -539,9 +561,25 @@ def parse_duration(arg: str):
         pass
     return None, None
 
+async def safe_send(coro, retries=3):
+    """Выполняет запрос к Telegram API с автоповтором при flood control"""
+    for attempt in range(retries):
+        try:
+            return await coro
+        except Exception as e:
+            err = str(e)
+            if "Too Many Requests" in err or "Flood" in err or "retry after" in err.lower():
+                import re as _re_flood
+                m = _re_flood.search(r"retry after (\d+)", err, _re_flood.IGNORECASE)
+                wait = int(m.group(1)) + 1 if m else (attempt + 1) * 3
+                await asyncio.sleep(wait)
+            else:
+                break
+    return None
+
 async def log_action(text: str):
     try:
-        await bot.send_message(LOG_CHANNEL_ID, text, parse_mode="HTML")
+        await safe_send(bot.send_message(LOG_CHANNEL_ID, text, parse_mode="HTML"))
     except:
         pass
 
@@ -567,9 +605,19 @@ async def schedule_delete(msg, delay: int = AUTO_DELETE_DELAY):
 
 async def answer_auto_delete(message: Message, text: str, **kwargs) -> Message:
     """Отправляет сообщение и удаляет через 30 секунд (без удаления исходного)"""
-    sent = await message.answer(text, **kwargs)
-    asyncio.create_task(schedule_delete(sent))
-    return sent
+    for attempt in range(3):
+        try:
+            sent = await message.answer(text, **kwargs)
+            asyncio.create_task(schedule_delete(sent))
+            return sent
+        except Exception as e:
+            if "Too Many Requests" in str(e) or "retry after" in str(e).lower():
+                import re as _re2
+                m = _re2.search(r"retry after (\d+)", str(e), _re2.IGNORECASE)
+                await asyncio.sleep(int(m.group(1)) + 1 if m else (attempt+1)*3)
+            else:
+                break
+    return None
 
 async def cb_auto_delete(call: CallbackQuery, text: str, **kwargs):
     """Редактирует сообщение колбэка и удаляет через 30 секунд"""
@@ -583,9 +631,19 @@ async def cb_auto_delete(call: CallbackQuery, text: str, **kwargs):
 
 async def reply_auto_delete(message: Message, text: str, **kwargs) -> Message:
     """Отвечает на сообщение и удаляет оба через 30 секунд"""
-    sent = await message.reply(text, **kwargs)
-    asyncio.create_task(auto_delete(message, sent))
-    return sent
+    for attempt in range(3):
+        try:
+            sent = await message.reply(text, **kwargs)
+            asyncio.create_task(auto_delete(message, sent))
+            return sent
+        except Exception as e:
+            if "Too Many Requests" in str(e) or "retry after" in str(e).lower():
+                import re as _re3
+                m = _re3.search(r"retry after (\d+)", str(e), _re3.IGNORECASE)
+                await asyncio.sleep(int(m.group(1)) + 1 if m else (attempt+1)*3)
+            else:
+                break
+    return None
 
 def add_mod_history(cid: int, uid: int, action: str, reason: str, by_name: str):
     """Записывает действие модератора в историю пользователя"""
@@ -987,9 +1045,6 @@ class AntiMatMiddleware(BaseMiddleware):
             if m.status in ("administrator","creator"): return await handler(event, data)
         except: pass
         return await handler(event, data)
-
-
-class PendingInputMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if not isinstance(event, Message): return await handler(event, data)
         uid = event.from_user.id if event.from_user else None
@@ -7194,10 +7249,386 @@ async def cmd_report_archive(message: Message):
 
 
 
+# ══════════════════════════════════════════════════════════
+#  📢 БРОДКАСТ — сообщение во все чаты
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("broadcast2"))
+async def cmd_broadcast_all(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    text = message.text.replace("/broadcast2", "").strip()
+    if not text:
+        await reply_auto_delete(message,
+            "📢 <b>Использование:</b>\n<code>/broadcast2 текст</code>\n\nОтправит во все чаты бота",
+            parse_mode="HTML"); return
+    success, fail = 0, 0
+    status_msg = await message.answer(f"📢 Отправляю в {len(known_chats)} чатов...")
+    for cid in list(known_chats.keys()):
+        try:
+            await bot.send_message(cid,
+                f"📢 <b>Сообщение от владельца</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n{text}",
+                parse_mode="HTML")
+            success += 1
+            await asyncio.sleep(0.1)  # антифлуд
+        except: fail += 1
+    await status_msg.edit_text(
+        f"📢 <b>Бродкаст завершён</b>\n✅ Доставлено: {success}\n❌ Ошибок: {fail}",
+        parse_mode="HTML")
+    asyncio.create_task(schedule_delete(status_msg, 30))
+
+# ══════════════════════════════════════════════════════════
+#  🔒 ГЛОБАЛЬНЫЙ ЧЁРНЫЙ СПИСОК
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("blacklist"))
+async def cmd_blacklist(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    target = message.reply_to_message.from_user if message.reply_to_message else None
+    if not target:
+        # Показать список
+        if not global_blacklist:
+            await reply_auto_delete(message, "🔒 Чёрный список пуст"); return
+        lines = [f"🔒 <b>Глобальный чёрный список</b> ({len(global_blacklist)} чел.)\n"]
+        for uid2 in list(global_blacklist)[:20]:
+            lines.append(f"▸ <code>{uid2}</code>")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML"); return
+    uid = target.id
+    if uid in global_blacklist:
+        await reply_auto_delete(message, f"⚠️ {target.full_name} уже в чёрном списке"); return
+    global_blacklist.add(uid)
+    save_data()
+    # Банить во всех чатах
+    banned_in = 0
+    for cid in list(known_chats.keys()):
+        try:
+            await bot.ban_chat_member(cid, uid)
+            ban_list[cid].add(uid)
+            banned_in += 1
+            await asyncio.sleep(0.05)
+        except: pass
+    await reply_auto_delete(message,
+        f"🔒 {target.mention_html()} добавлен в <b>глобальный чёрный список</b>\n"
+        f"🔨 Забанен в {banned_in} чатах навсегда",
+        parse_mode="HTML")
+    await log_action(
+        f"🔒 <b>ГЛОБАЛЬНЫЙ БАН</b>\n👤 {target.full_name} (<code>{uid}</code>)\n"
+        f"🔨 Забанен в {banned_in} чатах\n👑 {message.from_user.full_name}")
+
+@dp.message(Command("unblacklist"))
+async def cmd_unblacklist(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    target = message.reply_to_message.from_user if message.reply_to_message else None
+    if not target:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение юзера"); return
+    global_blacklist.discard(target.id)
+    save_data()
+    await reply_auto_delete(message,
+        f"✅ {target.mention_html()} удалён из чёрного списка", parse_mode="HTML")
+
+# Автобан при входе если в чёрном списке
+@dp.chat_member()
+async def check_blacklist_on_join(event):
+    if not event.new_chat_member: return
+    uid = event.new_chat_member.user.id
+    if uid in global_blacklist:
+        try:
+            await bot.ban_chat_member(event.chat.id, uid)
+        except: pass
+
+# ══════════════════════════════════════════════════════════
+#  🌍 АУДИТ ЧАТА
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("audit"))
+async def cmd_audit(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    cid = message.chat.id
+    lines = [f"🔍 <b>Аудит чата: {message.chat.title}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    # Топ нарушителей
+    top_warn = sorted(warnings[cid].items(), key=lambda x: x[1], reverse=True)[:5]
+    lines.append("⚡ <b>Топ нарушителей:</b>")
+    for uid2, w in top_warn:
+        try: tm = await bot.get_chat_member(cid, uid2); n = tm.user.full_name
+        except: n = f"ID{uid2}"
+        lines.append(f"  ▸ {n} — {w} варнов")
+    # Неактивные (0 сообщений)
+    inactive = [uid2 for uid2 in chat_stats[cid] if chat_stats[cid][uid2] == 0]
+    lines.append(f"\n😴 Неактивных юзеров: <b>{len(inactive)}</b>")
+    # Забаненные
+    lines.append(f"🔨 Забанено: <b>{len(ban_list[cid])}</b>")
+    # Репорты
+    open_reports = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
+    lines.append(f"🚨 Открытых репортов: <b>{open_reports}</b>")
+    # Роли
+    lines.append(f"🎖 Модераторов с ролями: <b>{len(mod_roles.get(cid, {}))}</b>")
+    # Плагины
+    disabled = [l for k, l in PLUGIN_LABELS.items() if not plugins[cid].get(k, True)]
+    if disabled:
+        lines.append(f"🧩 Отключены: {', '.join(disabled)}")
+    await bot.send_message(OWNER_ID, "\n".join(lines), parse_mode="HTML")
+    await reply_auto_delete(message, "🔍 Аудит отправлен в личку!", parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  ⚙️ БЭКАП И ВОССТАНОВЛЕНИЕ
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("backup"))
+async def cmd_backup(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    import json, io
+    backup_data = {
+        "warnings": {str(c): {str(u): v for u, v in d.items()} for c, d in warnings.items()},
+        "reputation": {str(c): {str(u): v for u, v in d.items()} for c, d in reputation.items()},
+        "xp_data": {str(c): {str(u): v for u, v in d.items()} for c, d in xp_data.items()},
+        "ban_list": {str(c): list(v) for c, v in ban_list.items()},
+        "global_blacklist": list(global_blacklist),
+        "known_chats": {str(k): v for k, v in known_chats.items()},
+        "mod_roles": {str(c): {str(u): r for u, r in d.items()} for c, d in mod_roles.items()},
+    }
+    json_bytes = json.dumps(backup_data, ensure_ascii=False, indent=2).encode("utf-8")
+    buf = io.BytesIO(json_bytes)
+    buf.name = "backup.json"
+    from datetime import datetime
+    fname = f"backup_{datetime.now().strftime('%d%m%Y_%H%M')}.json"
+    buf.name = fname
+    await bot.send_document(OWNER_ID, buf,
+        caption=f"💾 <b>Бэкап базы</b>\n📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
+                f"💬 Чатов: {len(known_chats)}\n👥 Юзеров: {sum(len(d) for d in chat_stats.values())}",
+        parse_mode="HTML")
+    await reply_auto_delete(message, "💾 Бэкап отправлен в личку!", parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  🗑 СБРОС ДАННЫХ ЧАТА
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("resetchat"))
+async def cmd_reset_chat(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    cid = message.chat.id
+    # Подтверждение
+    pending[message.from_user.id] = {"action": "confirm_reset", "chat_id": cid}
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="💥 ДА, СБРОСИТЬ", callback_data=f"resetchat:yes:{cid}"),
+        InlineKeyboardButton(text="❌ Отмена",         callback_data=f"resetchat:no:{cid}"),
+    ]])
+    await reply_auto_delete(message,
+        f"⚠️ <b>Сброс данных чата</b>\n\n"
+        f"Будут удалены: варны, репа, XP, история, статистика\n"
+        f"💬 Чат: <b>{message.chat.title}</b>\n\n<b>Уверен?</b>",
+        parse_mode="HTML")
+    sent = await message.answer("👇", reply_markup=kb)
+    asyncio.create_task(schedule_delete(sent, 30))
+
+@dp.callback_query(F.data.startswith("resetchat:"))
+async def cb_reset_chat(call: CallbackQuery):
+    if call.from_user.id != OWNER_ID:
+        await call.answer("🚫", show_alert=True); return
+    parts = call.data.split(":")
+    action, cid = parts[1], int(parts[2])
+    if action == "no":
+        await call.message.delete(); await call.answer("Отменено"); return
+    # Сброс
+    warnings[cid].clear()
+    reputation[cid].clear()
+    xp_data[cid].clear()
+    chat_stats[cid].clear()
+    levels[cid].clear()
+    mod_history[cid].clear()
+    report_queue[cid].clear()
+    ban_list[cid].clear()
+    save_data()
+    await call.message.edit_text(
+        f"💥 <b>Данные чата сброшены!</b>\n💬 {known_chats.get(cid, cid)}",
+        parse_mode="HTML")
+    await log_action(f"💥 <b>СБРОС ДАННЫХ ЧАТА</b>\n💬 {known_chats.get(cid, cid)}\n👑 {call.from_user.full_name}")
+    await call.answer("✅ Сброшено")
+
+# ══════════════════════════════════════════════════════════
+#  💣 ЭКСТРЕННЫЕ КОМАНДЫ
+# ══════════════════════════════════════════════════════════
+
+# SOS ALL — локдаун всех чатов
+@dp.message(Command("sosall"))
+async def cmd_sos_all(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    locked, fail = 0, 0
+    for cid in list(known_chats.keys()):
+        try:
+            await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
+            locked += 1
+            await asyncio.sleep(0.1)
+        except: fail += 1
+    await reply_auto_delete(message,
+        f"🚨 <b>SOS — ЛОКДАУН ВСЕХ ЧАТОВ</b>\n"
+        f"🔒 Заблокировано: {locked}\n❌ Ошибок: {fail}",
+        parse_mode="HTML")
+    await log_action(f"🚨 <b>SOS ALL</b>\n🔒 {locked} чатов заблокированы\n👑 {message.from_user.full_name}")
+
+# РАЗЛОКДАУН всех чатов
+@dp.message(Command("sosoff"))
+async def cmd_sos_off(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    unlocked = 0
+    for cid in list(known_chats.keys()):
+        try:
+            await bot.set_chat_permissions(cid, ChatPermissions(
+                can_send_messages=True, can_send_media_messages=True,
+                can_send_polls=True, can_send_other_messages=True,
+                can_add_web_page_previews=True, can_invite_users=True))
+            unlocked += 1
+            await asyncio.sleep(0.1)
+        except: pass
+    await reply_auto_delete(message,
+        f"✅ <b>Все чаты разблокированы</b> ({unlocked})", parse_mode="HTML")
+
+# ЭВАКУАЦИЯ — удалить всех кто зашёл за последний час
+@dp.message(Command("evacuation"))
+async def cmd_evacuation(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    cid = message.chat.id
+    import time as _tev
+    now = _tev.time()
+    kicked = 0
+    # Кикаем всех кто зашёл за последний час (нет в last_seen или last_seen < 1ч)
+    new_users = [uid2 for uid2, ts in last_seen.get(cid, {}).items()
+                 if now - ts < 3600]
+    for uid2 in new_users:
+        if await is_admin_by_id(cid, uid2): continue
+        try:
+            await bot.ban_chat_member(cid, uid2)
+            await bot.unban_chat_member(cid, uid2)
+            kicked += 1
+            await asyncio.sleep(0.05)
+        except: pass
+    await reply_auto_delete(message,
+        f"🚁 <b>ЭВАКУАЦИЯ</b>\n"
+        f"🚪 Удалено {kicked} юзеров зашедших за последний час",
+        parse_mode="HTML")
+    await log_action(f"🚁 <b>ЭВАКУАЦИЯ</b>\n🚪 {kicked} юзеров\n💬 {message.chat.title}\n👑 {message.from_user.full_name}")
+
+# КАРАНТИН — автомут всех новых участников
+@dp.message(Command("quarantine"))
+async def cmd_quarantine(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    cid = message.chat.id
+    if cid in quarantine_chats:
+        quarantine_chats.discard(cid)
+        await reply_auto_delete(message, "✅ Карантин снят — новые участники могут писать", parse_mode="HTML")
+    else:
+        quarantine_chats.add(cid)
+        await reply_auto_delete(message,
+            "🔬 <b>Карантин включён</b>\n"
+            "Все новые участники получают мут на 24ч автоматически",
+            parse_mode="HTML")
+
+# Хук карантина — срабатывает при входе нового участника
+@dp.message(F.new_chat_members)
+async def on_new_member_quarantine(message: Message):
+    cid = message.chat.id
+    for user in message.new_chat_members:
+        if user.is_bot: continue
+        # Проверка чёрного списка
+        if user.id in global_blacklist:
+            try: await bot.ban_chat_member(cid, user.id)
+            except: pass
+            continue
+        # Карантин
+        if cid in quarantine_chats:
+            try:
+                await bot.restrict_chat_member(cid, user.id,
+                    permissions=ChatPermissions(can_send_messages=False),
+                    until_date=timedelta(hours=24))
+                await message.answer(
+                    f"🔬 {user.mention_html()} на карантине 24ч — не может писать",
+                    parse_mode="HTML")
+            except: pass
+
+# ЗАЧИСТКА — удалить всех с 0 сообщений за 30 дней
+@dp.message(Command("cleanup"))
+async def cmd_cleanup(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    cid = message.chat.id
+    from datetime import datetime, timedelta as _td2
+    cutoff = (datetime.now() - _td2(days=30)).strftime("%d.%m.%Y")
+    # Ищем юзеров без активности за 30 дней
+    inactive_uids = []
+    for uid2 in list(chat_stats[cid].keys()):
+        if await is_admin_by_id(cid, uid2): continue
+        activity_30 = sum(
+            user_activity[cid][uid2].get(
+                (datetime.now() - _td2(days=i)).strftime("%d.%m.%Y"), 0)
+            for i in range(30))
+        if activity_30 == 0:
+            inactive_uids.append(uid2)
+    if not inactive_uids:
+        await reply_auto_delete(message, "✅ Неактивных за 30 дней нет!"); return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"💥 Удалить {len(inactive_uids)} юзеров",
+                             callback_data=f"cleanup:yes:{cid}:{len(inactive_uids)}"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data="cleanup:no:0:0"),
+    ]])
+    sent = await message.answer(
+        f"🧹 <b>Зачистка</b>\n\n"
+        f"Неактивных за 30 дней: <b>{len(inactive_uids)}</b>\n"
+        f"Будут исключены из чата. Продолжить?",
+        parse_mode="HTML", reply_markup=kb)
+    pending[message.from_user.id] = {"action": "cleanup_uids", "uids": inactive_uids, "cid": cid}
+    asyncio.create_task(schedule_delete(sent, 60))
+
+@dp.callback_query(F.data.startswith("cleanup:"))
+async def cb_cleanup(call: CallbackQuery):
+    if call.from_user.id != OWNER_ID:
+        await call.answer("🚫", show_alert=True); return
+    parts = call.data.split(":")
+    action = parts[1]
+    if action == "no":
+        await call.message.delete(); await call.answer("Отменено"); return
+    cid = int(parts[2])
+    p = pending.get(call.from_user.id, {})
+    uids = p.get("uids", [])
+    kicked = 0
+    await call.message.edit_text(f"🧹 Удаляю {len(uids)} юзеров...")
+    for uid2 in uids:
+        try:
+            await bot.ban_chat_member(cid, uid2)
+            await bot.unban_chat_member(cid, uid2)
+            kicked += 1
+            await asyncio.sleep(0.05)
+        except: pass
+    save_data()
+    await call.message.edit_text(
+        f"🧹 <b>Зачистка завершена</b>\n✅ Удалено: {kicked} неактивных юзеров",
+        parse_mode="HTML")
+    await log_action(f"🧹 <b>ЗАЧИСТКА</b>\n✅ {kicked} юзеров\n💬 {known_chats.get(cid, cid)}\n👑 {call.from_user.full_name}")
+    await call.answer("✅ Готово")
+
+# ══════════════════════════════════════════════════════════
+#  🔄 КЛОН НАСТРОЕК
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("clonechat"))
+async def cmd_clone_chat(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    args = message.text.split()[1:] if message.text else []
+    if len(args) < 2:
+        chats_list = "\n".join(f"▸ <code>{cid}</code> — {title}"
+                               for cid, title in list(known_chats.items())[:10])
+        await reply_auto_delete(message,
+            f"🔄 <b>Клон настроек</b>\n\n"
+            f"<code>/clonechat ID_откуда ID_куда</code>\n\n"
+            f"Доступные чаты:\n{chats_list}",
+            parse_mode="HTML"); return
+    try:
+        src, dst = int(args[0]), int(args[1])
+    except:
+        await reply_auto_delete(message, "⚠️ Укажи числовые ID чатов"); return
+    # Копируем плагины и настройки
+    plugins[dst] = dict(plugins[src])
+    mod_roles[dst] = dict(mod_roles[src])
+    save_data()
+    await reply_auto_delete(message,
+        f"✅ <b>Настройки скопированы</b>\n"
+        f"📤 Из: {known_chats.get(src, src)}\n"
+        f"📥 В: {known_chats.get(dst, dst)}\n"
+        f"Скопировано: плагины, роли модераторов",
+        parse_mode="HTML")
+    import time as _tstart
 async def main():
 
-    global bot_start_time
-    import time as _tstart
     bot_start_time = _tstart.time()
     load_data()
     asyncio.create_task(birthday_checker())
