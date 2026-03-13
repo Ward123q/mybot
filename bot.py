@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 import os
+import sqlite3
 import time as _tstart
 import aiohttp
 from datetime import timedelta
@@ -18,132 +19,294 @@ from aiohttp import web
 import json
 from pathlib import Path
 
-DATA_FILE = "data.json"
+DB_FILE_MAIN = "skinvault.db"
 
-def load_data():
-    global warnings, reputation, notes, xp_data, streaks, birthdays, afk_users
-    global user_titles, mvp_votes, known_chats, referrals, referral_used
-    global boosters, avatars, clans, clan_members, lottery_tickets, stock_invested
-    global quotes_data, journal_data, artifacts, color_titles, role_of_day
-    global rep_transfer_cooldown, confession_reactions, confession_voters
-    if not Path(DATA_FILE).exists():
+def db_connect():
+    conn = sqlite3.connect(DB_FILE_MAIN, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")   # быстрее при параллельных запросах
+    conn.execute("PRAGMA synchronous=NORMAL") # баланс скорость/надёжность
+    return conn
+
+def db_init():
+    conn = db_connect()
+    conn.executescript("""
+    -- ── Основные данные ──────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS warnings (
+        cid INTEGER, uid INTEGER, count INTEGER DEFAULT 0,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS reputation (
+        cid INTEGER, uid INTEGER, score INTEGER DEFAULT 0,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS xp_data (
+        cid INTEGER, uid INTEGER, xp INTEGER DEFAULT 0,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS levels (
+        cid INTEGER, uid INTEGER, level INTEGER DEFAULT 0,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS streaks (
+        cid INTEGER, uid INTEGER, streak INTEGER DEFAULT 0,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS chat_stats (
+        cid INTEGER, uid INTEGER, msg_count INTEGER DEFAULT 0,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS last_seen (
+        cid INTEGER, uid INTEGER, ts REAL,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS ban_list (
+        cid INTEGER, uid INTEGER,
+        PRIMARY KEY (cid, uid));
+    -- ── Профили ──────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS birthdays (
+        uid INTEGER PRIMARY KEY, date TEXT);
+    CREATE TABLE IF NOT EXISTS user_titles (
+        uid INTEGER PRIMARY KEY, data TEXT);
+    CREATE TABLE IF NOT EXISTS avatars (
+        uid INTEGER PRIMARY KEY, emoji TEXT);
+    CREATE TABLE IF NOT EXISTS known_chats (
+        cid INTEGER PRIMARY KEY, title TEXT);
+    CREATE TABLE IF NOT EXISTS notes (
+        cid INTEGER, key TEXT, value TEXT,
+        PRIMARY KEY (cid, key));
+    -- ── Экономика ────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS lottery_tickets (
+        cid INTEGER, uid INTEGER,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS stock_invested (
+        cid INTEGER, uid INTEGER, amount INTEGER DEFAULT 0,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS boosters (
+        uid TEXT PRIMARY KEY, data TEXT);
+    CREATE TABLE IF NOT EXISTS referrals (
+        uid TEXT PRIMARY KEY, invited TEXT);
+    CREATE TABLE IF NOT EXISTS referral_used (
+        uid TEXT PRIMARY KEY, val TEXT);
+    CREATE TABLE IF NOT EXISTS rep_transfer_cooldown (
+        key TEXT PRIMARY KEY, ts REAL);
+    -- ── Кланы ────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS clans (
+        tag TEXT PRIMARY KEY, data TEXT);
+    CREATE TABLE IF NOT EXISTS clan_members (
+        uid INTEGER PRIMARY KEY, clan_tag TEXT);
+    -- ── Контент ──────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS quotes_data (
+        cid INTEGER, idx INTEGER, data TEXT,
+        PRIMARY KEY (cid, idx));
+    CREATE TABLE IF NOT EXISTS journal_data (
+        uid TEXT PRIMARY KEY, entries TEXT);
+    CREATE TABLE IF NOT EXISTS artifacts (
+        uid TEXT PRIMARY KEY, data TEXT);
+    CREATE TABLE IF NOT EXISTS color_titles (
+        key TEXT PRIMARY KEY, val TEXT);
+    CREATE TABLE IF NOT EXISTS role_of_day (
+        key TEXT PRIMARY KEY, val TEXT);
+    CREATE TABLE IF NOT EXISTS mvp_votes (
+        key TEXT PRIMARY KEY, val TEXT);
+    -- ── История модерации ────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS mod_history (
+        cid INTEGER, uid INTEGER, history TEXT,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS user_notes (
+        cid INTEGER, uid INTEGER, note_data TEXT,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS crown_holders (
+        cid INTEGER PRIMARY KEY, data TEXT);
+    CREATE TABLE IF NOT EXISTS user_activity (
+        cid INTEGER, uid INTEGER, day TEXT, count INTEGER DEFAULT 0,
+        PRIMARY KEY (cid, uid, day));
+    -- ── Новые модули ─────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS user_memory (
+        uid INTEGER, cid INTEGER, key TEXT, value TEXT,
+        PRIMARY KEY (uid, cid, key));
+    CREATE TABLE IF NOT EXISTS mod_journal (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER, mod_id INTEGER, mod_name TEXT,
+        action TEXT, target_id INTEGER, target_name TEXT,
+        reason TEXT, ts INTEGER);
+    CREATE TABLE IF NOT EXISTS mod_shifts (
+        cid INTEGER, mod_id INTEGER, mod_name TEXT,
+        start_hour INTEGER, end_hour INTEGER,
+        PRIMARY KEY (cid, mod_id));
+    CREATE TABLE IF NOT EXISTS mod_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER, mod_id INTEGER, mod_name TEXT,
+        task TEXT, deadline INTEGER, done INTEGER DEFAULT 0,
+        created_by TEXT);
+    CREATE TABLE IF NOT EXISTS quick_replies (
+        cid INTEGER, key TEXT, text TEXT,
+        PRIMARY KEY (cid, key));
+    CREATE TABLE IF NOT EXISTS pinned_messages (
+        cid INTEGER, msg_id INTEGER, title TEXT, ts INTEGER,
+        PRIMARY KEY (cid, msg_id));
+    CREATE TABLE IF NOT EXISTS vip_users (
+        uid INTEGER, cid INTEGER, granted_by TEXT, ts INTEGER,
+        PRIMARY KEY (uid, cid));
+    CREATE TABLE IF NOT EXISTS events_calendar (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER, uid INTEGER, action TEXT,
+        target_id INTEGER, target_name TEXT, ts INTEGER);
+    CREATE TABLE IF NOT EXISTS global_blacklist (
+        uid INTEGER PRIMARY KEY);
+    CREATE TABLE IF NOT EXISTS mod_roles_db (
+        cid INTEGER, uid INTEGER, role TEXT,
+        PRIMARY KEY (cid, uid));
+    CREATE TABLE IF NOT EXISTS plugins_db (
+        cid INTEGER, key TEXT, enabled INTEGER DEFAULT 1,
+        PRIMARY KEY (cid, key));
+    CREATE TABLE IF NOT EXISTS appeals_db (
+        uid INTEGER PRIMARY KEY, data TEXT);
+    """)
+    conn.commit()
+    conn.close()
+
+# ── Хелперы чтения/записи ────────────────────────────────────
+def db_get_int(table: str, cid: int, uid: int, col: str = "count") -> int:
+    conn = db_connect()
+    row = conn.execute(f"SELECT {col} FROM {table} WHERE cid=? AND uid=?", (cid, uid)).fetchone()
+    conn.close()
+    return row[col] if row else 0
+
+def db_set_int(table: str, cid: int, uid: int, col: str, val: int):
+    conn = db_connect()
+    conn.execute(
+        f"INSERT INTO {table} (cid, uid, {col}) VALUES (?,?,?) "
+        f"ON CONFLICT(cid,uid) DO UPDATE SET {col}=excluded.{col}",
+        (cid, uid, val))
+    conn.commit(); conn.close()
+
+def db_incr(table: str, cid: int, uid: int, col: str, delta: int = 1):
+    cur = db_get_int(table, cid, uid, col)
+    db_set_int(table, cid, uid, col, cur + delta)
+
+# ── Миграция из data.json если существует ─────────────────────
+def migrate_json_to_sqlite():
+    if not Path("data.json").exists():
         return
     try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
+        with open("data.json", "r", encoding="utf-8") as f:
             d = json.load(f)
-
+        conn = db_connect()
+        # warnings
         for cid, users in d.get("warnings", {}).items():
             for uid, count in users.items():
-                warnings[int(cid)][int(uid)] = count
+                conn.execute("INSERT OR REPLACE INTO warnings VALUES (?,?,?)", (int(cid), int(uid), count))
+        # reputation
         for cid, users in d.get("reputation", {}).items():
             for uid, score in users.items():
-                reputation[int(cid)][int(uid)] = score
-        for cid, nts in d.get("notes", {}).items():
-            notes[int(cid)] = nts
+                conn.execute("INSERT OR REPLACE INTO reputation VALUES (?,?,?)", (int(cid), int(uid), score))
+        # xp
         for cid, users in d.get("xp_data", {}).items():
             for uid, xp in users.items():
-                xp_data[int(cid)][int(uid)] = xp
+                conn.execute("INSERT OR REPLACE INTO xp_data VALUES (?,?,?)", (int(cid), int(uid), xp))
+        # streaks
         for cid, users in d.get("streaks", {}).items():
             for uid, s in users.items():
-                streaks[int(cid)][int(uid)] = s
-        for uid, bday in d.get("birthdays", {}).items():
-            birthdays[int(uid)] = bday
-        for uid, data in d.get("user_titles", {}).items():
-            user_titles[int(uid)] = data
-        for cid, title in d.get("known_chats", {}).items():
-            known_chats[int(cid)] = title
-        for uid, inv in d.get("referrals", {}).items():
-            referrals[uid] = set(inv)
-        referral_used.update(d.get("referral_used", {}))
-        for uid, bdata in d.get("boosters", {}).items():
-            boosters[uid] = bdata
-        avatars.update(d.get("avatars", {}))
-        clans.update(d.get("clans", {}))
-        clan_members.update({int(k): v for k, v in d.get("clan_members", {}).items()})
-        for cid, tickets in d.get("lottery_tickets", {}).items():
-            lottery_tickets[int(cid)] = set(tickets)
-        for cid, investors in d.get("stock_invested", {}).items():
-            for uid, amt in investors.items():
-                stock_invested[int(cid)][int(uid)] = amt
-        for cid, qs in d.get("quotes_data", {}).items():
-            quotes_data[int(cid)] = qs
-        for uid, entries in d.get("journal_data", {}).items():
-            journal_data[uid] = entries
-        for uid, arts in d.get("artifacts", {}).items():
-            artifacts[uid] = arts
-        color_titles.update(d.get("color_titles", {}))
-        role_of_day.update(d.get("role_of_day", {}))
-        mvp_votes.update(d.get("mvp_votes", {}))
-        rep_transfer_cooldown.update(d.get("rep_transfer_cooldown", {}))
-        # Новые поля
-        for cid, users in d.get("mod_history", {}).items():
-            for uid, h in users.items():
-                mod_history[int(cid)][int(uid)] = h
-        for cid, users in d.get("user_notes", {}).items():
-            for uid, n in users.items():
-                user_notes[int(cid)][int(uid)] = n
-        for cid, uids in d.get("ban_list", {}).items():
-            ban_list[int(cid)] = set(uids)
+                conn.execute("INSERT OR REPLACE INTO streaks VALUES (?,?,?)", (int(cid), int(uid), s))
+        # levels
         for cid, users in d.get("levels", {}).items():
             for uid, l in users.items():
-                levels[int(cid)][int(uid)] = l
+                conn.execute("INSERT OR REPLACE INTO levels VALUES (?,?,?)", (int(cid), int(uid), l))
+        # chat_stats
         for cid, users in d.get("chat_stats", {}).items():
             for uid, c in users.items():
-                chat_stats[int(cid)][int(uid)] = c
+                conn.execute("INSERT OR REPLACE INTO chat_stats VALUES (?,?,?)", (int(cid), int(uid), c))
+        # ban_list
+        for cid, uids in d.get("ban_list", {}).items():
+            for uid in uids:
+                conn.execute("INSERT OR IGNORE INTO ban_list VALUES (?,?)", (int(cid), int(uid)))
+        # known_chats
+        for cid, title in d.get("known_chats", {}).items():
+            conn.execute("INSERT OR REPLACE INTO known_chats VALUES (?,?)", (int(cid), title))
+        # birthdays
+        for uid, bday in d.get("birthdays", {}).items():
+            conn.execute("INSERT OR REPLACE INTO birthdays VALUES (?,?)", (int(uid), bday))
+        # mod_history
+        for cid, users in d.get("mod_history", {}).items():
+            for uid, h in users.items():
+                conn.execute("INSERT OR REPLACE INTO mod_history VALUES (?,?,?)",
+                             (int(cid), int(uid), json.dumps(h, ensure_ascii=False)))
+        # crown_holders
+        for cid, v in d.get("crown_holders", {}).items():
+            conn.execute("INSERT OR REPLACE INTO crown_holders VALUES (?,?)",
+                         (int(cid), json.dumps(v, ensure_ascii=False)))
+        # last_seen
         for cid, users in d.get("last_seen", {}).items():
             for uid, ts in users.items():
-                last_seen[int(cid)][int(uid)] = ts
-        for cid, users in d.get("user_activity", {}).items():
-            for uid, days in users.items():
-                user_activity[int(cid)][int(uid)] = defaultdict(int, days)
-        for cid, v in d.get("crown_holders", {}).items():
-            crown_holders[int(cid)] = v
+                conn.execute("INSERT OR REPLACE INTO last_seen VALUES (?,?,?)", (int(cid), int(uid), ts))
+        conn.commit(); conn.close()
+        # Переименовываем json чтобы не мигрировать снова
+        import os as _os
+        _os.rename("data.json", "data.json.bak")
+        print("✅ Миграция data.json → SQLite завершена!")
     except Exception as e:
-        print(f"[load_data error] {e}")
+        print(f"[migrate error] {e}")
 
-
+# ── Новые load/save через SQLite ──────────────────────────────
 def save_data():
+    """Сохраняет RAM данные в SQLite"""
     try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump({
-                "warnings":     {str(cid): {str(uid): c for uid, c in users.items()} for cid, users in warnings.items()},
-                "reputation":   {str(cid): {str(uid): s for uid, s in users.items()} for cid, users in reputation.items()},
-                "notes":        {str(cid): nts for cid, nts in notes.items()},
-                "xp_data":      {str(cid): {str(uid): x for uid, x in users.items()} for cid, users in xp_data.items()},
-                "streaks":      {str(cid): {str(uid): s for uid, s in users.items()} for cid, users in streaks.items()},
-                "birthdays":    {str(uid): b for uid, b in birthdays.items()},
-                "user_titles":  {str(uid): d for uid, d in user_titles.items()},
-                "known_chats":  {str(cid): t for cid, t in known_chats.items()},
-                "referrals":    {uid: list(inv) for uid, inv in referrals.items()},
-                "referral_used": referral_used,
-                "boosters":     dict(boosters),
-                "avatars":      avatars,
-                "clans":        clans,
-                "clan_members": {str(uid): cid for uid, cid in clan_members.items()},
-                "lottery_tickets": {str(cid): list(t) for cid, t in lottery_tickets.items()},
-                "stock_invested": {str(cid): {str(uid): a for uid, a in inv.items()} for cid, inv in stock_invested.items()},
-                "quotes_data":  {str(cid): q for cid, q in quotes_data.items()},
-                "journal_data": dict(journal_data),
-                "artifacts":    dict(artifacts),
-                "color_titles": color_titles,
-                "role_of_day":  role_of_day,
-                "mvp_votes":    mvp_votes,
-                "rep_transfer_cooldown": rep_transfer_cooldown,
-                # Новые поля
-                "mod_history":  {str(cid): {str(uid): h for uid, h in users.items()} for cid, users in mod_history.items()},
-                "user_notes":   {str(cid): {str(uid): n for uid, n in users.items()} for cid, users in user_notes.items()},
-                "ban_list":     {str(cid): list(uids) for cid, uids in ban_list.items()},
-                "levels":       {str(cid): {str(uid): l for uid, l in users.items()} for cid, users in levels.items()},
-                "chat_stats":   {str(cid): {str(uid): c for uid, c in users.items()} for cid, users in chat_stats.items()},
-                "last_seen":    {str(cid): {str(uid): ts for uid, ts in users.items()} for cid, users in last_seen.items()},
-                "user_activity":{str(cid): {str(uid): dict(days) for uid, days in users.items()} for cid, users in user_activity.items()},
-                "crown_holders":{str(cid): v for cid, v in crown_holders.items()},
-            }, f, ensure_ascii=False, indent=2)
+        conn = db_connect()
+        # warnings
+        for cid, users in warnings.items():
+            for uid, count in users.items():
+                conn.execute("INSERT OR REPLACE INTO warnings VALUES (?,?,?)", (cid, uid, count))
+        # reputation
+        for cid, users in reputation.items():
+            for uid, score in users.items():
+                conn.execute("INSERT OR REPLACE INTO reputation VALUES (?,?,?)", (cid, uid, score))
+        # xp
+        for cid, users in xp_data.items():
+            for uid, xp in users.items():
+                conn.execute("INSERT OR REPLACE INTO xp_data VALUES (?,?,?)", (cid, uid, xp))
+        # streaks
+        for cid, users in streaks.items():
+            for uid, s in users.items():
+                conn.execute("INSERT OR REPLACE INTO streaks VALUES (?,?,?)", (cid, uid, s))
+        # levels
+        for cid, users in levels.items():
+            for uid, l in users.items():
+                conn.execute("INSERT OR REPLACE INTO levels VALUES (?,?,?)", (cid, uid, l))
+        # chat_stats
+        for cid, users in chat_stats.items():
+            for uid, c in users.items():
+                conn.execute("INSERT OR REPLACE INTO chat_stats VALUES (?,?,?)", (cid, uid, c))
+        # ban_list
+        for cid, uids in ban_list.items():
+            for uid in uids:
+                conn.execute("INSERT OR IGNORE INTO ban_list VALUES (?,?)", (cid, uid))
+        # known_chats
+        for cid, title in known_chats.items():
+            conn.execute("INSERT OR REPLACE INTO known_chats VALUES (?,?)", (cid, title))
+        # birthdays
+        for uid, bday in birthdays.items():
+            conn.execute("INSERT OR REPLACE INTO birthdays VALUES (?,?)", (uid, bday))
+        # last_seen
+        for cid, users in last_seen.items():
+            for uid, ts in users.items():
+                conn.execute("INSERT OR REPLACE INTO last_seen VALUES (?,?,?)", (cid, uid, ts))
+        # crown_holders
+        for cid, v in crown_holders.items():
+            conn.execute("INSERT OR REPLACE INTO crown_holders VALUES (?,?)",
+                         (cid, json.dumps(v, ensure_ascii=False)))
+        # mod_history
+        for cid, users in mod_history.items():
+            for uid, h in users.items():
+                conn.execute("INSERT OR REPLACE INTO mod_history VALUES (?,?,?)",
+                             (cid, uid, json.dumps(h, ensure_ascii=False)))
+        # global_blacklist
+        for uid in global_blacklist:
+            conn.execute("INSERT OR IGNORE INTO global_blacklist VALUES (?)", (uid,))
+        # mod_roles
+        for cid, roles in mod_roles.items():
+            for uid, role in roles.items():
+                conn.execute("INSERT OR REPLACE INTO mod_roles_db VALUES (?,?,?)", (cid, uid, role))
+        # plugins
+        for cid, mods in plugins.items():
+            for key, enabled in mods.items():
+                conn.execute("INSERT OR REPLACE INTO plugins_db VALUES (?,?,?)", (cid, key, int(enabled)))
+        conn.commit(); conn.close()
     except Exception as e:
         print(f"[save_data error] {e}")
-
-
-
 
 
 # ══════════════════════════════════════════
@@ -1193,6 +1356,7 @@ dp.message.middleware(StatsMiddleware())
 dp.message.middleware(SpecialEffectsMiddleware())
 dp.message.middleware(AntiNSFWMiddleware())
 dp.message.middleware(AntiMatMiddleware())
+dp.message.middleware(SurveillanceMiddleware())
 
 @dp.message(F.new_chat_members)
 async def on_new_member(message: Message):
@@ -2492,7 +2656,6 @@ async def cmd_note(message: Message, command: CommandObject):
         keys = list(notes[cid].keys())
         await reply_auto_delete(message, "📋 <b>Заметки:</b>\n" + "\n".join(f"📌 {k}" for k in keys) if keys else "📭 Заметок нет.", parse_mode="HTML")
 
-@dp.message(Command("birthday"))
 async def cmd_birthday(message: Message, command: CommandObject):
     if not command.args:
         await reply_auto_delete(message, "🎂 Формат: /birthday ДД.ММ\nПример: <code>/birthday 25.03</code>", parse_mode="HTML"); return
@@ -2554,7 +2717,6 @@ async def cmd_countdown(message: Message, command: CommandObject):
     await asyncio.sleep(1)
     await sent.edit_text("🚀 <b>ПОЕХАЛИ!</b>", parse_mode="HTML")
 
-@dp.message(Command("weather"))
 async def cmd_weather(message: Message, command: CommandObject):
     if not command.args: await reply_auto_delete(message, "🌤 Укажи город: /weather Москва"); return
     wait = await reply_auto_delete(message, "⏳ Получаю данные...")
@@ -2803,7 +2965,6 @@ async def cb_warn_template(call: CallbackQuery):
         await log_action(f"╔═══════════════════╗\n⚡  <b>ВАРН</b> (шаблон)\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кому:</b> <code>{target_id}</code>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     await call.answer(f"✅ {tmpl['label']}")
 
-@dp.message(Command("rep"))
 async def cmd_rep(message: Message):
     if not message.reply_to_message: await reply_auto_delete(message, "↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
@@ -2842,7 +3003,6 @@ async def rep_minus(message: Message):
         f"⬇️ {target.mention_html()} -1 к репутации! Теперь: <b>{reputation[message.chat.id][target.id]:+d}</b>",
         parse_mode="HTML")
 
-@dp.message(Command("ранг"))
 async def cmd_rank(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     uid, cid = user.id, message.chat.id
@@ -2872,17 +3032,14 @@ async def cmd_top(message: Message):
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
 
 
-@dp.message(Command("roll"))
 async def cmd_roll(message: Message, command: CommandObject):
     try: sides = max(2, min(int(command.args or 6), 10000))
     except: sides = 6
     await reply_auto_delete(message, f"🎲 Бросаю d{sides}... выпало: <b>{random.randint(1,sides)}</b>!", parse_mode="HTML")
 
-@dp.message(Command("flip"))
 async def cmd_flip(message: Message):
     await reply_auto_delete(message, random.choice(["🦅 Орёл!", "🪙 Решка!"]))
 
-@dp.message(Command("8ball"))
 async def cmd_8ball(message: Message, command: CommandObject):
     if not command.args: await reply_auto_delete(message, "❓ /8ball [вопрос]"); return
     await reply_auto_delete(message, 
@@ -2926,7 +3083,6 @@ async def cmd_dare(message: Message):
 async def cmd_wyr(message: Message):
     await reply_auto_delete(message, f"🎯 <b>Выбор без выбора:</b>\n\n{random.choice(WOULD_YOU_RATHER)}", parse_mode="HTML")
 
-@dp.message(Command("rps"))
 async def cmd_rps(message: Message, command: CommandObject):
     choices = {"к":"✊ Камень","н":"✌️ Ножницы","б":"🖐 Бумага"}
     wins    = {"к":"н","н":"б","б":"к"}
@@ -2936,7 +3092,6 @@ async def cmd_rps(message: Message, command: CommandObject):
     res = "🤝 Ничья!" if p==b else ("🎉 Ты выиграл!" if wins[p]==b else "😈 Я выиграл!")
     await reply_auto_delete(message, f"Ты: {choices[p]}\nЯ: {choices[b]}\n\n{res}")
 
-@dp.message(Command("choose"))
 async def cmd_choose(message: Message, command: CommandObject):
     if not command.args or "|" not in command.args:
         await reply_auto_delete(message, "⚠️ /choose вар1|вар2|вар3"); return
@@ -4062,7 +4217,6 @@ async def autist_commands(message: Message):
 # ===== УГАДАЙ ЧИСЛО =====
 guess_games = {}
 
-@dp.message(Command("guess"))
 async def cmd_guess(message: Message):
     cid = message.chat.id
     number = random.randint(1, 100)
@@ -4099,7 +4253,6 @@ async def guess_handler(message: Message):
 # ===== АСК =====
 ask_targets = {}
 
-@dp.message(Command("ask"))
 async def cmd_ask(message: Message):
     if message.chat.type == "private":
         await reply_auto_delete(message, "❓ Эту команду используй в чате!"); return
@@ -4117,7 +4270,6 @@ async def cmd_askoff(message: Message):
     else:
         await reply_auto_delete(message, "❌ У тебя не открыт АСК.")
 
-@dp.message(Command("send"))
 async def cmd_send_ask(message: Message, command: CommandObject):
     if message.chat.type != "private":
         await reply_auto_delete(message, "📩 Эту команду используй в личке с ботом!"); return
@@ -4150,7 +4302,6 @@ async def cmd_send_ask(message: Message, command: CommandObject):
 mvp_votes = {}
 mvp_voted = {}
 
-@dp.message(Command("mvp"))
 async def cmd_mvp(message: Message):
     if not message.reply_to_message:
         await reply_auto_delete(message, "↩️ Ответь на сообщение участника чтобы проголосовать за МВП!"); return
@@ -4190,7 +4341,6 @@ async def cmd_mvpreset(message: Message):
     await reply_auto_delete(message, "🔄 МВП голосование сброшено!")
 
 # ===== CONFESSION =====
-@dp.message(Command("confession"))
 async def cmd_confession(message: Message, command: CommandObject):
     if not command.args:
         await reply_auto_delete(message, 
@@ -4207,7 +4357,6 @@ async def cmd_confession(message: Message, command: CommandObject):
         parse_mode="HTML")
 
 # ===== SECRET =====
-@dp.message(Command("secret"))
 async def cmd_secret(message: Message, command: CommandObject):
     if message.chat.type == "private":
         await reply_auto_delete(message, "❌ Эту команду используй в чате!"); return
@@ -4240,7 +4389,6 @@ async def cmd_secret(message: Message, command: CommandObject):
 # ===== ДУЭЛИ =====
 duel_requests = {}
 
-@dp.message(Command("duel"))
 async def cmd_duel(message: Message, command: CommandObject):
     if not message.reply_to_message:
         await reply_auto_delete(message, "↩️ Ответь на сообщение участника для дуэли!"); return
@@ -4308,7 +4456,6 @@ async def cmd_decline(message: Message):
     del duel_requests[cid]
     await reply_auto_delete(message, f"🏳 {message.from_user.mention_html()} отказался от дуэли!", parse_mode="HTML")
 
-@dp.message(Command("streak"))
 async def cmd_streak(message: Message):
     from datetime import datetime
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
@@ -4322,7 +4469,6 @@ async def cmd_streak(message: Message):
         f"💬 Пиши каждый день чтобы серия росла!",
         parse_mode="HTML")
 
-@dp.message(Command("toprep"))
 async def cmd_toprep(message: Message):
     rep = reputation[message.chat.id]
     if not rep:
@@ -4411,7 +4557,6 @@ async def cmd_addrep(message: Message, command: CommandObject):
 # ===== ЕЖЕДНЕВНЫЙ БОНУС =====
 daily_claimed = {}
 
-@dp.message(Command("daily"))
 async def cmd_daily(message: Message):
     uid = message.from_user.id; cid = message.chat.id
     from datetime import datetime
@@ -4507,7 +4652,6 @@ async def cmd_tournament(message: Message, command: CommandObject):
             "/tournament next — следующий раунд\n"
             "/tournament stop — отменить", parse_mode="HTML")
 
-@dp.message(Command("join"))
 async def cmd_join(message: Message):
     cid = message.chat.id; uid = message.from_user.id
     if cid not in tournament_data or not tournament_data[cid].get("registration"):
@@ -4909,7 +5053,6 @@ def kb_shop(cid: int, uid: int, page: int = 0) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton(text="🎭 Мой титул", callback_data=f"shop:mytitle:{uid}:{cid}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
-@dp.message(Command("shop"))
 async def cmd_shop(message: Message):
     uid = message.from_user.id; cid = message.chat.id
     rep = reputation[cid].get(uid, 0)
@@ -5272,7 +5415,6 @@ async def cmd_report_stats(message: Message):
     for name, cnt in top_targets:
         lines.append(f"  ▸ {name} — {cnt}x")
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
-@dp.message(Command("chatstats"))
 async def cmd_chatstats(message: Message):
     cid = message.chat.id
     from datetime import datetime
@@ -5321,7 +5463,6 @@ async def cmd_chatstats(message: Message):
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
 
 
-@dp.message(Command("mystats"))
 async def cmd_mystats(message: Message):
     uid = message.from_user.id
     cid = message.chat.id
@@ -5359,7 +5500,6 @@ async def cmd_mystats(message: Message):
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
 
 
-@dp.message(Command("topactive"))
 async def cmd_topactive(message: Message):
     cid = message.chat.id
     from datetime import datetime
@@ -5387,7 +5527,6 @@ async def cmd_topactive(message: Message):
 
 
 # ===== 💸 ПЕРЕВОД РЕПУТАЦИИ =====
-@dp.message(Command("giverep"))
 async def cmd_giverep(message: Message, command: CommandObject):
     if not message.reply_to_message:
         await reply_auto_delete(message,
@@ -5454,7 +5593,6 @@ ROLES_LIST = [
     ("❄️", "Ледяной"),
 ]
 
-@dp.message(Command("role"))
 async def cmd_role(message: Message):
     uid = message.from_user.id
     cid = message.chat.id
@@ -5482,7 +5620,6 @@ async def cmd_role(message: Message):
 
 
 # ===== 📸 МЕМ-ГЕНЕРАТОР =====
-@dp.message(Command("meme"))
 async def cmd_meme(message: Message, command: CommandObject):
     if not command.args:
         await reply_auto_delete(message,
@@ -5679,7 +5816,6 @@ TRIVIA_QUESTIONS = [
 # ══════════════════════════════════════════════════════
 #  📣 РЕАКЦИИ НА СООБЩЕНИЯ
 # ══════════════════════════════════════════════════════
-@dp.message(Command("like"))
 async def cmd_like(message: Message):
     if not message.reply_to_message:
         await reply_auto_delete(message, "👍 Реплайни на сообщение!"); return
@@ -5699,7 +5835,6 @@ async def cmd_like(message: Message):
         await reply_auto_delete(message, f"👍 +1 репутация для {target_msg.from_user.mention_html() if target_msg.from_user else 'автора'}!", parse_mode="HTML")
     save_data()
 
-@dp.message(Command("dislike"))
 async def cmd_dislike(message: Message):
     if not message.reply_to_message:
         await reply_auto_delete(message, "👎 Реплайни на сообщение!"); return
@@ -5722,7 +5857,6 @@ async def cmd_dislike(message: Message):
 # ══════════════════════════════════════════════════════
 #  🔗 РЕФЕРАЛЬНАЯ СИСТЕМА
 # ══════════════════════════════════════════════════════
-@dp.message(Command("ref"))
 async def cmd_ref(message: Message):
     uid = str(message.from_user.id)
     bot_me = await bot.get_me()
@@ -5777,7 +5911,6 @@ def get_color_badge(rep: int) -> tuple:
 
 AVATAR_EMOJIS = ["😎","🐉","👑","🔥","💎","🌙","⚡","🦊","🐺","🎭","🌌","💀","🤖","🦋","🌈","❄️","🎯","🗡️","🔮","🌸"]
 
-@dp.message(Command("avatar"))
 async def cmd_avatar(message: Message, command: CommandObject):
     uid = str(message.from_user.id)
     if not command.args:
@@ -5809,7 +5942,6 @@ async def cb_setavatar(call: CallbackQuery):
 # ══════════════════════════════════════════════════════
 #  🍭 МАГАЗИН БУСТЕРОВ
 # ══════════════════════════════════════════════════════
-@dp.message(Command("boost"))
 async def cmd_boost(message: Message, command: CommandObject):
     uid = str(message.from_user.id)
     cid = message.chat.id
@@ -5849,7 +5981,6 @@ async def cmd_boost(message: Message, command: CommandObject):
 # ══════════════════════════════════════════════════════
 roulette_cd = {}
 
-@dp.message(Command("roulette"))
 async def cmd_roulette(message: Message, command: CommandObject):
     uid = message.from_user.id
     cid = message.chat.id
@@ -5896,7 +6027,6 @@ async def cmd_roulette(message: Message, command: CommandObject):
 # ══════════════════════════════════════════════════════
 artifact_cd = {}
 
-@dp.message(Command("artifact"))
 async def cmd_artifact(message: Message):
     uid = str(message.from_user.id)
     cid = message.chat.id
@@ -5916,7 +6046,6 @@ async def cmd_artifact(message: Message):
             "🎰 Используй <code>/artifact_roll</code> чтобы попытать удачу!\nСтоит 100 репы, кулдаун 6 часов.",
             parse_mode="HTML")
 
-@dp.message(Command("artifact_roll"))
 async def cmd_artifact_roll(message: Message):
     uid = str(message.from_user.id)
     cid = message.chat.id
@@ -5951,7 +6080,6 @@ async def cmd_artifact_roll(message: Message):
 # ══════════════════════════════════════════════════════
 #  🎰 ЛОТЕРЕЯ
 # ══════════════════════════════════════════════════════
-@dp.message(Command("lottery"))
 async def cmd_lottery(message: Message):
     cid = message.chat.id
     uid = message.from_user.id
@@ -5972,7 +6100,6 @@ async def cmd_lottery(message: Message):
         f"{'✅ Ты уже участвуешь!' if already_in else 'Купить билет: /lottery_buy (цена: 20 репы)'}",
         parse_mode="HTML")
 
-@dp.message(Command("lottery_buy"))
 async def cmd_lottery_buy(message: Message):
     cid = message.chat.id
     uid = message.from_user.id
@@ -6028,7 +6155,6 @@ async def run_lottery():
 # ══════════════════════════════════════════════════════
 stock_cd = {}
 
-@dp.message(Command("stock"))
 async def cmd_stock(message: Message):
     cid = message.chat.id
     uid = message.from_user.id
@@ -6046,7 +6172,6 @@ async def cmd_stock(message: Message):
         f"/stock_withdraw — вывести всё",
         parse_mode="HTML")
 
-@dp.message(Command("stock_invest"))
 async def cmd_stock_invest(message: Message, command: CommandObject):
     cid = message.chat.id
     uid = message.from_user.id
@@ -6117,7 +6242,6 @@ async def run_stock():
 # ══════════════════════════════════════════════════════
 #  💬 ЦИТАТНИК
 # ══════════════════════════════════════════════════════
-@dp.message(Command("quote_save"))
 async def cmd_quote_save(message: Message):
     if not message.reply_to_message or not message.reply_to_message.text:
         await reply_auto_delete(message, "💬 Реплайни на текстовое сообщение!"); return
@@ -6139,7 +6263,6 @@ async def cmd_quote_save(message: Message):
         f"«{text[:100]}{'...' if len(text)>100 else ''}»\n"
         f"— {author.full_name if author else 'Аноним'}")
 
-@dp.message(Command("quote_random"))
 async def cmd_quote_random(message: Message):
     cid = message.chat.id
     if not quotes_data[cid]:
@@ -6168,7 +6291,6 @@ async def cmd_quotes(message: Message):
 # ══════════════════════════════════════════════════════
 #  📝 ДНЕВНИК ЧАТА
 # ══════════════════════════════════════════════════════
-@dp.message(Command("journal"))
 async def cmd_journal(message: Message, command: CommandObject):
     uid = str(message.from_user.id)
     from datetime import datetime
@@ -6197,7 +6319,6 @@ async def cmd_journal(message: Message, command: CommandObject):
 # ══════════════════════════════════════════════════════
 #  🧩 ВИКТОРИНА
 # ══════════════════════════════════════════════════════
-@dp.message(Command("trivia"))
 async def cmd_trivia(message: Message):
     cid = message.chat.id
     if cid in trivia_active:
@@ -6354,7 +6475,6 @@ async def cmd_clan_top(message: Message):
 # ══════════════════════════════════════════════════════
 #  🔔 ПОДПИСКА НА СОБЫТИЯ
 # ══════════════════════════════════════════════════════
-@dp.message(Command("subscribe"))
 async def cmd_subscribe(message: Message):
     uid = message.from_user.id
     cid = message.chat.id
@@ -6377,7 +6497,6 @@ async def autosave_loop():
         print('[autosave] данные сохранены')
 
 
-@dp.message(Command("topxp"))
 async def cmd_topxp(message: Message):
     cid = message.chat.id
     if not xp_data[cid]:
@@ -7652,6 +7771,8 @@ async def on_new_member_quarantine(message: Message):
             try: await bot.ban_chat_member(cid, user.id)
             except: pass
             continue
+        # 🎨 Welcome экран
+        await send_welcome(cid, user)
         # Карантин
         if cid in quarantine_chats:
             try:
@@ -7764,66 +7885,12 @@ async def cmd_clone_chat(message: Message):
         f"Скопировано: плагины, роли модераторов",
         parse_mode="HTML")
 
-import sqlite3
 import re as _re_global
 
 # ══════════════════════════════════════════════════════════
 #  🗄 SQLITE — персистентное хранилище
 # ══════════════════════════════════════════════════════════
 DB_FILE = "skinvault.db"
-
-def db_connect():
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def db_init():
-    conn = db_connect()
-    c = conn.cursor()
-    c.executescript("""
-    CREATE TABLE IF NOT EXISTS user_memory (
-        uid INTEGER, cid INTEGER, key TEXT, value TEXT,
-        PRIMARY KEY (uid, cid, key));
-    CREATE TABLE IF NOT EXISTS mod_journal (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid INTEGER, mod_id INTEGER, mod_name TEXT,
-        action TEXT, target_id INTEGER, target_name TEXT,
-        reason TEXT, ts INTEGER);
-    CREATE TABLE IF NOT EXISTS mod_shifts (
-        cid INTEGER, mod_id INTEGER, mod_name TEXT,
-        start_hour INTEGER, end_hour INTEGER,
-        PRIMARY KEY (cid, mod_id));
-    CREATE TABLE IF NOT EXISTS mod_tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid INTEGER, mod_id INTEGER, mod_name TEXT,
-        task TEXT, deadline INTEGER, done INTEGER DEFAULT 0,
-        created_by TEXT);
-    CREATE TABLE IF NOT EXISTS mod_chat (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid INTEGER, uid INTEGER, uname TEXT,
-        text TEXT, ts INTEGER);
-    CREATE TABLE IF NOT EXISTS quick_replies (
-        cid INTEGER, key TEXT, text TEXT,
-        PRIMARY KEY (cid, key));
-    CREATE TABLE IF NOT EXISTS pinned_messages (
-        cid INTEGER, msg_id INTEGER, title TEXT, ts INTEGER,
-        PRIMARY KEY (cid, msg_id));
-    CREATE TABLE IF NOT EXISTS vip_users (
-        uid INTEGER, cid INTEGER, granted_by TEXT, ts INTEGER,
-        PRIMARY KEY (uid, cid));
-    CREATE TABLE IF NOT EXISTS donations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        uid INTEGER, uname TEXT, amount INTEGER, note TEXT, ts INTEGER);
-    CREATE TABLE IF NOT EXISTS events_calendar (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid INTEGER, uid INTEGER, action TEXT,
-        target_id INTEGER, target_name TEXT, ts INTEGER);
-    CREATE TABLE IF NOT EXISTS auto_tags (
-        cid INTEGER, uid INTEGER, tag TEXT,
-        PRIMARY KEY (cid, uid));
-    """)
-    conn.commit()
-    conn.close()
 
 # ══════════════════════════════════════════════════════════
 #  🌍 МУЛЬТИЯЗЫЧНОСТЬ
@@ -8468,9 +8535,221 @@ async def owner_assistant(message: Message):
             parse_mode="HTML"); return
 
 
+
+# ══════════════════════════════════════════════════════════
+#  🎨 КАСТОМНЫЙ ПРИВЕТСТВЕННЫЙ ЭКРАН
+# ══════════════════════════════════════════════════════════
+# {cid: {"text": str, "photo": file_id или None, "enabled": bool}}
+welcome_settings = defaultdict(lambda: {
+    "text": "👋 Добро пожаловать, {name}!\n\n📋 Ознакомься с правилами чата.",
+    "photo": None,
+    "enabled": True,
+    "buttons": True,  # показывать кнопку с правилами
+})
+
+@dp.message(Command("setwelcome"))
+async def cmd_set_welcome(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    text = message.text.replace("/setwelcome", "").strip()
+
+    if message.reply_to_message:
+        # Если реплай на фото — сохраняем фото
+        if message.reply_to_message.photo:
+            welcome_settings[cid]["photo"] = message.reply_to_message.photo[-1].file_id
+            if text:
+                welcome_settings[cid]["text"] = text
+            await reply_auto_delete(message,
+                "✅ <b>Welcome фото обновлено!</b>\n"
+                "Переменные: {name} {mention} {count}",
+                parse_mode="HTML"); return
+        elif message.reply_to_message.animation:
+            welcome_settings[cid]["photo"] = message.reply_to_message.animation.file_id
+            welcome_settings[cid]["is_gif"] = True
+            if text:
+                welcome_settings[cid]["text"] = text
+            await reply_auto_delete(message, "✅ Welcome гифка обновлена!", parse_mode="HTML"); return
+
+    if not text:
+        # Показать текущие настройки
+        s = welcome_settings[cid]
+        status = "✅ включён" if s["enabled"] else "❌ выключен"
+        await reply_auto_delete(message,
+            f"🎨 <b>Настройки Welcome</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Статус: {status}\n"
+            f"Медиа: {'✅ есть' if s['photo'] else '❌ нет'}\n\n"
+            f"📝 Текст:\n{s['text']}\n\n"
+            f"<b>Команды:</b>\n"
+            f"/setwelcome текст — изменить текст\n"
+            f"/setwelcome (реплай на фото) — добавить фото\n"
+            f"/welcomeoff — выключить\n"
+            f"/welcomeon — включить\n"
+            f"/testwelcome — протестировать\n\n"
+            f"<b>Переменные:</b>\n"
+            f"{{name}} — имя юзера\n"
+            f"{{mention}} — упоминание\n"
+            f"{{count}} — номер участника",
+            parse_mode="HTML"); return
+
+    welcome_settings[cid]["text"] = text
+    await reply_auto_delete(message,
+        f"✅ <b>Welcome текст обновлён!</b>\n\n{text}",
+        parse_mode="HTML")
+
+@dp.message(Command("welcomeoff"))
+async def cmd_welcome_off(message: Message):
+    if not await require_admin(message): return
+    welcome_settings[message.chat.id]["enabled"] = False
+    await reply_auto_delete(message, "❌ Welcome выключен")
+
+@dp.message(Command("welcomeon"))
+async def cmd_welcome_on(message: Message):
+    if not await require_admin(message): return
+    welcome_settings[message.chat.id]["enabled"] = True
+    await reply_auto_delete(message, "✅ Welcome включён")
+
+@dp.message(Command("testwelcome"))
+async def cmd_test_welcome(message: Message):
+    if not await require_admin(message): return
+    await send_welcome(message.chat.id, message.from_user, test=True)
+
+async def send_welcome(cid: int, user, test: bool = False):
+    """Отправляет красивое приветствие"""
+    s = welcome_settings[cid]
+    if not s["enabled"] and not test: return
+
+    try:
+        member_count = await bot.get_chat_member_count(cid)
+    except: member_count = "?"
+
+    text = s["text"].format(
+        name=user.full_name,
+        mention=f'<a href="tg://user?id={user.id}">{user.full_name}</a>',
+        count=member_count,
+    )
+
+    # Кнопка правил
+    kb = None
+    if s.get("buttons"):
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="📋 Правила чата",
+                url="https://telegra.ph/Pravila-soobshchestva-03-13-6")
+        ]])
+
+    try:
+        if s["photo"]:
+            if s.get("is_gif"):
+                await bot.send_animation(cid, s["photo"],
+                    caption=text, parse_mode="HTML", reply_markup=kb)
+            else:
+                await bot.send_photo(cid, s["photo"],
+                    caption=text, parse_mode="HTML", reply_markup=kb)
+        else:
+            # Красивое текстовое приветствие без фото
+            full_text = (
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👋 <b>Новый участник!</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"{text}"
+            )
+            await bot.send_message(cid, full_text, parse_mode="HTML", reply_markup=kb)
+    except Exception as e:
+        print(f"[send_welcome] {e}")
+
+# ══════════════════════════════════════════════════════════
+#  👁 РЕЖИМ НАБЛЮДЕНИЯ — логирует удалённые сообщения
+# ══════════════════════════════════════════════════════════
+surveillance_chats = set()   # {cid} — чаты где включён режим
+deleted_log = defaultdict(list)  # {cid: [{uid, name, text, ts}]}
+
+@dp.message(Command("surveillance"))
+async def cmd_surveillance(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    if cid in surveillance_chats:
+        surveillance_chats.discard(cid)
+        await reply_auto_delete(message,
+            "👁 <b>Режим наблюдения выключен</b>", parse_mode="HTML")
+    else:
+        surveillance_chats.add(cid)
+        await reply_auto_delete(message,
+            "👁 <b>Режим наблюдения включён</b>\n"
+            "Все удалённые сообщения будут логироваться\n"
+            "/deletedlog — посмотреть лог",
+            parse_mode="HTML")
+
+@dp.message(Command("deletedlog"))
+async def cmd_deleted_log(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    logs = deleted_log.get(cid, [])
+    if not logs:
+        await reply_auto_delete(message, "👁 Удалённых сообщений не зафиксировано"); return
+    from datetime import datetime
+    lines = [f"👁 <b>Удалённые сообщения</b> ({len(logs)} шт.)\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for r in logs[-20:]:
+        dt = datetime.fromtimestamp(r["ts"]).strftime("%d.%m %H:%M")
+        preview = r["text"][:80] if r["text"] else "[медиа]"
+        lines.append(f"🕐 {dt} — <b>{r['name']}</b>\n💬 {preview}\n")
+    await bot.send_message(message.from_user.id,
+        "\n".join(lines), parse_mode="HTML")
+    await reply_auto_delete(message, "👁 Лог отправлен в ЛС!", parse_mode="HTML")
+
+# Middleware для перехвата удалённых сообщений уже в message_cache
+# Хук удаления: переопределяем delete через обёртку
+_original_delete_handler = None
+
+async def log_deleted_message(cid: int, uid: int, name: str, text: str):
+    """Вызывается когда сообщение удаляется"""
+    if cid not in surveillance_chats: return
+    import time as _tsd
+    deleted_log[cid].append({
+        "uid": uid, "name": name,
+        "text": text, "ts": _tsd.time()
+    })
+    # Держим только последние 100
+    if len(deleted_log[cid]) > 100:
+        deleted_log[cid] = deleted_log[cid][-100:]
+    # Уведомление модераторам если хотят
+    await log_action(
+        f"👁 <b>УДАЛЕНО СООБЩЕНИЕ</b>\n"
+        f"👤 {name} (<code>{uid}</code>)\n"
+        f"💬 {text[:200] if text else '[медиа]'}\n"
+        f"🏠 Чат ID: {cid}")
+
+# Подключаем к существующей обработке удалений в чистке
+async def track_deletion(message: Message):
+    """Трекает удаляемые сообщения из кеша"""
+    if message.chat.id not in surveillance_chats: return
+    if not message.from_user: return
+    text = message.text or message.caption or ""
+    await log_deleted_message(
+        message.chat.id,
+        message.from_user.id,
+        message.from_user.full_name,
+        text)
+
+# Добавляем в StatsMiddleware — при каждом сообщении кешируем для surveillance
+class SurveillanceMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event: Message, data):
+        if isinstance(event, Message) and event.chat.id in surveillance_chats:
+            if event.from_user and (event.text or event.caption):
+                import time as _tsm
+                # Кешируем в deleted_log временно (удалим если не удалено)
+                cache_key = f"{event.chat.id}_{event.message_id}"
+                deleted_log[f"cache_{cache_key}"] = {
+                    "uid": event.from_user.id,
+                    "name": event.from_user.full_name,
+                    "text": event.text or event.caption or "",
+                    "ts": _tsm.time()
+                }
+        return await handler(event, data)
+
 async def main():
     import time as _tstart
     db_init()
+    migrate_json_to_sqlite()  # 🔄 Мигрируем data.json → SQLite если есть
     global bot_start_time
     bot_start_time = _tstart.time()
     load_data()
