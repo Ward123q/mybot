@@ -918,6 +918,65 @@ def kb_games(tid: int) -> InlineKeyboardMarkup:
 message_cache = {}
 user_msg_ids  = defaultdict(lambda: defaultdict(list))  # {cid: {uid: [(msg_id, ts)]}}
 
+class PendingInputMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event: Message, data):
+        if not isinstance(event, Message): return await handler(event, data)
+        uid = event.from_user.id if event.from_user else None
+        if uid and uid in pending and not (event.text and event.text.startswith("/")):
+            p = pending.pop(uid)
+            action   = p.get("action", "")
+            target_id   = p.get("target_id", 0)
+            target_name = p.get("target_name", "")
+            chat_id     = p.get("chat_id", event.chat.id)
+            text = event.text or ""
+            try:
+                if action == "mute_custom":
+                    mins, label = parse_duration(text)
+                    if mins:
+                        await bot.restrict_chat_member(chat_id, target_id,
+                            permissions=ChatPermissions(can_send_messages=False),
+                            until_date=timedelta(minutes=mins))
+                        await event.answer(random.choice(MUTE_MESSAGES).format(
+                            name=f"<b>{target_name}</b>", time=label), parse_mode="HTML")
+                    else: await event.reply("⚠️ Примеры: 10, 30m, 2h, 1d")
+                elif action == "warn_custom":
+                    reason = text.strip() or "Нарушение правил"
+                    warnings[chat_id][target_id] += 1; count = warnings[chat_id][target_id]
+                    if count >= MAX_WARNINGS:
+                        await bot.ban_chat_member(chat_id, target_id)
+                        warnings[chat_id][target_id] = 0
+                        msg = random.choice(AUTOBAN_MESSAGES).format(name=f"<b>{target_name}</b>", max=MAX_WARNINGS)
+                    else:
+                        msg = random.choice(WARN_MESSAGES).format(
+                            name=f"<b>{target_name}</b>", count=count, max=MAX_WARNINGS, reason=reason)
+                    await event.answer(msg, parse_mode="HTML")
+                elif action == "ban_custom":
+                    reason = text.strip() or "Нарушение правил"
+                    await bot.ban_chat_member(chat_id, target_id)
+                    await event.answer(random.choice(BAN_MESSAGES).format(
+                        name=f"<b>{target_name}</b>", reason=reason), parse_mode="HTML")
+                elif action == "announce_text":
+                    await bot.send_message(chat_id,
+                        f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{text}\n\n— <b>Администрация</b>", parse_mode="HTML")
+                elif action == "poll_text":
+                    parts = [x.strip() for x in text.split("|") if x.strip()]
+                    if len(parts) >= 3:
+                        await bot.send_poll(chat_id, question=parts[0], options=parts[1:], is_anonymous=False)
+                    else:
+                        await event.reply("⚠️ Формат: Вопрос|Вариант1|Вариант2")
+                elif action == "weather_city":
+                    await event.answer(await get_weather(text.strip()), parse_mode="HTML")
+                elif action == "mypanel_announce":
+                    await bot.send_message(chat_id,
+                        f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{text}\n\n— <b>Администрация</b>", parse_mode="HTML")
+                    await event.answer("✅ Объявление отправлено!")
+            except Exception as e:
+                await event.reply(f"⚠️ Ошибка: {e}")
+            try: await event.delete()
+            except: pass
+            return
+        return await handler(event, data)
+
 class StatsMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if isinstance(event, Message) and event.from_user and event.chat.type in ("group","supergroup"):
