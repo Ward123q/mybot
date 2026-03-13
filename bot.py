@@ -1218,7 +1218,7 @@ async def on_new_member(message: Message):
             ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📜 Читать правила чата", url="https://telegra.ph/Pravila-anon-chata-03-11-3")]
+                [InlineKeyboardButton(text="📜 Читать правила чата", url="https://telegra.ph/Pravila-soobshchestva-03-13-6")]
             ])
         )
 
@@ -1767,7 +1767,7 @@ async def cmd_rules(message: Message):
         caption="📜 <b>Правила чата</b>\n\n🔎 Нажми кнопку ниже чтобы прочитать правила:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-anon-chata-03-11-3")]
+            [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-soobshchestva-03-13-6")]
         ])
     )
 
