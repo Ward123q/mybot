@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 import os
+import time as _tstart
 import aiohttp
 from datetime import timedelta
 from collections import defaultdict
@@ -8402,7 +8403,10 @@ async def owner_assistant(message: Message):
             "/profile — твой профиль\n"
             "/backup — бэкап базы",
             parse_mode="HTML"); return
+
+
 async def main():
+    import time as _tstart
     db_init()
     global bot_start_time
     bot_start_time = _tstart.time()
