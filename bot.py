@@ -9049,6 +9049,105 @@ async def cmd_calendar(message: Message):
     await reply_auto_delete(message, "📅 Календарь отправлен в ЛС!", parse_mode="HTML")
 
 # ══════════════════════════════════════════════════════════
+#  💾 АВТОБЭКАП БАЗЫ В ТЕЛЕГРАМ КАЖДЫЕ 6 ЧАСОВ
+# ══════════════════════════════════════════════════════════
+async def auto_backup_loop():
+    """Каждые 6 часов отправляет skinvault.db владельцу в ЛС"""
+    await asyncio.sleep(30)  # Ждём 30 сек после старта
+    while True:
+        try:
+            save_data()  # Сначала сохраняем актуальные данные
+            import os as _os2, io as _io2
+            from datetime import datetime as _dt_bk
+            db_path = "skinvault.db"
+            if _os2.path.exists(db_path):
+                size = _os2.path.getsize(db_path)
+                with open(db_path, "rb") as f:
+                    buf = _io2.BytesIO(f.read())
+                buf.name = f"skinvault_{_dt_bk.now().strftime('%d%m%Y_%H%M')}.db"
+                await bot.send_document(
+                    OWNER_ID, buf,
+                    caption=(
+                        f"💾 <b>Автобэкап базы данных</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"📅 {_dt_bk.now().strftime('%d.%m.%Y %H:%M')}\n"
+                        f"📦 Размер: <b>{size // 1024} KB</b>\n"
+                        f"💬 Чатов: <b>{len(known_chats)}</b>\n"
+                        f"👥 Юзеров: <b>{sum(len(chat_stats[c]) for c in chat_stats)}</b>\n\n"
+                        f"<i>Для восстановления: /restoredb</i>"
+                    ),
+                    parse_mode="HTML"
+                )
+                print(f"✅ Автобэкап отправлен ({size // 1024} KB)")
+        except Exception as e:
+            print(f"[auto_backup_loop] {e}")
+        await asyncio.sleep(6 * 3600)  # Каждые 6 часов
+
+@dp.message(Command("restoredb"))
+async def cmd_restore_db(message: Message):
+    """Восстановить базу из файла — /restoredb (реплай на .db файл)"""
+    if message.from_user.id != OWNER_ID: return
+    if not message.reply_to_message or not message.reply_to_message.document:
+        await reply_auto_delete(message,
+            "💾 <b>Восстановление базы</b>\n\n"
+            "Реплайни на .db файл из бэкапа и напиши /restoredb\n\n"
+            "⚠️ Текущие данные будут заменены!",
+            parse_mode="HTML"); return
+    doc = message.reply_to_message.document
+    if not doc.file_name.endswith(".db"):
+        await reply_auto_delete(message, "⚠️ Нужен файл с расширением .db"); return
+    status = await message.answer("⏳ Скачиваю и восстанавливаю базу...")
+    try:
+        import io as _io3
+        file = await bot.get_file(doc.file_id)
+        buf = _io3.BytesIO()
+        await bot.download_file(file.file_path, buf)
+        buf.seek(0)
+        # Сохраняем старую базу как резерв
+        import os as _os3, shutil as _sh
+        if _os3.path.exists("skinvault.db"):
+            _sh.copy("skinvault.db", "skinvault_old.db")
+        with open("skinvault.db", "wb") as f:
+            f.write(buf.read())
+        # Перезагружаем данные
+        load_data()
+        await status.edit_text(
+            f"✅ <b>База восстановлена!</b>\n"
+            f"📦 Файл: {doc.file_name}\n"
+            f"💬 Чатов: {len(known_chats)}\n"
+            f"👥 Юзеров: {sum(len(chat_stats[c]) for c in chat_stats)}\n\n"
+            f"<i>Старая база сохранена как skinvault_old.db</i>",
+            parse_mode="HTML")
+        await log_action(f"💾 <b>БАЗА ВОССТАНОВЛЕНА</b>\n👑 {message.from_user.full_name}")
+    except Exception as e:
+        await status.edit_text(f"❌ Ошибка восстановления: {e}")
+
+@dp.message(Command("backupnow"))
+async def cmd_backup_now(message: Message):
+    """Немедленный бэкап базы"""
+    if message.from_user.id != OWNER_ID: return
+    import os as _osbn, io as _iobn
+    from datetime import datetime as _dtbn
+    save_data()
+    db_path = "skinvault.db"
+    if not _osbn.path.exists(db_path):
+        await reply_auto_delete(message, "❌ База данных не найдена"); return
+    size = _osbn.path.getsize(db_path)
+    with open(db_path, "rb") as f:
+        buf = _iobn.BytesIO(f.read())
+    buf.name = f"skinvault_{_dtbn.now().strftime('%d%m%Y_%H%M')}.db"
+    await bot.send_document(
+        OWNER_ID, buf,
+        caption=(
+            f"💾 <b>Ручной бэкап</b>\n"
+            f"📅 {_dtbn.now().strftime('%d.%m.%Y %H:%M')}\n"
+            f"📦 Размер: <b>{size // 1024} KB</b>\n"
+            f"💬 Чатов: <b>{len(known_chats)}</b>"
+        ),
+        parse_mode="HTML")
+    await reply_auto_delete(message, "✅ Бэкап отправлен в ЛС!", parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
 #  🔔 УМНЫЕ УВЕДОМЛЕНИЯ — бот сам пишет владельцу
 # ══════════════════════════════════════════════════════════
 async def smart_notify_loop():
@@ -10102,6 +10201,7 @@ async def main():
     asyncio.create_task(run_newspaper())
     asyncio.create_task(run_stock())
     asyncio.create_task(smart_notify_loop())  # 🔔 Умные уведомления + дейли + мониторинг
+    asyncio.create_task(auto_backup_loop())    # 💾 Автобэкап каждые 6 часов
     asyncio.create_task(daily_idea_loop())    # 💡 Идея дня
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
