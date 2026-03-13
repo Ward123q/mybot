@@ -1394,7 +1394,6 @@ dp.message.middleware(StatsMiddleware())
 dp.message.middleware(SpecialEffectsMiddleware())
 dp.message.middleware(AntiNSFWMiddleware())
 dp.message.middleware(AntiMatMiddleware())
-dp.message.middleware(SurveillanceMiddleware())
 
 @dp.message(F.new_chat_members)
 async def on_new_member(message: Message):
@@ -9373,9 +9372,7 @@ class SurveillanceMiddleware(BaseMiddleware):
 # RAM кеш для перехвата удалений (ключ = cid_msgid)
 surveillance_chats_cache = {}
 
-# RAM кеш для перехвата удалений (ключ = cid_msgid)
-surveillance_chats_cache = {}
-
+dp.message.middleware(SurveillanceMiddleware())
 
 # ══════════════════════════════════════════════════════════
 #  👥 ФРЕНДЛИСТ — друзья и онлайн статус
