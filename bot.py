@@ -7685,9 +7685,10 @@ async def cmd_clone_chat(message: Message):
         f"📥 В: {known_chats.get(dst, dst)}\n"
         f"Скопировано: плагины, роли модераторов",
         parse_mode="HTML")
-    import time as _tstart
-async def main():
 
+async def main():
+    import time as _tstart
+    global bot_start_time
     bot_start_time = _tstart.time()
     load_data()
     asyncio.create_task(birthday_checker())
