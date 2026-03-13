@@ -318,6 +318,48 @@ def save_data():
     except Exception as e:
         print(f"[save_data error] {e}")
 
+def load_data():
+    """Загружает данные из SQLite в RAM при запуске"""
+    global warnings, reputation, xp_data, streaks, levels, chat_stats
+    global ban_list, known_chats, birthdays, last_seen, crown_holders
+    global mod_history, global_blacklist, mod_roles, plugins
+    try:
+        conn = db_connect()
+        for r in conn.execute("SELECT cid,uid,count FROM warnings"):
+            warnings[r["cid"]][r["uid"]] = r["count"]
+        for r in conn.execute("SELECT cid,uid,score FROM reputation"):
+            reputation[r["cid"]][r["uid"]] = r["score"]
+        for r in conn.execute("SELECT cid,uid,xp FROM xp_data"):
+            xp_data[r["cid"]][r["uid"]] = r["xp"]
+        for r in conn.execute("SELECT cid,uid,streak FROM streaks"):
+            streaks[r["cid"]][r["uid"]] = r["streak"]
+        for r in conn.execute("SELECT cid,uid,level FROM levels"):
+            levels[r["cid"]][r["uid"]] = r["level"]
+        for r in conn.execute("SELECT cid,uid,msg_count FROM chat_stats"):
+            chat_stats[r["cid"]][r["uid"]] = r["msg_count"]
+        for r in conn.execute("SELECT cid,uid FROM ban_list"):
+            ban_list[r["cid"]].add(r["uid"])
+        for r in conn.execute("SELECT cid,title FROM known_chats"):
+            known_chats[r["cid"]] = r["title"]
+        for r in conn.execute("SELECT uid,date FROM birthdays"):
+            birthdays[r["uid"]] = r["date"]
+        for r in conn.execute("SELECT cid,uid,ts FROM last_seen"):
+            last_seen[r["cid"]][r["uid"]] = r["ts"]
+        for r in conn.execute("SELECT cid,data FROM crown_holders"):
+            crown_holders[r["cid"]] = json.loads(r["data"])
+        for r in conn.execute("SELECT cid,uid,history FROM mod_history"):
+            mod_history[r["cid"]][r["uid"]] = json.loads(r["history"])
+        for r in conn.execute("SELECT uid FROM global_blacklist"):
+            global_blacklist.add(r["uid"])
+        for r in conn.execute("SELECT cid,uid,role FROM mod_roles_db"):
+            mod_roles[r["cid"]][r["uid"]] = r["role"]
+        for r in conn.execute("SELECT cid,key,enabled FROM plugins_db"):
+            plugins[r["cid"]][r["key"]] = bool(r["enabled"])
+        conn.close()
+        print("✅ Данные загружены из SQLite")
+    except Exception as e:
+        print(f"[load_data error] {e}")
+
 
 # ══════════════════════════════════════════
 #  СИСТЕМА УРОВНЕЙ (500 уровней)
