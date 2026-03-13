@@ -2491,6 +2491,30 @@ async def cmd_help(message: Message):
         "▸ аутист дуэль <i>(реплай)</i> — дуэль с юзером\n"
         "▸ аутист похитить <i>(реплай)</i> — похитить юзера\n"
         "▸ аутист экзамен <i>(реплай)</i> — задать вопрос юзеру\n"
+        "▸ аутист подарить 🌹 <i>(реплай)</i> — отправить подарок\n"
+        "▸ аутист предложить <i>(реплай)</i> — предложить отношения\n"
+        "▸ аутист разлюбить <i>(реплай)</i> — завершить отношения\n\n"
+
+        "👥 <b>СОЦИАЛКА</b>\n"
+        "▸ /myprofile — мой профиль\n"
+        "▸ /setbio текст — установить био\n"
+        "▸ /setmood — выбрать настроение\n"
+        "▸ /addfriend <i>(реплай)</i> — добавить в друзья\n"
+        "▸ /friends — список друзей\n"
+        "▸ /unfriend <i>(реплай)</i> — удалить из друзей\n"
+        "▸ /propose <i>(реплай)</i> — предложить отношения\n"
+        "▸ /breakup — завершить отношения\n"
+        "▸ /gift 🌹 <i>(реплай)</i> — отправить подарок\n"
+        "▸ /anonmsg текст <i>(реплай)</i> — анонимное сообщение\n"
+        "▸ /follow <i>(реплай)</i> — подписаться на юзера\n"
+        "▸ /followers — мои подписки\n"
+        "▸ /scanqr КОД — активировать КюАр-код\n\n"
+
+        "🌐 <b>УТИЛИТЫ</b>\n"
+        "▸ /tr [язык] — перевести сообщение <i>(реплай)</i>\n"
+        "▸ /music название — найти трек\n"
+        "▸ /imagine описание — сгенерировать картинку\n"
+        "▸ /idea — тема для обсуждения\n"
     )
     if is_adm:
         text += (
@@ -2688,7 +2712,19 @@ async def cmd_help(message: Message):
             "▸ /setshift 9 21 — назначить смену <i>(реплай)</i>\n\n"
 
             "🌍 <b>ЯЗЫК И НАСТРОЙКИ</b>\n"
-            "▸ /lang — сменить язык бота 🇷🇺🇬🇧🇺🇦\n"
+            "▸ /lang — сменить язык бота 🇷🇺🇬🇧🇺🇦\n\n"
+
+            "📲 <b>КюАр-КОДЫ</b>\n"
+            "▸ /createqr [XP] — создать КюАр-код с наградой\n\n"
+
+            "🔐 <b>ПРАВА ДОСТУПА</b>\n"
+            "▸ /setperm команда роль — установить минимальную роль\n"
+            "▸ /perms — список кастомных прав\n\n"
+
+            "🎭 <b>АУТИСТ (социалка)</b>\n"
+            "▸ аутист подарить 🌹 <i>(реплай)</i> — подарить\n"
+            "▸ аутист предложить <i>(реплай)</i> — предложить отношения\n"
+            "▸ аутист разлюбить <i>(реплай)</i> — расстаться\n"
         )
     if message.from_user.id == OWNER_ID:
         chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
@@ -3667,6 +3703,7 @@ async def autist_commands(message: Message):
     for cmd in ["снять варн","разварн","размут","разбан","варн","мут навсегда","мут","бан","захуесосить","кик",
                 "тег","убрать тег","очистить","удалить","закрепить","предупредить","инфо","варны","репутация",
                 "обозвать","поженить","проверить","казнить","диагноз","профессия","похитить","дуэль","экзамен",
+                "подарить","предложить","разлюбить",
                 # 🛡 Модераторские
                 "статус","чистка","поиск","антиспам",
                 "алерт","пересмотр","последний","заморозка",
@@ -3677,7 +3714,7 @@ async def autist_commands(message: Message):
                 "скрин","взрыв","корона","вызов","шпион","жребий","громко","молния","магнит","цель",
                 "напомни","закреп","голос","рост","тишина",
                 "температура","неделя","режим","лог","рестарт","сос",
-                "стикермут","гифмут","войсмут","всёмут"]:
+                "стикермут","гифмут","войсмут","всёмут","подарить","предложить","разлюбить"]:
         if rest.startswith(cmd):
             action = cmd; rest = rest[len(cmd):].strip(); break
     if not action: return
@@ -3903,6 +3940,38 @@ async def autist_commands(message: Message):
             await reply_auto_delete(message, 
                 f"📝 <b>ЭКЗАМЕН для {tname}!</b>\n\n{random.choice(вопросы)}\n\n⏰ У тебя <b>30 секунд</b>!",
                 parse_mode="HTML")
+
+        elif action == "подарить":
+            if not target:
+                await reply_auto_delete(message, "↩️ Реплайни на сообщение"); return
+            gifts_emojis = list(GIFT_LIST.keys())
+            gift_emoji = rest.strip() if rest and rest.strip() in GIFT_LIST else random.choice(gifts_emojis)
+            gift_name, gift_price = GIFT_LIST[gift_emoji]
+            await reply_auto_delete(message,
+                f"{gift_emoji} <b>{message.from_user.full_name}</b> дарит <b>{gift_name}</b> пользователю {tname}!\n"
+                f"✨ Приятный сюрприз!",
+                parse_mode="HTML")
+
+        elif action == "предложить":
+            if not target:
+                await reply_auto_delete(message, "↩️ Реплайни на сообщение"); return
+            proposals = [
+                f"💝 {message.from_user.full_name} опускается на одно колено перед {tname}...\n❤️ Ты будешь моей второй половинкой?",
+                f"🌹 {message.from_user.full_name} дарит {tname} красную розу...\n💫 Встречаемся?",
+                f"💌 {message.from_user.full_name} пишет записку {tname}:\n'Ты мне нравишься ❤️'",
+            ]
+            await reply_auto_delete(message, random.choice(proposals), parse_mode="HTML")
+
+        elif action == "разлюбить":
+            if not target:
+                await reply_auto_delete(message, "↩️ Реплайни на сообщение"); return
+            breakups = [
+                f"💔 {message.from_user.full_name} и {tname} расстались...\nАнекдот закончился.",
+                f"🥀 {message.from_user.full_name} бросил(а) {tname} через сообщение\n😢 Это жестоко.",
+                f"📱 {message.from_user.full_name} разблокировал(а) {tname}...\nНет погоди — заблокировал(а).",
+            ]
+            await reply_auto_delete(message, random.choice(breakups), parse_mode="HTML")
+
         elif action == "проверить":
             await reply_auto_delete(message, f"ℹ️ Функция проверки (капча) отключена.", parse_mode="HTML")
 
@@ -9304,12 +9373,687 @@ class SurveillanceMiddleware(BaseMiddleware):
 # RAM кеш для перехвата удалений (ключ = cid_msgid)
 surveillance_chats_cache = {}
 
+# RAM кеш для перехвата удалений (ключ = cid_msgid)
+surveillance_chats_cache = {}
+
+
+# ══════════════════════════════════════════════════════════
+#  👥 ФРЕНДЛИСТ — друзья и онлайн статус
+# ══════════════════════════════════════════════════════════
+def db_friends_init():
+    conn = db_connect()
+    conn.executescript("""
+    CREATE TABLE IF NOT EXISTS friends (
+        uid INTEGER, friend_id INTEGER, friend_name TEXT, ts INTEGER,
+        PRIMARY KEY (uid, friend_id));
+    CREATE TABLE IF NOT EXISTS friend_requests (
+        from_uid INTEGER, to_uid INTEGER, from_name TEXT, ts INTEGER,
+        PRIMARY KEY (from_uid, to_uid));
+    CREATE TABLE IF NOT EXISTS online_status (
+        uid INTEGER PRIMARY KEY, last_seen REAL, status TEXT DEFAULT 'online');
+    CREATE TABLE IF NOT EXISTS user_profiles (
+        uid INTEGER PRIMARY KEY, bio TEXT, mood TEXT, interests TEXT,
+        anon_nick TEXT, anon_enabled INTEGER DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS relationships (
+        uid1 INTEGER, uid2 INTEGER, rel_type TEXT, ts INTEGER,
+        PRIMARY KEY (uid1, uid2));
+    CREATE TABLE IF NOT EXISTS gifts_sent (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        from_uid INTEGER, to_uid INTEGER, gift TEXT, ts INTEGER);
+    CREATE TABLE IF NOT EXISTS subscriptions (
+        subscriber INTEGER, target INTEGER,
+        PRIMARY KEY (subscriber, target));
+    CREATE TABLE IF NOT EXISTS qr_codes (
+        code TEXT PRIMARY KEY, uid INTEGER, reward INTEGER, used INTEGER DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS daily_ideas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER, idea TEXT, ts INTEGER);
+    CREATE TABLE IF NOT EXISTS anon_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        from_uid INTEGER, to_uid INTEGER, text TEXT, ts INTEGER, read INTEGER DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS cmd_permissions (
+        cid INTEGER, cmd TEXT, min_role TEXT,
+        PRIMARY KEY (cid, cmd));
+    """)
+    conn.commit(); conn.close()
+
+MOOD_LIST = ["😊 Отлично", "😐 Нормально", "😔 Грустно", "😤 Злой", "🤔 Задумчив",
+             "🥳 Праздник", "😴 Устал", "💪 Бодрый", "❤️ Влюблён", "🔥 На подъёме"]
+
+GIFT_LIST = {
+    "🌹": ("Роза", 10),    "🎂": ("Торт", 20),   "💎": ("Алмаз", 50),
+    "🍕": ("Пицца", 15),   "🎵": ("Музыка", 5),  "⭐": ("Звезда", 30),
+    "🏆": ("Кубок", 40),   "🎁": ("Сюрприз", 25),"💐": ("Цветы", 12),
+    "🍫": ("Шоколад", 8),
+}
+
+ANON_NICKS = ["Призрак", "Тень", "Ветер", "Загадка", "Туман", "Шёпот",
+              "Молния", "Огонь", "Лёд", "Буря", "Звезда", "Луна"]
+
+# ── Профиль ───────────────────────────────────────────────────
+@dp.message(Command("setbio"))
+async def cmd_set_bio(message: Message):
+    bio = message.text.replace("/setbio", "").strip()
+    if not bio:
+        await reply_auto_delete(message,
+            "🏠 <b>Использование:</b> <code>/setbio твоё био</code>\nМакс 150 символов",
+            parse_mode="HTML"); return
+    if len(bio) > 150:
+        await reply_auto_delete(message, "⚠️ Макс 150 символов"); return
+    conn = db_connect()
+    conn.execute("INSERT OR REPLACE INTO user_profiles (uid, bio) VALUES (?,?) "
+                 "ON CONFLICT(uid) DO UPDATE SET bio=excluded.bio",
+                 (message.from_user.id, bio))
+    conn.commit(); conn.close()
+    await reply_auto_delete(message, f"✅ Био обновлено!", parse_mode="HTML")
+
+@dp.message(Command("setmood"))
+async def cmd_set_mood(message: Message):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=m, callback_data=f"mood:{i}")]
+        for i, m in enumerate(MOOD_LIST)
+    ])
+    await reply_auto_delete(message, "😊 Выбери настроение:", reply_markup=kb)
+
+@dp.callback_query(F.data.startswith("mood:"))
+async def cb_mood(call: CallbackQuery):
+    idx = int(call.data.split(":")[1])
+    mood = MOOD_LIST[idx]
+    conn = db_connect()
+    conn.execute("INSERT OR REPLACE INTO user_profiles (uid, mood) VALUES (?,?) "
+                 "ON CONFLICT(uid) DO UPDATE SET mood=excluded.mood",
+                 (call.from_user.id, mood))
+    conn.commit(); conn.close()
+    await call.message.edit_text(f"✅ Настроение: {mood}")
+    await call.answer()
+
+@dp.message(Command("myprofile"))
+async def cmd_my_profile(message: Message):
+    uid = message.from_user.id
+    conn = db_connect()
+    p = conn.execute("SELECT * FROM user_profiles WHERE uid=?", (uid,)).fetchone()
+    friends_cnt = conn.execute("SELECT COUNT(*) as c FROM friends WHERE uid=?", (uid,)).fetchone()["c"]
+    rel = conn.execute("SELECT rel_type, uid2 FROM relationships WHERE uid1=?", (uid,)).fetchone()
+    conn.close()
+    bio = p["bio"] if p and p["bio"] else "Не указано"
+    mood = p["mood"] if p and p["mood"] else "😐 Нормально"
+    interests = p["interests"] if p and p["interests"] else "Не указаны"
+    anon = "✅ вкл" if p and p["anon_enabled"] else "❌ выкл"
+    rel_text = ""
+    if rel:
+        try:
+            tm = await bot.get_chat_member(message.chat.id, rel["uid2"])
+            rel_text = f"\n{'❤️' if rel['rel_type']=='couple' else '🤝'} {rel['rel_type'].title()}: {tm.user.full_name}"
+        except: pass
+    await reply_auto_delete(message,
+        f"🏠 <b>Профиль</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 {message.from_user.full_name}\n"
+        f"😊 Настроение: {mood}\n"
+        f"📝 Био: {bio}\n"
+        f"🎯 Интересы: {interests}\n"
+        f"👥 Друзей: <b>{friends_cnt}</b>\n"
+        f"🎭 Аноним: {anon}"
+        f"{rel_text}",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✏️ Био", callback_data=f"profile_edit:bio:{uid}"),
+             InlineKeyboardButton(text="😊 Настроение", callback_data=f"profile_edit:mood:{uid}")],
+            [InlineKeyboardButton(text="🎯 Интересы", callback_data=f"profile_edit:interests:{uid}"),
+             InlineKeyboardButton(text="🎭 Аноним", callback_data=f"profile_edit:anon:{uid}")],
+        ]))
+
+@dp.callback_query(F.data.startswith("profile_edit:"))
+async def cb_profile_edit(call: CallbackQuery):
+    parts = call.data.split(":")
+    field, uid = parts[1], int(parts[2])
+    if call.from_user.id != uid:
+        await call.answer("🚫 Это не твой профиль!", show_alert=True); return
+    if field == "mood":
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=m, callback_data=f"mood:{i}")]
+            for i, m in enumerate(MOOD_LIST)
+        ])
+        await call.message.edit_text("😊 Выбери настроение:", reply_markup=kb)
+    elif field == "anon":
+        conn = db_connect()
+        p = conn.execute("SELECT anon_enabled, anon_nick FROM user_profiles WHERE uid=?", (uid,)).fetchone()
+        cur = p["anon_enabled"] if p else 0
+        new_val = 0 if cur else 1
+        nick = p["anon_nick"] if p and p["anon_nick"] else random.choice(ANON_NICKS)
+        conn.execute("INSERT OR REPLACE INTO user_profiles (uid, anon_enabled, anon_nick) VALUES (?,?,?) "
+                     "ON CONFLICT(uid) DO UPDATE SET anon_enabled=excluded.anon_enabled, anon_nick=excluded.anon_nick",
+                     (uid, new_val, nick))
+        conn.commit(); conn.close()
+        status = "✅ включён" if new_val else "❌ выключен"
+        await call.answer(f"🎭 Анонимный режим {status}\nНик: {nick}", show_alert=True)
+    elif field in ("bio", "interests"):
+        pending[call.from_user.id] = {"action": f"set_{field}", "chat_id": call.message.chat.id,
+                                       "target_id": uid, "target_name": ""}
+        await call.message.edit_text(f"✏️ Напиши {'био (макс 150 симв.)' if field=='bio' else 'интересы'}:")
+    await call.answer()
+
+# ── Друзья ────────────────────────────────────────────────────
+@dp.message(Command("addfriend"))
+async def cmd_add_friend(message: Message):
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение юзера"); return
+    target = message.reply_to_message.from_user
+    uid = message.from_user.id
+    if target.id == uid:
+        await reply_auto_delete(message, "😅 Нельзя добавить себя в друзья"); return
+    import time as _taf
+    conn = db_connect()
+    existing = conn.execute("SELECT * FROM friends WHERE uid=? AND friend_id=?", (uid, target.id)).fetchone()
+    if existing:
+        conn.close()
+        await reply_auto_delete(message, f"✅ {target.full_name} уже в твоём списке друзей!"); return
+    # Отправить запрос
+    conn.execute("INSERT OR REPLACE INTO friend_requests VALUES (?,?,?,?)",
+                 (uid, target.id, message.from_user.full_name, int(_taf.time())))
+    conn.commit(); conn.close()
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Принять", callback_data=f"friend:accept:{uid}"),
+        InlineKeyboardButton(text="❌ Отклонить", callback_data=f"friend:reject:{uid}"),
+    ]])
+    try:
+        await bot.send_message(target.id,
+            f"👥 <b>{message.from_user.full_name}</b> хочет добавить тебя в друзья!",
+            parse_mode="HTML", reply_markup=kb)
+    except: pass
+    await reply_auto_delete(message, f"📨 Запрос отправлен {target.mention_html()}!", parse_mode="HTML")
+
+@dp.callback_query(F.data.startswith("friend:"))
+async def cb_friend(call: CallbackQuery):
+    parts = call.data.split(":")
+    action, from_uid = parts[1], int(parts[2])
+    to_uid = call.from_user.id
+    import time as _tfr
+    conn = db_connect()
+    req = conn.execute("SELECT * FROM friend_requests WHERE from_uid=? AND to_uid=?",
+                       (from_uid, to_uid)).fetchone()
+    if not req:
+        conn.close(); await call.answer("Устарело", show_alert=True); return
+    conn.execute("DELETE FROM friend_requests WHERE from_uid=? AND to_uid=?", (from_uid, to_uid))
+    if action == "accept":
+        ts = int(_tfr.time())
+        conn.execute("INSERT OR REPLACE INTO friends VALUES (?,?,?,?)",
+                     (to_uid, from_uid, req["from_name"], ts))
+        conn.execute("INSERT OR REPLACE INTO friends VALUES (?,?,?,?)",
+                     (from_uid, to_uid, call.from_user.full_name, ts))
+        conn.commit(); conn.close()
+        await call.message.edit_text(f"✅ Теперь вы с {req['from_name']} друзья! 👥")
+        try:
+            await bot.send_message(from_uid,
+                f"✅ <b>{call.from_user.full_name}</b> принял(а) твой запрос в друзья!",
+                parse_mode="HTML")
+        except: pass
+    else:
+        conn.commit(); conn.close()
+        await call.message.edit_text(f"❌ Запрос от {req['from_name']} отклонён")
+    await call.answer()
+
+@dp.message(Command("friends"))
+async def cmd_friends(message: Message):
+    uid = message.from_user.id
+    conn = db_connect()
+    rows = conn.execute("SELECT * FROM friends WHERE uid=?", (uid,)).fetchall()
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message, "👥 Друзей нет — добавь через /addfriend (реплай)"); return
+    lines = [f"👥 <b>Мои друзья</b> ({len(rows)})\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for r in rows:
+        lines.append(f"▸ {r['friend_name']}")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+@dp.message(Command("unfriend"))
+async def cmd_unfriend(message: Message):
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение юзера"); return
+    target = message.reply_to_message.from_user
+    uid = message.from_user.id
+    conn = db_connect()
+    conn.execute("DELETE FROM friends WHERE uid=? AND friend_id=?", (uid, target.id))
+    conn.execute("DELETE FROM friends WHERE uid=? AND friend_id=?", (target.id, uid))
+    conn.commit(); conn.close()
+    await reply_auto_delete(message, f"💔 {target.full_name} удалён из друзей")
+
+# ── Система отношений ─────────────────────────────────────────
+@dp.message(Command("propose"))
+async def cmd_propose(message: Message):
+    """Предложение отношений"""
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение юзера"); return
+    target = message.reply_to_message.from_user
+    uid = message.from_user.id
+    if target.id == uid:
+        await reply_auto_delete(message, "😅 Нельзя встречаться с собой"); return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="❤️ Да!", callback_data=f"rel:accept:{uid}:couple"),
+        InlineKeyboardButton(text="💔 Нет", callback_data=f"rel:reject:{uid}:couple"),
+    ]])
+    try:
+        await bot.send_message(target.id,
+            f"💝 <b>{message.from_user.full_name}</b> предлагает тебе отношения! ❤️",
+            parse_mode="HTML", reply_markup=kb)
+    except: pass
+    await reply_auto_delete(message,
+        f"💌 Предложение отправлено {target.mention_html()}! ❤️", parse_mode="HTML")
+
+@dp.callback_query(F.data.startswith("rel:"))
+async def cb_rel(call: CallbackQuery):
+    parts = call.data.split(":")
+    action, from_uid, rel_type = parts[1], int(parts[2]), parts[3]
+    to_uid = call.from_user.id
+    import time as _trel
+    conn = db_connect()
+    if action == "accept":
+        # Удаляем старые отношения
+        conn.execute("DELETE FROM relationships WHERE uid1=? OR uid2=?", (to_uid, to_uid))
+        conn.execute("DELETE FROM relationships WHERE uid1=? OR uid2=?", (from_uid, from_uid))
+        conn.execute("INSERT OR REPLACE INTO relationships VALUES (?,?,?,?)",
+                     (from_uid, to_uid, rel_type, int(_trel.time())))
+        conn.execute("INSERT OR REPLACE INTO relationships VALUES (?,?,?,?)",
+                     (to_uid, from_uid, rel_type, int(_trel.time())))
+        conn.commit(); conn.close()
+        await call.message.edit_text(f"❤️ Теперь вы пара!")
+        try:
+            await bot.send_message(from_uid,
+                f"❤️ <b>{call.from_user.full_name}</b> принял(а) твоё предложение!", parse_mode="HTML")
+        except: pass
+    else:
+        conn.close()
+        await call.message.edit_text("💔 Предложение отклонено...")
+        try: await bot.send_message(from_uid, "💔 Предложение отклонено...")
+        except: pass
+    await call.answer()
+
+@dp.message(Command("breakup"))
+async def cmd_breakup(message: Message):
+    uid = message.from_user.id
+    conn = db_connect()
+    rel = conn.execute("SELECT * FROM relationships WHERE uid1=?", (uid,)).fetchone()
+    if not rel:
+        conn.close()
+        await reply_auto_delete(message, "💔 У тебя нет отношений"); return
+    partner_id = rel["uid2"]
+    conn.execute("DELETE FROM relationships WHERE uid1=? OR uid2=?", (uid, uid))
+    conn.commit(); conn.close()
+    await reply_auto_delete(message, "💔 Отношения завершены")
+    try: await bot.send_message(partner_id, f"💔 <b>{message.from_user.full_name}</b> завершил(а) ваши отношения...", parse_mode="HTML")
+    except: pass
+
+# ── Подарки ───────────────────────────────────────────────────
+@dp.message(Command("gift"))
+async def cmd_gift(message: Message):
+    if not message.reply_to_message:
+        await reply_auto_delete(message,
+            "🎁 <b>Подарки</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+            + "\n".join(f"{e} {n} — {p} XP" for e,(n,p) in GIFT_LIST.items()) +
+            "\n\n<code>/gift эмодзи</code> (реплай на юзера)",
+            parse_mode="HTML"); return
+    args = message.text.split()[1:] if message.text else []
+    if not args or args[0] not in GIFT_LIST:
+        await reply_auto_delete(message,
+            "⚠️ Выбери подарок:\n" +
+            " ".join(GIFT_LIST.keys()) + "\n\n<code>/gift 🌹</code>",
+            parse_mode="HTML"); return
+    target = message.reply_to_message.from_user
+    uid = message.from_user.id
+    gift_emoji = args[0]
+    gift_name, gift_price = GIFT_LIST[gift_emoji]
+    # Списываем XP
+    cur_xp = xp_data[message.chat.id].get(uid, 0)
+    if cur_xp < gift_price:
+        await reply_auto_delete(message, f"❌ Нужно {gift_price} XP, у тебя {cur_xp}"); return
+    xp_data[message.chat.id][uid] -= gift_price
+    xp_data[message.chat.id][target.id] = xp_data[message.chat.id].get(target.id, 0) + gift_price // 2
+    db_set_int("xp_data", message.chat.id, uid, "xp", xp_data[message.chat.id][uid])
+    db_set_int("xp_data", message.chat.id, target.id, "xp", xp_data[message.chat.id][target.id])
+    import time as _tg
+    conn = db_connect()
+    conn.execute("INSERT INTO gifts_sent (from_uid,to_uid,gift,ts) VALUES (?,?,?,?)",
+                 (uid, target.id, gift_emoji, int(_tg.time())))
+    conn.commit(); conn.close()
+    await reply_auto_delete(message,
+        f"{gift_emoji} <b>{message.from_user.full_name}</b> дарит <b>{gift_name}</b> → {target.mention_html()}!\n"
+        f"💸 -{gift_price} XP",
+        parse_mode="HTML")
+    try:
+        await bot.send_message(target.id,
+            f"🎁 Тебе подарок {gift_emoji} <b>{gift_name}</b> от {message.from_user.full_name}!",
+            parse_mode="HTML")
+    except: pass
+
+# ── Анонимные сообщения ───────────────────────────────────────
+@dp.message(Command("anonmsg"))
+async def cmd_anon_msg(message: Message):
+    """Написать анонимное сообщение юзеру"""
+    if not message.reply_to_message:
+        await reply_auto_delete(message,
+            "💌 <b>Анонимное сообщение</b>\n"
+            "<code>/anonmsg текст</code> (реплай на юзера)",
+            parse_mode="HTML"); return
+    text = message.text.replace("/anonmsg", "").strip()
+    if not text:
+        await reply_auto_delete(message, "⚠️ Напиши текст сообщения"); return
+    target = message.reply_to_message.from_user
+    uid = message.from_user.id
+    # Получаем аноним-ник отправителя
+    conn = db_connect()
+    p = conn.execute("SELECT anon_nick, anon_enabled FROM user_profiles WHERE uid=?", (uid,)).fetchone()
+    nick = p["anon_nick"] if p and p["anon_nick"] else random.choice(ANON_NICKS)
+    conn.execute("INSERT INTO anon_messages (from_uid,to_uid,text,ts) VALUES (?,?,?,?)",
+                 (uid, target.id, text, int(__import__("time").time())))
+    conn.commit(); conn.close()
+    try:
+        await bot.send_message(target.id,
+            f"💌 <b>Анонимное сообщение</b>\n"
+            f"👤 От: <b>{nick}</b>\n\n"
+            f"📝 {text}",
+            parse_mode="HTML")
+    except:
+        await reply_auto_delete(message, "❌ Не удалось отправить — юзер закрыл ЛС"); return
+    await reply_auto_delete(message, f"✅ Анонимное сообщение отправлено!", parse_mode="HTML")
+
+# ── Подписки ──────────────────────────────────────────────────
+@dp.message(Command("follow"))
+async def cmd_follow(message: Message):
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение юзера"); return
+    target = message.reply_to_message.from_user
+    uid = message.from_user.id
+    if target.id == uid:
+        await reply_auto_delete(message, "😅 Нельзя подписаться на себя"); return
+    conn = db_connect()
+    existing = conn.execute("SELECT * FROM subscriptions WHERE subscriber=? AND target=?",
+                            (uid, target.id)).fetchone()
+    if existing:
+        conn.execute("DELETE FROM subscriptions WHERE subscriber=? AND target=?", (uid, target.id))
+        conn.commit(); conn.close()
+        await reply_auto_delete(message, f"🔕 Отписался от {target.full_name}")
+    else:
+        conn.execute("INSERT OR REPLACE INTO subscriptions VALUES (?,?)", (uid, target.id))
+        conn.commit(); conn.close()
+        await reply_auto_delete(message, f"🔔 Подписался на {target.mention_html()}!", parse_mode="HTML")
+        try:
+            await bot.send_message(target.id,
+                f"🔔 <b>{message.from_user.full_name}</b> подписался на тебя!", parse_mode="HTML")
+        except: pass
+
+@dp.message(Command("followers"))
+async def cmd_followers(message: Message):
+    uid = message.from_user.id
+    conn = db_connect()
+    subs = conn.execute("SELECT COUNT(*) as c FROM subscriptions WHERE target=?", (uid,)).fetchone()["c"]
+    following = conn.execute("SELECT COUNT(*) as c FROM subscriptions WHERE subscriber=?", (uid,)).fetchone()["c"]
+    conn.close()
+    await reply_auto_delete(message,
+        f"🔔 <b>Подписки</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👥 Подписчиков: <b>{subs}</b>\n"
+        f"➡️ Подписок: <b>{following}</b>",
+        parse_mode="HTML")
+
+# ── КюАр-коды ────────────────────────────────────────────────
+@dp.message(Command("createqr"))
+async def cmd_create_qr(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    args = message.text.split()[1:] if message.text else []
+    reward = int(args[0]) if args and args[0].isdigit() else 50
+    import uuid as _uuid
+    code = _uuid.uuid4().hex[:8].upper()
+    conn = db_connect()
+    conn.execute("INSERT INTO qr_codes VALUES (?,?,?,?)",
+                 (code, message.from_user.id, reward, 0))
+    conn.commit(); conn.close()
+    await reply_auto_delete(message,
+        f"📲 <b>КюАр-код создан!</b>\n\n"
+        f"🔑 Код: <code>{code}</code>\n"
+        f"🎁 Награда: <b>{reward} XP</b>\n\n"
+        f"Юзеры активируют: /scanqr {code}",
+        parse_mode="HTML")
+
+@dp.message(Command("scanqr"))
+async def cmd_scan_qr(message: Message):
+    args = message.text.split()[1:] if message.text else []
+    if not args:
+        await reply_auto_delete(message,
+            "📲 <b>Сканировать код:</b>\n<code>/scanqr КОД</code>",
+            parse_mode="HTML"); return
+    code = args[0].upper()
+    uid = message.from_user.id
+    conn = db_connect()
+    qr = conn.execute("SELECT * FROM qr_codes WHERE code=?", (code,)).fetchone()
+    if not qr:
+        conn.close(); await reply_auto_delete(message, "❌ Код не найден"); return
+    if qr["used"]:
+        conn.close(); await reply_auto_delete(message, "⚠️ Код уже использован"); return
+    if qr["uid"] == uid:
+        conn.close(); await reply_auto_delete(message, "😅 Нельзя активировать свой код"); return
+    conn.execute("UPDATE qr_codes SET used=1 WHERE code=?", (code,))
+    conn.commit(); conn.close()
+    cid = message.chat.id
+    xp_data[cid][uid] = xp_data[cid].get(uid, 0) + qr["reward"]
+    db_set_int("xp_data", cid, uid, "xp", xp_data[cid][uid])
+    await reply_auto_delete(message,
+        f"📲 <b>Код активирован!</b>\n🎁 +{qr['reward']} XP получено!",
+        parse_mode="HTML")
+
+# ── Идея дня ─────────────────────────────────────────────────
+DAILY_IDEAS = [
+    "🤔 Что бы вы сделали, если бы у вас был 1 миллион?",
+    "🌍 Какую страну вы бы хотели посетить и почему?",
+    "🎮 Какая игра изменила вашу жизнь?",
+    "📚 Какую книгу вы бы порекомендовали всем?",
+    "🎵 Какой трек у вас сейчас на повторе?",
+    "🍕 Пицца или суши — что выбираете?",
+    "🚀 Если бы можно было улететь в космос — полетели бы?",
+    "💭 О чём вы мечтаете прямо сейчас?",
+    "🎬 Какой фильм смотрели последним?",
+    "🌙 Вы жаворонок или сова?",
+    "🔥 Что вас мотивирует каждый день?",
+    "🤝 Что для вас важнее — дружба или карьера?",
+    "🎯 Какова ваша цель на этот год?",
+    "😂 Расскажите смешной случай из жизни",
+    "🌟 За что вы благодарны сегодня?",
+]
+daily_idea_chats = set()  # {cid} — чаты где включена идея дня
+
+@dp.message(Command("dailyidea"))
+async def cmd_daily_idea_toggle(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    if cid in daily_idea_chats:
+        daily_idea_chats.discard(cid)
+        await reply_auto_delete(message, "💡 Идея дня выключена")
+    else:
+        daily_idea_chats.add(cid)
+        await reply_auto_delete(message,
+            "💡 <b>Идея дня включена!</b>\nКаждое утро в 9:00 бот будет предлагать тему для обсуждения",
+            parse_mode="HTML")
+
+@dp.message(Command("idea"))
+async def cmd_idea_now(message: Message):
+    """Получить идею прямо сейчас"""
+    idea = random.choice(DAILY_IDEAS)
+    await reply_auto_delete(message,
+        f"💡 <b>Тема для обсуждения</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n{idea}",
+        parse_mode="HTML")
+
+# ── Авто-перевод ─────────────────────────────────────────────
+translate_chats = {}  # {cid: target_lang}
+
+@dp.message(Command("translate"))
+async def cmd_translate_toggle(message: Message):
+    if not await require_admin(message): return
+    args = message.text.split()[1:] if message.text else []
+    cid = message.chat.id
+    if not args:
+        if cid in translate_chats:
+            del translate_chats[cid]
+            await reply_auto_delete(message, "🌐 Авто-перевод выключен"); return
+        await reply_auto_delete(message,
+            "🌐 <b>Авто-перевод</b>\n<code>/translate en</code> — переводить на английский\n"
+            "Языки: ru, en, uk, de, fr, es, zh, ja, ko, ar",
+            parse_mode="HTML"); return
+    lang = args[0].lower()
+    translate_chats[cid] = lang
+    await reply_auto_delete(message, f"🌐 Авто-перевод на <b>{lang}</b> включён", parse_mode="HTML")
+
+@dp.message(Command("tr"))
+async def cmd_translate_msg(message: Message):
+    """Перевести конкретное сообщение"""
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение для перевода"); return
+    args = message.text.split()[1:] if message.text else []
+    lang = args[0] if args else "en"
+    text = message.reply_to_message.text or message.reply_to_message.caption or ""
+    if not text:
+        await reply_auto_delete(message, "⚠️ Нет текста для перевода"); return
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"https://translate.googleapis.com/translate_a/single",
+                params={"client": "gtx", "sl": "auto", "tl": lang, "dt": "t", "q": text}
+            ) as resp:
+                data = await resp.json()
+                translated = "".join(part[0] for part in data[0] if part[0])
+        await reply_auto_delete(message,
+            f"🌐 <b>Перевод ({lang}):</b>\n{translated}", parse_mode="HTML")
+    except Exception as e:
+        await reply_auto_delete(message, f"❌ Ошибка перевода: {e}")
+
+# ── Поиск музыки ─────────────────────────────────────────────
+@dp.message(Command("music"))
+async def cmd_music(message: Message):
+    args = message.text.replace("/music", "").strip() if message.text else ""
+    if not args:
+        await reply_auto_delete(message,
+            "🎵 <b>Поиск музыки:</b>\n<code>/music название трека</code>",
+            parse_mode="HTML"); return
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://itunes.apple.com/search",
+                params={"term": args, "media": "music", "limit": "5", "entity": "song"}
+            ) as resp:
+                data = await resp.json()
+        results = data.get("results", [])
+        if not results:
+            await reply_auto_delete(message, "🎵 Ничего не найдено"); return
+        lines = [f"🎵 <b>Результаты поиска: {args}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+        for r in results[:5]:
+            artist = r.get("artistName","?")
+            track = r.get("trackName","?")
+            album = r.get("collectionName","?")
+            duration = r.get("trackTimeMillis",0) // 1000
+            m2, s2 = duration // 60, duration % 60
+            preview = r.get("previewUrl","")
+            lines.append(f"🎤 <b>{artist}</b> — {track}\n"
+                        f"💿 {album} | ⏱ {m2}:{s2:02d}")
+            if preview:
+                lines.append(f"🎧 <a href='{preview}'>Слушать превью</a>")
+            lines.append("")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML",
+                                disable_web_page_preview=True)
+    except Exception as e:
+        await reply_auto_delete(message, f"❌ Ошибка поиска: {e}")
+
+# ── Генерация изображений через Pollinations ─────────────────
+@dp.message(Command("imagine"))
+async def cmd_imagine(message: Message):
+    prompt = message.text.replace("/imagine", "").strip() if message.text else ""
+    if not prompt:
+        await reply_auto_delete(message,
+            "🖼 <b>Генерация изображения:</b>\n<code>/imagine описание на английском</code>\n"
+            "Пример: <code>/imagine cyberpunk city night rain</code>",
+            parse_mode="HTML"); return
+    status = await message.answer("🖼 Генерирую изображение...")
+    try:
+        import urllib.parse
+        encoded = urllib.parse.quote(prompt)
+        url = f"https://image.pollinations.ai/prompt/{encoded}?width=512&height=512&nologo=true"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    img_data = await resp.read()
+                    import io
+                    buf = io.BytesIO(img_data)
+                    buf.name = "image.jpg"
+                    await message.answer_photo(buf,
+                        caption=f"🖼 <b>{prompt}</b>\n<i>Сгенерировано AI</i>",
+                        parse_mode="HTML")
+                    await status.delete()
+                else:
+                    await status.edit_text("❌ Не удалось сгенерировать")
+    except Exception as e:
+        await status.edit_text(f"❌ Ошибка: {e}")
+
+# ── Система прав доступа ──────────────────────────────────────
+CMD_ROLES = {}  # {cid: {cmd: min_role}}
+
+@dp.message(Command("setperm"))
+async def cmd_set_perm(message: Message):
+    """Установить минимальную роль для команды"""
+    if message.from_user.id != OWNER_ID: return
+    args = message.text.split()[1:] if message.text else []
+    if len(args) < 2:
+        await reply_auto_delete(message,
+            "🔐 <b>Использование:</b>\n<code>/setperm команда роль</code>\n"
+            "Роли: junior / senior / head / admin / owner\n"
+            "Пример: <code>/setperm warn junior</code>",
+            parse_mode="HTML"); return
+    cmd, role = args[0].lower(), args[1].lower()
+    if role not in ("junior", "senior", "head", "admin", "owner"):
+        await reply_auto_delete(message, "⚠️ Роли: junior / senior / head / admin / owner"); return
+    cid = message.chat.id
+    conn = db_connect()
+    conn.execute("INSERT OR REPLACE INTO cmd_permissions VALUES (?,?,?)", (cid, cmd, role))
+    conn.commit(); conn.close()
+    if cid not in CMD_ROLES: CMD_ROLES[cid] = {}
+    CMD_ROLES[cid][cmd] = role
+    await reply_auto_delete(message,
+        f"🔐 Команда <code>/{cmd}</code> — минимальная роль: <b>{role}</b>",
+        parse_mode="HTML")
+
+@dp.message(Command("perms"))
+async def cmd_perms(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    cid = message.chat.id
+    conn = db_connect()
+    rows = conn.execute("SELECT cmd, min_role FROM cmd_permissions WHERE cid=?", (cid,)).fetchall()
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message, "🔐 Кастомных прав нет"); return
+    lines = ["🔐 <b>Права доступа</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for r in rows:
+        lines.append(f"▸ <code>/{r['cmd']}</code> — {r['min_role']}")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# ── Фоновая задача: идея дня + перевод ───────────────────────
+async def daily_idea_loop():
+    """Каждый день в 9:00 отправляет идею дня"""
+    while True:
+        from datetime import datetime
+        now = datetime.now()
+        if now.hour == 9 and now.minute < 5:
+            idea = random.choice(DAILY_IDEAS)
+            for cid in list(daily_idea_chats):
+                try:
+                    await safe_send(bot.send_message(cid,
+                        f"💡 <b>Идея дня</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n{idea}\n\n"
+                        f"<i>Обсудите в чате!</i>",
+                        parse_mode="HTML"))
+                    await asyncio.sleep(0.2)
+                except: pass
+        await asyncio.sleep(300)
+
 async def main():
-    import time as _tstart
-    db_init()
-    migrate_json_to_sqlite()  # 🔄 Мигрируем data.json → SQLite если есть
+
     global bot_start_time
     bot_start_time = _tstart.time()
+    import time as _tstart
+    db_init()
+    db_friends_init()
     load_data()
     asyncio.create_task(birthday_checker())
     asyncio.create_task(send_weekly_stats())
@@ -9320,6 +10064,7 @@ async def main():
     asyncio.create_task(run_newspaper())
     asyncio.create_task(run_stock())
     asyncio.create_task(smart_notify_loop())  # 🔔 Умные уведомления + дейли + мониторинг
+    asyncio.create_task(daily_idea_loop())    # 💡 Идея дня
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
     print("✅ Бот запущен!")
