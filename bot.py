@@ -293,6 +293,8 @@ OWNER_ID         = 7823802800
 MAX_WARNINGS     = 3
 ANTI_MAT_ENABLED  = False
 
+# 💳 Платёжная система отключена
+
 MAT_MUTE_MINUTES = 5
 AUTO_KICK_BOTS   = True
 
@@ -7596,6 +7598,18 @@ async def on_new_member_quarantine(message: Message):
                     f"🔬 {user.mention_html()} на карантине 24ч — не может писать",
                     parse_mode="HTML")
             except: pass
+        # Авто-правила в ЛС
+        if cid in auto_rules_chats:
+            try:
+                await bot.send_message(user.id,
+                    f"👋 Привет, {user.full_name}! Ты вступил в <b>{message.chat.title}</b>\n\n"
+                    f"{RULES_TEXT}\n\n"
+                    f"📋 <a href='https://telegra.ph/Pravila-soobshchestva-03-13-6'>Полные правила</a>",
+                    parse_mode="HTML")
+                await message.answer(
+                    f"📋 {user.mention_html()}, правила отправлены тебе в ЛС!",
+                    parse_mode="HTML")
+            except: pass
 
 # ЗАЧИСТКА — удалить всех с 0 сообщений за 30 дней
 @dp.message(Command("cleanup"))
@@ -7686,8 +7700,710 @@ async def cmd_clone_chat(message: Message):
         f"Скопировано: плагины, роли модераторов",
         parse_mode="HTML")
 
+import sqlite3
+import re as _re_global
+
+# ══════════════════════════════════════════════════════════
+#  🗄 SQLITE — персистентное хранилище
+# ══════════════════════════════════════════════════════════
+DB_FILE = "skinvault.db"
+
+def db_connect():
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def db_init():
+    conn = db_connect()
+    c = conn.cursor()
+    c.executescript("""
+    CREATE TABLE IF NOT EXISTS user_memory (
+        uid INTEGER, cid INTEGER, key TEXT, value TEXT,
+        PRIMARY KEY (uid, cid, key));
+    CREATE TABLE IF NOT EXISTS mod_journal (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER, mod_id INTEGER, mod_name TEXT,
+        action TEXT, target_id INTEGER, target_name TEXT,
+        reason TEXT, ts INTEGER);
+    CREATE TABLE IF NOT EXISTS mod_shifts (
+        cid INTEGER, mod_id INTEGER, mod_name TEXT,
+        start_hour INTEGER, end_hour INTEGER,
+        PRIMARY KEY (cid, mod_id));
+    CREATE TABLE IF NOT EXISTS mod_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER, mod_id INTEGER, mod_name TEXT,
+        task TEXT, deadline INTEGER, done INTEGER DEFAULT 0,
+        created_by TEXT);
+    CREATE TABLE IF NOT EXISTS mod_chat (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER, uid INTEGER, uname TEXT,
+        text TEXT, ts INTEGER);
+    CREATE TABLE IF NOT EXISTS quick_replies (
+        cid INTEGER, key TEXT, text TEXT,
+        PRIMARY KEY (cid, key));
+    CREATE TABLE IF NOT EXISTS pinned_messages (
+        cid INTEGER, msg_id INTEGER, title TEXT, ts INTEGER,
+        PRIMARY KEY (cid, msg_id));
+    CREATE TABLE IF NOT EXISTS vip_users (
+        uid INTEGER, cid INTEGER, granted_by TEXT, ts INTEGER,
+        PRIMARY KEY (uid, cid));
+    CREATE TABLE IF NOT EXISTS donations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid INTEGER, uname TEXT, amount INTEGER, note TEXT, ts INTEGER);
+    CREATE TABLE IF NOT EXISTS events_calendar (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER, uid INTEGER, action TEXT,
+        target_id INTEGER, target_name TEXT, ts INTEGER);
+    CREATE TABLE IF NOT EXISTS auto_tags (
+        cid INTEGER, uid INTEGER, tag TEXT,
+        PRIMARY KEY (cid, uid));
+    """)
+    conn.commit()
+    conn.close()
+
+# ══════════════════════════════════════════════════════════
+#  🌍 МУЛЬТИЯЗЫЧНОСТЬ
+# ══════════════════════════════════════════════════════════
+LANGS = {
+    "ru": {
+        "warn_issued": "⚠️ {name} получает варн! ({count}/{max})",
+        "ban_issued":  "🔨 {name} забанен!",
+        "mute_issued": "🔇 {name} заглушён на {time}",
+        "welcome":     "👋 Добро пожаловать, {name}!",
+        "rules_sent":  "📋 Правила отправлены тебе в ЛС!",
+        "lang_changed":"✅ Язык изменён на Русский 🇷🇺",
+    },
+    "en": {
+        "warn_issued": "⚠️ {name} gets a warning! ({count}/{max})",
+        "ban_issued":  "🔨 {name} is banned!",
+        "mute_issued": "🔇 {name} is muted for {time}",
+        "welcome":     "👋 Welcome, {name}!",
+        "rules_sent":  "📋 Rules sent to your DM!",
+        "lang_changed":"✅ Language changed to English 🇬🇧",
+    },
+    "uk": {
+        "warn_issued": "⚠️ {name} отримує попередження! ({count}/{max})",
+        "ban_issued":  "🔨 {name} заблокований!",
+        "mute_issued": "🔇 {name} заглушений на {time}",
+        "welcome":     "👋 Ласкаво просимо, {name}!",
+        "rules_sent":  "📋 Правила надіслані тобі в ЛС!",
+        "lang_changed":"✅ Мова змінена на Українську 🇺🇦",
+    },
+}
+chat_lang = defaultdict(lambda: "ru")  # {cid: lang}
+
+def t(cid: int, key: str, **kwargs) -> str:
+    lang = chat_lang.get(cid, "ru")
+    text = LANGS.get(lang, LANGS["ru"]).get(key, key)
+    return text.format(**kwargs) if kwargs else text
+
+@dp.message(Command("lang"))
+async def cmd_lang(message: Message):
+    if not await require_admin(message): return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🇷🇺 Русский",    callback_data=f"lang:ru:{message.chat.id}"),
+        InlineKeyboardButton(text="🇬🇧 English",    callback_data=f"lang:en:{message.chat.id}"),
+        InlineKeyboardButton(text="🇺🇦 Українська", callback_data=f"lang:uk:{message.chat.id}"),
+    ]])
+    await reply_auto_delete(message, "🌍 <b>Выбери язык бота:</b>", parse_mode="HTML")
+    sent = await message.answer("👇", reply_markup=kb)
+    asyncio.create_task(schedule_delete(sent, 30))
+
+@dp.callback_query(F.data.startswith("lang:"))
+async def cb_lang(call: CallbackQuery):
+    if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
+        await call.answer("🚫", show_alert=True); return
+    _, lang, cid_str = call.data.split(":")
+    cid = int(cid_str)
+    chat_lang[cid] = lang
+    await call.message.edit_text(t(cid, "lang_changed"))
+    await call.answer()
+
+# ══════════════════════════════════════════════════════════
+#  🧠 ПАМЯТЬ БОТА — запоминает юзеров между сессиями
+# ══════════════════════════════════════════════════════════
+def mem_set(uid: int, cid: int, key: str, value: str):
+    conn = db_connect()
+    conn.execute("INSERT OR REPLACE INTO user_memory VALUES (?,?,?,?)",
+                 (uid, cid, key, value))
+    conn.commit(); conn.close()
+
+def mem_get(uid: int, cid: int, key: str) -> str:
+    conn = db_connect()
+    row = conn.execute("SELECT value FROM user_memory WHERE uid=? AND cid=? AND key=?",
+                       (uid, cid, key)).fetchone()
+    conn.close()
+    return row["value"] if row else None
+
+def mem_get_all(uid: int, cid: int) -> dict:
+    conn = db_connect()
+    rows = conn.execute("SELECT key, value FROM user_memory WHERE uid=? AND cid=?",
+                        (uid, cid)).fetchall()
+    conn.close()
+    return {r["key"]: r["value"] for r in rows}
+
+# ══════════════════════════════════════════════════════════
+#  📋 ЖУРНАЛ ДЕЙСТВИЙ МОДЕРАТОРОВ
+# ══════════════════════════════════════════════════════════
+def journal_add(cid, mod_id, mod_name, action, target_id, target_name, reason=""):
+    import time as _tj
+    conn = db_connect()
+    conn.execute(
+        "INSERT INTO mod_journal (cid,mod_id,mod_name,action,target_id,target_name,reason,ts) VALUES (?,?,?,?,?,?,?,?)",
+        (cid, mod_id, mod_name, action, target_id, target_name, reason, int(_tj.time())))
+    conn.commit(); conn.close()
+    # Календарь событий
+    conn2 = db_connect()
+    conn2.execute(
+        "INSERT INTO events_calendar (cid,uid,action,target_id,target_name,ts) VALUES (?,?,?,?,?,?)",
+        (cid, mod_id, action, target_id, target_name, int(_tj.time())))
+    conn2.commit(); conn2.close()
+
+@dp.message(Command("myjournal"))
+async def cmd_my_journal(message: Message):
+    """Мод видит свои действия"""
+    uid = message.from_user.id
+    cid = message.chat.id
+    is_mod = uid in mod_roles.get(cid, {}) or await is_admin_by_id(cid, uid)
+    if not is_mod: return
+    conn = db_connect()
+    rows = conn.execute(
+        "SELECT action, target_name, reason, ts FROM mod_journal WHERE mod_id=? AND cid=? ORDER BY ts DESC LIMIT 15",
+        (uid, cid)).fetchall()
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message, "📋 Твой журнал пуст"); return
+    from datetime import datetime
+    lines = [f"📋 <b>Твой журнал действий</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for r in rows:
+        dt = datetime.fromtimestamp(r["ts"]).strftime("%d.%m %H:%M")
+        lines.append(f"▸ <b>{r['action']}</b> → {r['target_name']}\n"
+                     f"  📝 {r['reason'] or '—'} | 🕐 {dt}\n")
+    await bot.send_message(uid, "\n".join(lines), parse_mode="HTML")
+    await reply_auto_delete(message, "📋 Журнал отправлен тебе в ЛС!", parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  ⏰ СМЕНЫ МОДЕРАТОРОВ
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("setshift"))
+async def cmd_set_shift(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    args = message.text.split()[1:] if message.text else []
+    if len(args) < 3 or not message.reply_to_message:
+        await reply_auto_delete(message,
+            "⏰ <b>Использование:</b>\n<code>/setshift начало конец</code> (реплай на мода)\n"
+            "Пример: <code>/setshift 9 21</code> — дежурит с 9 до 21",
+            parse_mode="HTML"); return
+    target = message.reply_to_message.from_user
+    try: start, end = int(args[0]), int(args[1])
+    except: await reply_auto_delete(message, "⚠️ Часы числами"); return
+    cid = message.chat.id
+    conn = db_connect()
+    conn.execute("INSERT OR REPLACE INTO mod_shifts VALUES (?,?,?,?,?)",
+                 (cid, target.id, target.full_name, start, end))
+    conn.commit(); conn.close()
+    await reply_auto_delete(message,
+        f"⏰ Смена назначена: {target.mention_html()}\n🕐 {start}:00 — {end}:00",
+        parse_mode="HTML")
+
+@dp.message(Command("shifts"))
+async def cmd_shifts(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    conn = db_connect()
+    rows = conn.execute("SELECT * FROM mod_shifts WHERE cid=?", (cid,)).fetchall()
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message, "⏰ Смены не назначены"); return
+    from datetime import datetime
+    now_h = datetime.now().hour
+    lines = [f"⏰ <b>Расписание смен</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for r in rows:
+        on = "🟢" if r["start_hour"] <= now_h < r["end_hour"] else "⚫"
+        lines.append(f"{on} {r['mod_name']} — {r['start_hour']}:00–{r['end_hour']}:00")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  📊 РЕЙТИНГ МОДЕРАТОРОВ
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("modrating"))
+async def cmd_mod_rating(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    conn = db_connect()
+    rows = conn.execute(
+        "SELECT mod_name, COUNT(*) as cnt FROM mod_journal WHERE cid=? GROUP BY mod_id ORDER BY cnt DESC LIMIT 10",
+        (cid,)).fetchall()
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message, "📊 Статистики ещё нет"); return
+    medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+    lines = [f"📊 <b>Рейтинг модераторов</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for i, r in enumerate(rows):
+        lines.append(f"{medals[i]} {r['mod_name']} — <b>{r['cnt']}</b> действий")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  🎯 ЗАДАЧИ МОДЕРАТОРАМ
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("task"))
+async def cmd_task(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    args = message.text.split(None, 3)[1:] if message.text else []
+    if not message.reply_to_message or len(args) < 1:
+        await reply_auto_delete(message,
+            "🎯 <b>Использование:</b>\n<code>/task текст задачи [дедлайн в часах]</code>\n"
+            "Реплайни на мода. Пример: <code>/task Обработать репорты 24</code>",
+            parse_mode="HTML"); return
+    target = message.reply_to_message.from_user
+    cid = message.chat.id
+    task_text = " ".join(args[:-1]) if args[-1].isdigit() else " ".join(args)
+    hours = int(args[-1]) if args[-1].isdigit() else 24
+    import time as _tt
+    deadline = int(_tt.time()) + hours * 3600
+    conn = db_connect()
+    conn.execute(
+        "INSERT INTO mod_tasks (cid,mod_id,mod_name,task,deadline,created_by) VALUES (?,?,?,?,?,?)",
+        (cid, target.id, target.full_name, task_text, deadline, message.from_user.full_name))
+    task_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit(); conn.close()
+    from datetime import datetime
+    dl_str = datetime.fromtimestamp(deadline).strftime("%d.%m %H:%M")
+    # Уведомить мода в ЛС
+    try:
+        await bot.send_message(target.id,
+            f"🎯 <b>Новая задача от {message.from_user.full_name}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📝 {task_text}\n⏰ Дедлайн: <b>{dl_str}</b>\n\n"
+            f"Когда выполнишь: /donetask {task_id}",
+            parse_mode="HTML")
+    except: pass
+    await reply_auto_delete(message,
+        f"🎯 Задача #{task_id} поставлена для {target.mention_html()}\n"
+        f"📝 {task_text}\n⏰ Дедлайн: {dl_str}",
+        parse_mode="HTML")
+
+@dp.message(Command("donetask"))
+async def cmd_done_task(message: Message):
+    args = message.text.split()[1:] if message.text else []
+    if not args:
+        await reply_auto_delete(message, "⚠️ Укажи ID задачи: /donetask 5"); return
+    try: task_id = int(args[0])
+    except: await reply_auto_delete(message, "⚠️ ID числом"); return
+    uid = message.from_user.id
+    conn = db_connect()
+    row = conn.execute("SELECT * FROM mod_tasks WHERE id=? AND mod_id=?", (task_id, uid)).fetchone()
+    if not row:
+        conn.close(); await reply_auto_delete(message, "❌ Задача не найдена"); return
+    conn.execute("UPDATE mod_tasks SET done=1 WHERE id=?", (task_id,))
+    conn.commit(); conn.close()
+    await reply_auto_delete(message, f"✅ Задача #{task_id} выполнена!")
+    try:
+        await bot.send_message(OWNER_ID,
+            f"✅ <b>Задача выполнена!</b>\n"
+            f"👤 {message.from_user.full_name}\n"
+            f"📝 {row['task']}", parse_mode="HTML")
+    except: pass
+
+@dp.message(Command("tasks"))
+async def cmd_tasks(message: Message):
+    uid = message.from_user.id
+    is_owner = uid == OWNER_ID
+    cid = message.chat.id
+    conn = db_connect()
+    if is_owner:
+        rows = conn.execute("SELECT * FROM mod_tasks WHERE cid=? AND done=0 ORDER BY deadline", (cid,)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM mod_tasks WHERE mod_id=? AND done=0 ORDER BY deadline", (uid,)).fetchall()
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message, "✅ Активных задач нет!"); return
+    from datetime import datetime
+    import time as _tsk
+    lines = [f"🎯 <b>Активные задачи</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for r in rows:
+        dl = datetime.fromtimestamp(r["deadline"]).strftime("%d.%m %H:%M")
+        overdue = "⚠️ ПРОСРОЧЕНО" if r["deadline"] < _tsk.time() else ""
+        lines.append(f"#{r['id']} {r['mod_name'] if is_owner else ''} — {r['task']}\n"
+                     f"  ⏰ {dl} {overdue}\n")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  💬 ЧАТ МОДЕРАТОРОВ
+# ══════════════════════════════════════════════════════════
+mod_chat_active = set()  # {uid} — кто сейчас в чате модов
+
+@dp.message(Command("modchat"))
+async def cmd_modchat(message: Message):
+    uid = message.from_user.id
+    cid = message.chat.id
+    is_mod = uid == OWNER_ID or uid in mod_roles.get(cid, {}) or await is_admin_by_id(cid, uid)
+    if not is_mod:
+        await reply_auto_delete(message, "🚫 Только для модераторов"); return
+    if uid in mod_chat_active:
+        mod_chat_active.discard(uid)
+        await reply_auto_delete(message, "💬 Вышел из чата модераторов")
+    else:
+        mod_chat_active.add(uid)
+        await reply_auto_delete(message,
+            "💬 <b>Чат модераторов активен</b>\n"
+            "Пиши боту в ЛС — сообщение увидят все моды\n"
+            "Выйти: /modchat ещё раз", parse_mode="HTML")
+
+@dp.message(F.chat.type == "private")
+async def handle_modchat_dm(message: Message):
+    uid = message.from_user.id
+    if uid not in mod_chat_active: return
+    if not message.text or message.text.startswith("/"): return
+    # Рассылаем всем активным модам
+    uname = message.from_user.full_name
+    text = f"💬 <b>[МОД-ЧАТ]</b> {uname}:\n{message.text}"
+    sent_to = 0
+    for mod_uid in list(mod_chat_active):
+        if mod_uid == uid: continue
+        try:
+            await bot.send_message(mod_uid, text, parse_mode="HTML")
+            sent_to += 1
+        except: pass
+    if sent_to == 0:
+        await message.answer("💬 Других модов онлайн нет")
+
+# ══════════════════════════════════════════════════════════
+#  ⚡ БЫСТРЫЕ ОТВЕТЫ
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("addreply"))
+async def cmd_add_reply(message: Message):
+    if not await require_admin(message): return
+    args = message.text.split(None, 2)[1:] if message.text else []
+    if len(args) < 2:
+        await reply_auto_delete(message,
+            "⚡ <b>Добавить быстрый ответ:</b>\n"
+            "<code>/addreply ключ текст ответа</code>\n"
+            "Пример: <code>/addreply реклама Реклама запрещена!</code>",
+            parse_mode="HTML"); return
+    key, text = args[0].lower(), args[1]
+    cid = message.chat.id
+    conn = db_connect()
+    conn.execute("INSERT OR REPLACE INTO quick_replies VALUES (?,?,?)", (cid, key, text))
+    conn.commit(); conn.close()
+    await reply_auto_delete(message, f"✅ Быстрый ответ <b>!{key}</b> сохранён", parse_mode="HTML")
+
+@dp.message(Command("replies"))
+async def cmd_replies(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    conn = db_connect()
+    rows = conn.execute("SELECT key, text FROM quick_replies WHERE cid=?", (cid,)).fetchall()
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message, "⚡ Быстрых ответов нет — добавь через /addreply"); return
+    lines = ["⚡ <b>Быстрые ответы</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for r in rows:
+        lines.append(f"▸ <code>!{r['key']}</code> — {r['text'][:40]}")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# Хук: если мод пишет !ключ — бот отвечает шаблоном
+@dp.message(F.text.startswith("!"))
+async def handle_quick_reply(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    uid = message.from_user.id
+    cid = message.chat.id
+    if not (await is_admin_by_id(cid, uid) or uid in mod_roles.get(cid, {})): return
+    key = message.text[1:].split()[0].lower()
+    conn = db_connect()
+    row = conn.execute("SELECT text FROM quick_replies WHERE cid=? AND key=?", (cid, key)).fetchone()
+    conn.close()
+    if not row: return
+    try: await message.delete()
+    except: pass
+    if message.reply_to_message:
+        await message.reply_to_message.reply(row["text"])
+    else:
+        await message.answer(row["text"])
+
+# ══════════════════════════════════════════════════════════
+#  📌 ЗАКРЕП-МЕНЕДЖЕР
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("pinmanager"))
+async def cmd_pin_manager(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    conn = db_connect()
+    rows = conn.execute("SELECT * FROM pinned_messages WHERE cid=? ORDER BY ts DESC", (cid,)).fetchall()
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message,
+            "📌 <b>Закреп-менеджер</b>\n\nЗакреплённых нет.\n"
+            "Реплайни на сообщение + /pin заголовок — добавить",
+            parse_mode="HTML"); return
+    from datetime import datetime
+    lines = ["📌 <b>Закреп-менеджер</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    kb_rows = []
+    for r in rows:
+        dt = datetime.fromtimestamp(r["ts"]).strftime("%d.%m")
+        lines.append(f"▸ <b>{r['title']}</b> — {dt}")
+        kb_rows.append([
+            InlineKeyboardButton(text=f"📌 {r['title'][:15]}", url=f"https://t.me/c/{str(cid)[4:]}/{r['msg_id']}"),
+            InlineKeyboardButton(text="🗑", callback_data=f"unpin:{cid}:{r['msg_id']}"),
+        ])
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+    sent = await message.answer("Управление:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_rows))
+    asyncio.create_task(schedule_delete(sent, 60))
+
+@dp.message(Command("pin"))
+async def cmd_pin_add(message: Message):
+    if not await require_admin(message): return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение"); return
+    title = message.text.replace("/pin", "").strip() or "Без названия"
+    cid = message.chat.id
+    msg_id = message.reply_to_message.message_id
+    import time as _tp
+    conn = db_connect()
+    conn.execute("INSERT OR REPLACE INTO pinned_messages VALUES (?,?,?,?)",
+                 (cid, msg_id, title, int(_tp.time())))
+    conn.commit(); conn.close()
+    try: await bot.pin_chat_message(cid, msg_id, disable_notification=True)
+    except: pass
+    await reply_auto_delete(message, f"📌 Закреплено: <b>{title}</b>", parse_mode="HTML")
+
+@dp.callback_query(F.data.startswith("unpin:"))
+async def cb_unpin(call: CallbackQuery):
+    if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
+        await call.answer("🚫", show_alert=True); return
+    _, cid_str, msg_id_str = call.data.split(":")
+    cid, msg_id = int(cid_str), int(msg_id_str)
+    conn = db_connect()
+    conn.execute("DELETE FROM pinned_messages WHERE cid=? AND msg_id=?", (cid, msg_id))
+    conn.commit(); conn.close()
+    try: await bot.unpin_chat_message(cid, msg_id)
+    except: pass
+    await call.answer("📌 Откреплено")
+    await call.message.delete()
+
+# ══════════════════════════════════════════════════════════
+#  🔄 АВТО-ПРАВИЛА ПРИ ВХОДЕ
+# ══════════════════════════════════════════════════════════
+auto_rules_chats = set()  # {cid} — в каких чатах слать правила в ЛС
+
+@dp.message(Command("autorules"))
+async def cmd_auto_rules(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    if cid in auto_rules_chats:
+        auto_rules_chats.discard(cid)
+        await reply_auto_delete(message, "🔄 Авто-правила выключены")
+    else:
+        auto_rules_chats.add(cid)
+        await reply_auto_delete(message,
+            "🔄 <b>Авто-правила включены</b>\n"
+            "Новые участники будут получать правила в ЛС автоматически",
+            parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  💎 VIP СИСТЕМА
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("vip"))
+async def cmd_vip(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    target = message.reply_to_message.from_user if message.reply_to_message else None
+    if not target:
+        # Показать VIP список
+        conn = db_connect()
+        rows = conn.execute("SELECT uid, granted_by FROM vip_users WHERE cid=?",
+                            (message.chat.id,)).fetchall()
+        conn.close()
+        if not rows:
+            await reply_auto_delete(message, "💎 VIP список пуст"); return
+        lines = [f"💎 <b>VIP участники</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+        for r in rows:
+            lines.append(f"▸ ID{r['uid']} (выдал: {r['granted_by']})")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML"); return
+    import time as _tv
+    cid = message.chat.id
+    conn = db_connect()
+    existing = conn.execute("SELECT uid FROM vip_users WHERE uid=? AND cid=?",
+                            (target.id, cid)).fetchone()
+    if existing:
+        conn.execute("DELETE FROM vip_users WHERE uid=? AND cid=?", (target.id, cid))
+        conn.commit(); conn.close()
+        await reply_auto_delete(message, f"💎 VIP снят с {target.mention_html()}", parse_mode="HTML")
+    else:
+        conn.execute("INSERT OR REPLACE INTO vip_users VALUES (?,?,?,?)",
+                     (target.id, cid, message.from_user.full_name, int(_tv.time())))
+        conn.commit(); conn.close()
+        await reply_auto_delete(message,
+            f"💎 {target.mention_html()} получил <b>VIP статус</b>!\n"
+            f"✅ Иммунитет к анти-спаму и анти-мату", parse_mode="HTML")
+        try:
+            await bot.send_message(target.id,
+                f"💎 <b>Ты получил VIP статус</b> в {message.chat.title}!\n"
+                f"✅ Особые привилегии активированы", parse_mode="HTML")
+        except: pass
+
+def is_vip(uid: int, cid: int) -> bool:
+    conn = db_connect()
+    row = conn.execute("SELECT uid FROM vip_users WHERE uid=? AND cid=?", (uid, cid)).fetchone()
+    conn.close()
+    return row is not None
+
+# ══════════════════════════════════════════════════════════
+#  📊 АНАЛИТИКА — топы и хитмапы
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("heatmap"))
+async def cmd_heatmap(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    hours = defaultdict(int)
+    for uid2 in hourly_stats[cid]:
+        for h, cnt in hourly_stats[cid][uid2].items():
+            hours[int(h)] += cnt
+    if not hours:
+        await reply_auto_delete(message, "📊 Данных пока нет"); return
+    max_cnt = max(hours.values()) or 1
+    blocks = ["▁","▂","▃","▄","▅","▆","▇","█"]
+    bars = ""
+    for h in range(24):
+        val = hours.get(h, 0)
+        idx = int(val / max_cnt * 7)
+        bars += blocks[idx]
+    lines = [
+        "📊 <b>Активность по часам</b>\n━━━━━━━━━━━━━━━━━━━━━━\n",
+        f"<code>{bars}</code>",
+        f"0ч {'':>10} 12ч {'':>9} 23ч",
+        f"\n🔥 Пик: <b>{max(hours, key=hours.get)}:00</b> ({hours[max(hours, key=hours.get)]} сообщ.)",
+        f"😴 Мин: <b>{min(hours, key=hours.get)}:00</b> ({hours[min(hours, key=hours.get)]} сообщ.)",
+    ]
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  📅 КАЛЕНДАРЬ СОБЫТИЙ
+# ══════════════════════════════════════════════════════════
+@dp.message(Command("calendar"))
+async def cmd_calendar(message: Message):
+    if message.from_user.id != OWNER_ID: return
+    cid = message.chat.id
+    conn = db_connect()
+    rows = conn.execute(
+        "SELECT action, target_name, ts FROM events_calendar WHERE cid=? ORDER BY ts DESC LIMIT 20",
+        (cid,)).fetchall()
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message, "📅 Календарь пуст"); return
+    from datetime import datetime
+    lines = ["📅 <b>Календарь событий</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for r in rows:
+        dt = datetime.fromtimestamp(r["ts"]).strftime("%d.%m %H:%M")
+        lines.append(f"▸ {dt} — <b>{r['action']}</b> → {r['target_name']}")
+    await bot.send_message(OWNER_ID, "\n".join(lines), parse_mode="HTML")
+    await reply_auto_delete(message, "📅 Календарь отправлен в ЛС!", parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  🔔 УМНЫЕ УВЕДОМЛЕНИЯ — бот сам пишет владельцу
+# ══════════════════════════════════════════════════════════
+async def smart_notify_loop():
+    """Фоновая задача — мониторинг и уведомления"""
+    import time as _tsn
+    await asyncio.sleep(60)
+    while True:
+        try:
+            now = _tsn.time()
+            from datetime import datetime
+
+            # 1. Просроченные задачи
+            conn = db_connect()
+            overdue = conn.execute(
+                "SELECT * FROM mod_tasks WHERE done=0 AND deadline < ?", (now,)).fetchall()
+            conn.close()
+            if overdue:
+                lines = [f"⚠️ <b>Просроченные задачи ({len(overdue)})</b>\n"]
+                for t2 in overdue:
+                    dl = datetime.fromtimestamp(t2["deadline"]).strftime("%d.%m %H:%M")
+                    lines.append(f"▸ {t2['mod_name']}: {t2['task']} (до {dl})")
+                await safe_send(bot.send_message(OWNER_ID, "\n".join(lines), parse_mode="HTML"))
+
+            # 2. Дейли отчёт в 21:00
+            now_dt = datetime.now()
+            if now_dt.hour == 21 and now_dt.minute < 5:
+                for cid in list(known_chats.keys()):
+                    today = now_dt.strftime("%d.%m.%Y")
+                    today_msgs = sum(daily_stats[cid][u].get(today, 0) for u in daily_stats[cid])
+                    new_warns  = sum(1 for u in warnings[cid] if warnings[cid][u] > 0)
+                    open_reps  = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
+                    await safe_send(bot.send_message(cid,
+                        f"📰 <b>Дейли {today}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"💬 Сообщений за день: <b>{today_msgs}</b>\n"
+                        f"⚡ Активных варнов: <b>{new_warns}</b>\n"
+                        f"🚨 Открытых репортов: <b>{open_reps}</b>\n"
+                        f"👥 Активных юзеров: <b>{len(daily_stats[cid])}</b>",
+                        parse_mode="HTML"))
+                    await asyncio.sleep(0.2)
+
+            # 3. Мониторинг 24/7 — пинг владельцу если очередь репортов большая
+            for cid in list(known_chats.keys()):
+                open_reps = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
+                if open_reps >= 5:
+                    await safe_send(bot.send_message(OWNER_ID,
+                        f"📡 <b>Мониторинг 24/7</b>\n"
+                        f"⚠️ В <b>{known_chats.get(cid,'?')}</b> накопилось <b>{open_reps}</b> необработанных репортов!\n"
+                        f"🔗 Открой /mypanel → Репорты",
+                        parse_mode="HTML"))
+
+        except Exception as e:
+            print(f"[smart_notify_loop] {e}")
+        await asyncio.sleep(300)  # каждые 5 минут
+
+# ══════════════════════════════════════════════════════════
+#  🤖 ПЕРСОНАЛЬНЫЙ АССИСТЕНТ В ЛС
+# ══════════════════════════════════════════════════════════
+ASSISTANT_COMMANDS = {
+    "стат": "cmd_sos",
+    "статус": "cmd_sos",
+    "репорты": "reports_summary",
+    "задачи": "tasks_summary",
+    "помощь": "assistant_help",
+    "чаты": "chats_summary",
+}
+
+@dp.message(F.chat.type == "private", F.from_user.id == OWNER_ID)
+async def owner_assistant(message: Message):
+    if not message.text or message.text.startswith("/"): return
+    if message.from_user.id in mod_chat_active: return
+    text = message.text.lower().strip()
+    # Простые ответы ассистента
+    if any(w in text for w in ["привет", "хай", "hello"]):
+        await message.answer(
+            f"👋 Привет! Я твой ассистент.\n\n"
+            f"💬 Чатов: {len(known_chats)}\n"
+            f"🚨 Репортов: {sum(len(report_queue.get(c,[])) for c in known_chats)}\n\n"
+            f"Спроси меня что угодно или используй /mypanel"); return
+    if any(w in text for w in ["сколько", "чатов", "статус"]):
+        total_msgs = sum(sum(chat_stats[c].values()) for c in known_chats)
+        await message.answer(
+            f"📊 <b>Статус</b>\n"
+            f"💬 Чатов: {len(known_chats)}\n"
+            f"👥 Юзеров: {sum(len(chat_stats[c]) for c in known_chats)}\n"
+            f"📨 Сообщений: {total_msgs}\n"
+            f"🚨 Репортов: {sum(len(report_queue.get(c,[])) for c in known_chats)}",
+            parse_mode="HTML"); return
+    if any(w in text for w in ["задач", "task"]):
+        conn = db_connect()
+        rows = conn.execute("SELECT COUNT(*) as cnt FROM mod_tasks WHERE done=0").fetchone()
+        conn.close()
+        await message.answer(f"🎯 Активных задач: <b>{rows['cnt']}</b>\n/tasks — подробнее", parse_mode="HTML"); return
+    if any(w in text for w in ["помощ", "help", "что умеешь"]):
+        await message.answer(
+            "🤖 <b>Я умею отвечать на:</b>\n"
+            "▸ 'привет' — приветствие\n"
+            "▸ 'сколько чатов' — статистика\n"
+            "▸ 'задачи' — активные задачи\n\n"
+            "Также используй:\n"
+            "/mypanel — панель всех чатов\n"
+            "/profile — твой профиль\n"
+            "/backup — бэкап базы",
+            parse_mode="HTML"); return
 async def main():
-    import time as _tstart
+    db_init()
     global bot_start_time
     bot_start_time = _tstart.time()
     load_data()
@@ -7699,6 +8415,7 @@ async def main():
     asyncio.create_task(run_events())
     asyncio.create_task(run_newspaper())
     asyncio.create_task(run_stock())
+    asyncio.create_task(smart_notify_loop())  # 🔔 Умные уведомления + дейли + мониторинг
     await start_web()
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
     print("✅ Бот запущен!")
