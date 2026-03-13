@@ -155,6 +155,16 @@ def db_init():
         PRIMARY KEY (cid, key));
     CREATE TABLE IF NOT EXISTS appeals_db (
         uid INTEGER PRIMARY KEY, data TEXT);
+    CREATE TABLE IF NOT EXISTS welcome_settings (
+        cid INTEGER PRIMARY KEY, text TEXT,
+        photo TEXT, is_gif INTEGER DEFAULT 0,
+        enabled INTEGER DEFAULT 1, buttons INTEGER DEFAULT 1);
+    CREATE TABLE IF NOT EXISTS surveillance_chats (
+        cid INTEGER PRIMARY KEY);
+    CREATE TABLE IF NOT EXISTS deleted_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER, uid INTEGER, name TEXT,
+        text TEXT, ts REAL);
     """)
     conn.commit()
     conn.close()
@@ -937,21 +947,25 @@ def kb_back(tid: int) -> list:
     return [InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:back:{tid}")]
 
 def kb_main_menu(tid: int = 0) -> InlineKeyboardMarkup:
+    """Главное меню панели для администраторов"""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Участник",       callback_data=f"panel:select:{tid}"),
-         InlineKeyboardButton(text="✉️ Сообщения",      callback_data=f"panel:messages:{tid}")],
-        [InlineKeyboardButton(text="👥 Участники",      callback_data=f"panel:members:{tid}"),
-         InlineKeyboardButton(text="⚙️ Настройки",     callback_data=f"panel:chat:{tid}")],
-        [InlineKeyboardButton(text="🎮 Игры",           callback_data=f"panel:games:{tid}"),
-         InlineKeyboardButton(text="📊 Статистика",     callback_data=f"panel:botstats2:{tid}")],
-        [InlineKeyboardButton(text="🚨 Жалобы",         callback_data=f"panel:reports:{tid}"),
-         InlineKeyboardButton(text="📈 Экономика",      callback_data=f"panel:economy:{tid}")],
-        [InlineKeyboardButton(text="🏆 Топ XP",         callback_data=f"panel:topxp:{tid}"),
-         InlineKeyboardButton(text="📋 Список банов",   callback_data=f"members:banlist:{tid}")],
-        [InlineKeyboardButton(text="✖️ Закрыть",        callback_data="panel:close:0")],
+        [InlineKeyboardButton(text="👤 Участник",        callback_data=f"panel:select:{tid}"),
+         InlineKeyboardButton(text="🚨 Репорты",         callback_data=f"panel:reports:{tid}")],
+        [InlineKeyboardButton(text="👥 Участники",       callback_data=f"panel:members:{tid}"),
+         InlineKeyboardButton(text="📋 Список банов",    callback_data=f"members:banlist:{tid}")],
+        [InlineKeyboardButton(text="⚙️ Настройки чата",  callback_data=f"panel:chatsettings:{tid}"),
+         InlineKeyboardButton(text="🛡 Модерация",       callback_data=f"panel:modtools:{tid}")],
+        [InlineKeyboardButton(text="📊 Статистика",      callback_data=f"panel:stats:{tid}"),
+         InlineKeyboardButton(text="🎖 Роли",            callback_data=f"panel:roles:{tid}")],
+        [InlineKeyboardButton(text="⚡ Быстрые ответы",  callback_data=f"panel:quickreplies:{tid}"),
+         InlineKeyboardButton(text="📌 Закреплённые",    callback_data=f"panel:pins:{tid}")],
+        [InlineKeyboardButton(text="🔔 Welcome",         callback_data=f"panel:welcome:{tid}"),
+         InlineKeyboardButton(text="🧩 Плагины",         callback_data=f"panel:plugins:{tid}")],
+        [InlineKeyboardButton(text="✖️ Закрыть",         callback_data="panel:close:0")],
     ])
 
 def kb_user_panel(tid: int) -> InlineKeyboardMarkup:
+    """Панель действий над участником"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔇 Мут",              callback_data=f"panel:mute:{tid}"),
          InlineKeyboardButton(text="🔊 Размут",            callback_data=f"panel:unmute:{tid}")],
@@ -961,14 +975,38 @@ def kb_user_panel(tid: int) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="🕊 Разбан",             callback_data=f"panel:unban:{tid}")],
         [InlineKeyboardButton(text="🔕 Тихий бан",         callback_data=f"panel:silentban:{tid}"),
          InlineKeyboardButton(text="⏳ Темпбан 24ч",       callback_data=f"ban:{tid}:tempban24")],
-        [InlineKeyboardButton(text="📵 Мут 24ч (реклама)", callback_data=f"members:warn24:{tid}"),
-         InlineKeyboardButton(text="🗑 Удалить сообщ",     callback_data=f"panel:del:{tid}")],
+        [InlineKeyboardButton(text="🙅 Стикермут",         callback_data=f"panel:stickermute:{tid}"),
+         InlineKeyboardButton(text="🎭 Гифмут",            callback_data=f"panel:gifmute:{tid}")],
+        [InlineKeyboardButton(text="🔇 Войсмут",           callback_data=f"panel:voicemute:{tid}"),
+         InlineKeyboardButton(text="🚫 Всёмут",            callback_data=f"panel:allmedmute:{tid}")],
         [InlineKeyboardButton(text="🔍 Информация",        callback_data=f"panel:info:{tid}"),
          InlineKeyboardButton(text="📋 История",            callback_data=f"panel:modhistory:{tid}")],
         [InlineKeyboardButton(text="📝 Заметки",           callback_data=f"panel:usernotes:{tid}"),
-         InlineKeyboardButton(text="🏷 Выдать тег",        callback_data=f"panel:promote:{tid}")],
+         InlineKeyboardButton(text="💎 VIP",               callback_data=f"panel:vip:{tid}")],
         [InlineKeyboardButton(text="🎭 Приколы",           callback_data=f"panel:fun:{tid}"),
          InlineKeyboardButton(text="◀️ Назад",             callback_data=f"panel:mainmenu:0")],
+    ])
+
+def kb_owner_panel() -> InlineKeyboardMarkup:
+    """Панель владельца — только для OWNER_ID"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌍 Все чаты",         callback_data="owner:chats:0"),
+         InlineKeyboardButton(text="📊 Статус бота",      callback_data="owner:status:0")],
+        [InlineKeyboardButton(text="💣 SOS ALL",          callback_data="owner:sosall:0"),
+         InlineKeyboardButton(text="✅ Разлокдаун всех",  callback_data="owner:sosoff:0")],
+        [InlineKeyboardButton(text="📢 Бродкаст",         callback_data="owner:broadcast:0"),
+         InlineKeyboardButton(text="🔒 Чёрный список",    callback_data="owner:blacklist:0")],
+        [InlineKeyboardButton(text="💾 Бэкап",            callback_data="owner:backup:0"),
+         InlineKeyboardButton(text="🔍 Аудит чата",       callback_data="owner:audit:0")],
+        [InlineKeyboardButton(text="🧩 Плагины глобал",   callback_data="owner:plugins:0"),
+         InlineKeyboardButton(text="📅 Календарь",        callback_data="owner:calendar:0")],
+        [InlineKeyboardButton(text="🎯 Задачи модов",     callback_data="owner:tasks:0"),
+         InlineKeyboardButton(text="📊 Рейтинг модов",   callback_data="owner:modrating:0")],
+        [InlineKeyboardButton(text="💣 Эвакуация",        callback_data="owner:evacuation:0"),
+         InlineKeyboardButton(text="🔬 Карантин",         callback_data="owner:quarantine:0")],
+        [InlineKeyboardButton(text="🧹 Зачистка",         callback_data="owner:cleanup:0"),
+         InlineKeyboardButton(text="🔗 Связать чаты",     callback_data="owner:linkchats:0")],
+        [InlineKeyboardButton(text="✖️ Закрыть",          callback_data="panel:close:0")],
     ])
 
 def kb_mute(tid: int) -> InlineKeyboardMarkup:
@@ -1580,8 +1618,449 @@ async def cb_panel(call: CallbackQuery):
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")
                 ]]))
+
+        # ── Новые разделы панели ──────────────────────────────
+        elif action == "mainmenu":
+            total_msgs  = sum(chat_stats[cid].values())
+            total_warns = sum(warnings[cid].values())
+            open_reps   = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
+            await call.message.edit_text(
+                f"✨ <b>CHAT GUARD</b> — Панель администратора\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💬 <b>{call.message.chat.title}</b>\n"
+                f"👥 Активных: <b>{len(chat_stats[cid])}</b>\n"
+                f"📨 Сообщений: <b>{total_msgs}</b>\n"
+                f"⚡ Варнов: <b>{total_warns}</b>\n"
+                f"🚨 Репортов: <b>{open_reps}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML", reply_markup=kb_main_menu())
+
+        elif action == "chatsettings":
+            await call.message.edit_text(
+                f"⚙️ <b>Настройки чата</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🧼 Антимат: <b>{'✅' if ANTI_MAT_ENABLED else '❌'}</b>\n"
+                f"🤖 Автокик ботов: <b>{'✅' if AUTO_KICK_BOTS else '❌'}</b>\n"
+                f"🔔 Welcome: <b>{'✅' if welcome_get(cid)['enabled'] else '❌'}</b>\n"
+                f"👁 Наблюдение: <b>{'✅' if surveillance_enabled(cid) else '❌'}</b>\n"
+                f"🔄 Авто-правила: <b>{'✅' if cid in auto_rules_chats else '❌'}</b>\n"
+                f"🔬 Карантин: <b>{'✅' if cid in quarantine_chats else '❌'}</b>",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🧼 Антимат вкл/выкл", callback_data=f"chat:antimat:{cid}"),
+                     InlineKeyboardButton(text="🔔 Welcome вкл/выкл", callback_data=f"panelset:welcome:{cid}")],
+                    [InlineKeyboardButton(text="👁 Наблюдение",       callback_data=f"panelset:surveillance:{cid}"),
+                     InlineKeyboardButton(text="🔄 Авто-правила",     callback_data=f"panelset:autorules:{cid}")],
+                    [InlineKeyboardButton(text="🔬 Карантин",         callback_data=f"panelset:quarantine:{cid}"),
+                     InlineKeyboardButton(text="🌍 Язык бота",        callback_data=f"panelset:lang:{cid}")],
+                    [InlineKeyboardButton(text="◀️ Назад",            callback_data="panel:mainmenu:0")],
+                ]))
+
+        elif action == "modtools":
+            await call.message.edit_text(
+                f"🛡 <b>Инструменты модерации</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Выбери действие:",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="⚡ Выдать варн",      callback_data=f"panel:warn:{tid}"),
+                     InlineKeyboardButton(text="🔇 Мут чата",         callback_data=f"panelset:lockdown:{cid}")],
+                    [InlineKeyboardButton(text="🧹 Очистить сообщ.",  callback_data=f"panelset:clear:{cid}"),
+                     InlineKeyboardButton(text="👁 Удалённые сообщ.", callback_data=f"panelset:deletedlog:{cid}")],
+                    [InlineKeyboardButton(text="🚨 Репорты",          callback_data=f"panel:reports:{tid}"),
+                     InlineKeyboardButton(text="📋 История мод.",     callback_data=f"panel:modhistory:{tid}")],
+                    [InlineKeyboardButton(text="⏰ Смены",            callback_data=f"panelset:shifts:{cid}"),
+                     InlineKeyboardButton(text="📊 Рейтинг модов",    callback_data=f"panelset:modrating:{cid}")],
+                    [InlineKeyboardButton(text="◀️ Назад",            callback_data="panel:mainmenu:0")],
+                ]))
+
+        elif action == "stats":
+            from datetime import datetime
+            today = datetime.now().strftime("%d.%m.%Y")
+            today_msgs = sum(daily_stats[cid][u].get(today, 0) for u in daily_stats[cid])
+            top = sorted(chat_stats[cid].items(), key=lambda x: x[1], reverse=True)[:3]
+            top_lines = []
+            for u2, c2 in top:
+                try:
+                    tm2 = await bot.get_chat_member(cid, u2)
+                    top_lines.append(f"▸ {tm2.user.full_name}: {c2}")
+                except: top_lines.append(f"▸ ID{u2}: {c2}")
+            await call.message.edit_text(
+                f"📊 <b>Статистика чата</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📅 Сегодня: <b>{today_msgs}</b> сообщ.\n"
+                f"👥 Всего активных: <b>{len(chat_stats[cid])}</b>\n"
+                f"🔨 Забанено: <b>{len(ban_list.get(cid, set()))}</b>\n\n"
+                f"🏆 <b>Топ-3 активных:</b>\n" + "\n".join(top_lines),
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📊 Хитмап", callback_data=f"panelset:heatmap:{cid}")],
+                    [InlineKeyboardButton(text="◀️ Назад",  callback_data="panel:mainmenu:0")],
+                ]))
+
+        elif action == "roles":
+            roles_in = mod_roles.get(cid, {})
+            if not roles_in:
+                text = "🎖 <b>Роли модераторов</b>\n\nРолей нет.\nВладелец выдаёт через /giverole"
+            else:
+                lines2 = ["🎖 <b>Роли модераторов</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+                for u2, r2 in roles_in.items():
+                    try:
+                        tm2 = await bot.get_chat_member(cid, u2)
+                        n2 = tm2.user.full_name
+                    except: n2 = f"ID{u2}"
+                    lines2.append(f"{MOD_ROLE_LABELS.get(r2,r2)} — {n2}")
+                text = "\n".join(lines2)
+            await call.message.edit_text(text, parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")
+                ]]))
+
+        elif action == "quickreplies":
+            conn = db_connect()
+            rows = conn.execute("SELECT key, text FROM quick_replies WHERE cid=?", (cid,)).fetchall()
+            conn.close()
+            if not rows:
+                text = "⚡ <b>Быстрые ответы</b>\n\nПусто.\nДобавь: /addreply ключ текст"
+            else:
+                lines2 = ["⚡ <b>Быстрые ответы</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+                for r2 in rows:
+                    lines2.append(f"▸ <code>!{r2['key']}</code> — {r2['text'][:40]}")
+                lines2.append("\n<i>Использование: !ключ в чате</i>")
+                text = "\n".join(lines2)
+            await call.message.edit_text(text, parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")
+                ]]))
+
+        elif action == "pins":
+            conn = db_connect()
+            rows = conn.execute("SELECT msg_id, title FROM pinned_messages WHERE cid=?", (cid,)).fetchall()
+            conn.close()
+            if not rows:
+                text = "📌 <b>Закреплённые</b>\n\nПусто.\n/pin заголовок (реплай)"
+            else:
+                lines2 = ["📌 <b>Закреплённые</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+                for r2 in rows:
+                    lines2.append(f"▸ {r2['title']}")
+                text = "\n".join(lines2)
+            await call.message.edit_text(text, parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")
+                ]]))
+
+        elif action == "welcome":
+            s = welcome_get(cid)
+            status = "✅ включён" if s["enabled"] else "❌ выключен"
+            await call.message.edit_text(
+                f"🔔 <b>Welcome экран</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Статус: {status}\n"
+                f"Медиа: {'✅' if s['photo'] else '❌'}\n\n"
+                f"📝 {s['text'][:100]}",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Вкл",    callback_data=f"panelset:welcomeon:{cid}"),
+                     InlineKeyboardButton(text="❌ Выкл",   callback_data=f"panelset:welcomeoff:{cid}")],
+                    [InlineKeyboardButton(text="🧪 Тест",   callback_data=f"panelset:testwelcome:{cid}")],
+                    [InlineKeyboardButton(text="◀️ Назад",  callback_data="panel:mainmenu:0")],
+                ]))
+
+        elif action == "plugins":
+            p = plugins[cid]
+            rows2 = []
+            for k, label in PLUGIN_LABELS.items():
+                st = "✅" if p.get(k, True) else "❌"
+                rows2.append([InlineKeyboardButton(
+                    text=f"{st} {label}",
+                    callback_data=f"plugin:toggle:{k}:{cid}")])
+            rows2.append([InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")])
+            await call.message.edit_text(
+                "🧩 <b>Плагины</b>\nНажми чтобы вкл/выкл:",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=rows2))
+
+        elif action == "vip":
+            if tid == 0:
+                await call.answer("↩️ Открой через реплай на юзера", show_alert=True); return
+            v = is_vip(tid, cid)
+            import time as _tvp
+            conn = db_connect()
+            if v:
+                conn.execute("DELETE FROM vip_users WHERE uid=? AND cid=?", (tid, cid))
+                conn.commit(); conn.close()
+                await call.answer(f"💎 VIP снят с {tname}", show_alert=True)
+            else:
+                conn.execute("INSERT OR REPLACE INTO vip_users VALUES (?,?,?,?)",
+                             (tid, cid, call.from_user.full_name, int(_tvp.time())))
+                conn.commit(); conn.close()
+                await call.answer(f"💎 {tname} получил VIP!", show_alert=True)
+
+        elif action in ("stickermute", "gifmute", "voicemute", "allmedmute"):
+            if tid == 0:
+                await call.answer("↩️ Реплай на юзера", show_alert=True); return
+            perm_map = {
+                "stickermute":  ChatPermissions(can_send_messages=True, can_send_media_messages=True, can_send_polls=True, can_send_other_messages=False, can_add_web_page_previews=True),
+                "gifmute":      ChatPermissions(can_send_messages=True, can_send_media_messages=True, can_send_polls=True, can_send_other_messages=False, can_add_web_page_previews=True),
+                "voicemute":    ChatPermissions(can_send_messages=True, can_send_media_messages=True, can_send_polls=True, can_send_other_messages=True,  can_add_web_page_previews=True),
+                "allmedmute":   ChatPermissions(can_send_messages=True, can_send_media_messages=False, can_send_polls=False, can_send_other_messages=False, can_add_web_page_previews=False),
+            }
+            label_map = {"stickermute":"🙅 Стикермут","gifmute":"🎭 Гифмут","voicemute":"🔇 Войсмут","allmedmute":"🚫 Всёмут"}
+            await bot.restrict_chat_member(cid, tid, permissions=perm_map[action])
+            await call.answer(f"{label_map[action]} применён к {tname}", show_alert=True)
+            journal_add(cid, call.from_user.id, call.from_user.full_name, label_map[action], tid, tname)
+
     except Exception as e:
         await call.answer(f"⚠️ Ошибка: {e}", show_alert=True)
+    await call.answer()
+
+# ── Вспомогательные колбэки настроек панели ──────────────────
+@dp.callback_query(F.data.startswith("panelset:"))
+async def cb_panelset(call: CallbackQuery):
+    if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
+        await call.answer("🚫", show_alert=True); return
+    parts = call.data.split(":")
+    action, cid_str = parts[1], parts[2]
+    cid = int(cid_str)
+
+    if action == "welcome" or action == "welcomeon":
+        s = welcome_get(cid); s["enabled"] = True; welcome_save(cid, s)
+        await call.answer("✅ Welcome включён")
+    elif action == "welcomeoff":
+        s = welcome_get(cid); s["enabled"] = False; welcome_save(cid, s)
+        await call.answer("❌ Welcome выключен")
+    elif action == "testwelcome":
+        await send_welcome(cid, call.from_user, test=True)
+        await call.answer("✅ Тест отправлен")
+    elif action == "surveillance":
+        enabled = surveillance_toggle(cid)
+        await call.answer(f"👁 Наблюдение {'включено' if enabled else 'выключено'}")
+    elif action == "autorules":
+        if cid in auto_rules_chats: auto_rules_chats.discard(cid); await call.answer("❌ Авто-правила выкл")
+        else: auto_rules_chats.add(cid); await call.answer("✅ Авто-правила вкл")
+    elif action == "quarantine":
+        if cid in quarantine_chats: quarantine_chats.discard(cid); await call.answer("❌ Карантин выкл")
+        else: quarantine_chats.add(cid); await call.answer("✅ Карантин вкл")
+    elif action == "lockdown":
+        try:
+            await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
+            await call.answer("🔒 Чат закрыт")
+        except Exception as e: await call.answer(f"❌ {e}", show_alert=True)
+    elif action == "deletedlog":
+        logs = surveillance_log_get(cid)
+        if not logs: await call.answer("Лог пуст", show_alert=True); return
+        from datetime import datetime
+        lines2 = ["👁 Удалённые:\n"]
+        for r2 in logs[:5]:
+            dt = datetime.fromtimestamp(r2["ts"]).strftime("%d.%m %H:%M")
+            lines2.append(f"{dt} {r2['name']}: {r2['text'][:40]}")
+        await call.answer("\n".join(lines2), show_alert=True)
+    elif action == "heatmap":
+        hours = defaultdict(int)
+        for u2 in hourly_stats[cid]:
+            for h2, cnt in hourly_stats[cid][u2].items():
+                hours[int(h2)] += cnt
+        if not hours: await call.answer("Данных нет", show_alert=True); return
+        mx = max(hours.values()) or 1
+        blocks = ["▁","▂","▃","▄","▅","▆","▇","█"]
+        bars = "".join(blocks[int(hours.get(h2,0)/mx*7)] for h2 in range(24))
+        peak = max(hours, key=hours.get)
+        await call.answer(f"📊 Активность:\n{bars}\nПик: {peak}:00", show_alert=True)
+    elif action == "shifts":
+        conn = db_connect()
+        rows = conn.execute("SELECT * FROM mod_shifts WHERE cid=?", (cid,)).fetchall()
+        conn.close()
+        from datetime import datetime
+        now_h = datetime.now().hour
+        if not rows: await call.answer("Смен нет. /setshift", show_alert=True); return
+        text = "\n".join(f"{'🟢' if r['start_hour']<=now_h<r['end_hour'] else '⚫'} {r['mod_name']} {r['start_hour']}–{r['end_hour']}ч" for r in rows)
+        await call.answer(f"⏰ Смены:\n{text}", show_alert=True)
+    elif action == "modrating":
+        conn = db_connect()
+        rows = conn.execute("SELECT mod_name,COUNT(*) as cnt FROM mod_journal WHERE cid=? GROUP BY mod_id ORDER BY cnt DESC LIMIT 5",(cid,)).fetchall()
+        conn.close()
+        if not rows: await call.answer("Статистики нет", show_alert=True); return
+        text = "\n".join(f"{i+1}. {r['mod_name']}: {r['cnt']}" for i, r in enumerate(rows))
+        await call.answer(f"📊 Рейтинг модов:\n{text}", show_alert=True)
+    await call.answer()
+
+# ── ПАНЕЛЬ ВЛАДЕЛЬЦА ──────────────────────────────────────────
+@dp.callback_query(F.data.startswith("owner:"))
+async def cb_owner_panel(call: CallbackQuery):
+    if call.from_user.id != OWNER_ID:
+        await call.answer("🚫 Только для владельца!", show_alert=True); return
+    parts = call.data.split(":")
+    action = parts[1]
+    cid = call.message.chat.id
+
+    if action == "chats":
+        lines2 = [f"🌍 <b>Все чаты</b> ({len(known_chats)})\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+        for c2, t2 in list(known_chats.items())[:15]:
+            w2 = sum(warnings[c2].values())
+            r2 = sum(1 for r3 in report_queue.get(c2,[]) if r3.get("status")=="new")
+            lines2.append(f"▸ <b>{t2}</b>\n  ⚡{w2} варн | 🚨{r2} реп")
+        await call.message.edit_text("\n".join(lines2), parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="◀️ Назад", callback_data="owner:back:0")
+            ]]))
+
+    elif action == "status":
+        import time as _tos
+        uptime = int(_tos.time() - bot_start_time)
+        h2, m2 = uptime // 3600, (uptime % 3600) // 60
+        total_warns = sum(sum(warnings[c2].values()) for c2 in warnings)
+        open_reps = sum(1 for c2 in report_queue for r2 in report_queue[c2] if r2.get("status")=="new")
+        conn = db_connect()
+        tasks_cnt = conn.execute("SELECT COUNT(*) as c FROM mod_tasks WHERE done=0").fetchone()["c"]
+        conn.close()
+        await call.answer(
+            f"🤖 CHAT GUARD\n"
+            f"⏱ Аптайм: {h2}ч {m2}м\n"
+            f"💬 Чатов: {len(known_chats)}\n"
+            f"⚡ Варнов: {total_warns}\n"
+            f"🚨 Репортов: {open_reps}\n"
+            f"🎯 Задач: {tasks_cnt}\n"
+            f"🔒 Ч.список: {len(global_blacklist)}",
+            show_alert=True)
+
+    elif action == "sosall":
+        locked = 0
+        for c2 in list(known_chats.keys()):
+            try: await bot.set_chat_permissions(c2, ChatPermissions(can_send_messages=False)); locked += 1; await asyncio.sleep(0.1)
+            except: pass
+        await call.answer(f"🚨 Локдаун {locked} чатов!", show_alert=True)
+        await log_action(f"🚨 <b>SOS ALL</b> из панели\n👑 {call.from_user.full_name}")
+
+    elif action == "sosoff":
+        unlocked = 0
+        for c2 in list(known_chats.keys()):
+            try:
+                await bot.set_chat_permissions(c2, ChatPermissions(
+                    can_send_messages=True, can_send_media_messages=True,
+                    can_send_polls=True, can_send_other_messages=True,
+                    can_add_web_page_previews=True, can_invite_users=True))
+                unlocked += 1; await asyncio.sleep(0.1)
+            except: pass
+        await call.answer(f"✅ Разлокдаун {unlocked} чатов!", show_alert=True)
+
+    elif action == "broadcast":
+        pending[call.from_user.id] = {"action": "owner_broadcast", "chat_id": 0, "target_id": 0, "target_name": ""}
+        await call.message.edit_text(
+            "📢 <b>Бродкаст</b>\nНапиши текст — отправится во все чаты:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="❌ Отмена", callback_data="owner:back:0")
+            ]]))
+
+    elif action == "blacklist":
+        if not global_blacklist:
+            await call.answer("🔒 Чёрный список пуст", show_alert=True); return
+        text = f"🔒 Чёрный список ({len(global_blacklist)}):\n" + "\n".join(f"▸ {u}" for u in list(global_blacklist)[:10])
+        await call.answer(text, show_alert=True)
+
+    elif action == "backup":
+        await call.answer("⏳ Создаю бэкап...", show_alert=False)
+        import json as _js, io as _io
+        bd = {
+            "warnings": {str(c2):{str(u2):v for u2,v in d2.items()} for c2,d2 in warnings.items()},
+            "known_chats": {str(k):v for k,v in known_chats.items()},
+            "ban_list": {str(c2):list(v) for c2,v in ban_list.items()},
+            "global_blacklist": list(global_blacklist),
+        }
+        buf = _io.BytesIO(_js.dumps(bd,ensure_ascii=False,indent=2).encode())
+        from datetime import datetime as _dt3
+        buf.name = f"backup_{_dt3.now().strftime('%d%m%Y_%H%M')}.json"
+        await bot.send_document(OWNER_ID, buf, caption="💾 Бэкап из панели")
+        await call.answer("✅ Бэкап отправлен в ЛС!")
+
+    elif action == "audit":
+        total_warns = sum(warnings[cid].values())
+        bans = len(ban_list.get(cid, set()))
+        open_reps = sum(1 for r2 in report_queue.get(cid,[]) if r2.get("status")=="new")
+        await call.answer(
+            f"🔍 Аудит {known_chats.get(cid,'?')}\n"
+            f"⚡ Варнов: {total_warns}\n"
+            f"🔨 Банов: {bans}\n"
+            f"🚨 Репортов: {open_reps}\n"
+            f"🎖 Ролей: {len(mod_roles.get(cid,{}))}", show_alert=True)
+
+    elif action == "plugins":
+        p = plugins[cid]
+        rows2 = []
+        for k, label in PLUGIN_LABELS.items():
+            st = "✅" if p.get(k,True) else "❌"
+            rows2.append([InlineKeyboardButton(text=f"{st} {label}", callback_data=f"plugin:toggle:{k}:{cid}")])
+        rows2.append([InlineKeyboardButton(text="◀️ Назад", callback_data="owner:back:0")])
+        await call.message.edit_text("🧩 <b>Плагины</b>:", parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows2))
+
+    elif action == "calendar":
+        conn = db_connect()
+        rows2 = conn.execute("SELECT action,target_name,ts FROM events_calendar WHERE cid=? ORDER BY ts DESC LIMIT 10",(cid,)).fetchall()
+        conn.close()
+        if not rows2: await call.answer("📅 Календарь пуст", show_alert=True); return
+        from datetime import datetime
+        text = "📅 События:\n" + "\n".join(
+            f"{datetime.fromtimestamp(r2['ts']).strftime('%d.%m %H:%M')} {r2['action']} → {r2['target_name']}"
+            for r2 in rows2)
+        await call.answer(text[:200], show_alert=True)
+
+    elif action == "tasks":
+        conn = db_connect()
+        rows2 = conn.execute("SELECT * FROM mod_tasks WHERE done=0 ORDER BY deadline LIMIT 8").fetchall()
+        conn.close()
+        if not rows2: await call.answer("✅ Задач нет", show_alert=True); return
+        from datetime import datetime
+        text = "🎯 Задачи:\n" + "\n".join(
+            f"#{r2['id']} {r2['mod_name']}: {r2['task'][:30]}" for r2 in rows2)
+        await call.answer(text, show_alert=True)
+
+    elif action == "modrating":
+        conn = db_connect()
+        rows2 = conn.execute("SELECT mod_name,COUNT(*) as cnt FROM mod_journal GROUP BY mod_id ORDER BY cnt DESC LIMIT 5").fetchall()
+        conn.close()
+        if not rows2: await call.answer("Статистики нет", show_alert=True); return
+        text = "📊 Рейтинг:\n" + "\n".join(f"{i+1}. {r2['mod_name']}: {r2['cnt']}" for i,r2 in enumerate(rows2))
+        await call.answer(text, show_alert=True)
+
+    elif action == "evacuation":
+        import time as _tev2
+        now2 = _tev2.time()
+        new_users = [u2 for u2,ts2 in last_seen.get(cid,{}).items() if now2-ts2 < 3600]
+        kicked2 = 0
+        for u2 in new_users:
+            if await is_admin_by_id(cid, u2): continue
+            try: await bot.ban_chat_member(cid,u2); await bot.unban_chat_member(cid,u2); kicked2+=1; await asyncio.sleep(0.05)
+            except: pass
+        await call.answer(f"🚁 Эвакуация: {kicked2} удалено", show_alert=True)
+
+    elif action == "quarantine":
+        if cid in quarantine_chats: quarantine_chats.discard(cid); await call.answer("❌ Карантин выкл")
+        else: quarantine_chats.add(cid); await call.answer("✅ Карантин вкл")
+
+    elif action == "cleanup":
+        await call.answer("⏳ Используй /cleanup в чате для подтверждения", show_alert=True)
+
+    elif action == "linkchats":
+        linked = list(known_chats.keys())
+        linked_chats_bans["owner"] = linked
+        save_data()
+        await call.answer(f"🔗 Связано {len(linked)} чатов!", show_alert=True)
+
+    elif action == "back":
+        import time as _tp3
+        uptime2 = int(_tp3.time() - bot_start_time)
+        h3, m3 = uptime2//3600, (uptime2%3600)//60
+        total_warns2 = sum(sum(warnings[c2].values()) for c2 in warnings)
+        open_reps2 = sum(1 for c2 in report_queue for r2 in report_queue[c2] if r2.get("status")=="new")
+        await call.message.edit_text(
+            f"👑 <b>ПАНЕЛЬ ВЛАДЕЛЬЦА</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🤖 Бот: <b>CHAT GUARD</b>\n"
+            f"⏱ Аптайм: <b>{h3}ч {m3}м</b>\n"
+            f"💬 Чатов: <b>{len(known_chats)}</b>\n"
+            f"⚡ Варнов: <b>{total_warns2}</b>\n"
+            f"🚨 Репортов: <b>{open_reps2}</b>\n"
+            f"🔒 Чёрный список: <b>{len(global_blacklist)}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+            parse_mode="HTML", reply_markup=kb_owner_panel())
+
     await call.answer()
 
 @dp.callback_query(F.data.startswith("mute:"))
@@ -2223,39 +2702,69 @@ async def cmd_help(message: Message):
 @dp.message(Command("panel"))
 async def cmd_panel(message: Message):
     if not await require_admin(message): return
+    cid = message.chat.id
+    uid = message.from_user.id
+
+    # Владелец видит свою панель
+    if uid == OWNER_ID:
+        import time as _tp2
+        uptime = int(_tp2.time() - bot_start_time)
+        h, m = uptime // 3600, (uptime % 3600) // 60
+        total_warns = sum(sum(warnings[c].values()) for c in warnings)
+        open_reps = sum(1 for c in report_queue for r in report_queue[c] if r.get("status") == "new")
+        await reply_auto_delete(message,
+            f"👑 <b>ПАНЕЛЬ ВЛАДЕЛЬЦА</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🤖 Бот: <b>CHAT GUARD</b>\n"
+            f"⏱ Аптайм: <b>{h}ч {m}м</b>\n"
+            f"💬 Чатов: <b>{len(known_chats)}</b>\n"
+            f"⚡ Варнов: <b>{total_warns}</b>\n"
+            f"🚨 Репортов: <b>{open_reps}</b>\n"
+            f"🔒 Чёрный список: <b>{len(global_blacklist)}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+            parse_mode="HTML",
+            reply_markup=kb_owner_panel())
+        return
+
     if message.reply_to_message:
         target = message.reply_to_message.from_user
-        warns  = warnings[message.chat.id].get(target.id, 0)
-        rep    = reputation[message.chat.id].get(target.id, 0)
-        msgs   = chat_stats[message.chat.id].get(target.id, 0)
-        afk    = f"\n😴 AFK: {afk_users[target.id]}" if target.id in afk_users else ""
-        await reply_auto_delete(message, 
-            "✨ <b>CHAT GUARD</b> — Участник\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👤 {target.mention_html()}{afk}\n"
+        warns  = warnings[cid].get(target.id, 0)
+        xp     = xp_data[cid].get(target.id, 0)
+        msgs   = chat_stats[cid].get(target.id, 0)
+        role   = mod_roles.get(cid, {}).get(target.id, "")
+        role_label = MOD_ROLE_LABELS.get(role, "") if role else ""
+        vip_badge = "💎 VIP\n" if is_vip(target.id, cid) else ""
+        await reply_auto_delete(message,
+            f"✨ <b>CHAT GUARD</b> — Участник\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 {target.mention_html()}\n"
+            f"{vip_badge}"
             f"🪪 ID: <code>{target.id}</code>\n"
             f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
-            f"⭐ Репутация: <b>{rep:+d}</b>\n"
+            f"🏆 XP: <b>{xp}</b>\n"
             f"💬 Сообщений: <b>{msgs}</b>\n"
-            f"🏅 Уровень: <b>{xp_data[message.chat.id].get(target.id, 0)} XP</b>\n\n"
-            "▸ Выбери действие:",
-            
-            parse_mode="HTML", reply_markup=kb_user_panel(target.id))
+            f"{role_label}\n"
+            f"▸ Выбери действие:",
+            parse_mode="HTML",
+            reply_markup=kb_user_panel(target.id))
     else:
-        total_msgs  = sum(chat_stats[message.chat.id].values())
-        total_warns = sum(warnings[message.chat.id].values())
-        await reply_auto_delete(message, 
-            "✨ <b>CHAT GUARD</b> — Панель управления\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"💬 Чат: <b>{message.chat.title}</b>\n"
-            f"👥 Участников: <b>{len(chat_stats[message.chat.id])}</b> активных\n"
+        total_msgs  = sum(chat_stats[cid].values())
+        total_warns = sum(warnings[cid].values())
+        open_reps   = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
+        await reply_auto_delete(message,
+            f"✨ <b>CHAT GUARD</b> — Панель администратора\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💬 <b>{message.chat.title}</b>\n"
+            f"👥 Активных: <b>{len(chat_stats[cid])}</b>\n"
             f"📨 Сообщений: <b>{total_msgs}</b>\n"
-            f"⚡ Варнов выдано: <b>{total_warns}</b>\n"
-            f"🧼 Антимат: <b>{'✅ вкл' if ANTI_MAT_ENABLED else '❌ выкл'}</b>\n"
-            f"🤖 Автокик: <b>{'✅ вкл' if AUTO_KICK_BOTS else '❌ выкл'}</b>\n\n"
-            "▸ Выбери раздел:",
-            
-            parse_mode="HTML", reply_markup=kb_main_menu())
+            f"⚡ Варнов: <b>{total_warns}</b>\n"
+            f"🚨 Репортов: <b>{open_reps}</b>\n"
+            f"🧩 Плагины: <b>{sum(1 for v in plugins[cid].values() if v)}/{len(PLUGIN_LABELS)}</b>\n"
+            f"🔔 Welcome: <b>{'✅' if welcome_get(cid)['enabled'] else '❌'}</b>\n"
+            f"👁 Наблюдение: <b>{'✅' if surveillance_enabled(cid) else '❌'}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+            parse_mode="HTML",
+            reply_markup=kb_main_menu())
 
 @dp.message(Command("ban"))
 async def cmd_ban(message: Message, command: CommandObject):
@@ -8540,12 +9049,64 @@ async def owner_assistant(message: Message):
 #  🎨 КАСТОМНЫЙ ПРИВЕТСТВЕННЫЙ ЭКРАН
 # ══════════════════════════════════════════════════════════
 # {cid: {"text": str, "photo": file_id или None, "enabled": bool}}
-welcome_settings = defaultdict(lambda: {
-    "text": "👋 Добро пожаловать, {name}!\n\n📋 Ознакомься с правилами чата.",
-    "photo": None,
-    "enabled": True,
-    "buttons": True,  # показывать кнопку с правилами
-})
+# ── Welcome helpers ──────────────────────────────────────────
+def welcome_get(cid: int) -> dict:
+    conn = db_connect()
+    row = conn.execute("SELECT * FROM welcome_settings WHERE cid=?", (cid,)).fetchone()
+    conn.close()
+    if row:
+        return {"text": row["text"], "photo": row["photo"],
+                "is_gif": bool(row["is_gif"]), "enabled": bool(row["enabled"]),
+                "buttons": bool(row["buttons"])}
+    return {"text": "👋 Добро пожаловать, {name}!\n\n📋 Ознакомься с правилами чата.",
+            "photo": None, "is_gif": False, "enabled": True, "buttons": True}
+
+def welcome_save(cid: int, data: dict):
+    conn = db_connect()
+    conn.execute(
+        "INSERT OR REPLACE INTO welcome_settings VALUES (?,?,?,?,?,?)",
+        (cid, data.get("text",""), data.get("photo"), int(data.get("is_gif",False)),
+         int(data.get("enabled",True)), int(data.get("buttons",True))))
+    conn.commit(); conn.close()
+
+# ── Surveillance helpers ──────────────────────────────────────
+def surveillance_enabled(cid: int) -> bool:
+    conn = db_connect()
+    row = conn.execute("SELECT cid FROM surveillance_chats WHERE cid=?", (cid,)).fetchone()
+    conn.close()
+    return row is not None
+
+def surveillance_toggle(cid: int) -> bool:
+    """Returns True if now enabled, False if disabled"""
+    conn = db_connect()
+    row = conn.execute("SELECT cid FROM surveillance_chats WHERE cid=?", (cid,)).fetchone()
+    if row:
+        conn.execute("DELETE FROM surveillance_chats WHERE cid=?", (cid,))
+        conn.commit(); conn.close()
+        return False
+    else:
+        conn.execute("INSERT INTO surveillance_chats VALUES (?)", (cid,))
+        conn.commit(); conn.close()
+        return True
+
+def surveillance_log_add(cid: int, uid: int, name: str, text: str):
+    import time as _tsl
+    conn = db_connect()
+    conn.execute("INSERT INTO deleted_log (cid,uid,name,text,ts) VALUES (?,?,?,?,?)",
+                 (cid, uid, name, text[:500], _tsl.time()))
+    # Keep only last 100 per chat
+    conn.execute("""DELETE FROM deleted_log WHERE cid=? AND id NOT IN
+                    (SELECT id FROM deleted_log WHERE cid=? ORDER BY ts DESC LIMIT 100)""",
+                 (cid, cid))
+    conn.commit(); conn.close()
+
+def surveillance_log_get(cid: int) -> list:
+    conn = db_connect()
+    rows = conn.execute(
+        "SELECT uid,name,text,ts FROM deleted_log WHERE cid=? ORDER BY ts DESC LIMIT 20",
+        (cid,)).fetchall()
+    conn.close()
+    return [{"uid": r["uid"], "name": r["name"], "text": r["text"], "ts": r["ts"]} for r in rows]
 
 @dp.message(Command("setwelcome"))
 async def cmd_set_welcome(message: Message):
@@ -8556,23 +9117,26 @@ async def cmd_set_welcome(message: Message):
     if message.reply_to_message:
         # Если реплай на фото — сохраняем фото
         if message.reply_to_message.photo:
-            welcome_settings[cid]["photo"] = message.reply_to_message.photo[-1].file_id
-            if text:
-                welcome_settings[cid]["text"] = text
+            s = welcome_get(cid)
+            s["photo"] = message.reply_to_message.photo[-1].file_id
+            s["is_gif"] = False
+            if text: s["text"] = text
+            welcome_save(cid, s)
             await reply_auto_delete(message,
                 "✅ <b>Welcome фото обновлено!</b>\n"
                 "Переменные: {name} {mention} {count}",
                 parse_mode="HTML"); return
         elif message.reply_to_message.animation:
-            welcome_settings[cid]["photo"] = message.reply_to_message.animation.file_id
-            welcome_settings[cid]["is_gif"] = True
-            if text:
-                welcome_settings[cid]["text"] = text
+            s = welcome_get(cid)
+            s["photo"] = message.reply_to_message.animation.file_id
+            s["is_gif"] = True
+            if text: s["text"] = text
+            welcome_save(cid, s)
             await reply_auto_delete(message, "✅ Welcome гифка обновлена!", parse_mode="HTML"); return
 
     if not text:
         # Показать текущие настройки
-        s = welcome_settings[cid]
+        s = welcome_get(cid)
         status = "✅ включён" if s["enabled"] else "❌ выключен"
         await reply_auto_delete(message,
             f"🎨 <b>Настройки Welcome</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -8591,7 +9155,9 @@ async def cmd_set_welcome(message: Message):
             f"{{count}} — номер участника",
             parse_mode="HTML"); return
 
-    welcome_settings[cid]["text"] = text
+    s = welcome_get(cid)
+    s["text"] = text
+    welcome_save(cid, s)
     await reply_auto_delete(message,
         f"✅ <b>Welcome текст обновлён!</b>\n\n{text}",
         parse_mode="HTML")
@@ -8599,13 +9165,17 @@ async def cmd_set_welcome(message: Message):
 @dp.message(Command("welcomeoff"))
 async def cmd_welcome_off(message: Message):
     if not await require_admin(message): return
-    welcome_settings[message.chat.id]["enabled"] = False
+    s = welcome_get(message.chat.id)
+    s["enabled"] = False
+    welcome_save(message.chat.id, s)
     await reply_auto_delete(message, "❌ Welcome выключен")
 
 @dp.message(Command("welcomeon"))
 async def cmd_welcome_on(message: Message):
     if not await require_admin(message): return
-    welcome_settings[message.chat.id]["enabled"] = True
+    s = welcome_get(message.chat.id)
+    s["enabled"] = True
+    welcome_save(message.chat.id, s)
     await reply_auto_delete(message, "✅ Welcome включён")
 
 @dp.message(Command("testwelcome"))
@@ -8615,7 +9185,7 @@ async def cmd_test_welcome(message: Message):
 
 async def send_welcome(cid: int, user, test: bool = False):
     """Отправляет красивое приветствие"""
-    s = welcome_settings[cid]
+    s = welcome_get(cid)
     if not s["enabled"] and not test: return
 
     try:
@@ -8660,40 +9230,38 @@ async def send_welcome(cid: int, user, test: bool = False):
 # ══════════════════════════════════════════════════════════
 #  👁 РЕЖИМ НАБЛЮДЕНИЯ — логирует удалённые сообщения
 # ══════════════════════════════════════════════════════════
-surveillance_chats = set()   # {cid} — чаты где включён режим
-deleted_log = defaultdict(list)  # {cid: [{uid, name, text, ts}]}
+surveillance_chats = set()   # {cid} — чаты где включён режим (RAM кеш для скорости)
+deleted_log = defaultdict(list)  # не используется — данные в SQLite
 
 @dp.message(Command("surveillance"))
 async def cmd_surveillance(message: Message):
     if not await require_admin(message): return
     cid = message.chat.id
-    if cid in surveillance_chats:
-        surveillance_chats.discard(cid)
-        await reply_auto_delete(message,
-            "👁 <b>Режим наблюдения выключен</b>", parse_mode="HTML")
-    else:
-        surveillance_chats.add(cid)
+    enabled = surveillance_toggle(cid)
+    if enabled:
         await reply_auto_delete(message,
             "👁 <b>Режим наблюдения включён</b>\n"
             "Все удалённые сообщения будут логироваться\n"
             "/deletedlog — посмотреть лог",
             parse_mode="HTML")
+    else:
+        await reply_auto_delete(message,
+            "👁 <b>Режим наблюдения выключен</b>", parse_mode="HTML")
 
 @dp.message(Command("deletedlog"))
 async def cmd_deleted_log(message: Message):
     if not await require_admin(message): return
     cid = message.chat.id
-    logs = deleted_log.get(cid, [])
+    logs = surveillance_log_get(cid)
     if not logs:
         await reply_auto_delete(message, "👁 Удалённых сообщений не зафиксировано"); return
     from datetime import datetime
     lines = [f"👁 <b>Удалённые сообщения</b> ({len(logs)} шт.)\n━━━━━━━━━━━━━━━━━━━━━━\n"]
-    for r in logs[-20:]:
+    for r in logs:
         dt = datetime.fromtimestamp(r["ts"]).strftime("%d.%m %H:%M")
         preview = r["text"][:80] if r["text"] else "[медиа]"
         lines.append(f"🕐 {dt} — <b>{r['name']}</b>\n💬 {preview}\n")
-    await bot.send_message(message.from_user.id,
-        "\n".join(lines), parse_mode="HTML")
+    await bot.send_message(message.from_user.id, "\n".join(lines), parse_mode="HTML")
     await reply_auto_delete(message, "👁 Лог отправлен в ЛС!", parse_mode="HTML")
 
 # Middleware для перехвата удалённых сообщений уже в message_cache
@@ -8701,50 +9269,40 @@ async def cmd_deleted_log(message: Message):
 _original_delete_handler = None
 
 async def log_deleted_message(cid: int, uid: int, name: str, text: str):
-    """Вызывается когда сообщение удаляется"""
-    if cid not in surveillance_chats: return
-    import time as _tsd
-    deleted_log[cid].append({
-        "uid": uid, "name": name,
-        "text": text, "ts": _tsd.time()
-    })
-    # Держим только последние 100
-    if len(deleted_log[cid]) > 100:
-        deleted_log[cid] = deleted_log[cid][-100:]
-    # Уведомление модераторам если хотят
+    if not surveillance_enabled(cid): return
+    surveillance_log_add(cid, uid, name, text)
     await log_action(
         f"👁 <b>УДАЛЕНО СООБЩЕНИЕ</b>\n"
         f"👤 {name} (<code>{uid}</code>)\n"
         f"💬 {text[:200] if text else '[медиа]'}\n"
         f"🏠 Чат ID: {cid}")
 
-# Подключаем к существующей обработке удалений в чистке
 async def track_deletion(message: Message):
-    """Трекает удаляемые сообщения из кеша"""
-    if message.chat.id not in surveillance_chats: return
+    if not surveillance_enabled(message.chat.id): return
     if not message.from_user: return
     text = message.text or message.caption or ""
     await log_deleted_message(
-        message.chat.id,
-        message.from_user.id,
-        message.from_user.full_name,
-        text)
+        message.chat.id, message.from_user.id,
+        message.from_user.full_name, text)
 
-# Добавляем в StatsMiddleware — при каждом сообщении кешируем для surveillance
 class SurveillanceMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
-        if isinstance(event, Message) and event.chat.id in surveillance_chats:
+        if isinstance(event, Message) and surveillance_enabled(event.chat.id):
             if event.from_user and (event.text or event.caption):
                 import time as _tsm
-                # Кешируем в deleted_log временно (удалим если не удалено)
-                cache_key = f"{event.chat.id}_{event.message_id}"
-                deleted_log[f"cache_{cache_key}"] = {
+                # Кешируем в RAM для отслеживания последующего удаления
+                key = f"{event.chat.id}_{event.message_id}"
+                surveillance_chats_cache[key] = {
+                    "cid": event.chat.id,
                     "uid": event.from_user.id,
                     "name": event.from_user.full_name,
                     "text": event.text or event.caption or "",
                     "ts": _tsm.time()
                 }
         return await handler(event, data)
+
+# RAM кеш для перехвата удалений (ключ = cid_msgid)
+surveillance_chats_cache = {}
 
 async def main():
     import time as _tstart
