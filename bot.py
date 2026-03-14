@@ -506,6 +506,7 @@ LOG_CHANNEL_ID   = -1003832428474
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
 OWNER_ID         = 7823802800
+ADMIN_IDS        = {7823802800, 8046083268, 7397338777, 7991589995}
 MAX_WARNINGS     = 3
 ANTI_MAT_ENABLED  = False
 
@@ -745,7 +746,7 @@ async def start_web():
     await web.TCPSite(runner, "0.0.0.0", 8080).start()
 
 async def check_admin(message: Message) -> bool:
-    if message.from_user.id == OWNER_ID:
+    if message.from_user.id in ADMIN_IDS:
         return True
     try:
         m = await bot.get_chat_member(message.chat.id, message.from_user.id)
@@ -754,7 +755,7 @@ async def check_admin(message: Message) -> bool:
         return False
 
 async def is_admin_by_id(chat_id: int, user_id: int) -> bool:
-    if user_id == OWNER_ID:
+    if user_id in ADMIN_IDS:
         return True
     try:
         m = await bot.get_chat_member(chat_id, user_id)
@@ -3978,7 +3979,7 @@ async def autist_commands(message: Message):
         #  👑 OWNER ONLY КОМАНДЫ
         # ══════════════════════════════════════════
         elif action == "ядерка":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             # Варн + мут навсегда + удалить сообщения
             warnings[cid][target.id] += 1
@@ -3995,7 +3996,7 @@ async def autist_commands(message: Message):
             await log_action(f"💣 <b>ЯДЕРКА</b>\n👤 {tname}\n🏠 {message.chat.title}")
 
         elif action == "анонс":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             text = rest.strip()
             if not text:
@@ -4007,7 +4008,7 @@ async def autist_commands(message: Message):
                 parse_mode="HTML")
 
         elif action == "локдаун":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             arg = rest.strip().lower()
             if arg == "выкл":
@@ -4023,7 +4024,7 @@ async def autist_commands(message: Message):
                     "Снять: <b>аутист локдаун выкл</b>", parse_mode="HTML")
 
         elif action == "маска":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             text = rest.strip()
             if not text:
@@ -4042,14 +4043,14 @@ async def autist_commands(message: Message):
 
         # ── Предыдущий набор (слежка, репа, хаос, сброс, лотерея, смерть, зеркало) ──
         elif action == "слежка":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             import time as _t
             spy_targets[f"{cid}_{target.id}"] = OWNER_ID
             await reply_auto_delete(message, f"👁 Слежка за {tname} включена!\nКаждое сообщение придёт тебе в личку.", parse_mode="HTML")
 
         elif action == "дать репу":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             import re as _re
             m2 = _re.match(r"^(-?\d+)", rest)
@@ -4060,7 +4061,7 @@ async def autist_commands(message: Message):
                 f"💰 {tname}: репа {'+'if amount>0 else ''}{amount} → <b>{reputation[cid][target.id]}</b>", parse_mode="HTML")
 
         elif action == "хаос":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             members = list(chat_stats[cid].keys())
             if not members:
@@ -4082,7 +4083,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 {vname} отделался лёгким испугом!", parse_mode="HTML")
 
         elif action == "сброс":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             warnings[cid][target.id] = 0
             reputation[cid][target.id] = 0
@@ -4093,7 +4094,7 @@ async def autist_commands(message: Message):
             await reply_auto_delete(message, f"⚙️ {tname} — всё обнулено!\nВарны, репа, XP, история.", parse_mode="HTML")
 
         elif action == "лотерея":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             tickets = lottery_tickets.get(cid, [])
             if not tickets:
@@ -4107,7 +4108,7 @@ async def autist_commands(message: Message):
                 f"🎰 <b>ПРИНУДИТЕЛЬНЫЙ РОЗЫГРЫШ!</b>\n\n🏆 Победитель: {wname}\n🎉 Поздравляем!", parse_mode="HTML")
 
         elif action == "смерть":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             некрологи = [
                 f"упал с дивана и не выжил",
@@ -4123,14 +4124,14 @@ async def autist_commands(message: Message):
                 f"😔 Помним. Скорбим. Не забудем.", parse_mode="HTML")
 
         elif action == "зеркало":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             mirror_chats[cid] = __import__('time').time() + 300
             await reply_auto_delete(message, "🔁 <b>Режим зеркала включён на 5 минут!</b>\nБот будет повторять каждое сообщение.", parse_mode="HTML")
 
         # ── Новые owner команды ──
         elif action == "скрин":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             from datetime import datetime
             total_msgs = sum(chat_stats[cid].values())
@@ -4157,7 +4158,7 @@ async def autist_commands(message: Message):
             await reply_auto_delete(message, "📸 Статистика отправлена тебе в личку!", parse_mode="HTML")
 
         elif action == "взрыв":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             deleted = 0
             for i in range(message.message_id, max(message.message_id - 50, 0), -1):
@@ -4168,7 +4169,7 @@ async def autist_commands(message: Message):
             asyncio.create_task(schedule_delete(sent))
 
         elif action == "корона":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             crown_holders[cid] = {"uid": target.id, "name": target.full_name, "expire": __import__('time').time() + 86400}
             await bot.send_message(cid,
@@ -4178,7 +4179,7 @@ async def autist_commands(message: Message):
                 f"Да здравствует король! 👑", parse_mode="HTML")
 
         elif action == "вызов":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             question = rest.strip() or "Что ты об этом думаешь?"
             try: await message.delete()
@@ -4190,7 +4191,7 @@ async def autist_commands(message: Message):
                 f"<i>Ответь на сообщение выше 👆</i>", parse_mode="HTML")
 
         elif action == "шпион":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             from datetime import datetime, timedelta
             hour_ago = datetime.now() - timedelta(hours=1)
@@ -4205,7 +4206,7 @@ async def autist_commands(message: Message):
             await reply_auto_delete(message, "🕵️ Отчёт отправлен в личку!", parse_mode="HTML")
 
         elif action == "жребий":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             members = [uid2 for uid2 in chat_stats[cid] if chat_stats[cid][uid2] > 0]
             if not members:
@@ -4217,7 +4218,7 @@ async def autist_commands(message: Message):
                 f"🃏 <b>ЖРЕБИЙ БРОШЕН!</b>\n\n🎯 Выбран: {cname}", parse_mode="HTML")
 
         elif action == "громко":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             text_loud = rest.strip().upper() if rest.strip() else "ВНИМАНИЕ"
             try: await message.delete()
@@ -4226,7 +4227,7 @@ async def autist_commands(message: Message):
                 f"🔊 <b>{text_loud}!!!</b>", parse_mode="HTML")
 
         elif action == "молния":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             from datetime import datetime
             today_str = datetime.now().strftime("%d.%m.%Y")
@@ -4247,7 +4248,7 @@ async def autist_commands(message: Message):
                 f"🧲 <b>Магнит активирован!</b>\nБот будет лайкать каждое сообщение {tname} 10 минут.", parse_mode="HTML")
 
         elif action == "цель":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             target_doubles[f"{cid}_{target.id}"] = __import__('time').time() + 1800
             await reply_auto_delete(message,
@@ -4491,7 +4492,7 @@ async def autist_commands(message: Message):
         #  👑 НОВЫЕ OWNER КОМАНДЫ
         # ══════════════════════════════════════════
         elif action == "напомни":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             # Формат: аутист напомни 30м текст
             import re as _re2
@@ -4510,7 +4511,7 @@ async def autist_commands(message: Message):
             await reply_auto_delete(message, f"⏰ Напомню тебе через <b>{lbl2}</b>!", parse_mode="HTML")
 
         elif action == "закреп":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             text_pin = rest.strip()
             if not text_pin and not message.reply_to_message:
@@ -4527,7 +4528,7 @@ async def autist_commands(message: Message):
                 await bot.pin_chat_message(cid, sent.message_id, disable_notification=False)
 
         elif action == "голос":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             # Формат: аутист голос Вопрос? | Вариант1 | Вариант2
             parts_poll = rest.split("|")
@@ -4541,7 +4542,7 @@ async def autist_commands(message: Message):
             await bot.send_poll(cid, question=question_poll, options=options_poll, is_anonymous=False)
 
         elif action == "рост":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             activity = user_activity[cid].get(target.id, {})
             if not activity:
@@ -4556,7 +4557,7 @@ async def autist_commands(message: Message):
             await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
 
         elif action == "тишина":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             # Парсим время прямо из rest если target не найден
             import re as _re5
@@ -4587,7 +4588,7 @@ async def autist_commands(message: Message):
         #  📊 ТЕМПЕРАТУРА, НЕДЕЛЯ, РЕЖИМ, ЛОГ, РЕСТАРТ, СОС
         # ══════════════════════════════════════════
         elif action == "температура":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             import time as _tt
             now_ts = _tt.time()
@@ -4613,7 +4614,7 @@ async def autist_commands(message: Message):
                 parse_mode="HTML")
 
         elif action == "неделя":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             from datetime import datetime, timedelta as _td
             lines = [f"📊 <b>Итоги недели — {message.chat.title}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
@@ -4640,7 +4641,7 @@ async def autist_commands(message: Message):
             await reply_auto_delete(message, "📊 Итоги недели отправлены в личку!", parse_mode="HTML")
 
         elif action == "режим":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             new_name = rest.strip()
             if not new_name:
@@ -4652,7 +4653,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, f"⚠️ Не удалось: {ex}", parse_mode="HTML")
 
         elif action == "лог":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             import re as _re6
             n_log = int(_re6.match(r"^(\d+)", rest).group(1)) if _re6.match(r"^(\d+)", rest) else 10
@@ -4672,7 +4673,7 @@ async def autist_commands(message: Message):
                 parse_mode="HTML")
 
         elif action == "рестарт":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             await reply_auto_delete(message, "🔄 Перезапускаю бота...", parse_mode="HTML")
             import os, sys
@@ -4680,7 +4681,7 @@ async def autist_commands(message: Message):
             os.execv(sys.executable, [sys.executable] + sys.argv)
 
         elif action == "сос":
-            if message.from_user.id != OWNER_ID:
+            if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             import time as _ts2
             uptime_sec = int(_ts2.time() - bot_start_time) if 'bot_start_time' in globals() else 0
@@ -5059,7 +5060,7 @@ async def cmd_profile(message: Message):
 
 @dp.message(Command("addrep"))
 async def cmd_addrep(message: Message, command: CommandObject):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     if message.reply_to_message:
         target = message.reply_to_message.from_user
     else:
@@ -5919,7 +5920,7 @@ async def cmd_block_report(message: Message):
 
 @dp.message(Command("reportstats"))
 async def cmd_report_stats(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     cid = message.chat.id
     queue = report_queue.get(cid, [])
     from collections import Counter
@@ -6221,7 +6222,7 @@ async def cmd_meme(message: Message, command: CommandObject):
 # ===== 📢 РАССЫЛКА ПО ВСЕМ ЧАТАМ (только владелец) =====
 @dp.message(Command("broadcast"))
 async def cmd_broadcast(message: Message, command: CommandObject):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMIN_IDS:
         await reply_auto_delete(message, "🚫 Только для владельца бота!"); return
     if not command.args:
         await reply_auto_delete(message,
@@ -6260,7 +6261,7 @@ async def cmd_broadcast(message: Message, command: CommandObject):
 
 @dp.message(Command("chats"))
 async def cmd_chats(message: Message):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMIN_IDS:
         await reply_auto_delete(message, "🚫 Только для владельца бота!"); return
     lines = [
         "╔═══════════════════╗",
@@ -7502,7 +7503,7 @@ async def cmd_gift(message: Message, command: CommandObject):
 @dp.message(Command("yaderna", "nuclear"))
 async def cmd_yaderna_slash(message: Message, command: CommandObject):
     """Alias: /yaderna = аутист ядерка"""
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMIN_IDS:
         await reply_auto_delete(message, "🚫 Только для владельца!"); return
     if not message.reply_to_message:
         await reply_auto_delete(message, "↩️ Реплайни на сообщение!"); return
@@ -7520,7 +7521,7 @@ async def cmd_yaderna_slash(message: Message, command: CommandObject):
 
 @dp.message(Command("sbros"))
 async def cmd_sbros_slash(message: Message):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMIN_IDS:
         await reply_auto_delete(message, "🚫 Только для владельца!"); return
     if not message.reply_to_message:
         await reply_auto_delete(message, "↩️ Реплайни на сообщение!"); return
@@ -7558,7 +7559,7 @@ async def cmd_announce_slash(message: Message, command: CommandObject):
 
 @dp.message(Command("corona", "корона"))
 async def cmd_corona_slash(message: Message, command: CommandObject):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMIN_IDS:
         await reply_auto_delete(message, "🚫 Только для владельца!"); return
     if not message.reply_to_message:
         await reply_auto_delete(message, "↩️ Реплайни на сообщение!"); return
@@ -7586,7 +7587,7 @@ def get_mod_role_label(cid: int, uid: int) -> str:
 @dp.message(Command("giverole"))
 async def cmd_give_role(message: Message):
     """аутист дать роль @user junior/senior/head — только владелец"""
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMIN_IDS:
         await reply_auto_delete(message, "🚫 Только владелец может выдавать роли!"); return
     args = message.text.split()[1:] if message.text else []
     if len(args) < 2:
@@ -7626,7 +7627,7 @@ async def cmd_give_role(message: Message):
 
 @dp.message(Command("takerole"))
 async def cmd_take_role(message: Message):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMIN_IDS:
         await reply_auto_delete(message, "🚫 Только владелец!"); return
     target = message.reply_to_message.from_user if message.reply_to_message else None
     if not target:
@@ -7674,7 +7675,7 @@ PLUGIN_LABELS = {
 
 @dp.message(Command("plugins"))
 async def cmd_plugins(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     cid = message.chat.id
     p = plugins[cid]
     rows = []
@@ -7717,7 +7718,7 @@ async def cb_plugin(call: CallbackQuery):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("linkchats"))
 async def cmd_link_chats(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     linked = list(known_chats.keys())
     linked_chats_bans["owner"] = linked
     save_data()
@@ -7860,7 +7861,7 @@ async def cb_profile(call: CallbackQuery):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("mypanel"), F.chat.type == "private")
 async def cmd_mypanel(message: Message):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in ADMIN_IDS:
         await message.answer("🚫 Только для владельца!"); return
     if not known_chats:
         await message.answer("📭 Бот ещё не добавлен ни в один чат"); return
@@ -8018,7 +8019,7 @@ async def cmd_report_archive(message: Message):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("broadcast2"))
 async def cmd_broadcast_all(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     text = message.text.replace("/broadcast2", "").strip()
     if not text:
         await reply_auto_delete(message,
@@ -8044,7 +8045,7 @@ async def cmd_broadcast_all(message: Message):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("blacklist"))
 async def cmd_blacklist(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     target = message.reply_to_message.from_user if message.reply_to_message else None
     if not target:
         # Показать список
@@ -8078,7 +8079,7 @@ async def cmd_blacklist(message: Message):
 
 @dp.message(Command("unblacklist"))
 async def cmd_unblacklist(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     target = message.reply_to_message.from_user if message.reply_to_message else None
     if not target:
         await reply_auto_delete(message, "↩️ Реплайни на сообщение юзера"); return
@@ -8102,7 +8103,7 @@ async def check_blacklist_on_join(event):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("audit"))
 async def cmd_audit(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     cid = message.chat.id
     lines = [f"🔍 <b>Аудит чата: {message.chat.title}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
     # Топ нарушителей
@@ -8134,7 +8135,7 @@ async def cmd_audit(message: Message):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("backup"))
 async def cmd_backup(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     import json, io
     backup_data = {
         "warnings": {str(c): {str(u): v for u, v in d.items()} for c, d in warnings.items()},
@@ -8162,7 +8163,7 @@ async def cmd_backup(message: Message):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("resetchat"))
 async def cmd_reset_chat(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     cid = message.chat.id
     # Подтверждение
     pending[message.from_user.id] = {"action": "confirm_reset", "chat_id": cid}
@@ -8209,7 +8210,7 @@ async def cb_reset_chat(call: CallbackQuery):
 # SOS ALL — локдаун всех чатов
 @dp.message(Command("sosall"))
 async def cmd_sos_all(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     locked, fail = 0, 0
     for cid in list(known_chats.keys()):
         try:
@@ -8226,7 +8227,7 @@ async def cmd_sos_all(message: Message):
 # РАЗЛОКДАУН всех чатов
 @dp.message(Command("sosoff"))
 async def cmd_sos_off(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     unlocked = 0
     for cid in list(known_chats.keys()):
         try:
@@ -8243,7 +8244,7 @@ async def cmd_sos_off(message: Message):
 # ЭВАКУАЦИЯ — удалить всех кто зашёл за последний час
 @dp.message(Command("evacuation"))
 async def cmd_evacuation(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     cid = message.chat.id
     import time as _tev
     now = _tev.time()
@@ -8268,7 +8269,7 @@ async def cmd_evacuation(message: Message):
 # КАРАНТИН — автомут всех новых участников
 @dp.message(Command("quarantine"))
 async def cmd_quarantine(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     cid = message.chat.id
     if cid in quarantine_chats:
         quarantine_chats.discard(cid)
@@ -8319,7 +8320,7 @@ async def on_new_member_quarantine(message: Message):
 # ЗАЧИСТКА — удалить всех с 0 сообщений за 30 дней
 @dp.message(Command("cleanup"))
 async def cmd_cleanup(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     cid = message.chat.id
     from datetime import datetime, timedelta as _td2
     cutoff = (datetime.now() - _td2(days=30)).strftime("%d.%m.%Y")
@@ -8380,7 +8381,7 @@ async def cb_cleanup(call: CallbackQuery):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("clonechat"))
 async def cmd_clone_chat(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     args = message.text.split()[1:] if message.text else []
     if len(args) < 2:
         chats_list = "\n".join(f"▸ <code>{cid}</code> — {title}"
@@ -8538,7 +8539,7 @@ async def cmd_my_journal(message: Message):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("setshift"))
 async def cmd_set_shift(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     args = message.text.split()[1:] if message.text else []
     if len(args) < 3 or not message.reply_to_message:
         await reply_auto_delete(message,
@@ -8599,7 +8600,7 @@ async def cmd_mod_rating(message: Message):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("task"))
 async def cmd_task(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     args = message.text.split(None, 3)[1:] if message.text else []
     if not message.reply_to_message or len(args) < 1:
         await reply_auto_delete(message,
@@ -8856,7 +8857,7 @@ async def cmd_auto_rules(message: Message):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("vip"))
 async def cmd_vip(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     target = message.reply_to_message.from_user if message.reply_to_message else None
     if not target:
         # Показать VIP список
@@ -8932,7 +8933,7 @@ async def cmd_heatmap(message: Message):
 # ══════════════════════════════════════════════════════════
 @dp.message(Command("calendar"))
 async def cmd_calendar(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     cid = message.chat.id
     conn = db_connect()
     rows = conn.execute(
@@ -8987,7 +8988,7 @@ async def auto_backup_loop():
 @dp.message(Command("restoredb"))
 async def cmd_restore_db(message: Message):
     """Восстановить базу из файла — /restoredb (реплай на .db файл)"""
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     if not message.reply_to_message or not message.reply_to_message.document:
         await reply_auto_delete(message,
             "💾 <b>Восстановление базы</b>\n\n"
@@ -9026,7 +9027,7 @@ async def cmd_restore_db(message: Message):
 @dp.message(Command("backupnow"))
 async def cmd_backup_now(message: Message):
     """Немедленный бэкап базы"""
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     import os as _osbn, io as _iobn
     from datetime import datetime as _dtbn
     save_data()
@@ -9809,7 +9810,7 @@ async def cmd_followers(message: Message):
 # ── КюАр-коды ────────────────────────────────────────────────
 @dp.message(Command("createqr"))
 async def cmd_create_qr(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     args = message.text.split()[1:] if message.text else []
     reward = int(args[0]) if args and args[0].isdigit() else 50
     import uuid as _uuid
@@ -10007,7 +10008,7 @@ CMD_ROLES = {}  # {cid: {cmd: min_role}}
 @dp.message(Command("setperm"))
 async def cmd_set_perm(message: Message):
     """Установить минимальную роль для команды"""
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     args = message.text.split()[1:] if message.text else []
     if len(args) < 2:
         await reply_auto_delete(message,
@@ -10030,7 +10031,7 @@ async def cmd_set_perm(message: Message):
 
 @dp.message(Command("perms"))
 async def cmd_perms(message: Message):
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in ADMIN_IDS: return
     cid = message.chat.id
     conn = db_connect()
     rows = conn.execute("SELECT cmd, min_role FROM cmd_permissions WHERE cid=?", (cid,)).fetchall()
