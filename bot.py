@@ -4979,14 +4979,41 @@ async def cmd_profile(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     uid, cid = user.id, message.chat.id
 
-    xp     = xp_data[cid].get(uid, 0)
+    # Читаем актуальные данные из SQLite напрямую
+    conn = db_connect()
+    xp_row   = conn.execute("SELECT xp FROM xp_data WHERE cid=? AND uid=?", (cid, uid)).fetchone()
+    rep_row  = conn.execute("SELECT score FROM reputation WHERE cid=? AND uid=?", (cid, uid)).fetchone()
+    warn_row = conn.execute("SELECT count FROM warnings WHERE cid=? AND uid=?", (cid, uid)).fetchone()
+    stat_row = conn.execute("SELECT msg_count FROM chat_stats WHERE cid=? AND uid=?", (cid, uid)).fetchone()
+    str_row  = conn.execute("SELECT streak FROM streaks WHERE cid=? AND uid=?", (cid, uid)).fetchone()
+    # Ранг по XP
+    rank_xp_row = conn.execute(
+        "SELECT COUNT(*)+1 as r FROM xp_data WHERE cid=? AND xp > (SELECT COALESCE(xp,0) FROM xp_data WHERE cid=? AND uid=?)",
+        (cid, cid, uid)).fetchone()
+    # Ранг по репе
+    rank_rep_row = conn.execute(
+        "SELECT COUNT(*)+1 as r FROM reputation WHERE cid=? AND score > (SELECT COALESCE(score,0) FROM reputation WHERE cid=? AND uid=?)",
+        (cid, cid, uid)).fetchone()
+    conn.close()
+
+    xp     = xp_row["xp"] if xp_row else 0
+    rep    = rep_row["score"] if rep_row else 0
+    warns  = warn_row["count"] if warn_row else 0
+    msgs   = stat_row["msg_count"] if stat_row else 0
+    streak = str_row["streak"] if str_row else 0
+    rank_xp  = rank_xp_row["r"] if rank_xp_row else "?"
+    rank_rep = rank_rep_row["r"] if rank_rep_row else "?"
+
+    # Синхронизируем RAM
+    xp_data[cid][uid]      = xp
+    reputation[cid][uid]   = rep
+    warnings[cid][uid]     = warns
+    chat_stats[cid][uid]   = msgs
+    streaks[cid][uid]      = streak
+
     lvl    = get_level(xp)
     levels[cid][uid] = lvl
     emoji_lvl, title_lvl = get_level_title(lvl)
-    rep    = reputation[cid].get(uid, 0)
-    warns  = warnings[cid].get(uid, 0)
-    msgs   = chat_stats[cid].get(uid, 0)
-    streak = streaks[cid].get(uid, 0)
 
     # Прогресс до следующего уровня
     cur_xp  = LEVEL_XP.get(lvl, 0)
@@ -4996,36 +5023,38 @@ async def cmd_profile(message: Message):
     pct     = min(int((prog / needed) * 12), 12) if needed > 0 else 12
     bar     = "█" * pct + "░" * (12 - pct)
 
-    # Ранг по XP в чате
-    sorted_xp = sorted(xp_data[cid].items(), key=lambda x: x[1], reverse=True)
-    rank_xp = next((i+1 for i,(u,_) in enumerate(sorted_xp) if u == uid), "?")
-
-    # Ранг по репе в чате
-    sorted_rep = sorted(reputation[cid].items(), key=lambda x: x[1], reverse=True)
-    rank_rep = next((i+1 for i,(u,_) in enumerate(sorted_rep) if u == uid), "?")
-
     # Доп инфо
     avatar     = avatars.get(str(uid), "👤")
-    shop_title = user_titles[uid].get("title", "")
+    shop_title = user_titles[uid].get("title", "") if uid in user_titles else ""
     clan_id    = clan_members.get(uid)
     clan_line  = f"🤝 Клан: <b>[{clans[clan_id]['tag']}] {clans[clan_id]['name']}</b>\n" if clan_id and clan_id in clans else ""
     title_line = f"🎭 Титул: <b>{shop_title}</b>\n" if shop_title else ""
-    arts_count = len(artifacts.get(str(uid), []))
     color_badge, _ = get_color_badge(rep)
 
+    # Профиль из SQLite (друзья, отношения, настроение)
+    conn2 = db_connect()
+    p = conn2.execute("SELECT mood, bio FROM user_profiles WHERE uid=?", (uid,)).fetchone()
+    friends_cnt = conn2.execute("SELECT COUNT(*) as c FROM friends WHERE uid=?", (uid,)).fetchone()["c"]
+    rel = conn2.execute("SELECT rel_type FROM relationships WHERE uid1=?", (uid,)).fetchone()
+    conn2.close()
+    mood_line = f"😊 {p['mood']}\n" if p and p["mood"] else ""
+    rel_line  = f"❤️ В отношениях\n" if rel else ""
+
     await reply_auto_delete(message,
-        f"{avatar} <b>{user.mention_html()}</b> {color_badge}\n"
+        f"{avatar} <b>{user.full_name}</b> {color_badge}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"{emoji_lvl} <b>{title_lvl}</b>  •  Уровень <b>{lvl}</b> / 250\n"
+        f"{emoji_lvl} <b>{title_lvl}</b>  •  Уровень <b>{lvl}</b>\n"
         f"<code>[{bar}]</code> {prog}/{needed} XP\n\n"
+        f"{mood_line}"
         f"{title_line}"
         f"{clan_line}"
+        f"{rel_line}"
         f"⭐ Репутация: <b>{rep:+d}</b>  (#{rank_rep} в чате)\n"
         f"📊 XP ранг: <b>#{rank_xp}</b>  •  Всего XP: <b>{xp}</b>\n"
         f"💬 Сообщений: <b>{msgs}</b>\n"
         f"🔥 Стрик: <b>{streak}</b> дней\n"
         f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
-        f"🧙 Артефактов: <b>{arts_count}</b>\n",
+        f"👥 Друзей: <b>{friends_cnt}</b>\n",
         parse_mode="HTML")
 
 @dp.message(Command("addrep"))
