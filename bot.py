@@ -9950,7 +9950,9 @@ async def cmd_music(message: Message):
                 "https://itunes.apple.com/search",
                 params={"term": args, "media": "music", "limit": "5", "entity": "song"}
             ) as resp:
-                data = await resp.json()
+                text_data = await resp.text()
+                import json as _json
+                data = _json.loads(text_data)
         results = data.get("results", [])
         if not results:
             await reply_auto_delete(message, "🎵 Ничего не найдено"); return
