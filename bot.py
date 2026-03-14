@@ -1451,21 +1451,13 @@ async def on_new_member(message: Message):
                 except: pass
             except: pass
             continue
-        await message.answer_photo(
-            photo=FSInputFile("welcome.jpg"),
-            caption=(
-                f"👋 Привет, {member.mention_html()}!\n"
-                f"Добро пожаловать в <b>{message.chat.title}</b>!\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"📜 <b>Обязательно ознакомься с правилами</b>\n"
-                f"перед тем как начать писать!\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"<i>Нажми кнопку ниже чтобы прочитать правила 👇</i>"
-            ),
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📜 Читать правила чата", url="https://telegra.ph/Pravila-soobshchestva-03-13-6")]
-            ])
+        await message.answer(
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👋 <b>Новый участник!</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👋 Добро пожаловать, <b>{member.full_name}</b>!\n"
+            f"📋 Ознакомься с правилами чата.",
+            parse_mode="HTML"
         )
 
 @dp.message(F.left_chat_member)
