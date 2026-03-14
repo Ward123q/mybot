@@ -2449,12 +2449,11 @@ async def cmd_start(message: Message):
 
 @dp.message(Command("rules"))
 async def cmd_rules(message: Message):
-    await message.reply_photo(
-        photo=FSInputFile("welcome.jpg"),
-        caption="📜 <b>Правила чата</b>\n\n🔎 Нажми кнопку ниже чтобы прочитать правила:",
+    await reply_auto_delete(message,
+        "📜 <b>Правила чата</b>\n\n🔎 Нажми кнопку ниже чтобы прочитать правила:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📜 Правила чата", url="https://telegra.ph/Pravila-soobshchestva-03-13-6")]
+            [InlineKeyboardButton(text="📜 Читать правила чата", url="https://telegra.ph/Pravila-soobshchestva-03-13-6")]
         ])
     )
 
@@ -9278,42 +9277,16 @@ async def send_welcome(cid: int, user, test: bool = False):
     s = welcome_get(cid)
     if not s["enabled"] and not test: return
 
-    try:
-        member_count = await bot.get_chat_member_count(cid)
-    except: member_count = "?"
-
-    text = s["text"].format(
-        name=user.full_name,
-        mention=f'<a href="tg://user?id={user.id}">{user.full_name}</a>',
-        count=member_count,
+    full_text = (
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👋 <b>Новый участник!</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👋 Добро пожаловать, <b>{user.full_name}</b>!\n"
+        f"📋 Ознакомься с правилами чата."
     )
 
-    # Кнопка правил
-    kb = None
-    if s.get("buttons"):
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(
-                text="📋 Правила чата",
-                url="https://telegra.ph/Pravila-soobshchestva-03-13-6")
-        ]])
-
     try:
-        if s["photo"]:
-            if s.get("is_gif"):
-                await bot.send_animation(cid, s["photo"],
-                    caption=text, parse_mode="HTML", reply_markup=kb)
-            else:
-                await bot.send_photo(cid, s["photo"],
-                    caption=text, parse_mode="HTML", reply_markup=kb)
-        else:
-            # Красивое текстовое приветствие без фото
-            full_text = (
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"👋 <b>Новый участник!</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"{text}"
-            )
-            await bot.send_message(cid, full_text, parse_mode="HTML", reply_markup=kb)
+        await bot.send_message(cid, full_text, parse_mode="HTML")
     except Exception as e:
         print(f"[send_welcome] {e}")
 
