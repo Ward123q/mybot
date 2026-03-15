@@ -26,6 +26,7 @@ import database as db
 import tickets as tkt
 import dashboard
 import features
+import notifications as notif
 
 DB_FILE_MAIN = "skinvault.db"
 
@@ -1242,6 +1243,43 @@ class StatsMiddleware(BaseMiddleware):
             # Сохраняем чат в БД для тикетов и дашборда
             try:
                 await db.upsert_chat(event.chat.id, event.chat.title or str(event.chat.id))
+            except: pass
+            # Трекинг для уведомлений
+            try:
+                await notif.track_message(event)
+            except: pass
+            # Алерты спама
+            try:
+                from dashboard import check_spam
+                await check_spam(uid, cid, event.from_user.full_name, event.chat.title or "")
+            except: pass
+            # Медиа лог
+            try:
+                from dashboard import log_media, _dashboard_settings
+                if _dashboard_settings.get("media_log_enabled", True):
+                    media_type = None
+                    file_id = ""
+                    if event.photo:
+                        media_type = "photo"
+                        file_id = event.photo[-1].file_id
+                    elif event.video:
+                        media_type = "video"
+                        file_id = event.video.file_id
+                    elif event.document:
+                        media_type = "document"
+                        file_id = event.document.file_id
+                    elif event.voice:
+                        media_type = "voice"
+                        file_id = event.voice.file_id
+                    elif event.sticker:
+                        media_type = "sticker"
+                        file_id = event.sticker.file_id
+                    elif event.animation:
+                        media_type = "animation"
+                        file_id = event.animation.file_id
+                    if media_type:
+                        log_media(cid, uid, event.from_user.full_name,
+                                  event.chat.title or "", media_type, file_id)
             except: pass
             uid, cid = event.from_user.id, event.chat.id
             from datetime import datetime, timedelta
@@ -10206,6 +10244,9 @@ async def main():
 
     # ── Features ──────────────────────────────────────────
     await features.init(bot, dp, ADMIN_IDS, OWNER_ID)
+
+    # ── Notifications ─────────────────────────────────────
+    await notif.init(bot, dp)
 
     asyncio.create_task(birthday_checker())
     asyncio.create_task(send_weekly_stats())
