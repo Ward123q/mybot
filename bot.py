@@ -1012,7 +1012,7 @@ def kb_main_menu(tid: int = 0) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🔔 Welcome",         callback_data=f"panel:welcome:{tid}"),
          InlineKeyboardButton(text="🧩 Плагины",         callback_data=f"panel:plugins:{tid}")],
         [InlineKeyboardButton(text="🎫 Тикеты",          callback_data=f"panel:tickets:{tid}"),
-         InlineKeyboardButton(text="📈 Дашборд",         url="https://your-project.up.railway.app/dashboard")],
+         InlineKeyboardButton(text="📈 Дашборд",         url="https://mybot-1s9l.onrender.com/dashboard")],
         [InlineKeyboardButton(text="✖️ Закрыть",         callback_data="panel:close:0")],
     ])
 
