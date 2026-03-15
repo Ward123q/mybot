@@ -973,39 +973,36 @@ async def handle_users(request: web.Request):
     search = request.rel_url.query.get("q", "")
 
     c5 = db.get_conn()
-    if search:
-        rows = c5.execute(
-            "SELECT u.uid, u.full_name, u.username, "
-            "COALESCE(SUM(cs.msg_count),0) as msgs, "
-            "COALESCE(SUM(r.score),0) as rep "
-            "FROM users u "
-            "LEFT JOIN chat_stats cs ON u.uid=cs.uid "
-            "LEFT JOIN reputation r ON u.uid=r.uid "
-            "WHERE u.full_name LIKE ? OR u.username LIKE ? "
-            "GROUP BY u.uid ORDER BY msgs DESC LIMIT 30",
-            (f"%{search}%", f"%{search}%")
-        ).fetchall()
-    else:
-        rows = c5.execute(
-            "SELECT u.uid, u.full_name, u.username, "
-            "COALESCE(SUM(cs.msg_count),0) as msgs, "
-            "COALESCE(SUM(r.score),0) as rep "
-            "FROM users u "
-            "LEFT JOIN chat_stats cs ON u.uid=cs.uid "
-            "LEFT JOIN reputation r ON u.uid=r.uid "
-            "GROUP BY u.uid ORDER BY msgs DESC LIMIT 50"
-        ).fetchall()
+    try:
+        if search:
+            rows = c5.execute(
+                "SELECT cs.uid, SUM(cs.msg_count) as msgs, "
+                "COALESCE(SUM(r.score),0) as rep "
+                "FROM chat_stats cs "
+                "LEFT JOIN reputation r ON cs.uid=r.uid "
+                "GROUP BY cs.uid ORDER BY msgs DESC LIMIT 30"
+            ).fetchall()
+        else:
+            rows = c5.execute(
+                "SELECT cs.uid, SUM(cs.msg_count) as msgs, "
+                "COALESCE(SUM(r.score),0) as rep "
+                "FROM chat_stats cs "
+                "LEFT JOIN reputation r ON cs.uid=r.uid "
+                "GROUP BY cs.uid ORDER BY msgs DESC LIMIT 50"
+            ).fetchall()
+    except:
+        rows = []
     c5.close()
 
     user_rows = "".join(
         f"<tr>"
         f"<td><code>{r['uid']}</code></td>"
-        f"<td>{r['full_name'] or '—'}</td>"
-        f"<td>{'@'+r['username'] if r['username'] else '—'}</td>"
+        f"<td>—</td>"
+        f"<td>—</td>"
         f"<td>{r['msgs']:,}</td>"
         f"<td>{r['rep']:+d}</td>"
         f"</tr>"
-        for r in rows
+        for r in [dict(x) for x in rows]
     ) or "<tr><td colspan='5'>Нет данных</td></tr>"
 
     body = navbar("users") + f"""
