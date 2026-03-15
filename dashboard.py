@@ -236,6 +236,25 @@ HTML_BASE = """<!DOCTYPE html>
     color: #e0e0e0;
     font-size: 14px;
   }}
+  .notif-toast {{
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #1a2e1a;
+    border: 1px solid #27ae60;
+    border-radius: 12px;
+    padding: 14px 20px;
+    color: #fff;
+    font-size: 14px;
+    z-index: 9999;
+    max-width: 320px;
+    display: none;
+    animation: slidein .3s ease;
+  }}
+  @keyframes slidein {{
+    from {{ transform: translateY(20px); opacity: 0; }}
+    to   {{ transform: translateY(0);    opacity: 1; }}
+  }}
   @media (max-width: 768px) {{
     .container {{ padding: 12px; }}
     .cards {{ grid-template-columns: 1fr 1fr; }}
@@ -243,6 +262,34 @@ HTML_BASE = """<!DOCTYPE html>
     th, td {{ padding: 8px 12px; }}
   }}
 </style>
+<script>
+// SSE уведомления о новых тикетах
+(function() {{
+  var toast = null;
+  function showToast(msg) {{
+    if (!toast) {{
+      toast = document.createElement('div');
+      toast.className = 'notif-toast';
+      document.body.appendChild(toast);
+    }}
+    toast.innerHTML = '🎫 <b>Новый тикет!</b><br>' + msg;
+    toast.style.display = 'block';
+    setTimeout(function() {{ toast.style.display = 'none'; }}, 6000);
+  }}
+  try {{
+    var es = new EventSource('/dashboard/events');
+    es.onmessage = function(e) {{
+      if (e.data === 'connected') return;
+      try {{
+        var d = JSON.parse(e.data);
+        if (d.type === 'new_ticket') {{
+          showToast('#' + d.id + ' от ' + d.user + '<br><small>' + d.subject + '</small>');
+        }}
+      }} catch(err) {{}}
+    }};
+  }} catch(err) {{}}
+}})();
+</script>
 </head>
 <body>
 {body}
@@ -256,11 +303,14 @@ def page(body: str) -> str:
 
 def navbar(active: str = "") -> str:
     links = [
-        ("overview", "/dashboard", "📊 Обзор"),
-        ("chats", "/dashboard/chats", "💬 Чаты"),
-        ("tickets", "/dashboard/tickets", "🎫 Тикеты"),
-        ("moderation", "/dashboard/moderation", "🛡 Модерация"),
-        ("users", "/dashboard/users", "👥 Участники"),
+        ("overview",    "/dashboard",             "📊 Обзор"),
+        ("chats",       "/dashboard/chats",        "💬 Чаты"),
+        ("tickets",     "/dashboard/tickets",      "🎫 Тикеты"),
+        ("reports",     "/dashboard/reports",      "🚨 Репорты"),
+        ("moderation",  "/dashboard/moderation",   "🛡 Модерация"),
+        ("deleted",     "/dashboard/deleted",      "📋 Удалённые"),
+        ("economy",     "/dashboard/economy",      "💰 Экономика"),
+        ("users",       "/dashboard/users",        "👥 Участники"),
     ]
     nav_items = "".join(
         f'<a href="{url}" style="{"color:#fff;font-weight:600;" if k==active else ""}">{label}</a>'
@@ -1013,6 +1063,411 @@ async def handle_health(request: web.Request):
 
 
 # ══════════════════════════════════════════
+#  РЕПОРТЫ
+# ══════════════════════════════════════════
+
+@require_auth
+async def handle_reports(request: web.Request):
+    action = request.rel_url.query.get("action")
+    rid    = request.rel_url.query.get("id")
+
+    conn = db.get_conn()
+    # Пробуем разные структуры таблицы reports
+    try:
+        reports = conn.execute(
+            "SELECT * FROM reports ORDER BY rowid DESC LIMIT 50"
+        ).fetchall()
+        cols = [d[0] for d in conn.execute("SELECT * FROM reports LIMIT 1").description or []]
+    except:
+        reports = []
+        cols = []
+    conn.close()
+
+    if not reports:
+        body = navbar("reports") + """
+        <div class="container">
+          <div class="page-title">🚨 Репорты</div>
+          <div class="section"><div class="empty-state" style="padding:40px;">Репортов нет</div></div>
+        </div>"""
+        return web.Response(text=page(body), content_type="text/html")
+
+    rows = ""
+    for r in [dict(zip(cols, row)) if not hasattr(r, 'keys') else dict(r) for r in reports]:
+        reporter = r.get("reporter_name") or r.get("by") or r.get("uid") or "—"
+        target   = r.get("target_name") or r.get("target") or r.get("target_uid") or "—"
+        reason   = r.get("reason") or r.get("text") or "—"
+        status   = r.get("status", "open")
+        chat     = r.get("chat_title") or r.get("cid") or "—"
+        rid_val  = r.get("id") or r.get("rowid", "")
+        dt       = r.get("created_at") or r.get("time") or "—"
+        if isinstance(dt, str) and len(dt) > 16:
+            dt = dt[:16]
+
+        st_badge = f'<span class="badge badge-{"open" if status=="open" else "closed"}">{status}</span>'
+        rows += (
+            f"<tr>"
+            f"<td>{reporter}</td>"
+            f"<td>{target}</td>"
+            f"<td>{reason[:50]}</td>"
+            f"<td>{chat}</td>"
+            f"<td>{st_badge}</td>"
+            f"<td>{dt}</td>"
+            f"<td>"
+            f"<a class='btn btn-sm btn-danger' href='/dashboard/reports/ban?id={rid_val}'>🔨 Бан</a> "
+            f"<a class='btn btn-sm btn-primary' href='/dashboard/reports/mute?id={rid_val}'>🔇 Мут</a>"
+            f"</td>"
+            f"</tr>"
+        )
+
+    body = navbar("reports") + f"""
+    <div class="container">
+      <div class="page-title">🚨 Репорты ({len(reports)})</div>
+      <div class="section">
+        <table>
+          <thead>
+            <tr><th>От кого</th><th>На кого</th><th>Причина</th><th>Чат</th><th>Статус</th><th>Время</th><th>Действия</th></tr>
+          </thead>
+          <tbody>{rows}</tbody>
+        </table>
+      </div>
+    </div>"""
+    return web.Response(text=page(body), content_type="text/html")
+
+
+# ══════════════════════════════════════════
+#  БАН/МУТ ИЗ ДАШБОРДА
+# ══════════════════════════════════════════
+
+@require_auth
+async def handle_ban_from_dashboard(request: web.Request):
+    """Страница бана пользователя прямо из дашборда"""
+    if request.method == "POST":
+        data    = await request.post()
+        uid     = int(data.get("uid", 0))
+        cid     = int(data.get("cid", 0))
+        reason  = data.get("reason", "Нарушение правил")
+        action  = data.get("action", "ban")
+
+        if uid and cid and _bot:
+            try:
+                if action == "ban":
+                    await _bot.ban_chat_member(cid, uid)
+                    result = f"✅ Пользователь {uid} забанен в чате {cid}"
+                elif action == "mute":
+                    from datetime import timedelta
+                    from aiogram.types import ChatPermissions
+                    until = __import__("datetime").datetime.now() + timedelta(hours=1)
+                    await _bot.restrict_chat_member(
+                        cid, uid,
+                        permissions=ChatPermissions(can_send_messages=False),
+                        until_date=until
+                    )
+                    result = f"✅ Пользователь {uid} замучен на 1 час в чате {cid}"
+                elif action == "unban":
+                    await _bot.unban_chat_member(cid, uid)
+                    result = f"✅ Пользователь {uid} разбанен в чате {cid}"
+            except Exception as e:
+                result = f"❌ Ошибка: {e}"
+        else:
+            result = "❌ Не указан uid или cid"
+
+        chats = await db.get_all_chats()
+        chat_opts = "".join(
+            f'<option value="{r["cid"]}">{r["title"] or r["cid"]}</option>'
+            for r in chats
+        )
+        body = navbar("moderation") + f"""
+        <div class="container">
+          <div class="page-title">🔨 Действие выполнено</div>
+          <div class="section" style="padding:20px;">
+            <p style="font-size:16px;">{result}</p>
+            <a class="btn btn-primary" style="margin-top:16px;" href="/dashboard/modaction">← Назад</a>
+          </div>
+        </div>"""
+        return web.Response(text=page(body), content_type="text/html")
+
+    # GET — показываем форму
+    chats = await db.get_all_chats()
+    chat_opts = "".join(
+        f'<option value="{r["cid"]}">{r["title"] or r["cid"]}</option>'
+        for r in chats
+    )
+
+    body = navbar("moderation") + f"""
+    <div class="container">
+      <div class="page-title">🔨 Действия модерации</div>
+      <div class="section" style="max-width:500px;">
+        <div class="section-header">Бан / Мут / Разбан</div>
+        <div style="padding:20px;">
+          <form method="POST">
+            <div class="form-group">
+              <label>Telegram ID пользователя</label>
+              <input class="form-control" type="number" name="uid" placeholder="123456789" required>
+            </div>
+            <div class="form-group">
+              <label>Чат</label>
+              <select class="form-control" name="cid">
+                {chat_opts}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Причина</label>
+              <input class="form-control" type="text" name="reason" value="Нарушение правил">
+            </div>
+            <div class="form-group">
+              <label>Действие</label>
+              <select class="form-control" name="action">
+                <option value="ban">🔨 Бан</option>
+                <option value="mute">🔇 Мут (1 час)</option>
+                <option value="unban">🕊 Разбан</option>
+              </select>
+            </div>
+            <button class="btn btn-danger" type="submit" style="width:100%;padding:12px;">
+              Выполнить
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>"""
+    return web.Response(text=page(body), content_type="text/html")
+
+
+# ══════════════════════════════════════════
+#  ЛОГИ УДАЛЁННЫХ СООБЩЕНИЙ
+# ══════════════════════════════════════════
+
+@require_auth
+async def handle_deleted(request: web.Request):
+    cid_filter = request.rel_url.query.get("cid")
+    chats = await db.get_all_chats()
+
+    conn = db.get_conn()
+    try:
+        if cid_filter:
+            rows = conn.execute(
+                "SELECT * FROM deleted_log WHERE cid=? ORDER BY deleted_at DESC LIMIT 100",
+                (cid_filter,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM deleted_log ORDER BY deleted_at DESC LIMIT 100"
+            ).fetchall()
+    except:
+        rows = []
+    conn.close()
+
+    chat_filter_opts = '<option value="">Все чаты</option>' + "".join(
+        f'<option value="{r["cid"]}" {"selected" if str(r["cid"])==str(cid_filter) else ""}>'
+        f'{r["title"] or r["cid"]}</option>'
+        for r in chats
+    )
+
+    msg_rows = ""
+    for r in [dict(r) for r in rows]:
+        dt   = str(r.get("deleted_at",""))[:16]
+        name = r.get("name") or r.get("uid") or "—"
+        text = r.get("text","")[:200]
+        cid  = r.get("cid","")
+        msg_rows += (
+            f"<tr>"
+            f"<td>{dt}</td>"
+            f"<td>{name}</td>"
+            f"<td style='max-width:400px;word-break:break-word;'>{text}</td>"
+            f"<td>{cid}</td>"
+            f"</tr>"
+        )
+
+    if not msg_rows:
+        msg_rows = "<tr><td colspan='4' class='empty-state'>Удалённых сообщений нет</td></tr>"
+
+    body = navbar("deleted") + f"""
+    <div class="container">
+      <div class="page-title">📋 Логи удалённых сообщений</div>
+      <div style="margin-bottom:16px;">
+        <form method="GET" style="display:flex;gap:12px;align-items:center;">
+          <select class="form-control" name="cid" style="width:250px;">
+            {chat_filter_opts}
+          </select>
+          <button class="btn btn-primary" type="submit">Фильтр</button>
+        </form>
+      </div>
+      <div class="section">
+        <table>
+          <thead>
+            <tr><th>Время</th><th>Пользователь</th><th>Сообщение</th><th>Чат ID</th></tr>
+          </thead>
+          <tbody>{msg_rows}</tbody>
+        </table>
+      </div>
+    </div>"""
+    return web.Response(text=page(body), content_type="text/html")
+
+
+# ══════════════════════════════════════════
+#  ЭКОНОМИКА
+# ══════════════════════════════════════════
+
+@require_auth
+async def handle_economy(request: web.Request):
+    cid_filter = request.rel_url.query.get("cid")
+    chats = await db.get_all_chats()
+
+    conn = db.get_conn()
+
+    if cid_filter:
+        top_rep_rows = conn.execute(
+            "SELECT uid, score FROM reputation WHERE cid=? ORDER BY score DESC LIMIT 20",
+            (cid_filter,)
+        ).fetchall()
+        top_xp_rows = conn.execute(
+            "SELECT uid, xp FROM xp_data WHERE cid=? ORDER BY xp DESC LIMIT 20",
+            (cid_filter,)
+        ).fetchall()
+    else:
+        top_rep_rows = conn.execute(
+            "SELECT uid, SUM(score) as score FROM reputation GROUP BY uid ORDER BY score DESC LIMIT 20"
+        ).fetchall()
+        top_xp_rows = conn.execute(
+            "SELECT uid, SUM(xp) as xp FROM xp_data GROUP BY uid ORDER BY xp DESC LIMIT 20"
+        ).fetchall()
+
+    # Активность по дням (последние 30 дней)
+    try:
+        activity_rows = conn.execute(
+            "SELECT day, SUM(count) as total FROM user_activity "
+            + ("WHERE cid=? " if cid_filter else "")
+            + "GROUP BY day ORDER BY day DESC LIMIT 30",
+            *((cid_filter,) if cid_filter else ())
+        ).fetchall()
+    except:
+        activity_rows = []
+
+    conn.close()
+
+    chat_opts = '<option value="">Все чаты</option>' + "".join(
+        f'<option value="{r["cid"]}" {"selected" if str(r["cid"])==str(cid_filter or "") else ""}>'
+        f'{r["title"] or r["cid"]}</option>'
+        for r in chats
+    )
+
+    rep_rows = "".join(
+        f"<tr><td>{i}</td><td><code>{r['uid']}</code></td><td>{r['score']:+d}</td></tr>"
+        for i, r in enumerate([dict(x) for x in top_rep_rows], 1)
+    ) or "<tr><td colspan='3'>Нет данных</td></tr>"
+
+    xp_rows = "".join(
+        f"<tr><td>{i}</td><td><code>{r['uid']}</code></td><td>{r['xp']:,}</td></tr>"
+        for i, r in enumerate([dict(x) for x in top_xp_rows], 1)
+    ) or "<tr><td colspan='3'>Нет данных</td></tr>"
+
+    # График активности по дням
+    act_data = [dict(r) for r in activity_rows][::-1]  # хронологический порядок
+    max_act  = max((r["total"] for r in act_data), default=1)
+    bars = ""
+    for r in act_data[-14:]:  # последние 14 дней
+        pct = int((r["total"] / max_act) * 100) if max_act else 0
+        day = str(r.get("day",""))[-5:]  # MM-DD
+        bars += (
+            f'<div style="display:inline-block;vertical-align:bottom;width:6%;margin:0 0.5%;'
+            f'background:#7c6fcd;opacity:{max(0.3, pct/100):.2f};'
+            f'height:{max(4,pct)}px;border-radius:3px 3px 0 0;" title="{day}: {r["total"]}"></div>'
+        )
+
+    body = navbar("economy") + f"""
+    <div class="container">
+      <div class="page-title">💰 Экономика</div>
+      <div style="margin-bottom:20px;">
+        <form method="GET" style="display:flex;gap:12px;align-items:center;">
+          <select class="form-control" name="cid" style="width:250px;">{chat_opts}</select>
+          <button class="btn btn-primary" type="submit">Фильтр</button>
+        </form>
+      </div>
+
+      <div class="section" style="margin-bottom:24px;">
+        <div class="section-header">📈 Активность за последние 14 дней</div>
+        <div style="padding:20px;">
+          <div style="height:100px;display:flex;align-items:flex-end;">
+            {bars or '<span style="color:#555;">Нет данных</span>'}
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+        <div class="section">
+          <div class="section-header">⭐ Топ репутации</div>
+          <table>
+            <thead><tr><th>#</th><th>ID</th><th>Репутация</th></tr></thead>
+            <tbody>{rep_rows}</tbody>
+          </table>
+        </div>
+        <div class="section">
+          <div class="section-header">🏆 Топ XP</div>
+          <table>
+            <thead><tr><th>#</th><th>ID</th><th>XP</th></tr></thead>
+            <tbody>{xp_rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>"""
+    return web.Response(text=page(body), content_type="text/html")
+
+
+# ══════════════════════════════════════════
+#  SSE — УВЕДОМЛЕНИЯ О НОВЫХ ТИКЕТАХ
+# ══════════════════════════════════════════
+
+# Список подключённых SSE клиентов
+_sse_clients: list = []
+
+
+async def handle_sse(request: web.Request):
+    """Server-Sent Events для уведомлений в браузере"""
+    token = request.cookies.get("dtoken") or request.rel_url.query.get("token")
+    if token != DASHBOARD_TOKEN:
+        raise web.HTTPUnauthorized()
+
+    response = web.StreamResponse()
+    response.headers["Content-Type"] = "text/event-stream"
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    await response.prepare(request)
+
+    queue = asyncio.Queue()
+    _sse_clients.append(queue)
+
+    try:
+        await response.write(b"data: connected\n\n")
+        while True:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=30)
+                await response.write(f"data: {msg}\n\n".encode())
+            except asyncio.TimeoutError:
+                await response.write(b": ping\n\n")
+    except Exception:
+        pass
+    finally:
+        _sse_clients.remove(queue)
+
+    return response
+
+
+async def notify_new_ticket_sse(ticket_id: int, user_name: str, subject: str):
+    """Вызывается когда создаётся новый тикет — уведомляет все открытые дашборды"""
+    import json as _j
+    msg = _j.dumps({
+        "type": "new_ticket",
+        "id": ticket_id,
+        "user": user_name,
+        "subject": subject
+    })
+    for q in _sse_clients:
+        try:
+            await q.put(msg)
+        except:
+            pass
+
+
+# ══════════════════════════════════════════
 #  ЗАПУСК
 # ══════════════════════════════════════════
 
@@ -1035,6 +1490,12 @@ async def start_dashboard():
     app.router.add_get("/dashboard/tickets/{ticket_id}/close",   handle_ticket_close_web)
     app.router.add_get("/dashboard/moderation",             handle_moderation)
     app.router.add_get("/dashboard/users",                  handle_users)
+    app.router.add_get("/dashboard/reports",                handle_reports)
+    app.router.add_get("/dashboard/modaction",              handle_ban_from_dashboard)
+    app.router.add_post("/dashboard/modaction",             handle_ban_from_dashboard)
+    app.router.add_get("/dashboard/deleted",                handle_deleted)
+    app.router.add_get("/dashboard/economy",                handle_economy)
+    app.router.add_get("/dashboard/events",                 handle_sse)
 
     # API
     app.router.add_get("/api/stats", api_stats)
