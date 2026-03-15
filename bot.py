@@ -10142,9 +10142,6 @@ async def main():
     # ── PostgreSQL ────────────────────────────────────────
     await db.init_db()
 
-    # ── Миграция из SQLite (только первый запуск) ─────────
-    await db.migrate_from_sqlite("skinvault.db")
-
     # ── Старая инициализация (оставляем для совместимости) ─
     db_init()
     db_friends_init()
