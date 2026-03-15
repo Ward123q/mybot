@@ -1238,6 +1238,10 @@ class StatsMiddleware(BaseMiddleware):
         if isinstance(event, Message) and event.from_user and event.chat.type in ("group","supergroup"):
             chat_stats[event.chat.id][event.from_user.id] += 1
             known_chats[event.chat.id] = event.chat.title or str(event.chat.id)
+            # Сохраняем чат в БД для тикетов и дашборда
+            try:
+                await db.upsert_chat(event.chat.id, event.chat.title or str(event.chat.id))
+            except: pass
             uid, cid = event.from_user.id, event.chat.id
             from datetime import datetime, timedelta
             import time as _time
@@ -7065,7 +7069,21 @@ async def handle_private_message(message: Message):
     # ── /ticket команда ───────────────────────────────────
     if text.startswith("/ticket"):
         chats = await db.get_all_chats()
-        chat_list = [(r["cid"], r["title"]) for r in chats]
+        # Если чатов нет в БД — берём из known_chats в памяти
+        if not chats:
+            chat_list = [(cid, title) for cid, title in known_chats.items()]
+        else:
+            chat_list = [(r["cid"], r["title"]) for r in chats]
+        if not chat_list:
+            await message.answer(
+                "━━━━━━━━━━━━━━━\n"
+                "🎫 <b>ТИКЕТЫ</b>\n"
+                "━━━━━━━━━━━━━━━\n\n"
+                "❌ Бот ещё не добавлен ни в один чат.\n"
+                "Сначала добавь бота в группу и напиши там любое сообщение.",
+                parse_mode="HTML"
+            )
+            return
         await tkt.cmd_ticket(message, bot, chat_list)
         return
 
