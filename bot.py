@@ -25,6 +25,7 @@ load_dotenv()
 import database as db
 import tickets as tkt
 import dashboard
+import features
 
 DB_FILE_MAIN = "skinvault.db"
 
@@ -7062,7 +7063,6 @@ async def handle_private_message(message: Message):
     uid  = message.from_user.id
     text = message.text or ""
 
-    print(f"ЛС от {uid}: {text[:50]}")
 
     # Команды обрабатываются отдельно — кроме /ticket
     if text.startswith("/") and not text.startswith("/ticket"):
@@ -7070,9 +7070,7 @@ async def handle_private_message(message: Message):
 
     # ── /ticket команда ───────────────────────────────────
     if text.startswith("/ticket"):
-        print(f"Тикет команда от {uid}")
         chats = await db.get_all_chats()
-        # Если чатов нет в БД — берём из known_chats в памяти
         if not chats:
             chat_list = [(cid, title) for cid, title in known_chats.items()]
         else:
@@ -7098,6 +7096,12 @@ async def handle_private_message(message: Message):
     if uid in ADMIN_IDS or uid in tkt.mod_reply_states:
         if await tkt.handle_mod_reply(message, bot):
             return
+
+    # ── Анонимные ответы и ящики ──────────────────────────
+    if await features.handle_anon_reply_text(message):
+        return
+    if await features.handle_anonbox_reply(message):
+        return
 
     responses = [
         "👋 Привет! Я работаю в групповых чатах.\nДобавь меня в группу и используй /help",
@@ -10199,6 +10203,9 @@ async def main():
     # ── Dashboard ─────────────────────────────────────────
     dashboard.set_bot(bot, ADMIN_IDS)
     await dashboard.start_dashboard()
+
+    # ── Features ──────────────────────────────────────────
+    await features.init(bot, dp, ADMIN_IDS, OWNER_ID)
 
     asyncio.create_task(birthday_checker())
     asyncio.create_task(send_weekly_stats())
