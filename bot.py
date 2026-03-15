@@ -7058,7 +7058,16 @@ async def handle_private_message(message: Message):
     uid  = message.from_user.id
     text = message.text or ""
 
-    if text.startswith("/"): return  # команды обрабатываются отдельно
+    # Команды обрабатываются отдельно — кроме /ticket
+    if text.startswith("/") and not text.startswith("/ticket"):
+        return
+
+    # ── /ticket команда ───────────────────────────────────
+    if text.startswith("/ticket"):
+        chats = await db.get_all_chats()
+        chat_list = [(r["cid"], r["title"]) for r in chats]
+        await tkt.cmd_ticket(message, bot, chat_list)
+        return
 
     # ── Система тикетов (приоритет) ──────────────────────
     if await tkt.handle_dm_message(message, bot, notify_mods_func=_notify_mods_ticket):
