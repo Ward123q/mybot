@@ -7062,12 +7062,15 @@ async def handle_private_message(message: Message):
     uid  = message.from_user.id
     text = message.text or ""
 
+    log.info(f"ЛС от {uid}: {text[:50]}")
+
     # Команды обрабатываются отдельно — кроме /ticket
     if text.startswith("/") and not text.startswith("/ticket"):
         return
 
     # ── /ticket команда ───────────────────────────────────
     if text.startswith("/ticket"):
+        log.info(f"Тикет команда от {uid}")
         chats = await db.get_all_chats()
         # Если чатов нет в БД — берём из known_chats в памяти
         if not chats:
