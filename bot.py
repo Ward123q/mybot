@@ -3616,7 +3616,7 @@ async def cmd_botstats(message: Message):
         f"🧼 Антимат: <b>{'вкл' if ANTI_MAT_ENABLED else 'выкл'}</b>\n"
         f"🤖 Автокик: <b>{'вкл' if AUTO_KICK_BOTS else 'выкл'}</b>", parse_mode="HTML")
 
-@dp.message(F.text & ~F.text.startswith("/"))
+@dp.message(F.text & ~F.text.startswith("/") & F.chat.type.in_({"group", "supergroup"}))
 async def autist_commands(message: Message):
     if not message.text: return
     text_lower = message.text.strip().lower()
@@ -6880,7 +6880,7 @@ async def cmd_trivia(message: Message):
                 f"⏰ Время вышло! Правильный ответ: <b>{answer}</b>", parse_mode="HTML")
         except: pass
 
-@dp.message(F.text & ~F.text.startswith("/"))
+@dp.message(F.text & ~F.text.startswith("/") & F.chat.type.in_({"group", "supergroup"}))
 async def handle_trivia_answer(message: Message):
     cid = message.chat.id
     if cid not in trivia_active: return
