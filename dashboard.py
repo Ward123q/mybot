@@ -1006,9 +1006,10 @@ async def start_dashboard():
     # API
     app.router.add_get("/api/stats", api_stats)
 
+    port = int(os.getenv("PORT", 8080))
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 8080)
+    site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    log.info("✅ Dashboard запущен на :8080")
+    log.info(f"✅ Dashboard запущен на :{port}")
     return runner
