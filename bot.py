@@ -1240,9 +1240,10 @@ class StatsMiddleware(BaseMiddleware):
         if isinstance(event, Message) and event.from_user and event.chat.type in ("group","supergroup"):
             chat_stats[event.chat.id][event.from_user.id] += 1
             known_chats[event.chat.id] = event.chat.title or str(event.chat.id)
-            # Сохраняем чат в БД для тикетов и дашборда
+            uid, cid = event.from_user.id, event.chat.id
+            # Сохраняем чат в БД
             try:
-                await db.upsert_chat(event.chat.id, event.chat.title or str(event.chat.id))
+                await db.upsert_chat(cid, event.chat.title or str(cid))
             except: pass
             # Трекинг для уведомлений
             try:
@@ -1281,7 +1282,6 @@ class StatsMiddleware(BaseMiddleware):
                         log_media(cid, uid, event.from_user.full_name,
                                   event.chat.title or "", media_type, file_id)
             except: pass
-            uid, cid = event.from_user.id, event.chat.id
             from datetime import datetime, timedelta
             import time as _time
             now_dt = datetime.now()
@@ -2487,20 +2487,70 @@ async def cb_game(call: CallbackQuery):
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
+    name = message.from_user.first_name
     await message.answer(
-        f"👋 Привет, <b>{message.from_user.first_name}</b>!\n\n"
-        "🤖 Я бот-модератор этого чата.\n"
-        "📜 /rules — правила\n"
-        "❓ /help — все команды\n"
-        "⚙️ /panel — панель управления (реплай на участника)\n"
-        "🎫 /ticket — написать в поддержку",
+        f"━━━━━━━━━━━━━━━\n"
+        f"⚡ <b>CHAT GUARD</b>\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"👋 Привет, <b>{name}</b>!\n\n"
+        f"Я умный бот-модератор с кучей функций:\n\n"
+        f"🛡 Модерация и защита чата\n"
+        f"⭐ Репутация и уровни\n"
+        f"🎮 Игры и развлечения\n"
+        f"💰 Экономика и магазин\n"
+        f"🤝 Кланы и социалка\n"
+        f"🎫 Система тикетов\n\n"
+        f"Используй кнопки ниже или напиши /help",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📖 Политика и правила бота", url="https://telegra.ph/politika-bota-03-15")],
-            [InlineKeyboardButton(text="🎫 Открыть тикет", url=f"https://t.me/{(await bot.get_me()).username}?start=ticket"),
-             InlineKeyboardButton(text="❓ Помощь", callback_data="help:user")],
+            [InlineKeyboardButton(text="❓ Команды и помощь",    callback_data="start:help")],
+            [InlineKeyboardButton(text="📖 Политика бота",       url="https://telegra.ph/politika-bota-03-15")],
+            [InlineKeyboardButton(text="🎫 Написать в поддержку", url=f"https://t.me/{(await bot.get_me()).username}")],
         ])
     )
+
+
+@dp.callback_query(F.data == "start:help")
+async def cb_start_help(call: CallbackQuery):
+    await call.message.answer(
+        "━━━━━━━━━━━━━━━\n"
+        "❓ <b>ОСНОВНЫЕ КОМАНДЫ</b>\n"
+        "━━━━━━━━━━━━━━━\n\n"
+        "👤 <b>Профиль</b>\n"
+        "/myprofile — мой профиль\n"
+        "/card — профиль-карточка\n"
+        "/setbio — установить био\n\n"
+        "📊 <b>Статистика</b>\n"
+        "/top — топ активных\n"
+        "/toprep — топ репутации\n"
+        "/mystats — моя статистика\n\n"
+        "💰 <b>Экономика</b>\n"
+        "/daily — ежедневный бонус\n"
+        "/shop2 — магазин\n"
+        "/auction — аукцион\n\n"
+        "👥 <b>Социалка</b>\n"
+        "/addfriend — добавить в друзья\n"
+        "/propose — предложить отношения\n"
+        "/anonmsg — анонимное сообщение\n"
+        "/anonbox — анонимный ящик\n\n"
+        "🎮 <b>Игры (аутист)</b>\n"
+        "аутист обозвать @юзер\n"
+        "аутист поженить @юзер\n"
+        "аутист казнить @юзер\n"
+        "аутист диагноз @юзер\n"
+        "аутист дуэль @юзер\n\n"
+        "🚨 <b>Жалобы</b>\n"
+        "/report — пожаловаться\n"
+        "/ticket — написать в поддержку\n"
+        "/appeal — апелляция\n\n"
+        "📋 Полный список: /help",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📖 Политика бота", url="https://telegra.ph/politika-bota-03-15")],
+            [InlineKeyboardButton(text="🎫 Открыть тикет", callback_data="tkt:new")],
+        ])
+    )
+    await call.answer()
 
 @dp.message(Command("rules"))
 async def cmd_rules(message: Message):
@@ -10235,6 +10285,76 @@ async def _notify_mods_ticket(ticket_id, uid, user_name, chat_title, subject, pr
         )
     except:
         pass
+
+
+
+# ══════════════════════════════════════════════════════════
+#  🔔 РАССЫЛКА ОБ ОБНОВЛЕНИИ БОТА
+# ══════════════════════════════════════════════════════════
+
+@dp.message(Command("botupdate"))
+async def cmd_botupdate(message: Message, command: CommandObject):
+    """Рассылает сообщение об обновлении во все чаты. Только владелец."""
+    if message.from_user.id != OWNER_ID:
+        await reply_auto_delete(message, "🚫 Только для владельца")
+        return
+
+    text = command.args or ""
+    if not text:
+        await reply_auto_delete(message,
+            "━━━━━━━━━━━━━━━\n"
+            "🔔 <b>РАССЫЛКА ОБНОВЛЕНИЯ</b>\n"
+            "━━━━━━━━━━━━━━━\n\n"
+            "Использование:\n"
+            "<code>/botupdate текст обновления</code>\n\n"
+            "Пример:\n"
+            "<code>/botupdate Бот обновлён до v2.0! Добавлены тикеты и дашборд.</code>",
+            parse_mode="HTML")
+        return
+
+    # Формируем красивое сообщение об обновлении
+    from datetime import datetime
+    update_text = (
+        f"━━━━━━━━━━━━━━━\n"
+        f"🔔 <b>ОБНОВЛЕНИЕ БОТА</b>\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"{text}\n\n"
+        f"📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
+        f"👤 Команда CHAT GUARD"
+    )
+
+    sent = 0
+    failed = 0
+    chats = list(known_chats.keys())
+
+    status_msg = await message.answer(
+        f"⏳ Рассылаю в {len(chats)} чатов...",
+        parse_mode="HTML"
+    )
+
+    for cid in chats:
+        try:
+            await bot.send_message(cid, update_text, parse_mode="HTML")
+            sent += 1
+            await asyncio.sleep(0.05)
+        except:
+            failed += 1
+
+    # Также логируем в лог-канал
+    try:
+        await log_action(update_text)
+    except: pass
+
+    try:
+        await status_msg.edit_text(
+            f"━━━━━━━━━━━━━━━\n"
+            f"✅ <b>РАССЫЛКА ЗАВЕРШЕНА</b>\n"
+            f"━━━━━━━━━━━━━━━\n\n"
+            f"📨 Отправлено: <b>{sent}</b> чатов\n"
+            f"❌ Ошибок: <b>{failed}</b>",
+            parse_mode="HTML"
+        )
+    except: pass
 
 
 async def main():
