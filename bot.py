@@ -10089,20 +10089,23 @@ async def daily_idea_loop():
 #  🎫 СИСТЕМА ТИКЕТОВ
 # ══════════════════════════════════════════════════════════
 
-@dp.message(Command("ticket"))
+@dp.message(Command("ticket"), F.chat.type == "private")
 async def cmd_ticket_handler(message: Message):
-    if message.chat.type != "private":
-        await reply_auto_delete(message,
-            "━━━━━━━━━━━━━━━\n"
-            "🎫 <b>ТИКЕТЫ</b>\n"
-            "━━━━━━━━━━━━━━━\n\n"
-            "Напиши мне в <b>личку</b> чтобы открыть тикет!\n"
-            "Там сможешь описать проблему — модераторы ответят.",
-            parse_mode="HTML")
-        return
     chats = await db.get_all_chats()
     chat_list = [(r["cid"], r["title"]) for r in chats]
     await tkt.cmd_ticket(message, bot, chat_list)
+
+
+@dp.message(Command("ticket"), F.chat.type != "private")
+async def cmd_ticket_group_handler(message: Message):
+    """В группе — отправляем в ЛС"""
+    await reply_auto_delete(message,
+        "━━━━━━━━━━━━━━━\n"
+        "🎫 <b>ТИКЕТЫ</b>\n"
+        "━━━━━━━━━━━━━━━\n\n"
+        "Напиши мне в <b>личку</b> чтобы открыть тикет!\n"
+        "Там сможешь описать проблему — модераторы ответят.",
+        parse_mode="HTML")
 
 
 @dp.callback_query(F.data.startswith("tkt:"))
