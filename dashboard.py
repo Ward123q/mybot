@@ -621,7 +621,7 @@ async def handle_tickets(request: web.Request):
     stats   = await db.ticket_stats_all()
 
     status_tabs = "".join(
-        f'<a href="?status={s}" class="btn btn-sm {'btn-primary' if status_filter==s else ''}" '
+        f'<a href="?status={s}" class="btn btn-sm {"btn-primary" if status_filter==s else ""}" '
         f'style="margin-right:8px;">'
         f'{label} ({stats[key]})</a>'
         for s, key, label in [
