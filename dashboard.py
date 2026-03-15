@@ -341,19 +341,20 @@ async def handle_overview(request: web.Request):
     # Общие числа
     total_chats = len(chats)
 
-    async with db.pool().acquire() as c:
-        total_users   = await c.fetchval("SELECT COUNT(DISTINCT uid) FROM chat_stats") or 0
-        total_msgs    = await c.fetchval("SELECT COALESCE(SUM(msg_count),0) FROM chat_stats") or 0
-        total_bans    = await c.fetchval("SELECT COUNT(*) FROM ban_list") or 0
-        total_warns   = await c.fetchval("SELECT COALESCE(SUM(count),0) FROM warnings") or 0
-        recent_mods   = await c.fetch(
-            "SELECT by_name, COUNT(*) as cnt FROM mod_history "
-            "GROUP BY by_name ORDER BY cnt DESC LIMIT 5"
-        )
-        recent_acts   = await c.fetch(
-            "SELECT action, reason, by_name, created_at FROM mod_history "
-            "ORDER BY created_at DESC LIMIT 10"
-        )
+    conn = db.get_conn()
+    total_users   = conn.execute("SELECT COUNT(DISTINCT uid) FROM chat_stats").fetchone()[0] or 0
+    total_msgs    = conn.execute("SELECT COALESCE(SUM(msg_count),0) FROM chat_stats").fetchone()[0] or 0
+    total_bans    = conn.execute("SELECT COUNT(*) FROM ban_list").fetchone()[0] or 0
+    total_warns   = conn.execute("SELECT COALESCE(SUM(count),0) FROM warnings").fetchone()[0] or 0
+    recent_mods   = conn.execute(
+        "SELECT by_name, COUNT(*) as cnt FROM mod_history "
+        "GROUP BY by_name ORDER BY cnt DESC LIMIT 5"
+    ).fetchall()
+    recent_acts   = conn.execute(
+        "SELECT action, reason, by_name, created_at FROM mod_history "
+        "ORDER BY created_at DESC LIMIT 10"
+    ).fetchall()
+    conn.close()
 
     cards = f"""
     <div class="cards">
@@ -398,7 +399,7 @@ async def handle_overview(request: web.Request):
     # Последние действия
     act_rows = "".join(
         f"<tr>"
-        f"<td>{r['created_at'].strftime('%d.%m %H:%M') if r['created_at'] else '—'}</td>"
+        f"<td>{r['created_at'][:16].replace('T',' ') if r['created_at'] else '—'}</td>"
         f"<td>{r['action']}</td>"
         f"<td>{r['reason'] or '—'}</td>"
         f"<td>{r['by_name']}</td>"
@@ -439,19 +440,12 @@ async def handle_chats(request: web.Request):
     for chat in chats:
         cid   = chat["cid"]
         title = chat["title"] or "Без названия"
-        async with db.pool().acquire() as c:
-            msgs  = await c.fetchval(
-                "SELECT COALESCE(SUM(msg_count),0) FROM chat_stats WHERE cid=$1", cid
-            ) or 0
-            users = await c.fetchval(
-                "SELECT COUNT(DISTINCT uid) FROM chat_stats WHERE cid=$1", cid
-            ) or 0
-            warns = await c.fetchval(
-                "SELECT COALESCE(SUM(count),0) FROM warnings WHERE cid=$1", cid
-            ) or 0
-            bans  = await c.fetchval(
-                "SELECT COUNT(*) FROM ban_list WHERE cid=$1", cid
-            ) or 0
+        c2 = db.get_conn()
+        msgs  = c2.execute("SELECT COALESCE(SUM(msg_count),0) FROM chat_stats WHERE cid=?", (cid,)).fetchone()[0] or 0
+        users = c2.execute("SELECT COUNT(DISTINCT uid) FROM chat_stats WHERE cid=?", (cid,)).fetchone()[0] or 0
+        warns = c2.execute("SELECT COALESCE(SUM(count),0) FROM warnings WHERE cid=?", (cid,)).fetchone()[0] or 0
+        bans  = c2.execute("SELECT COUNT(*) FROM ban_list WHERE cid=?", (cid,)).fetchone()[0] or 0
+        c2.close()
         rows += (
             f"<tr>"
             f"<td><code>{cid}</code></td>"
@@ -493,24 +487,24 @@ async def handle_chats(request: web.Request):
 async def handle_chat_detail(request: web.Request):
     cid = int(request.match_info["cid"])
 
-    async with db.pool().acquire() as c:
-        chat  = await c.fetchrow("SELECT title FROM known_chats WHERE cid=$1", cid)
-        title = chat["title"] if chat else str(cid)
-
-        top_users = await c.fetch(
-            "SELECT uid, msg_count FROM chat_stats WHERE cid=$1 ORDER BY msg_count DESC LIMIT 10", cid
-        )
-        top_rep   = await c.fetch(
-            "SELECT uid, score FROM reputation WHERE cid=$1 ORDER BY score DESC LIMIT 10", cid
-        )
-        bans      = await c.fetch(
-            "SELECT uid, name, reason, banned_by, banned_at FROM ban_list WHERE cid=$1 ORDER BY banned_at DESC", cid
-        )
-        mod_hist  = await c.fetch(
-            "SELECT action, reason, by_name, created_at FROM mod_history "
-            "WHERE cid=$1 ORDER BY created_at DESC LIMIT 20", cid
-        )
-        hours     = await db.get_hourly_totals(cid)
+    c3 = db.get_conn()
+    chat_row = c3.execute("SELECT title FROM known_chats WHERE cid=?", (cid,)).fetchone()
+    title    = chat_row["title"] if chat_row else str(cid)
+    top_users = c3.execute(
+        "SELECT uid, msg_count FROM chat_stats WHERE cid=? ORDER BY msg_count DESC LIMIT 10", (cid,)
+    ).fetchall()
+    top_rep = c3.execute(
+        "SELECT uid, score FROM reputation WHERE cid=? ORDER BY score DESC LIMIT 10", (cid,)
+    ).fetchall()
+    bans = c3.execute(
+        "SELECT uid, name, reason, banned_by, banned_at FROM ban_list WHERE cid=?", (cid,)
+    ).fetchall()
+    mod_hist = c3.execute(
+        "SELECT action, reason, by_name, created_at FROM mod_history "
+        "WHERE cid=? ORDER BY created_at DESC LIMIT 20", (cid,)
+    ).fetchall()
+    c3.close()
+    hours = await db.get_hourly_totals(cid)
 
     # Хитмап активности
     max_h = max(hours.values(), default=1)
@@ -553,7 +547,7 @@ async def handle_chat_detail(request: web.Request):
 
     hist_rows = "".join(
         f"<tr>"
-        f"<td>{r['created_at'].strftime('%d.%m %H:%M') if r['created_at'] else '—'}</td>"
+        f"<td>{r['created_at'][:16].replace('T',' ') if r['created_at'] else '—'}</td>"
         f"<td>{r['action']}</td>"
         f"<td>{r['reason'] or '—'}</td>"
         f"<td>{r['by_name']}</td>"
@@ -825,19 +819,20 @@ async def handle_ticket_close_web(request: web.Request):
 
 @require_auth
 async def handle_moderation(request: web.Request):
-    async with db.pool().acquire() as c:
-        recent = await c.fetch(
-            "SELECT m.*, k.title as chat_title FROM mod_history m "
-            "LEFT JOIN known_chats k ON m.cid=k.cid "
-            "ORDER BY m.created_at DESC LIMIT 50"
-        )
-        top_mods = await c.fetch(
-            "SELECT by_name, COUNT(*) as cnt, "
-            "COUNT(CASE WHEN action LIKE '%БАН%' THEN 1 END) as bans, "
-            "COUNT(CASE WHEN action LIKE '%ВАРН%' THEN 1 END) as warns, "
-            "COUNT(CASE WHEN action LIKE '%МУТ%' THEN 1 END) as mutes "
-            "FROM mod_history GROUP BY by_name ORDER BY cnt DESC LIMIT 10"
-        )
+    c4 = db.get_conn()
+    recent = c4.execute(
+        "SELECT m.*, k.title as chat_title FROM mod_history m "
+        "LEFT JOIN known_chats k ON m.cid=k.cid "
+        "ORDER BY m.created_at DESC LIMIT 50"
+    ).fetchall()
+    top_mods = c4.execute(
+        "SELECT by_name, COUNT(*) as cnt, "
+        "COUNT(CASE WHEN action LIKE '%БАН%' THEN 1 END) as bans, "
+        "COUNT(CASE WHEN action LIKE '%ВАРН%' THEN 1 END) as warns, "
+        "COUNT(CASE WHEN action LIKE '%МУТ%' THEN 1 END) as mutes "
+        "FROM mod_history GROUP BY by_name ORDER BY cnt DESC LIMIT 10"
+    ).fetchall()
+    c4.close()
 
     mod_rows = "".join(
         f"<tr>"
@@ -852,7 +847,7 @@ async def handle_moderation(request: web.Request):
 
     act_rows = "".join(
         f"<tr>"
-        f"<td>{r['created_at'].strftime('%d.%m %H:%M') if r['created_at'] else '—'}</td>"
+        f"<td>{r['created_at'][:16].replace('T',' ') if r['created_at'] else '—'}</td>"
         f"<td>{r.get('chat_title') or str(r['cid'])}</td>"
         f"<td>{r['action']}</td>"
         f"<td>{r['reason'] or '—'}</td>"
@@ -891,29 +886,30 @@ async def handle_moderation(request: web.Request):
 async def handle_users(request: web.Request):
     search = request.rel_url.query.get("q", "")
 
-    async with db.pool().acquire() as c:
-        if search:
-            rows = await c.fetch(
-                "SELECT u.uid, u.full_name, u.username, "
-                "COALESCE(SUM(cs.msg_count),0) as msgs, "
-                "COALESCE(SUM(r.score),0) as rep "
-                "FROM users u "
-                "LEFT JOIN chat_stats cs ON u.uid=cs.uid "
-                "LEFT JOIN reputation r ON u.uid=r.uid "
-                "WHERE u.full_name ILIKE $1 OR u.username ILIKE $1 "
-                "GROUP BY u.uid ORDER BY msgs DESC LIMIT 30",
-                f"%{search}%"
-            )
-        else:
-            rows = await c.fetch(
-                "SELECT u.uid, u.full_name, u.username, "
-                "COALESCE(SUM(cs.msg_count),0) as msgs, "
-                "COALESCE(SUM(r.score),0) as rep "
-                "FROM users u "
-                "LEFT JOIN chat_stats cs ON u.uid=cs.uid "
-                "LEFT JOIN reputation r ON u.uid=r.uid "
-                "GROUP BY u.uid ORDER BY msgs DESC LIMIT 50"
-            )
+    c5 = db.get_conn()
+    if search:
+        rows = c5.execute(
+            "SELECT u.uid, u.full_name, u.username, "
+            "COALESCE(SUM(cs.msg_count),0) as msgs, "
+            "COALESCE(SUM(r.score),0) as rep "
+            "FROM users u "
+            "LEFT JOIN chat_stats cs ON u.uid=cs.uid "
+            "LEFT JOIN reputation r ON u.uid=r.uid "
+            "WHERE u.full_name LIKE ? OR u.username LIKE ? "
+            "GROUP BY u.uid ORDER BY msgs DESC LIMIT 30",
+            (f"%{search}%", f"%{search}%")
+        ).fetchall()
+    else:
+        rows = c5.execute(
+            "SELECT u.uid, u.full_name, u.username, "
+            "COALESCE(SUM(cs.msg_count),0) as msgs, "
+            "COALESCE(SUM(r.score),0) as rep "
+            "FROM users u "
+            "LEFT JOIN chat_stats cs ON u.uid=cs.uid "
+            "LEFT JOIN reputation r ON u.uid=r.uid "
+            "GROUP BY u.uid ORDER BY msgs DESC LIMIT 50"
+        ).fetchall()
+    c5.close()
 
     user_rows = "".join(
         f"<tr>"
@@ -959,10 +955,11 @@ async def api_stats(request: web.Request):
     if token != DASHBOARD_TOKEN:
         return web.json_response({"error": "Unauthorized"}, status=401)
 
-    async with db.pool().acquire() as c:
-        total_users = await c.fetchval("SELECT COUNT(DISTINCT uid) FROM chat_stats") or 0
-        total_msgs  = await c.fetchval("SELECT COALESCE(SUM(msg_count),0) FROM chat_stats") or 0
-        total_bans  = await c.fetchval("SELECT COUNT(*) FROM ban_list") or 0
+    c6 = db.get_conn()
+    total_users = c6.execute("SELECT COUNT(DISTINCT uid) FROM chat_stats").fetchone()[0] or 0
+    total_msgs  = c6.execute("SELECT COALESCE(SUM(msg_count),0) FROM chat_stats").fetchone()[0] or 0
+    total_bans  = c6.execute("SELECT COUNT(*) FROM ban_list").fetchone()[0] or 0
+    c6.close()
 
     t_stats = await db.ticket_stats_all()
 
