@@ -10130,11 +10130,27 @@ async def cb_ticket_mod_handler(call: CallbackQuery):
 
 
 async def _notify_mods_ticket(ticket_id, uid, user_name, chat_title, subject, priority):
-    """Уведомляет всех админов о новом тикете"""
+    """Уведомляет всех админов о новом тикете + пишет в лог-канал"""
     await tkt.notify_mods_new_ticket(
         ticket_id, uid, user_name, chat_title, subject, priority,
         bot, ADMIN_IDS, mod_roles
     )
+    # Дублируем в лог-канал
+    pri_emoji = {"low": "🟢", "normal": "🟡", "high": "🔴", "urgent": "🆘"}.get(priority, "🟡")
+    try:
+        await bot.send_message(
+            LOG_CHANNEL_ID,
+            f"━━━━━━━━━━━━━━━\n"
+            f"🎫 <b>НОВЫЙ ТИКЕТ #{ticket_id}</b>\n"
+            f"━━━━━━━━━━━━━━━\n\n"
+            f"👤 {user_name}\n"
+            f"💬 {chat_title}\n"
+            f"📝 {subject}\n"
+            f"{pri_emoji} Приоритет: {priority}",
+            parse_mode="HTML"
+        )
+    except:
+        pass
 
 
 async def main():
