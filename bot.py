@@ -2487,13 +2487,20 @@ async def cb_game(call: CallbackQuery):
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
-    await reply_auto_delete(message, 
+    await message.answer(
         f"👋 Привет, <b>{message.from_user.first_name}</b>!\n\n"
         "🤖 Я бот-модератор этого чата.\n"
         "📜 /rules — правила\n"
         "❓ /help — все команды\n"
-        "⚙️ /panel — панель управления (реплай на участника)",
-        parse_mode="HTML")
+        "⚙️ /panel — панель управления (реплай на участника)\n"
+        "🎫 /ticket — написать в поддержку",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📖 Политика и правила бота", url="https://telegra.ph/politika-bota-03-15")],
+            [InlineKeyboardButton(text="🎫 Открыть тикет", url=f"https://t.me/{(await bot.get_me()).username}?start=ticket"),
+             InlineKeyboardButton(text="❓ Помощь", callback_data="help:user")],
+        ])
+    )
 
 @dp.message(Command("rules"))
 async def cmd_rules(message: Message):
@@ -2701,7 +2708,12 @@ async def cmd_help(message: Message):
         await reply_auto_delete(message,
             "📬 <b>Справка отправлена тебе в личку!</b>", parse_mode="HTML")
     else:
-        await reply_auto_delete(message, text_user, parse_mode="HTML")
+        await reply_auto_delete(message, text_user, parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📖 Политика и правила бота", url="https://telegra.ph/politika-bota-03-15")],
+                [InlineKeyboardButton(text="🎫 Открыть тикет", callback_data="tkt:new")],
+            ])
+        )
 
 
 @dp.message(Command("panel"))
