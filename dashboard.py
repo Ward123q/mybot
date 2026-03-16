@@ -488,32 +488,31 @@ async def handle_overview(request: web.Request):
     total_bans  = conn.execute("SELECT COUNT(*) FROM ban_list").fetchone()[0] or 0
     total_warns = conn.execute("SELECT COALESCE(SUM(count),0) FROM warnings").fetchone()[0] or 0
     conn.close()
-    # mod_history &#1093;&#1088;&#1072;&#1085;&#1080;&#1090;&#1089;&#1103; &#1082;&#1072;&#1082; JSON {cid: {uid: [{action, reason, by, time}]}}
-    import json as _json
+    # Читаем mod_history из SQLite (новый формат — строки)
     recent_mods = []
     recent_acts = []
     try:
         conn2 = db.get_conn()
-        rows_mh = conn2.execute("SELECT cid, uid, history FROM mod_history").fetchall()
+        # Создаём таблицу если нет
+        conn2.execute("""CREATE TABLE IF NOT EXISTS mod_history
+            (id INTEGER PRIMARY KEY AUTOINCREMENT,
+             cid INTEGER, uid INTEGER, action TEXT,
+             reason TEXT, by_name TEXT,
+             created_at TEXT DEFAULT (datetime('now')))""")
+        conn2.commit()
+        # Топ модераторов
+        mod_rows = conn2.execute(
+            "SELECT by_name, COUNT(*) as cnt FROM mod_history "
+            "GROUP BY by_name ORDER BY cnt DESC LIMIT 5"
+        ).fetchall()
+        recent_mods = [{"by_name": r["by_name"], "cnt": r["cnt"]} for r in mod_rows]
+        # Последние действия
+        act_rows = conn2.execute(
+            "SELECT action, reason, by_name, created_at FROM mod_history "
+            "ORDER BY created_at DESC LIMIT 10"
+        ).fetchall()
+        recent_acts = [dict(r) for r in act_rows]
         conn2.close()
-        mod_counts = {}
-        all_acts = []
-        for r in rows_mh:
-            try:
-                hist = _json.loads(r["history"]) if r["history"] else []
-                for h in hist:
-                    by = h.get("by", "&#8212;")
-                    mod_counts[by] = mod_counts.get(by, 0) + 1
-                    all_acts.append({
-                        "action": h.get("action", "&#8212;"),
-                        "reason": h.get("reason", "&#8212;"),
-                        "by_name": by,
-                        "created_at": h.get("time", "&#8212;"),
-                    })
-            except: pass
-        recent_mods = [{"by_name": k, "cnt": v} for k, v in
-                       sorted(mod_counts.items(), key=lambda x: -x[1])[:5]]
-        recent_acts = sorted(all_acts, key=lambda x: x.get("created_at",""), reverse=True)[:10]
     except: pass
 
     cards = f"""
@@ -1049,37 +1048,35 @@ async def handle_ticket_close_web(request: web.Request):
 
 @require_auth
 async def handle_moderation(request: web.Request):
-    import json as _json2
     c4 = db.get_conn()
-    rows_mh2 = c4.execute(
-        "SELECT m.cid, m.uid, m.history, k.title as chat_title "
-        "FROM mod_history m LEFT JOIN known_chats k ON m.cid=k.cid"
-    ).fetchall()
+    try:
+        c4.execute("""CREATE TABLE IF NOT EXISTS mod_history
+            (id INTEGER PRIMARY KEY AUTOINCREMENT,
+             cid INTEGER, uid INTEGER, action TEXT,
+             reason TEXT, by_name TEXT,
+             created_at TEXT DEFAULT (datetime('now')))""")
+        c4.commit()
+        # Топ модераторов
+        top_rows = c4.execute(
+            "SELECT by_name, COUNT(*) as cnt, "
+            "SUM(CASE WHEN action LIKE '%&#1041;&#1072;&#1085;%' THEN 1 ELSE 0 END) as bans, "
+            "SUM(CASE WHEN action LIKE '%&#1042;&#1072;&#1088;&#1085;%' THEN 1 ELSE 0 END) as warns, "
+            "SUM(CASE WHEN action LIKE '%&#1052;&#1091;&#1090;%' THEN 1 ELSE 0 END) as mutes "
+            "FROM mod_history GROUP BY by_name ORDER BY cnt DESC LIMIT 10"
+        ).fetchall()
+        top_mods = [dict(r) for r in top_rows]
+        # Последние действия
+        act_rows2 = c4.execute(
+            "SELECT m.action, m.reason, m.by_name, m.created_at, "
+            "COALESCE(k.title, CAST(m.cid AS TEXT)) as chat_title "
+            "FROM mod_history m LEFT JOIN known_chats k ON m.cid=k.cid "
+            "ORDER BY m.created_at DESC LIMIT 50"
+        ).fetchall()
+        recent = [dict(r) for r in act_rows2]
+    except:
+        top_mods = []
+        recent = []
     c4.close()
-    recent = []
-    mod_stat = {}
-    for r in rows_mh2:
-        try:
-            hist = _json2.loads(r["history"]) if r["history"] else []
-            for h in hist:
-                by = h.get("by", "&#8212;")
-                act = h.get("action", "&#8212;")
-                if by not in mod_stat:
-                    mod_stat[by] = {"by_name": by, "cnt": 0, "bans": 0, "warns": 0, "mutes": 0}
-                mod_stat[by]["cnt"] += 1
-                if "&#1041;&#1040;&#1053;" in act: mod_stat[by]["bans"] += 1
-                if "&#1042;&#1040;&#1056;&#1053;" in act: mod_stat[by]["warns"] += 1
-                if "&#1052;&#1059;&#1058;" in act: mod_stat[by]["mutes"] += 1
-                recent.append({
-                    "created_at": h.get("time", "&#8212;"),
-                    "chat_title": r["chat_title"] or str(r["cid"]),
-                    "action": act,
-                    "reason": h.get("reason", "&#8212;"),
-                    "by_name": by,
-                })
-        except: pass
-    recent = sorted(recent, key=lambda x: x.get("created_at",""), reverse=True)[:50]
-    top_mods = sorted(mod_stat.values(), key=lambda x: -x["cnt"])[:10]
 
     mod_rows = "".join(
         f"<tr>"
