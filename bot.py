@@ -28,6 +28,7 @@ import dashboard
 import features
 import notifications as notif
 import shared
+import chat_settings as cs
 
 DB_FILE_MAIN = "skinvault.db"
 
@@ -1283,6 +1284,10 @@ class StatsMiddleware(BaseMiddleware):
                         shared.log_media(cid, uid, event.from_user.full_name,
                                          event.chat.title or "", media_type, file_id)
             except: pass
+            # Авто-объявления
+            try:
+                await cs.on_message(cid)
+            except: pass
             from datetime import datetime, timedelta
             import time as _time
             now_dt = datetime.now()
@@ -1393,12 +1398,18 @@ class SpecialEffectsMiddleware(BaseMiddleware):
 class AntiMatMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if not isinstance(event, Message): return await handler(event, data)
-        if not ANTI_MAT_ENABLED: return await handler(event, data)
         if event.chat.type not in ("group","supergroup"): return await handler(event, data)
         if not event.text or event.text.startswith("/"): return await handler(event, data)
         if not event.from_user: return await handler(event, data)
         if event.new_chat_members or event.left_chat_member: return await handler(event, data)
         uid, cid = event.from_user.id, event.chat.id
+        # Проверяем настройки чата
+        try:
+            chat_cfg = cs.get_settings(cid)
+            if not chat_cfg.get("antimat_enabled", True):
+                return await handler(event, data)
+        except: pass
+        if not ANTI_MAT_ENABLED: return await handler(event, data)
         try:
             m = await bot.get_chat_member(cid, uid)
             if m.status in ("administrator","creator"): return await handler(event, data)
@@ -1493,11 +1504,14 @@ dp.message.middleware(AntiMatMiddleware())
 
 @dp.message(F.new_chat_members)
 async def on_new_member(message: Message):
+    cid = message.chat.id
+    chat_cfg = cs.get_settings(cid)
+
     for member in message.new_chat_members:
         if member.is_bot and AUTO_KICK_BOTS:
             try:
-                await bot.ban_chat_member(message.chat.id, member.id)
-                await bot.unban_chat_member(message.chat.id, member.id)
+                await bot.ban_chat_member(cid, member.id)
+                await bot.unban_chat_member(cid, member.id)
                 sent = await message.answer(
                     f"🤖 Бот <b>{member.full_name}</b> автоматически удалён.", parse_mode="HTML")
                 await asyncio.sleep(5)
@@ -1505,14 +1519,55 @@ async def on_new_member(message: Message):
                 except: pass
             except: pass
             continue
-        await message.answer(
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👋 <b>Новый участник!</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👋 Добро пожаловать, <b>{member.full_name}</b>!\n"
-            f"📋 Ознакомься с правилами чата.",
-            parse_mode="HTML"
-        )
+
+        # Приветствие из настроек
+        if chat_cfg.get("welcome_enabled", True):
+            welcome_text = chat_cfg.get("welcome_text", "👋 Добро пожаловать, {name}!")
+            welcome_text = welcome_text.replace("{name}", f"<b>{member.full_name}</b>")
+            sent = await message.answer(welcome_text, parse_mode="HTML")
+
+            # Удаляем предыдущее приветствие
+            if chat_cfg.get("welcome_delete_prev", True):
+                mins = chat_cfg.get("welcome_delete_mins", 5)
+                async def _del_welcome(msg, delay):
+                    await asyncio.sleep(delay * 60)
+                    try: await msg.delete()
+                    except: pass
+                asyncio.create_task(_del_welcome(sent, mins))
+        else:
+            sent = await message.answer(
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👋 <b>Новый участник!</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"👋 Добро пожаловать, <b>{member.full_name}</b>!\n"
+                f"📋 Ознакомься с правилами чата.",
+                parse_mode="HTML"
+            )
+
+        # Автомут новичков
+        if chat_cfg.get("auto_mute_newcomers", False):
+            hours = chat_cfg.get("newcomer_mute_hours", 1)
+            try:
+                await bot.restrict_chat_member(
+                    cid, member.id,
+                    permissions=ChatPermissions(can_send_messages=False),
+                    until_date=timedelta(hours=hours)
+                )
+            except: pass
+
+        # Бонус новичку
+        bonus = chat_cfg.get("newcomer_bonus", 0)
+        if bonus > 0:
+            try:
+                conn = db_connect()
+                conn.execute(
+                    "INSERT INTO reputation (cid,uid,score) VALUES (?,?,?) "
+                    "ON CONFLICT(cid,uid) DO UPDATE SET score=score+?",
+                    (cid, member.id, bonus, bonus)
+                )
+                conn.commit()
+                conn.close()
+            except: pass
 
 @dp.message(F.left_chat_member)
 async def on_left_member(message: Message):
@@ -10472,8 +10527,13 @@ async def main():
     global bot_start_time
     bot_start_time = _tstart.time()
 
-    # ── Shared state (синхронизация между модулями) ───────
+    # ── Shared state ──────────────────────────────────────
     shared.init(bot, ADMIN_IDS, OWNER_ID, LOG_CHANNEL_ID)
+
+    # ── Chat settings ─────────────────────────────────────
+    cs.init_tables()
+    cs.set_bot(bot)
+    asyncio.create_task(cs.schedule_loop())
 
     # ── PostgreSQL ────────────────────────────────────────
     await db.init_db()
