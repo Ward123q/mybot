@@ -15,6 +15,7 @@ from functools import wraps
 
 from aiohttp import web
 import database as db
+import shared
 
 log = logging.getLogger(__name__)
 
@@ -1118,11 +1119,14 @@ async def api_stats(request: web.Request):
 # ══════════════════════════════════════════
 
 # Трекер онлайн пользователей {uid: last_seen_ts}
-_online_users: dict = {}
+# online_users теперь в shared
 
 def update_online(uid: int, name: str, cid: int):
+    shared.update_online(uid, name, cid)
+    return
+    # legacy below:
     """Вызывается при каждом сообщении"""
-    _online_users[uid] = {"name": name, "cid": cid, "ts": __import__("time").time()}
+    shared.online_users[uid] = {"name": name, "cid": cid, "ts": __import__("time").time()}
 
 
 @require_auth
@@ -1133,7 +1137,7 @@ async def handle_live_stats(request: web.Request):
     # Онлайн — активны за последние 5 минут
     online = [
         {"uid": uid, "name": d["name"]}
-        for uid, d in _online_users.items()
+        for uid, d in shared.online_users.items()
         if now - d["ts"] < 300
     ]
     conn = db.get_conn()
@@ -1147,7 +1151,7 @@ async def handle_live_stats(request: web.Request):
         "messages": total_msgs,
         "bans": total_bans,
         "tickets": t_stats,
-        "alerts": len(_alerts),
+        "alerts": len(shared.alerts),
     })
 
 
@@ -1176,31 +1180,34 @@ async def handle_health(request: web.Request):
 # &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
 
 # &#1061;&#1088;&#1072;&#1085;&#1080;&#1083;&#1080;&#1097;&#1077; &#1072;&#1083;&#1077;&#1088;&#1090;&#1086;&#1074; &#1074; &#1087;&#1072;&#1084;&#1103;&#1090;&#1080;
-_alerts: list = []
-_spam_tracker: dict = {}  # {uid: [timestamps]}
+# alerts теперь в shared
+# spam_tracker теперь в shared  # {uid: [timestamps]}
 
 
 def add_alert(level: str, title: str, desc: str, cid: int = 0, uid: int = 0):
+    shared.add_alert(level, title, desc, cid, uid)
+    return
+    # legacy below:
     """&#1044;&#1086;&#1073;&#1072;&#1074;&#1083;&#1103;&#1077;&#1090; &#1072;&#1083;&#1077;&#1088;&#1090; (level: danger/warn/info)"""
-    _alerts.insert(0, {
+    shared.alerts.insert(0, {
         "level": level, "title": title, "desc": desc,
         "cid": cid, "uid": uid,
         "time": datetime.now().strftime("%d.%m %H:%M")
     })
-    if len(_alerts) > 200:
-        _alerts.pop()
+    if len(shared.alerts) > 200:
+        shared.alerts.pop()
 
 
 async def check_spam(uid: int, cid: int, name: str, chat_title: str):
     """&#1055;&#1088;&#1086;&#1074;&#1077;&#1088;&#1103;&#1077;&#1090; &#1085;&#1072; &#1089;&#1087;&#1072;&#1084;/&#1092;&#1083;&#1091;&#1076;"""
     now = time.time()
     key = f"{cid}:{uid}"
-    if key not in _spam_tracker:
-        _spam_tracker[key] = []
-    _spam_tracker[key].append(now)
+    if key not in shared.spam_tracker:
+        shared.spam_tracker[key] = []
+    shared.spam_tracker[key].append(now)
     # &#1054;&#1089;&#1090;&#1072;&#1074;&#1083;&#1103;&#1077;&#1084; &#1090;&#1086;&#1083;&#1100;&#1082;&#1086; &#1087;&#1086;&#1089;&#1083;&#1077;&#1076;&#1085;&#1080;&#1077; 60 &#1089;&#1077;&#1082;&#1091;&#1085;&#1076;
-    _spam_tracker[key] = [t for t in _spam_tracker[key] if now - t < 60]
-    count = len(_spam_tracker[key])
+    shared.spam_tracker[key] = [t for t in shared.spam_tracker[key] if now - t < 60]
+    count = len(shared.spam_tracker[key])
     if count >= 15:
         add_alert("danger", "&#128680; &#1060;&#1083;&#1091;&#1076; &#1086;&#1073;&#1085;&#1072;&#1088;&#1091;&#1078;&#1077;&#1085;",
                   f"{name} &#1086;&#1090;&#1087;&#1088;&#1072;&#1074;&#1080;&#1083; {count} &#1089;&#1086;&#1086;&#1073;&#1097;&#1077;&#1085;&#1080;&#1081; &#1079;&#1072; &#1084;&#1080;&#1085;&#1091;&#1090;&#1091; &#1074; {chat_title}",
@@ -1213,7 +1220,7 @@ async def check_spam(uid: int, cid: int, name: str, chat_title: str):
 
 @require_auth
 async def handle_alerts(request: web.Request):
-    if not _alerts:
+    if not shared.alerts:
         body = navbar("alerts") + """
         <div class="container">
           <div class="page-title">&#128308; &#1040;&#1083;&#1077;&#1088;&#1090;&#1099;</div>
@@ -1222,7 +1229,7 @@ async def handle_alerts(request: web.Request):
         return web.Response(text=page(body), content_type="text/html")
 
     items = ""
-    for a in _alerts[:50]:
+    for a in shared.alerts[:50]:
         cls = {"danger": "alert-item", "warn": "alert-item warn", "info": "alert-item info"}.get(a["level"], "alert-item")
         action = ""
         if a["uid"] and a["cid"] and _bot:
@@ -1248,7 +1255,7 @@ async def handle_alerts(request: web.Request):
     body = navbar("alerts") + f"""
     <div class="container">
       <div class="page-title" style="display:flex;justify-content:space-between;">
-        <span>&#128308; &#1040;&#1083;&#1077;&#1088;&#1090;&#1099; ({len(_alerts)})</span>
+        <span>&#128308; &#1040;&#1083;&#1077;&#1088;&#1090;&#1099; ({len(shared.alerts)})</span>
         <a href="/dashboard/alerts/clear" class="btn btn-sm btn-outline">&#128465; &#1054;&#1095;&#1080;&#1089;&#1090;&#1080;&#1090;&#1100;</a>
       </div>
       <div class="section" style="padding:16px;">{items}</div>
@@ -1258,7 +1265,7 @@ async def handle_alerts(request: web.Request):
 
 @require_auth
 async def handle_alerts_clear(request: web.Request):
-    _alerts.clear()
+    shared.alerts.clear()
     raise web.HTTPFound("/dashboard/alerts")
 
 
@@ -1616,36 +1623,39 @@ async def handle_broadcast(request: web.Request):
 # &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
 
 # &#1061;&#1088;&#1072;&#1085;&#1080;&#1083;&#1080;&#1097;&#1077; &#1084;&#1077;&#1076;&#1080;&#1072; &#1074; &#1087;&#1072;&#1084;&#1103;&#1090;&#1080; (&#1087;&#1086;&#1089;&#1083;&#1077;&#1076;&#1085;&#1080;&#1077; 500)
-_media_log: list = []
+# media_log теперь в shared
 
 
 def log_media(cid: int, uid: int, name: str, chat_title: str,
               media_type: str, file_id: str = ""):
+    shared.log_media(cid, uid, name, chat_title, media_type, file_id)
+    return
+    # legacy below:
     """&#1051;&#1086;&#1075;&#1080;&#1088;&#1091;&#1077;&#1090; &#1084;&#1077;&#1076;&#1080;&#1072; &#1092;&#1072;&#1081;&#1083;"""
-    _media_log.insert(0, {
+    shared.media_log.insert(0, {
         "cid": cid, "uid": uid, "name": name,
         "chat": chat_title, "type": media_type,
         "file_id": file_id,
         "time": datetime.now().strftime("%d.%m %H:%M")
     })
-    if len(_media_log) > 500:
-        _media_log.pop()
+    if len(shared.media_log) > 500:
+        shared.media_log.pop()
 
 
 @require_auth
 async def handle_media(request: web.Request):
     media_type_filter = request.rel_url.query.get("type", "all")
 
-    items = _media_log
+    items = shared.media_log
     if media_type_filter != "all":
-        items = [m for m in _media_log if m["type"] == media_type_filter]
+        items = [m for m in shared.media_log if m["type"] == media_type_filter]
 
     type_counts = {}
-    for m in _media_log:
+    for m in shared.media_log:
         type_counts[m["type"]] = type_counts.get(m["type"], 0) + 1
 
     tabs = ""
-    for t, count in [("all", len(_media_log)), ("photo", type_counts.get("photo",0)),
+    for t, count in [("all", len(shared.media_log)), ("photo", type_counts.get("photo",0)),
                      ("video", type_counts.get("video",0)), ("document", type_counts.get("document",0)),
                      ("voice", type_counts.get("voice",0)), ("sticker", type_counts.get("sticker",0))]:
         active = "btn-primary" if media_type_filter == t else "btn-outline"
@@ -1685,16 +1695,19 @@ async def handle_media(request: web.Request):
 #  &#1051;&#1054;&#1043; &#1044;&#1045;&#1049;&#1057;&#1058;&#1042;&#1048;&#1049; &#1044;&#1040;&#1064;&#1041;&#1054;&#1056;&#1044;&#1040;
 # &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
 
-_admin_log: list = []
+# admin_log теперь в shared
 
 
 def _log_admin_action(action: str):
-    _admin_log.insert(0, {
+    shared.log_admin_action(action)
+    return
+    # legacy below:
+    shared.admin_action_log.insert(0, {
         "action": action,
         "time": datetime.now().strftime("%d.%m.%Y %H:%M")
     })
-    if len(_admin_log) > 200:
-        _admin_log.pop()
+    if len(shared.admin_action_log) > 200:
+        shared.admin_action_log.pop()
 
 
 # &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
@@ -1762,7 +1775,7 @@ async def handle_export(request: web.Request):
 #  &#1053;&#1040;&#1057;&#1058;&#1056;&#1054;&#1049;&#1050;&#1048; &#1044;&#1040;&#1064;&#1041;&#1054;&#1056;&#1044;&#1040;
 # &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
 
-_dashboard_settings = {
+shared.dashboard_settings_local = {
     "alerts_enabled":     True,
     "media_log_enabled":  True,
     "spam_threshold":     10,
@@ -1775,32 +1788,31 @@ _dashboard_settings = {
 
 @require_auth
 async def handle_settings(request: web.Request):
-    global _dashboard_settings
 
     if request.method == "POST":
         data = await request.post()
-        _dashboard_settings["alerts_enabled"]    = data.get("alerts_enabled") == "1"
-        _dashboard_settings["media_log_enabled"] = data.get("media_log_enabled") == "1"
-        _dashboard_settings["spam_threshold"]    = int(data.get("spam_threshold", 10))
-        _dashboard_settings["flood_threshold"]   = int(data.get("flood_threshold", 15))
-        _dashboard_settings["show_user_ids"]     = data.get("show_user_ids") == "1"
-        _dashboard_settings["auto_refresh"]      = data.get("auto_refresh") == "1"
-        _dashboard_settings["items_per_page"]    = int(data.get("items_per_page", 20))
+        shared.dashboard_settings["alerts_enabled"]    = data.get("alerts_enabled") == "1"
+        shared.dashboard_settings["media_log_enabled"] = data.get("media_log_enabled") == "1"
+        shared.dashboard_settings["spam_threshold"]    = int(data.get("spam_threshold", 10))
+        shared.dashboard_settings["flood_threshold"]   = int(data.get("flood_threshold", 15))
+        shared.dashboard_settings["show_user_ids"]     = data.get("show_user_ids") == "1"
+        shared.dashboard_settings["auto_refresh"]      = data.get("auto_refresh") == "1"
+        shared.dashboard_settings["items_per_page"]    = int(data.get("items_per_page", 20))
         _log_admin_action("&#1053;&#1072;&#1089;&#1090;&#1088;&#1086;&#1081;&#1082;&#1080; &#1076;&#1072;&#1096;&#1073;&#1086;&#1088;&#1076;&#1072; &#1086;&#1073;&#1085;&#1086;&#1074;&#1083;&#1077;&#1085;&#1099;")
         raise web.HTTPFound("/dashboard/settings")
 
     def toggle(key):
-        val = _dashboard_settings.get(key, True)
+        val = shared.dashboard_settings.get(key, True)
         return f"""
         <label class="toggle-switch">
           <input type="checkbox" name="{key}" value="1" {'checked' if val else ''}>
           <span class="toggle-slider"></span>
         </label>"""
 
-    s = _dashboard_settings
+    s = shared.dashboard_settings
     admin_log_html = "".join(
         f"<tr><td>{r['time']}</td><td>{r['action']}</td></tr>"
-        for r in _admin_log[:20]
+        for r in shared.admin_action_log[:20]
     ) or "<tr><td colspan='2' class='empty-state'>&#1053;&#1077;&#1090; &#1076;&#1077;&#1081;&#1089;&#1090;&#1074;&#1080;&#1081;</td></tr>"
 
     body = navbar("settings") + f"""
@@ -2222,7 +2234,7 @@ async def handle_economy(request: web.Request):
 # &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
 
 # &#1057;&#1087;&#1080;&#1089;&#1086;&#1082; &#1087;&#1086;&#1076;&#1082;&#1083;&#1102;&#1095;&#1105;&#1085;&#1085;&#1099;&#1093; SSE &#1082;&#1083;&#1080;&#1077;&#1085;&#1090;&#1086;&#1074;
-_sse_clients: list = []
+shared.sse_clients: list = []
 
 
 async def handle_sse(request: web.Request):
@@ -2238,7 +2250,7 @@ async def handle_sse(request: web.Request):
     await response.prepare(request)
 
     queue = asyncio.Queue()
-    _sse_clients.append(queue)
+    shared.sse_clients.append(queue)
 
     try:
         await response.write(b"data: connected\n\n")
@@ -2251,12 +2263,15 @@ async def handle_sse(request: web.Request):
     except Exception:
         pass
     finally:
-        _sse_clients.remove(queue)
+        shared.sse_clients.remove(queue)
 
     return response
 
 
 async def notify_new_ticket_sse(ticket_id: int, user_name: str, subject: str):
+    await shared.notify_sse({"type": "new_ticket", "id": ticket_id, "user": user_name, "subject": subject})
+    return
+    # legacy below:
     """&#1042;&#1099;&#1079;&#1099;&#1074;&#1072;&#1077;&#1090;&#1089;&#1103; &#1082;&#1086;&#1075;&#1076;&#1072; &#1089;&#1086;&#1079;&#1076;&#1072;&#1105;&#1090;&#1089;&#1103; &#1085;&#1086;&#1074;&#1099;&#1081; &#1090;&#1080;&#1082;&#1077;&#1090; &#8212; &#1091;&#1074;&#1077;&#1076;&#1086;&#1084;&#1083;&#1103;&#1077;&#1090; &#1074;&#1089;&#1077; &#1086;&#1090;&#1082;&#1088;&#1099;&#1090;&#1099;&#1077; &#1076;&#1072;&#1096;&#1073;&#1086;&#1088;&#1076;&#1099;"""
     import json as _j
     msg = _j.dumps({
@@ -2265,7 +2280,7 @@ async def notify_new_ticket_sse(ticket_id: int, user_name: str, subject: str):
         "user": user_name,
         "subject": subject
     })
-    for q in _sse_clients:
+    for q in shared.sse_clients:
         try:
             await q.put(msg)
         except:
@@ -2301,8 +2316,8 @@ async def start_dashboard():
     app.router.add_post("/dashboard/modaction",                  handle_ban_from_dashboard)
     app.router.add_get("/dashboard/deleted",                     handle_deleted)
     app.router.add_get("/dashboard/economy",                     handle_economy)
-    app.router.add_get("/dashboard/alerts",                      handle_alerts)
-    app.router.add_get("/dashboard/alerts/clear",                handle_alerts_clear)
+    app.router.add_get("/dashboard/alerts",                      handleshared.alerts)
+    app.router.add_get("/dashboard/alerts/clear",                handleshared.alerts_clear)
     app.router.add_get("/dashboard/plugins",                     handle_plugins)
     app.router.add_post("/dashboard/plugins",                    handle_plugins)
     app.router.add_get("/dashboard/broadcast",                   handle_broadcast)

@@ -20,12 +20,14 @@ import database as db
 
 log = logging.getLogger(__name__)
 
-LOG_CHANNEL_ID = -1003832428474
-_bot = None  # устанавливается из init()
+import shared as _shared
 
-def set_bot(bot):
-    global _bot
-    _bot = bot
+LOG_CHANNEL_ID = -1003832428474
+
+def set_bot(bot_instance):
+    """Устанавливает бот через shared модуль"""
+    # Обратная совместимость — shared уже инициализирован из bot.py
+    pass
 
 # Состояния создания тикета
 # Состояния тикетов — сохраняются в SQLite чтобы не терялись при рестарте
@@ -95,13 +97,8 @@ mod_reply_states: dict = {}
 
 
 async def _log(bot_or_none, text: str):
-    """Отправляет сообщение в лог-канал"""
-    try:
-        b = bot_or_none or _bot
-        if b:
-            await b.send_message(LOG_CHANNEL_ID, text, parse_mode="HTML")
-    except Exception as e:
-        log.warning(f"Не удалось отправить в лог-канал: {e}")
+    """Отправляет сообщение в лог-канал через shared"""
+    await _shared.send_log(text)
 
 PRIORITY_EMOJI = {
     "low":    "🟢",
@@ -756,25 +753,8 @@ async def handle_mod_reply(message: Message, bot: Bot) -> bool:
 async def notify_mods_new_ticket(ticket_id: int, uid: int, user_name: str,
                                   chat_title: str, subject: str, priority: str,
                                   bot: Bot, admin_ids: set, mod_roles_getter):
-    """Рассылает уведомление всем модераторам о новом тикете"""
-    pri_emoji = PRIORITY_EMOJI.get(priority, "🟡")
-
-    text = (
-        f"━━━━━━━━━━━━━━━\n"
-        f"🎫 <b>НОВЫЙ ТИКЕТ #{ticket_id}</b>\n"
-        f"━━━━━━━━━━━━━━━\n\n"
-        f"👤 Пользователь: <b>{user_name}</b>\n"
-        f"💬 Чат: <b>{chat_title}</b>\n"
-        f"📝 Тема: <b>{subject}</b>\n"
-        f"{pri_emoji} Приоритет: <b>{priority}</b>"
-    )
-    kb = kb_mod_ticket(ticket_id)
-
-    # Отправляем всем владельцам/админам
-    for admin_id in admin_ids:
-        try:
-            await bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=kb)
-        except: pass
+    """Рассылает уведомление через shared модуль"""
+    await _shared.notify_new_ticket(ticket_id, user_name, subject, chat_title, priority)
 
 
 # ══════════════════════════════════════════

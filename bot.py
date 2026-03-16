@@ -27,6 +27,7 @@ import tickets as tkt
 import dashboard
 import features
 import notifications as notif
+import shared
 
 DB_FILE_MAIN = "skinvault.db"
 
@@ -1249,40 +1250,22 @@ class StatsMiddleware(BaseMiddleware):
             try:
                 await notif.track_message(event)
             except: pass
-            # Трекинг онлайна для дашборда
+            # Синхронизация через shared
             try:
-                dashboard.update_online(uid, event.from_user.full_name, cid)
-            except: pass
-            # Алерты спама
-            try:
-                await dashboard.check_spam(uid, cid, event.from_user.full_name, event.chat.title or "")
-            except: pass
-            # Медиа лог
-            try:
-                if dashboard._dashboard_settings.get("media_log_enabled", True):
+                shared.update_online(uid, event.from_user.full_name, cid)
+                await shared.check_spam(uid, cid, event.from_user.full_name, event.chat.title or "")
+                if shared.dashboard_settings.get("media_log_enabled", True):
                     media_type = None
                     file_id = ""
-                    if event.photo:
-                        media_type = "photo"
-                        file_id = event.photo[-1].file_id
-                    elif event.video:
-                        media_type = "video"
-                        file_id = event.video.file_id
-                    elif event.document:
-                        media_type = "document"
-                        file_id = event.document.file_id
-                    elif event.voice:
-                        media_type = "voice"
-                        file_id = event.voice.file_id
-                    elif event.sticker:
-                        media_type = "sticker"
-                        file_id = event.sticker.file_id
-                    elif event.animation:
-                        media_type = "animation"
-                        file_id = event.animation.file_id
+                    if event.photo:      media_type, file_id = "photo",    event.photo[-1].file_id
+                    elif event.video:    media_type, file_id = "video",    event.video.file_id
+                    elif event.document: media_type, file_id = "document", event.document.file_id
+                    elif event.voice:    media_type, file_id = "voice",    event.voice.file_id
+                    elif event.sticker:  media_type, file_id = "sticker",  event.sticker.file_id
+                    elif event.animation:media_type, file_id = "animation",event.animation.file_id
                     if media_type:
-                        dashboard.log_media(cid, uid, event.from_user.full_name,
-                                  event.chat.title or "", media_type, file_id)
+                        shared.log_media(cid, uid, event.from_user.full_name,
+                                         event.chat.title or "", media_type, file_id)
             except: pass
             from datetime import datetime, timedelta
             import time as _time
@@ -10277,27 +10260,8 @@ async def cb_ticket_mod_handler(call: CallbackQuery):
 
 
 async def _notify_mods_ticket(ticket_id, uid, user_name, chat_title, subject, priority):
-    """Уведомляет всех админов о новом тикете + пишет в лог-канал"""
-    await tkt.notify_mods_new_ticket(
-        ticket_id, uid, user_name, chat_title, subject, priority,
-        bot, ADMIN_IDS, mod_roles
-    )
-    # Дублируем в лог-канал
-    pri_emoji = {"low": "🟢", "normal": "🟡", "high": "🔴", "urgent": "🆘"}.get(priority, "🟡")
-    try:
-        await bot.send_message(
-            LOG_CHANNEL_ID,
-            f"━━━━━━━━━━━━━━━\n"
-            f"🎫 <b>НОВЫЙ ТИКЕТ #{ticket_id}</b>\n"
-            f"━━━━━━━━━━━━━━━\n\n"
-            f"👤 {user_name}\n"
-            f"💬 {chat_title}\n"
-            f"📝 {subject}\n"
-            f"{pri_emoji} Приоритет: {priority}",
-            parse_mode="HTML"
-        )
-    except:
-        pass
+    """Уведомляет всех админов о новом тикете через shared"""
+    await shared.notify_new_ticket(ticket_id, user_name, subject, chat_title, priority)
 
 
 
@@ -10501,6 +10465,9 @@ async def main():
     import time as _tstart
     global bot_start_time
     bot_start_time = _tstart.time()
+
+    # ── Shared state (синхронизация между модулями) ───────
+    shared.init(bot, ADMIN_IDS, OWNER_ID, LOG_CHANNEL_ID)
 
     # ── PostgreSQL ────────────────────────────────────────
     await db.init_db()
