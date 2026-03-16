@@ -313,7 +313,8 @@ def navbar(active: str = "") -> str:
         ("alerts",      "/dashboard/alerts",       "&#128308; &#1040;&#1083;&#1077;&#1088;&#1090;&#1099;"),
         ("broadcast",   "/dashboard/broadcast",    "&#128276; &#1056;&#1072;&#1089;&#1089;&#1099;&#1083;&#1082;&#1072;"),
         ("plugins",     "/dashboard/plugins",      "&#127899; &#1055;&#1083;&#1072;&#1075;&#1080;&#1085;&#1099;"),
-        ("settings",    "/dashboard/settings",     "&#9881; &#1053;&#1072;&#1089;&#1090;&#1088;&#1086;&#1081;&#1082;&#1080;"),
+        ("settings",    "/dashboard/settings",       "&#9881; &#1053;&#1072;&#1089;&#1090;&#1088;&#1086;&#1081;&#1082;&#1080;"),
+        ("chat_settings","/dashboard/chat_settings", "&#128172; &#1063;&#1072;&#1090;&#1099;+"),
     ]
     nav_items = "".join(
         f'<a href="{url}" style="{"color:#fff;font-weight:600;" if k==active else ""}">{label}</a>'
@@ -2665,6 +2666,10 @@ async def start_dashboard():
     app.router.add_get("/dashboard/media",                       handle_media)
     app.router.add_get("/dashboard/settings",                    handle_settings)
     app.router.add_post("/dashboard/settings",                   handle_settings)
+    app.router.add_get("/dashboard/chat_settings",               handle_chat_settings)
+    app.router.add_post("/dashboard/chat_settings",              handle_chat_settings)
+    app.router.add_get("/dashboard/chat_settings/{cid}",         handle_chat_settings)
+    app.router.add_post("/dashboard/chat_settings/{cid}",        handle_chat_settings)
     app.router.add_get("/dashboard/export/{type}",               handle_export)
     app.router.add_get("/dashboard/events",                      handle_sse)
 
