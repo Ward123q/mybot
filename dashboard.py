@@ -347,35 +347,119 @@ def require_auth(handler):
 #  ROUTES
 # &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
 
+
+# ══════════════════════════════════════════
+#  2FA — Двухфакторная аутентификация
+# ══════════════════════════════════════════
+import secrets
+import time as _time_2fa
+
+# {token: {"code": str, "expires": float}}
+_2fa_pending: dict = {}
+# {token: True} — подтверждённые сессии
+_2fa_confirmed: dict = {}
+
+
+def _gen_2fa_code() -> str:
+    return str(secrets.randbelow(900000) + 100000)  # 6-значный код
+
+
+async def _send_2fa_code(code: str) -> bool:
+    """Отправляет код в Telegram владельцу"""
+    if not _bot:
+        return False
+    try:
+        from shared import owner_id
+        await _bot.send_message(
+            owner_id,
+            f"━━━━━━━━━━━━━━━\n"
+            f"&#128274; <b>КОД ВХОДА В ДАШБОРД</b>\n"
+            f"━━━━━━━━━━━━━━━\n\n"
+            f"&#128273; Код: <code>{code}</code>\n\n"
+            f"&#9203; Действителен 5 минут.\n"
+            f"Если это не ты — смени DASHBOARD_TOKEN!",
+            parse_mode="HTML"
+        )
+        return True
+    except Exception as e:
+        log.warning(f"2FA: не удалось отправить код: {e}")
+        return False
+
+
 async def handle_login(request: web.Request):
     if request.method == "POST":
-        data = await request.post()
+        data  = await request.post()
         token = data.get("token", "")
+        code  = data.get("code", "")
+        sess  = data.get("sess", "")
+
+        # Шаг 2 — проверяем код 2FA
+        if sess and code:
+            pending = _2fa_pending.get(sess)
+            if pending and pending["code"] == code.strip() and _time_2fa.time() < pending["expires"]:
+                _2fa_pending.pop(sess, None)
+                _2fa_confirmed[sess] = True
+                response = web.HTTPFound("/dashboard")
+                response.set_cookie("dtoken", DASHBOARD_TOKEN, max_age=86400 * 7, httponly=True)
+                response.set_cookie("dsess", sess, max_age=86400 * 7, httponly=True)
+                raise response
+            else:
+                _2fa_pending.pop(sess, None)
+                error2fa = "&#10060; &#1053;&#1077;&#1074;&#1077;&#1088;&#1085;&#1099;&#1081; &#1080;&#1083;&#1080; &#1091;&#1089;&#1090;&#1072;&#1088;&#1077;&#1074;&#1096;&#1080;&#1081; &#1082;&#1086;&#1076;"
+                body = navbar() + f"""
+    <div class="login-wrap"><div class="login-box">
+      <h2>&#128274; &#1050;&#1086;&#1076; &#1087;&#1086;&#1076;&#1090;&#1074;&#1077;&#1088;&#1078;&#1076;&#1077;&#1085;&#1080;&#1103;</h2>
+      <p style="text-align:center;color:#666;margin-bottom:16px;">&#1050;&#1086;&#1076; &#1086;&#1090;&#1087;&#1088;&#1072;&#1074;&#1083;&#1077;&#1085; &#1074; Telegram</p>
+      <form method="POST">
+        <input type="hidden" name="sess" value="{sess}">
+        <div class="form-group"><label>6-&#1079;&#1085;&#1072;&#1095;&#1085;&#1099;&#1081; &#1082;&#1086;&#1076;</label>
+          <input class="form-control" type="text" name="code" placeholder="123456" maxlength="6" autofocus></div>
+        <button class="btn btn-primary" style="width:100%;padding:12px;" type="submit">&#9989; &#1055;&#1086;&#1076;&#1090;&#1074;&#1077;&#1088;&#1076;&#1080;&#1090;&#1100;</button>
+      </form>
+      <p style="color:#f44336;text-align:center;margin-top:12px;">{error2fa}</p>
+    </div></div>"""
+                return web.Response(text=page(body), content_type="text/html")
+
+        # Шаг 1 — проверяем токен и отправляем код
         if token == DASHBOARD_TOKEN:
-            response = web.HTTPFound("/dashboard")
-            response.set_cookie("dtoken", token, max_age=86400 * 7, httponly=True)
-            raise response
-        error = '<p style="color:#f44336;text-align:center;margin-top:12px;">&#1053;&#1077;&#1074;&#1077;&#1088;&#1085;&#1099;&#1081; &#1090;&#1086;&#1082;&#1077;&#1085;</p>'
+            code_val = _gen_2fa_code()
+            sess_id  = secrets.token_hex(16)
+            _2fa_pending[sess_id] = {"code": code_val, "expires": _time_2fa.time() + 300}
+            sent = await _send_2fa_code(code_val)
+            if not sent:
+                # Если бот не настроен — пропускаем 2FA
+                response = web.HTTPFound("/dashboard")
+                response.set_cookie("dtoken", token, max_age=86400 * 7, httponly=True)
+                raise response
+            body = navbar() + f"""
+    <div class="login-wrap"><div class="login-box">
+      <h2>&#128274; &#1050;&#1086;&#1076; &#1087;&#1086;&#1076;&#1090;&#1074;&#1077;&#1088;&#1078;&#1076;&#1077;&#1085;&#1080;&#1103;</h2>
+      <p style="text-align:center;color:#4caf50;margin-bottom:16px;">&#10003; &#1050;&#1086;&#1076; &#1086;&#1090;&#1087;&#1088;&#1072;&#1074;&#1083;&#1077;&#1085; &#1074; Telegram</p>
+      <p style="text-align:center;color:#666;font-size:12px;margin-bottom:20px;">&#9203; &#1044;&#1077;&#1081;&#1089;&#1090;&#1074;&#1080;&#1090;&#1077;&#1083;&#1077;&#1085; 5 &#1084;&#1080;&#1085;&#1091;&#1090;</p>
+      <form method="POST">
+        <input type="hidden" name="sess" value="{sess_id}">
+        <div class="form-group"><label>6-&#1079;&#1085;&#1072;&#1095;&#1085;&#1099;&#1081; &#1082;&#1086;&#1076; &#1080;&#1079; Telegram</label>
+          <input class="form-control" type="text" name="code" placeholder="123456" maxlength="6" autofocus
+            style="font-size:24px;text-align:center;letter-spacing:8px;"></div>
+        <button class="btn btn-primary" style="width:100%;padding:12px;" type="submit">&#9989; &#1055;&#1086;&#1076;&#1090;&#1074;&#1077;&#1088;&#1076;&#1080;&#1090;&#1100;</button>
+      </form>
+    </div></div>"""
+            return web.Response(text=page(body), content_type="text/html")
+        error = "&#10060; &#1053;&#1077;&#1074;&#1077;&#1088;&#1085;&#1099;&#1081; &#1090;&#1086;&#1082;&#1077;&#1085;"
     else:
         error = ""
 
     body = navbar() + f"""
-    <div class="login-wrap">
-      <div class="login-box">
-        <h2>&#9889; CHAT GUARD</h2>
-        <p style="text-align:center;color:#666;margin-bottom:24px;">&#1055;&#1072;&#1085;&#1077;&#1083;&#1100; &#1091;&#1087;&#1088;&#1072;&#1074;&#1083;&#1077;&#1085;&#1080;&#1103;</p>
-        <form method="POST">
-          <div class="form-group">
-            <label>&#1058;&#1086;&#1082;&#1077;&#1085; &#1076;&#1086;&#1089;&#1090;&#1091;&#1087;&#1072;</label>
-            <input class="form-control" type="password" name="token" placeholder="&#1042;&#1074;&#1077;&#1076;&#1080; &#1090;&#1086;&#1082;&#1077;&#1085;...">
-          </div>
-          <button class="btn btn-primary" style="width:100%;padding:12px;" type="submit">
-            &#1042;&#1086;&#1081;&#1090;&#1080;
-          </button>
-        </form>
-        {error}
-      </div>
-    </div>"""
+    <div class="login-wrap"><div class="login-box">
+      <h2>&#9889; CHAT GUARD</h2>
+      <p style="text-align:center;color:#666;margin-bottom:24px;">&#1055;&#1072;&#1085;&#1077;&#1083;&#1100; &#1091;&#1087;&#1088;&#1072;&#1074;&#1083;&#1077;&#1085;&#1080;&#1103;</p>
+      <form method="POST">
+        <div class="form-group"><label>&#1058;&#1086;&#1082;&#1077;&#1085; &#1076;&#1086;&#1089;&#1090;&#1091;&#1087;&#1072;</label>
+          <input class="form-control" type="password" name="token" placeholder="&#1042;&#1074;&#1077;&#1076;&#1080; &#1090;&#1086;&#1082;&#1077;&#1085;..."></div>
+        <button class="btn btn-primary" style="width:100%;padding:12px;" type="submit">&#1042;&#1086;&#1081;&#1090;&#1080;</button>
+      </form>
+      {"" if not error else f'<p style="color:#f44336;text-align:center;margin-top:12px;">{error}</p>'}
+    </div></div>"""
     return web.Response(text=page(body), content_type="text/html")
 
 
