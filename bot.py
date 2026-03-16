@@ -1251,13 +1251,11 @@ class StatsMiddleware(BaseMiddleware):
             except: pass
             # Алерты спама
             try:
-                from dashboard import check_spam
-                await check_spam(uid, cid, event.from_user.full_name, event.chat.title or "")
+                await dashboard.check_spam(uid, cid, event.from_user.full_name, event.chat.title or "")
             except: pass
             # Медиа лог
             try:
-                from dashboard import log_media, _dashboard_settings
-                if _dashboard_settings.get("media_log_enabled", True):
+                if dashboard._dashboard_settings.get("media_log_enabled", True):
                     media_type = None
                     file_id = ""
                     if event.photo:
@@ -1279,7 +1277,7 @@ class StatsMiddleware(BaseMiddleware):
                         media_type = "animation"
                         file_id = event.animation.file_id
                     if media_type:
-                        log_media(cid, uid, event.from_user.full_name,
+                        dashboard.log_media(cid, uid, event.from_user.full_name,
                                   event.chat.title or "", media_type, file_id)
             except: pass
             from datetime import datetime, timedelta
