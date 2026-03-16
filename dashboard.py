@@ -499,7 +499,7 @@ async def handle_chat_detail(request: web.Request):
         "SELECT uid, score FROM reputation WHERE cid=? ORDER BY score DESC LIMIT 10", (cid,)
     ).fetchall()
     bans = c3.execute(
-        "SELECT uid, name, reason, banned_by, banned_at FROM ban_list WHERE cid=?", (cid,)
+        "SELECT uid, reason, banned_at FROM ban_list WHERE cid=?", (cid,)
     ).fetchall()
     mod_hist = c3.execute(
         "SELECT action, reason, by_name, created_at FROM mod_history "
@@ -537,15 +537,11 @@ async def handle_chat_detail(request: web.Request):
     ) or "<tr><td colspan='3'>&#1053;&#1077;&#1090; &#1076;&#1072;&#1085;&#1085;&#1099;&#1093;</td></tr>"
 
     ban_rows = "".join(
-        f"<tr>"
-        f"<td><code>{r['uid']}</code></td>"
-        f"<td>{r['name'] or '&#8212;'}</td>"
-        f"<td>{r['reason'] or '&#8212;'}</td>"
-        f"<td>{r['banned_by'] or '&#8212;'}</td>"
-        f"<td>{r['banned_at'].strftime('%d.%m.%Y') if r['banned_at'] else '&#8212;'}</td>"
-        f"</tr>"
+        "<tr><td><code>" + str(dict(r).get("uid","")) + "</code></td>"
+        "<td>" + str(dict(r).get("reason") or "&#8212;") + "</td>"
+        "<td>" + str(dict(r).get("banned_at") or "")[:10] + "</td></tr>"
         for r in bans
-    ) or "<tr><td colspan='5'>&#1053;&#1077;&#1090; &#1073;&#1072;&#1085;&#1086;&#1074;</td></tr>"
+    ) or "<tr><td colspan='3'>&#1053;&#1077;&#1090; &#1073;&#1072;&#1085;&#1086;&#1074;</td></tr>"
 
     hist_rows = "".join(
         f"<tr>"
@@ -594,7 +590,7 @@ async def handle_chat_detail(request: web.Request):
       <div class="section" style="margin-bottom:24px;">
         <div class="section-header">&#128296; &#1057;&#1087;&#1080;&#1089;&#1086;&#1082; &#1073;&#1072;&#1085;&#1086;&#1074; ({len(bans)})</div>
         <table>
-          <thead><tr><th>ID</th><th>&#1048;&#1084;&#1103;</th><th>&#1055;&#1088;&#1080;&#1095;&#1080;&#1085;&#1072;</th><th>&#1050;&#1090;&#1086;</th><th>&#1044;&#1072;&#1090;&#1072;</th></tr></thead>
+          <thead><tr><th>ID</th><th>&#1055;&#1088;&#1080;&#1095;&#1080;&#1085;&#1072;</th><th>&#1044;&#1072;&#1090;&#1072;</th></tr></thead>
           <tbody>{ban_rows}</tbody>
         </table>
       </div>
@@ -1272,13 +1268,22 @@ async def handle_plugins(request: web.Request):
     ]
 
     conn = db.get_conn()
+    try:
+        conn.execute("""CREATE TABLE IF NOT EXISTS plugins
+                        (cid INTEGER, key TEXT, enabled INTEGER DEFAULT 1,
+                         PRIMARY KEY (cid, key))""")
+        conn.commit()
+    except: pass
     plugin_states = {}
     for key, _ in PLUGINS:
-        row = conn.execute(
-            "SELECT enabled FROM plugins WHERE cid=? AND key=?",
-            (selected_cid, key)
-        ).fetchone()
-        plugin_states[key] = bool(row["enabled"]) if row else True
+        try:
+            row = conn.execute(
+                "SELECT enabled FROM plugins WHERE cid=? AND key=?",
+                (selected_cid, key)
+            ).fetchone()
+            plugin_states[key] = bool(row["enabled"]) if row else True
+        except:
+            plugin_states[key] = True
     conn.close()
 
     chat_opts = "".join(
