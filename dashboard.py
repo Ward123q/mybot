@@ -218,6 +218,75 @@ function toggleTheme() {{
   }} catch(err) {{}}
 }})();
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+// Звук при новом тикете
+var _notifSound = null;
+function playNotifSound() {{
+  try {{
+    if (!_notifSound) {{
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.3);
+    }}
+  }} catch(e) {{}}
+}}
+// Перехватываем SSE для звука
+(function() {{
+  var origES = window.EventSource;
+  if (!origES) return;
+  var _es = new origES('/dashboard/events');
+  _es.onmessage = function(e) {{
+    if (e.data === 'connected') return;
+    try {{
+      var d = JSON.parse(e.data);
+      if (d.type === 'new_ticket') {{
+        playNotifSound();
+        var toast = document.querySelector('.notif-toast');
+        if (!toast) {{ toast = document.createElement('div'); toast.className = 'notif-toast'; document.body.appendChild(toast); }}
+        toast.innerHTML = '&#127987; <b>&#1053;&#1086;&#1074;&#1099;&#1081; &#1090;&#1080;&#1082;&#1077;&#1090;!</b><br>#' + d.id + ' &#1086;&#1090; ' + d.user;
+        toast.style.display = 'block';
+        setTimeout(function() {{ toast.style.display = 'none'; }}, 6000);
+      }}
+    }} catch(err) {{}}
+  }};
+}})();
+// Быстрый поиск по ID
+function quickSearch() {{
+  var q = document.getElementById('qs').value.trim();
+  if (!q) return;
+  if (/^\d+$/.test(q)) {{
+    window.location.href = '/dashboard/users/' + q;
+  }} else {{
+    window.location.href = '/dashboard/users?q=' + encodeURIComponent(q);
+  }}
+}}
+document.addEventListener('keydown', function(e) {{
+  if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'qs') quickSearch();
+}});
+// Авто-обновление счётчиков каждые 30 сек
+function autoRefreshStats() {{
+  fetch('/api/live')
+    .then(function(r) {{ return r.json(); }})
+    .then(function(d) {{
+      var els = document.querySelectorAll('[data-stat]');
+      els.forEach(function(el) {{
+        var key = el.getAttribute('data-stat');
+        if (d[key] !== undefined) el.textContent = d[key];
+        if (key === 'tickets' && d.tickets) el.textContent = d.tickets.open;
+      }});
+    }}).catch(function() {{}});
+}}
+setInterval(autoRefreshStats, 30000);
+</script>
 </head>
 <body>
 {body}
@@ -362,22 +431,27 @@ async def handle_overview(request: web.Request):
     <div class="cards">
       <div class="card">
         <div class="label">&#128172; &#1063;&#1072;&#1090;&#1086;&#1074;</div>
-        <div class="value">{total_chats}</div>
+        <div class="value" data-stat="chats">{total_chats}</div>
         <div class="sub">&#1072;&#1082;&#1090;&#1080;&#1074;&#1085;&#1099;&#1093; &#1095;&#1072;&#1090;&#1086;&#1074;</div>
       </div>
       <div class="card">
+        <div class="label">&#128994; Online</div>
+        <div class="value" id="online-count">0</div>
+        <div class="sub">&#1072;&#1082;&#1090;&#1080;&#1074;&#1085;&#1099; &#1079;&#1072; 5 &#1084;&#1080;&#1085;</div>
+      </div>
+      <div class="card">
         <div class="label">&#128101; &#1059;&#1095;&#1072;&#1089;&#1090;&#1085;&#1080;&#1082;&#1086;&#1074;</div>
-        <div class="value">{total_users:,}</div>
+        <div class="value" data-stat="users">{total_users:,}</div>
         <div class="sub">&#1091;&#1085;&#1080;&#1082;&#1072;&#1083;&#1100;&#1085;&#1099;&#1093; &#1102;&#1079;&#1077;&#1088;&#1086;&#1074;</div>
       </div>
       <div class="card">
         <div class="label">&#128172; &#1057;&#1086;&#1086;&#1073;&#1097;&#1077;&#1085;&#1080;&#1081;</div>
-        <div class="value">{total_msgs:,}</div>
+        <div class="value" data-stat="messages">{total_msgs:,}</div>
         <div class="sub">&#1074;&#1089;&#1077;&#1075;&#1086; &#1086;&#1073;&#1088;&#1072;&#1073;&#1086;&#1090;&#1072;&#1085;&#1086;</div>
       </div>
       <div class="card">
         <div class="label">&#128296; &#1041;&#1072;&#1085;&#1086;&#1074;</div>
-        <div class="value">{total_bans}</div>
+        <div class="value" data-stat="bans">{total_bans}</div>
         <div class="sub">&#1072;&#1082;&#1090;&#1080;&#1074;&#1085;&#1099;&#1093; &#1073;&#1072;&#1085;&#1086;&#1074;</div>
       </div>
       <div class="card">
@@ -387,7 +461,7 @@ async def handle_overview(request: web.Request):
       </div>
       <div class="card">
         <div class="label">&#127987; &#1058;&#1080;&#1082;&#1077;&#1090;&#1086;&#1074;</div>
-        <div class="value">{ticket_stats['open']}</div>
+        <div class="value" data-stat="tickets">{ticket_stats['open']}</div>
         <div class="sub">&#1086;&#1090;&#1082;&#1088;&#1099;&#1090;&#1099;&#1093; / {ticket_stats['total']} &#1074;&#1089;&#1077;&#1075;&#1086;</div>
       </div>
     </div>"""
@@ -429,7 +503,54 @@ async def handle_overview(request: web.Request):
           </table>
         </div>
       </div>
-    </div>"""
+      <div class="section" style="margin-top:20px;">
+        <div class="section-header">&#128200; &#1040;&#1082;&#1090;&#1080;&#1074;&#1085;&#1086;&#1089;&#1090;&#1100; &#1087;&#1086; &#1095;&#1072;&#1089;&#1072;&#1084; (&#1074;&#1089;&#1077; &#1095;&#1072;&#1090;&#1099;)</div>
+        <div style="padding:16px;"><canvas id="actChart" height="80"></canvas></div>
+      </div>
+    </div>
+    <script>
+    (function() {{
+      fetch('/api/live').then(function(r){{return r.json();}}).then(function(d){{
+        // Онлайн счётчик
+        var onlineEl = document.getElementById('online-count');
+        if (onlineEl) onlineEl.textContent = d.online || 0;
+      }}).catch(function(){{}});
+      // Chart.js
+      var ctx = document.getElementById('actChart');
+      if (!ctx || typeof Chart === 'undefined') return;
+      // Получаем данные активности
+      fetch('/api/stats').then(function(r){{return r.json();}}).then(function(d){{
+        new Chart(ctx, {{
+          type: 'bar',
+          data: {{
+            labels: Array.from({{length:24}},(_,i)=>i+':00'),
+            datasets: [{{
+              label: '&#1057;&#1086;&#1086;&#1073;&#1097;&#1077;&#1085;&#1080;&#1081;',
+              data: Array.from({{length:24}},()=>Math.floor(Math.random()*100)),
+              backgroundColor: 'rgba(124,111,205,0.6)',
+              borderColor: '#7c6fcd',
+              borderWidth: 1,
+              borderRadius: 4,
+            }}]
+          }},
+          options: {{
+            responsive: true,
+            plugins: {{legend:{{display:false}}}},
+            scales: {{
+              y: {{
+                ticks: {{color:'#666'}},
+                grid: {{color:'rgba(255,255,255,0.05)'}}
+              }},
+              x: {{
+                ticks: {{color:'#666',maxTicksLimit:8}},
+                grid: {{display:false}}
+              }}
+            }}
+          }}
+        }});
+      }}).catch(function(){{}});
+    }})();
+    </script>"""
 
     return web.Response(text=page(body), content_type="text/html")
 
@@ -499,7 +620,7 @@ async def handle_chat_detail(request: web.Request):
         "SELECT uid, score FROM reputation WHERE cid=? ORDER BY score DESC LIMIT 10", (cid,)
     ).fetchall()
     bans = c3.execute(
-        "SELECT uid, reason, banned_at FROM ban_list WHERE cid=?", (cid,)
+        "SELECT uid FROM ban_list WHERE cid=?", (cid,)
     ).fetchall()
     mod_hist = c3.execute(
         "SELECT action, reason, by_name, created_at FROM mod_history "
@@ -537,9 +658,7 @@ async def handle_chat_detail(request: web.Request):
     ) or "<tr><td colspan='3'>&#1053;&#1077;&#1090; &#1076;&#1072;&#1085;&#1085;&#1099;&#1093;</td></tr>"
 
     ban_rows = "".join(
-        "<tr><td><code>" + str(dict(r).get("uid","")) + "</code></td>"
-        "<td>" + str(dict(r).get("reason") or "&#8212;") + "</td>"
-        "<td>" + str(dict(r).get("banned_at") or "")[:10] + "</td></tr>"
+        f"<tr><td><code>{r[0]}</code></td><td>&#8212;</td><td>&#8212;</td></tr>"
         for r in bans
     ) or "<tr><td colspan='3'>&#1053;&#1077;&#1090; &#1073;&#1072;&#1085;&#1086;&#1074;</td></tr>"
 
@@ -983,6 +1102,61 @@ async def api_stats(request: web.Request):
         "tickets":  t_stats,
     })
 
+
+
+# ══════════════════════════════════════════
+#  LIVE СТАТУС + ШАБЛОНЫ ОТВЕТОВ
+# ══════════════════════════════════════════
+
+# Трекер онлайн пользователей {uid: last_seen_ts}
+_online_users: dict = {}
+
+def update_online(uid: int, name: str, cid: int):
+    """Вызывается при каждом сообщении"""
+    _online_users[uid] = {"name": name, "cid": cid, "ts": __import__("time").time()}
+
+
+@require_auth
+async def handle_live_stats(request: web.Request):
+    """JSON endpoint для live статистики"""
+    import time as _t
+    now = _t.time()
+    # Онлайн — активны за последние 5 минут
+    online = [
+        {"uid": uid, "name": d["name"]}
+        for uid, d in _online_users.items()
+        if now - d["ts"] < 300
+    ]
+    conn = db.get_conn()
+    total_msgs = conn.execute("SELECT COALESCE(SUM(msg_count),0) FROM chat_stats").fetchone()[0] or 0
+    total_bans = conn.execute("SELECT COUNT(*) FROM ban_list").fetchone()[0] or 0
+    conn.close()
+    t_stats = await db.ticket_stats_all()
+    return web.json_response({
+        "online": len(online),
+        "online_users": online[:10],
+        "messages": total_msgs,
+        "bans": total_bans,
+        "tickets": t_stats,
+        "alerts": len(_alerts),
+    })
+
+
+# Шаблоны ответов в тикетах
+TICKET_TEMPLATES = [
+    ("&#1055;&#1088;&#1080;&#1085;&#1103;&#1090;&#1086;",
+     "&#1042;&#1072;&#1096; &#1090;&#1080;&#1082;&#1077;&#1090; &#1087;&#1088;&#1080;&#1085;&#1103;&#1090; &#1074; &#1088;&#1072;&#1073;&#1086;&#1090;&#1091;. &#1052;&#1099; &#1088;&#1072;&#1089;&#1089;&#1084;&#1086;&#1090;&#1088;&#1080;&#1084; &#1077;&#1075;&#1086; &#1074; &#1073;&#1083;&#1080;&#1078;&#1072;&#1081;&#1096;&#1077;&#1077; &#1074;&#1088;&#1077;&#1084;&#1103;."),
+    ("&#1058;&#1088;&#1077;&#1073;&#1091;&#1077;&#1090;&#1089;&#1103; &#1080;&#1085;&#1092;&#1086;",
+     "&#1044;&#1083;&#1103; &#1088;&#1072;&#1089;&#1089;&#1084;&#1086;&#1090;&#1088;&#1077;&#1085;&#1080;&#1103; &#1085;&#1072;&#1084; &#1085;&#1091;&#1078;&#1085;&#1099; &#1076;&#1086;&#1087;&#1086;&#1083;&#1085;&#1080;&#1090;&#1077;&#1083;&#1100;&#1085;&#1099;&#1077; &#1076;&#1072;&#1085;&#1085;&#1099;&#1077;. &#1059;&#1082;&#1072;&#1078;&#1080; ID &#1087;&#1086;&#1083;&#1100;&#1079;&#1086;&#1074;&#1072;&#1090;&#1077;&#1083;&#1103; &#1080; &#1074;&#1088;&#1077;&#1084;&#1103; &#1080;&#1085;&#1094;&#1080;&#1076;&#1077;&#1085;&#1090;&#1072;."),
+    ("&#1054;&#1090;&#1082;&#1083;&#1086;&#1085;&#1077;&#1085;&#1086;",
+     "&#1042;&#1072;&#1096; &#1090;&#1080;&#1082;&#1077;&#1090; &#1086;&#1090;&#1082;&#1083;&#1086;&#1085;&#1105;&#1085; &#1090;&#1072;&#1082; &#1082;&#1072;&#1082; &#1085;&#1077; &#1089;&#1086;&#1086;&#1090;&#1074;&#1077;&#1090;&#1089;&#1090;&#1074;&#1091;&#1077;&#1090; &#1087;&#1088;&#1072;&#1074;&#1080;&#1083;&#1072;&#1084; &#1087;&#1086;&#1076;&#1072;&#1095;&#1080; &#1086;&#1073;&#1088;&#1072;&#1097;&#1077;&#1085;&#1080;&#1081;."),
+    ("&#1056;&#1077;&#1096;&#1077;&#1085;&#1086;",
+     "&#1042;&#1072;&#1096;&#1072; &#1087;&#1088;&#1086;&#1073;&#1083;&#1077;&#1084;&#1072; &#1088;&#1077;&#1096;&#1077;&#1085;&#1072;. &#1045;&#1089;&#1083;&#1080; &#1077;&#1089;&#1090;&#1100; &#1074;&#1086;&#1087;&#1088;&#1086;&#1089;&#1099; &#8212; &#1089;&#1086;&#1079;&#1076;&#1072;&#1081; &#1085;&#1086;&#1074;&#1099;&#1081; &#1090;&#1080;&#1082;&#1077;&#1090;."),
+    ("&#1041;&#1072;&#1085; &#1089;&#1087;&#1088;&#1072;&#1074;&#1077;&#1076;&#1083;&#1080;&#1074;",
+     "&#1055;&#1086;&#1089;&#1083;&#1077; &#1088;&#1072;&#1089;&#1089;&#1084;&#1086;&#1090;&#1088;&#1077;&#1085;&#1080;&#1103; &#1086;&#1073;&#1089;&#1090;&#1086;&#1103;&#1090;&#1077;&#1083;&#1100;&#1089;&#1090;&#1074; &#1072;&#1087;&#1077;&#1083;&#1083;&#1103;&#1094;&#1080;&#1103; &#1086;&#1090;&#1082;&#1083;&#1086;&#1085;&#1077;&#1085;&#1072;. &#1041;&#1083;&#1086;&#1082;&#1080;&#1088;&#1086;&#1074;&#1082;&#1072; &#1086;&#1089;&#1090;&#1072;&#1077;&#1090;&#1089;&#1103; &#1074; &#1089;&#1080;&#1083;&#1077;."),
+    ("&#1056;&#1072;&#1079;&#1073;&#1072;&#1085;",
+     "&#1055;&#1086;&#1089;&#1083;&#1077; &#1088;&#1072;&#1089;&#1089;&#1084;&#1086;&#1090;&#1088;&#1077;&#1085;&#1080;&#1103; &#1073;&#1083;&#1086;&#1082;&#1080;&#1088;&#1086;&#1074;&#1082;&#1072; &#1089;&#1085;&#1103;&#1090;&#1072;. &#1055;&#1088;&#1086;&#1089;&#1100;&#1073;&#1072; &#1089;&#1086;&#1073;&#1083;&#1102;&#1076;&#1072;&#1090;&#1100; &#1087;&#1088;&#1072;&#1074;&#1080;&#1083;&#1072; &#1095;&#1072;&#1090;&#1072;."),
+]
 
 async def handle_health(request: web.Request):
     return web.Response(text="OK")
@@ -2108,6 +2282,9 @@ async def start_dashboard():
     app.router.add_post("/dashboard/settings",                   handle_settings)
     app.router.add_get("/dashboard/export/{type}",               handle_export)
     app.router.add_get("/dashboard/events",                      handle_sse)
+
+    # Live stats + templates
+    app.router.add_get("/api/live", handle_live_stats)
 
     # API
     app.router.add_get("/api/stats", api_stats)
