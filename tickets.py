@@ -21,6 +21,11 @@ import database as db
 log = logging.getLogger(__name__)
 
 LOG_CHANNEL_ID = -1003832428474
+_bot = None  # устанавливается из init()
+
+def set_bot(bot):
+    global _bot
+    _bot = bot
 
 # Состояния создания тикета
 # Состояния тикетов — сохраняются в SQLite чтобы не терялись при рестарте
@@ -89,10 +94,12 @@ ticket_states = _TicketStates()
 mod_reply_states: dict = {}
 
 
-async def _log(bot: Bot, text: str):
+async def _log(bot_or_none, text: str):
     """Отправляет сообщение в лог-канал"""
     try:
-        await bot.send_message(LOG_CHANNEL_ID, text, parse_mode="HTML")
+        b = bot_or_none or _bot
+        if b:
+            await b.send_message(LOG_CHANNEL_ID, text, parse_mode="HTML")
     except Exception as e:
         log.warning(f"Не удалось отправить в лог-канал: {e}")
 
@@ -388,7 +395,7 @@ async def cb_ticket_user(call: CallbackQuery, bot: Bot, known_chats: list):
             parse_mode="HTML",
             reply_markup=kb_ticket_start()
         )
-        await _log(call.message._bot,
+        await _log(_bot,
             f"━━━━━━━━━━━━━━━\n"
             f"✅ <b>ТИКЕТ #{ticket_id} ЗАКРЫТ</b>\n"
             f"━━━━━━━━━━━━━━━\n"
