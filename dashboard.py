@@ -339,6 +339,10 @@ def require_auth(handler):
         token = request.cookies.get("dtoken") or request.rel_url.query.get("token")
         if token != DASHBOARD_TOKEN:
             raise web.HTTPFound("/dashboard/login")
+        try:
+            _track_session(request)
+        except:
+            pass
         return await handler(request)
     return wrapper
 
@@ -525,6 +529,11 @@ async def handle_overview(request: web.Request):
         <div class="sub">&#1072;&#1082;&#1090;&#1080;&#1074;&#1085;&#1099; &#1079;&#1072; 5 &#1084;&#1080;&#1085;</div>
       </div>
       <div class="card">
+        <div class="label">&#128101; &#1074; &#1076;&#1072;&#1096;&#1073;&#1086;&#1088;&#1076;&#1077;</div>
+        <div class="value">{len(_get_active_sessions())}</div>
+        <div class="sub">&#1089;&#1077;&#1081;&#1095;&#1072;&#1089; &#1085;&#1072; &#1089;&#1072;&#1081;&#1090;&#1077;</div>
+      </div>
+      <div class="card">
         <div class="label">&#128101; &#1059;&#1095;&#1072;&#1089;&#1090;&#1085;&#1080;&#1082;&#1086;&#1074;</div>
         <div class="value" data-stat="users">{total_users:,}</div>
         <div class="sub">&#1091;&#1085;&#1080;&#1082;&#1072;&#1083;&#1100;&#1085;&#1099;&#1093; &#1102;&#1079;&#1077;&#1088;&#1086;&#1074;</div>
@@ -572,6 +581,16 @@ async def handle_overview(request: web.Request):
     <div class="container">
       <div class="page-title">&#128202; &#1054;&#1073;&#1079;&#1086;&#1088;</div>
       {cards}
+      <div class="section" style="margin-bottom:20px;">
+        <div class="section-header">&#128101; &#1040;&#1082;&#1090;&#1080;&#1074;&#1085;&#1099;&#1077; &#1089;&#1077;&#1089;&#1089;&#1080;&#1080; &#1076;&#1072;&#1096;&#1073;&#1086;&#1088;&#1076;&#1072;</div>
+        {''.join(
+            f"<div style='padding:10px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;'>"
+            f"<div><b>&#128101; &#1057;&#1077;&#1089;&#1089;&#1080;&#1103;</b> <code style='font-size:11px;color:var(--text2);'>{s['ip']}</code></div>"
+            f"<div style='font-size:12px;color:var(--text2);'>{s['current']} &middot; {int((_sess_time.time()-s['last_seen'])//60)}&#1084; &#1085;&#1072;&#1079;&#1072;&#1076;</div>"
+            f"</div>"
+            for s in _get_active_sessions()
+        ) if _get_active_sessions() else '<div class="empty-state" style="padding:20px;">&#1053;&#1080;&#1082;&#1090;&#1086; &#1085;&#1077; &#1089;&#1080;&#1076;&#1080;&#1090;</div>'}
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
         <div class="section">
           <div class="section-header">&#128110; &#1058;&#1086;&#1087; &#1084;&#1086;&#1076;&#1077;&#1088;&#1072;&#1090;&#1086;&#1088;&#1086;&#1074;</div>
@@ -1254,6 +1273,45 @@ TICKET_TEMPLATES = [
     ("&#1056;&#1072;&#1079;&#1073;&#1072;&#1085;",
      "&#1055;&#1086;&#1089;&#1083;&#1077; &#1088;&#1072;&#1089;&#1089;&#1084;&#1086;&#1090;&#1088;&#1077;&#1085;&#1080;&#1103; &#1073;&#1083;&#1086;&#1082;&#1080;&#1088;&#1086;&#1074;&#1082;&#1072; &#1089;&#1085;&#1103;&#1090;&#1072;. &#1055;&#1088;&#1086;&#1089;&#1100;&#1073;&#1072; &#1089;&#1086;&#1073;&#1083;&#1102;&#1076;&#1072;&#1090;&#1100; &#1087;&#1088;&#1072;&#1074;&#1080;&#1083;&#1072; &#1095;&#1072;&#1090;&#1072;."),
 ]
+
+
+# ══════════════════════════════════════════
+#  ТРЕКИНГ СЕССИЙ ДАШБОРДА
+# ══════════════════════════════════════════
+
+import time as _sess_time
+
+# {sess_token: {"ip": str, "last_seen": float, "pages": int}}
+_active_sessions: dict = {}
+
+
+def _track_session(request):
+    """Обновляет время последней активности сессии"""
+    token = request.cookies.get("dtoken")
+    if token != DASHBOARD_TOKEN:
+        return
+    ip    = request.headers.get("X-Forwarded-For", request.remote or "unknown").split(",")[0].strip()
+    path  = str(request.rel_url)
+    now   = _sess_time.time()
+
+    if ip not in _active_sessions:
+        _active_sessions[ip] = {"ip": ip, "last_seen": now, "pages": 0, "current": path}
+    _active_sessions[ip]["last_seen"] = now
+    _active_sessions[ip]["pages"]    += 1
+    _active_sessions[ip]["current"]   = path
+
+    # Чистим сессии старше 10 минут
+    for k in list(_active_sessions.keys()):
+        if now - _active_sessions[k]["last_seen"] > 600:
+            del _active_sessions[k]
+
+
+def _get_active_sessions() -> list:
+    now = _sess_time.time()
+    return [
+        s for s in _active_sessions.values()
+        if now - s["last_seen"] < 600
+    ]
 
 async def handle_health(request: web.Request):
     return web.Response(text="OK")
