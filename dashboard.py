@@ -1170,12 +1170,15 @@ async def handle_user_detail(request: web.Request):
         for r in ticket_rows
     ) or "<tr><td colspan='4'>&#1053;&#1077;&#1090; &#1090;&#1080;&#1082;&#1077;&#1090;&#1086;&#1074;</td></tr>"
 
-    # &#1044;&#1086;&#1089;&#1090;&#1080;&#1078;&#1077;&#1085;&#1080;&#1103;
-    from features import ACHIEVEMENTS
-    ach_html = " ".join(
-        f'<span title="{ACHIEVEMENTS[r["key"]][1]}" style="font-size:20px;">{ACHIEVEMENTS[r["key"]][0]}</span>'
-        for r in ach_rows if r["key"] in ACHIEVEMENTS
-    ) or "&#1053;&#1077;&#1090; &#1076;&#1086;&#1089;&#1090;&#1080;&#1078;&#1077;&#1085;&#1080;&#1081;"
+    # Достижения
+    try:
+        from features import ACHIEVEMENTS as _ACH
+        ach_html = " ".join(
+            f'<span title="{_ACH[r["key"]][1]}" style="font-size:20px;">{_ACH[r["key"]][0]}</span>'
+            for r in ach_rows if r["key"] in _ACH
+        ) or "&#1053;&#1077;&#1090; &#1076;&#1086;&#1089;&#1090;&#1080;&#1078;&#1077;&#1085;&#1080;&#1081;"
+    except:
+        ach_html = "&#8212;"
 
     body = navbar("users") + f"""
     <div class="container">
@@ -1287,22 +1290,20 @@ async def handle_plugins(request: web.Request):
     rows = ""
     for key, label in PLUGINS:
         enabled = plugin_states.get(key, True)
-        rows += f"""
-        <tr>
-          <td>{label}</td>
-          <td><code>{key}</code></td>
-          <td>{'<span class="badge badge-open">&#1042;&#1082;&#1083;&#1102;&#1095;&#1105;&#1085;</span>' if enabled else '<span class="badge badge-closed">&#1042;&#1099;&#1082;&#1083;&#1102;&#1095;&#1077;&#1085;</span>'}</td>
-          <td>
-            <form method="POST" style="display:inline;">
-              <input type="hidden" name="cid" value="{selected_cid}">
-              <input type="hidden" name="plugin" value="{key}">
-              <input type="hidden" name="enabled" value="{'0' if enabled else '1'}">
-              <button class="btn btn-sm {'btn-danger' if enabled else 'btn-success'}" type="submit">
-                {'&#10060; &#1042;&#1099;&#1082;&#1083;&#1102;&#1095;&#1080;&#1090;&#1100;' if enabled else '&#9989; &#1042;&#1082;&#1083;&#1102;&#1095;&#1080;&#1090;&#1100;'}
-              </button>
-            </form>
-          </td>
-        </tr>"""
+        status_badge = '<span class="badge badge-open">&#1042;&#1082;&#1083;&#1102;&#1095;&#1105;&#1085;</span>' if enabled else '<span class="badge badge-closed">&#1042;&#1099;&#1082;&#1083;&#1102;&#1095;&#1077;&#1085;</span>'
+        btn_class = "btn-danger" if enabled else "btn-success"
+        btn_text  = "&#10060; &#1042;&#1099;&#1082;&#1083;&#1102;&#1095;&#1080;&#1090;&#1100;" if enabled else "&#9989; &#1042;&#1082;&#1083;&#1102;&#1095;&#1080;&#1090;&#1100;"
+        new_val   = "0" if enabled else "1"
+        rows += (
+            f"<tr><td>{label}</td><td><code>{key}</code></td>"
+            f"<td>{status_badge}</td><td>"
+            f'<form method="POST" style="display:inline;">'
+            f'<input type="hidden" name="cid" value="{selected_cid}">'
+            f'<input type="hidden" name="plugin" value="{key}">'
+            f'<input type="hidden" name="enabled" value="{new_val}">'
+            f'<button class="btn btn-sm {btn_class}" type="submit">{btn_text}</button>'
+            f"</form></td></tr>"
+        )
 
     body = navbar("plugins") + f"""
     <div class="container">
