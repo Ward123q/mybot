@@ -9,6 +9,7 @@ tickets.py — Система тикетов через ЛС бота
 """
 import asyncio
 import logging
+import os
 from datetime import datetime
 from aiogram import Bot
 from aiogram.types import (
@@ -19,13 +20,81 @@ import database as db
 
 log = logging.getLogger(__name__)
 
+LOG_CHANNEL_ID = -1003832428474
+
 # Состояния создания тикета
-# {uid: {"step": "subject"|"chat", "cid": int, "chat_title": str}}
-ticket_states: dict = {}
+# Состояния тикетов — сохраняются в SQLite чтобы не терялись при рестарте
+_ticket_states_cache: dict = {}
+
+def _load_ticket_states():
+    try:
+        import sqlite3, json
+        conn = sqlite3.connect("skinvault.db", check_same_thread=False)
+        conn.execute("""CREATE TABLE IF NOT EXISTS ticket_states_store
+                        (uid INTEGER PRIMARY KEY, data TEXT)""")
+        rows = conn.execute("SELECT uid, data FROM ticket_states_store").fetchall()
+        conn.close()
+        for row in rows:
+            try:
+                _ticket_states_cache[row[0]] = json.loads(row[1])
+            except: pass
+    except: pass
+
+def _save_ticket_state(uid: int, state: dict):
+    try:
+        import sqlite3, json
+        conn = sqlite3.connect("skinvault.db", check_same_thread=False)
+        conn.execute("CREATE TABLE IF NOT EXISTS ticket_states_store (uid INTEGER PRIMARY KEY, data TEXT)")
+        conn.execute("INSERT OR REPLACE INTO ticket_states_store (uid, data) VALUES (?,?)",
+                     (uid, json.dumps(state)))
+        conn.commit()
+        conn.close()
+    except: pass
+
+def _delete_ticket_state(uid: int):
+    try:
+        import sqlite3
+        conn = sqlite3.connect("skinvault.db", check_same_thread=False)
+        conn.execute("DELETE FROM ticket_states_store WHERE uid=?", (uid,))
+        conn.commit()
+        conn.close()
+    except: pass
+
+# Загружаем при старте
+_load_ticket_states()
+
+class _TicketStates:
+    """Персистентный dict для состояний тикетов"""
+    def __getitem__(self, key):
+        return _ticket_states_cache[key]
+    def __setitem__(self, key, value):
+        _ticket_states_cache[key] = value
+        _save_ticket_state(key, value)
+    def __delitem__(self, key):
+        _ticket_states_cache.pop(key, None)
+        _delete_ticket_state(key)
+    def __contains__(self, key):
+        return key in _ticket_states_cache
+    def get(self, key, default=None):
+        return _ticket_states_cache.get(key, default)
+    def pop(self, key, default=None):
+        _delete_ticket_state(key)
+        return _ticket_states_cache.pop(key, default)
+    def keys(self):
+        return _ticket_states_cache.keys()
+
+ticket_states = _TicketStates()
 
 # Состояния ответа мода
-# {mod_uid: ticket_id}
 mod_reply_states: dict = {}
+
+
+async def _log(bot: Bot, text: str):
+    """Отправляет сообщение в лог-канал"""
+    try:
+        await bot.send_message(LOG_CHANNEL_ID, text, parse_mode="HTML")
+    except Exception as e:
+        log.warning(f"Не удалось отправить в лог-канал: {e}")
 
 PRIORITY_EMOJI = {
     "low":    "🟢",
@@ -223,8 +292,9 @@ async def cb_ticket_user(call: CallbackQuery, bot: Bot, known_chats: list):
     elif parts[1] == "pri":
         priority = parts[2]
         state = ticket_states.get(uid, {})
-        if not state:
-            await call.answer("Начни заново /ticket", show_alert=True)
+        if not state or "chat_title" not in state:
+            await call.answer("Сессия устарела, начни заново /ticket", show_alert=True)
+            ticket_states.pop(uid, None)
             return
         state["priority"] = priority
         state["step"] = "subject"
@@ -318,6 +388,12 @@ async def cb_ticket_user(call: CallbackQuery, bot: Bot, known_chats: list):
             parse_mode="HTML",
             reply_markup=kb_ticket_start()
         )
+        await _log(call.message._bot,
+            f"━━━━━━━━━━━━━━━\n"
+            f"✅ <b>ТИКЕТ #{ticket_id} ЗАКРЫТ</b>\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"👤 {call.from_user.mention_html()} (пользователь)"
+        )
 
     elif parts[1] == "cancel":
         ticket_states.pop(uid, None)
@@ -393,6 +469,18 @@ async def handle_dm_message(message: Message, bot: Bot,
         if notify_mods_func:
             await notify_mods_func(ticket_id, uid, message.from_user.full_name,
                                    chat_title, subject, priority)
+
+        # Лог в канал
+        pri_emoji = PRIORITY_EMOJI.get(priority, "🟡")
+        await _log(bot,
+            f"━━━━━━━━━━━━━━━\n"
+            f"🆕 <b>НОВЫЙ ТИКЕТ #{ticket_id}</b>\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"👤 {message.from_user.mention_html()}\n"
+            f"💬 {chat_title}\n"
+            f"📝 {subject}\n"
+            f"{pri_emoji} Приоритет: {priority}"
+        )
         return True
 
     # Пользователь пишет ответ в открытый тикет
@@ -416,6 +504,15 @@ async def handle_dm_message(message: Message, bot: Bot,
         await message.answer(
             f"✅ Сообщение отправлено в тикет #{ticket_id}",
             reply_markup=kb_ticket_user(ticket_id)
+        )
+
+        # Лог в канал
+        await _log(bot,
+            f"━━━━━━━━━━━━━━━\n"
+            f"💬 <b>ОТВЕТ В ТИКЕТ #{ticket_id}</b>\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"👤 {message.from_user.mention_html()}:\n"
+            f"{text.strip()[:200]}"
         )
 
         # Уведомляем назначенного мода
@@ -471,6 +568,13 @@ async def cb_ticket_mod(call: CallbackQuery, bot: Bot):
             parse_mode="HTML",
             reply_markup=kb_mod_ticket(ticket_id)
         )
+        # Лог
+        await _log(bot,
+            f"━━━━━━━━━━━━━━━\n"
+            f"👮 <b>ТИКЕТ #{ticket_id} ВЗЯТ</b>\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"👮 {call.from_user.mention_html()}"
+        )
         # Уведомить пользователя
         try:
             await bot.send_message(
@@ -517,6 +621,13 @@ async def cb_ticket_mod(call: CallbackQuery, bot: Bot):
             f"━━━━━━━━━━━━━━━\n\n"
             f"Закрыл: <b>{mod_name}</b>",
             parse_mode="HTML"
+        )
+        # Лог
+        await _log(bot,
+            f"━━━━━━━━━━━━━━━\n"
+            f"✅ <b>ТИКЕТ #{ticket_id} ЗАКРЫТ</b>\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"👮 {call.from_user.mention_html()} (модератор)"
         )
         # Уведомить пользователя
         try:
@@ -601,6 +712,15 @@ async def handle_mod_reply(message: Message, bot: Bot) -> bool:
     await message.answer(
         f"✅ Ответ отправлен в тикет #{ticket_id}",
         reply_markup=kb_mod_ticket(ticket_id)
+    )
+
+    # Лог в канал
+    await _log(bot,
+        f"━━━━━━━━━━━━━━━\n"
+        f"💬 <b>ОТВЕТ МОДЕРАТОРА #{ticket_id}</b>\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"👮 {message.from_user.mention_html()}:\n"
+        f"{text[:200]}"
     )
 
     # Отправляем пользователю
