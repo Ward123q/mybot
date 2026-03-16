@@ -2473,6 +2473,26 @@ async def cb_game(call: CallbackQuery):
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     name = message.from_user.first_name
+    bot_info = await bot.get_me()
+    bot_username = bot_info.username
+
+    # В группе — отправляем кнопку перейти в ЛС
+    if message.chat.type in ("group", "supergroup"):
+        await message.answer(
+            f"👋 Привет, <b>{name}</b>!\n\n"
+            f"🎫 Чтобы открыть тикет или получить помощь — "
+            f"нажми кнопку ниже и напиши мне в личку.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text="💬 Открыть бота",
+                    url=f"https://t.me/{bot_username}?start=ticket"
+                )
+            ]])
+        )
+        return
+
+    # В ЛС — полное меню
     await message.answer(
         f"━━━━━━━━━━━━━━━\n"
         f"⚡ <b>CHAT GUARD</b>\n"
@@ -2868,6 +2888,8 @@ async def cmd_unban(message: Message):
     if not message.reply_to_message: await reply_auto_delete(message, "↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user
     await bot.unban_chat_member(message.chat.id, target.id, only_if_banned=True)
+    add_mod_history(message.chat.id, target.id, "🕊 Разбан", "—", message.from_user.full_name)
+    ban_list[message.chat.id].pop(target.id, None); save_data()
     await reply_auto_delete(message, f"🕊 {target.mention_html()} разбанен.", parse_mode="HTML")
     await log_action(f"╔═══════════════════╗\n🕊  <b>РАЗБАН</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
@@ -2910,6 +2932,7 @@ async def cmd_unmute(message: Message):
     await bot.restrict_chat_member(message.chat.id, target.id,
         permissions=ChatPermissions(can_send_messages=True, can_send_media_messages=True,
             can_send_polls=True, can_send_other_messages=True, can_add_web_page_previews=True))
+    add_mod_history(message.chat.id, target.id, "🔊 Размут", "—", message.from_user.full_name)
     await reply_auto_delete(message, f"🔊 {target.mention_html()} размучен.", parse_mode="HTML")
     await log_action(f"╔═══════════════════╗\n🔊  <b>РАЗМУТ</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
@@ -2965,7 +2988,8 @@ async def cmd_unwarn(message: Message):
     if not await require_admin(message): return
     if not message.reply_to_message: await reply_auto_delete(message, "↩️ Ответь на сообщение."); return
     target = message.reply_to_message.from_user; cid = message.chat.id
-    if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1
+    if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1; save_data()
+    add_mod_history(cid, target.id, "🌿 Снят варн", "—", message.from_user.full_name)
     await reply_auto_delete(message, 
         f"🌿 С {target.mention_html()} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>",
         parse_mode="HTML")
@@ -3808,6 +3832,8 @@ async def autist_commands(message: Message):
             else:
                 await bot.ban_chat_member(cid, target.id)
                 await reply_auto_delete(message, f"🔨 {tname} забанен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
+            add_mod_history(cid, target.id, "🔨 Бан", reason, message.from_user.full_name)
+            ban_list[cid].add(target.id); save_data()
             await log_action(f"╔═══════════════════╗\n🔨  <b>БАН</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         elif action == "захуесосить":
             await bot.ban_chat_member(cid, target.id)
@@ -3824,6 +3850,7 @@ async def autist_commands(message: Message):
             await bot.restrict_chat_member(cid, target.id,
                 permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
             await reply_auto_delete(message, f"🔇 {tname} замучен на <b>{label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
+            add_mod_history(cid, target.id, f"🔇 Мут {label}", reason, message.from_user.full_name)
             await log_action(f"╔═══════════════════╗\n🔇  <b>МУТ</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         elif action == "мут навсегда":
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(can_send_messages=False))
@@ -3843,22 +3870,29 @@ async def autist_commands(message: Message):
                 _aio.create_task(_auto_unwarn(cid, target.id, duration_mins))
             if count >= MAX_WARNINGS:
                 await bot.ban_chat_member(cid, target.id); warnings[cid][target.id] = 0
+                ban_list[cid].add(target.id); save_data()
+                add_mod_history(cid, target.id, "🔨 Автобан", f"{MAX_WARNINGS} варнов", message.from_user.full_name)
                 await reply_auto_delete(message, f"🔨 {tname} — {MAX_WARNINGS} варна, автобан!\n📝 Причина: {reason}", parse_mode="HTML")
                 await log_action(f"╔═══════════════════╗\n🔨  <b>АВТОБАН</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n🤖 <b>Причина:</b> лимит варнов\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
             else:
+                add_mod_history(cid, target.id, f"⚡ Варн {count}/{MAX_WARNINGS}", reason, message.from_user.full_name)
                 time_note = f"\n⏰ Автосброс через: <b>{duration_label}</b>" if duration_mins else ""
                 await reply_auto_delete(message, f"⚡ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}{time_note}", parse_mode="HTML")
                 await log_action(f"╔═══════════════════╗\n⚡  <b>ВАРН</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         elif action in ("снять варн", "разварн"):
             if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1; save_data()
+            add_mod_history(cid, target.id, "🌿 Снят варн", reason, message.from_user.full_name)
             await reply_auto_delete(message, f"🌿 С {tname} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>", parse_mode="HTML")
         elif action == "разбан":
             await bot.unban_chat_member(cid, target.id, only_if_banned=True)
+            ban_list[cid].discard(target.id); save_data()
+            add_mod_history(cid, target.id, "🕊 Разбан", reason, message.from_user.full_name)
             await reply_auto_delete(message, f"🕊 {tname} разбанен.", parse_mode="HTML")
         elif action == "размут":
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
                 can_send_other_messages=True, can_add_web_page_previews=True))
+            add_mod_history(cid, target.id, "🔊 Размут", reason, message.from_user.full_name)
             await reply_auto_delete(message, f"🔊 {tname} размучен.", parse_mode="HTML")
         elif action == "тег":
             tag_text = rest.strip() or reason
@@ -6508,6 +6542,16 @@ async def cmd_ref(message: Message):
 
 @dp.message(Command("start"))
 async def cmd_start_ref(message: Message, command: CommandObject):
+    # /start ticket — открываем тикет сразу
+    if command.args == "ticket" and message.chat.type == "private":
+        chats = await db.get_all_chats()
+        if not chats:
+            chat_list = [(cid, title) for cid, title in known_chats.items()]
+        else:
+            chat_list = [(r["cid"], r["title"]) for r in chats]
+        await tkt.cmd_ticket(message, bot, chat_list)
+        return
+
     if not command.args or not command.args.startswith("ref_"): return
     inviter_id = command.args.replace("ref_", "").strip()
     uid = str(message.from_user.id)
