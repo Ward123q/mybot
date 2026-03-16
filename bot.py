@@ -875,7 +875,7 @@ async def reply_auto_delete(message: Message, text: str, **kwargs) -> Message:
     return None
 
 def add_mod_history(cid: int, uid: int, action: str, reason: str, by_name: str):
-    """Записывает действие модератора в историю пользователя"""
+    """Записывает действие модератора в историю — память + SQLite"""
     from datetime import datetime
     mod_history[cid][uid].append({
         "action": action,
@@ -887,6 +887,22 @@ def add_mod_history(cid: int, uid: int, action: str, reason: str, by_name: str):
         mod_history[cid][uid] = mod_history[cid][uid][-20:]
     # 👮 Считаем статистику модератора
     mod_stats[cid][by_name] += 1
+    # 💾 Пишем в SQLite чтобы дашборд видел
+    try:
+        conn = db_connect()
+        conn.execute("""CREATE TABLE IF NOT EXISTS mod_history
+            (id INTEGER PRIMARY KEY AUTOINCREMENT,
+             cid INTEGER, uid INTEGER, action TEXT,
+             reason TEXT, by_name TEXT,
+             created_at TEXT DEFAULT (datetime('now')))""")
+        conn.execute(
+            "INSERT INTO mod_history (cid, uid, action, reason, by_name) VALUES (?,?,?,?,?)",
+            (cid, uid, action, reason or "—", by_name)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as _e:
+        pass
 
 WARN_EXPIRY_DAYS = 30  # варн сгорает через 30 дней
 
