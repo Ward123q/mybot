@@ -1249,6 +1249,10 @@ class StatsMiddleware(BaseMiddleware):
             try:
                 await notif.track_message(event)
             except: pass
+            # Трекинг онлайна для дашборда
+            try:
+                dashboard.update_online(uid, event.from_user.full_name, cid)
+            except: pass
             # Алерты спама
             try:
                 await dashboard.check_spam(uid, cid, event.from_user.full_name, event.chat.title or "")
