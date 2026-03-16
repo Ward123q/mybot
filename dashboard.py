@@ -611,23 +611,38 @@ async def handle_chat_detail(request: web.Request):
     cid = int(request.match_info["cid"])
 
     c3 = db.get_conn()
-    chat_row = c3.execute("SELECT title FROM known_chats WHERE cid=?", (cid,)).fetchone()
-    title    = chat_row["title"] if chat_row else str(cid)
-    top_users = c3.execute(
-        "SELECT uid, msg_count FROM chat_stats WHERE cid=? ORDER BY msg_count DESC LIMIT 10", (cid,)
-    ).fetchall()
-    top_rep = c3.execute(
-        "SELECT uid, score FROM reputation WHERE cid=? ORDER BY score DESC LIMIT 10", (cid,)
-    ).fetchall()
-    bans = c3.execute(
-        "SELECT uid FROM ban_list WHERE cid=?", (cid,)
-    ).fetchall()
-    mod_hist = c3.execute(
-        "SELECT action, reason, by_name, created_at FROM mod_history "
-        "WHERE cid=? ORDER BY created_at DESC LIMIT 20", (cid,)
-    ).fetchall()
+    try:
+        chat_row = c3.execute("SELECT title FROM known_chats WHERE cid=?", (cid,)).fetchone()
+        title = chat_row["title"] if chat_row else str(cid)
+    except: title = str(cid)
+
+    try:
+        top_users = c3.execute(
+            "SELECT uid, msg_count FROM chat_stats WHERE cid=? ORDER BY msg_count DESC LIMIT 10", (cid,)
+        ).fetchall()
+    except: top_users = []
+
+    try:
+        top_rep = c3.execute(
+            "SELECT uid, score FROM reputation WHERE cid=? ORDER BY score DESC LIMIT 10", (cid,)
+        ).fetchall()
+    except: top_rep = []
+
+    try:
+        bans = c3.execute("SELECT uid FROM ban_list WHERE cid=?", (cid,)).fetchall()
+    except: bans = []
+
+    try:
+        mod_hist = c3.execute(
+            "SELECT action, reason, by_name, created_at FROM mod_history "
+            "WHERE cid=? ORDER BY created_at DESC LIMIT 20", (cid,)
+        ).fetchall()
+    except: mod_hist = []
+
     c3.close()
-    hours = await db.get_hourly_totals(cid)
+    try:
+        hours = await db.get_hourly_totals(cid)
+    except: hours = {}
 
     # &#1061;&#1080;&#1090;&#1084;&#1072;&#1087; &#1072;&#1082;&#1090;&#1080;&#1074;&#1085;&#1086;&#1089;&#1090;&#1080;
     max_h = max(hours.values(), default=1)
@@ -640,12 +655,6 @@ async def handle_chat_detail(request: web.Request):
             f'height:{max(4, pct)}px;background:#7c6fcd;opacity:{max(0.2, pct/100):.2f};'
             f'margin:1px;border-radius:2px;" title="{h}:00 &#8212; {val} &#1089;&#1086;&#1086;&#1073;&#1097;."></div>'
         )
-
-    def user_rows(rows):
-        result = ""
-        for i, r in enumerate(rows, 1):
-            result += f"<tr><td>{i}</td><td><code>{r['uid']}</code></td><td>{r[rows[0].keys()[2]]:,}</td></tr>"
-        return result or "<tr><td colspan='3'>&#1053;&#1077;&#1090; &#1076;&#1072;&#1085;&#1085;&#1099;&#1093;</td></tr>"
 
     top_u_rows = "".join(
         f"<tr><td>{i}</td><td><code>{r['uid']}</code></td><td>{r['msg_count']:,}</td></tr>"
@@ -1340,6 +1349,16 @@ async def handle_user_detail(request: web.Request):
         for r in ticket_rows
     ) or "<tr><td colspan='4'>&#1053;&#1077;&#1090; &#1090;&#1080;&#1082;&#1077;&#1090;&#1086;&#1074;</td></tr>"
 
+    # Заметки модераторов
+    try:
+        notes_rows = conn.execute(
+            "SELECT text, by_name, created_at FROM mod_notes "
+            "WHERE uid=? ORDER BY created_at DESC LIMIT 20",
+            (uid,)
+        ).fetchall()
+    except:
+        notes_rows = []
+
     # Достижения
     try:
         from features import ACHIEVEMENTS as _ACH
@@ -1394,6 +1413,17 @@ async def handle_user_detail(request: web.Request):
           <a class="btn btn-danger" href="/dashboard/modaction?uid={uid}&action=mute">&#128263; &#1047;&#1072;&#1084;&#1091;&#1090;&#1080;&#1090;&#1100;</a>
           <a class="btn btn-success" href="/dashboard/modaction?uid={uid}&action=unban">&#128330; &#1056;&#1072;&#1079;&#1073;&#1072;&#1085;&#1080;&#1090;&#1100;</a>
         </div>
+      </div>
+      <div class="section" style="margin-top:20px;">
+        <div class="section-header">&#128221; &#1047;&#1072;&#1084;&#1077;&#1090;&#1082;&#1080; &#1084;&#1086;&#1076;&#1077;&#1088;&#1072;&#1090;&#1086;&#1088;&#1086;&#1074; ({len(notes_rows)})</div>
+        {
+          (chr(10).join(
+            f'<div style="padding:10px 20px;border-bottom:1px solid var(--border);">' +
+            f'<div style="font-size:13px;">' + str(dict(n).get("text","")) + '</div>' +
+            f'<div style="font-size:11px;color:var(--text2);margin-top:4px;">&#128110; ' + str(dict(n).get("by_name","")) + ' &middot; ' + str(dict(n).get("created_at",""))[:16] + '</div></div>'
+            for n in notes_rows
+          )) if notes_rows else '<div class="empty-state">&#1047;&#1072;&#1084;&#1077;&#1090;&#1086;&#1082; &#1085;&#1077;&#1090;</div>'
+        }
       </div>
     </div>"""
     return web.Response(text=page(body), content_type="text/html")
