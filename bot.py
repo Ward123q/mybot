@@ -4,6 +4,7 @@ import random
 import os
 import sqlite3
 import time as _tstart
+import time as _time_module
 import aiohttp
 from datetime import timedelta
 from collections import defaultdict
@@ -1254,6 +1255,86 @@ class PendingInputMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 class StatsMiddleware(BaseMiddleware):
+    # Трекер флуда: {cid: {uid: [timestamps]}}
+    _flood_tracker: dict = {}
+
+    async def _check_flood(self, uid: int, cid: int, name: str) -> bool:
+        """Проверяет флуд по настройкам чата. Возвращает True если флуд обнаружен."""
+        try:
+            chat_cfg = cs.get_settings(cid)
+            if not chat_cfg.get("antispam_enabled", True):
+                return False
+
+            threshold = chat_cfg.get("flood_msgs", 10)
+            action    = chat_cfg.get("flood_action", "mute")
+
+            now = _time_module.time()
+            if cid not in self._flood_tracker:
+                self._flood_tracker[cid] = {}
+            if uid not in self._flood_tracker[cid]:
+                self._flood_tracker[cid][uid] = []
+
+            # Оставляем только последние 60 секунд
+            self._flood_tracker[cid][uid] = [
+                t for t in self._flood_tracker[cid][uid] if now - t < 60
+            ]
+            self._flood_tracker[cid][uid].append(now)
+            count = len(self._flood_tracker[cid][uid])
+
+            if count >= threshold:
+                # Сбрасываем счётчик
+                self._flood_tracker[cid][uid] = []
+
+                # Применяем действие
+                if action == "mute":
+                    mins = chat_cfg.get("mute_duration", 10)
+                    try:
+                        from aiogram.types import ChatPermissions
+                        await bot.restrict_chat_member(
+                            cid, uid,
+                            permissions=ChatPermissions(can_send_messages=False),
+                            until_date=timedelta(minutes=mins)
+                        )
+                        await bot.send_message(
+                            cid,
+                            f"🔇 <a href='tg://user?id={uid}'>{name}</a> замучен на {mins} мин. за флуд ({count} сообщ/мин)",
+                            parse_mode="HTML"
+                        )
+                        add_mod_history(cid, uid, f"🔇 Мут {mins}м (флуд)", f"{count} сообщений за минуту", "AutoMod")
+                    except: pass
+
+                elif action == "warn":
+                    warnings[cid][uid] += 1
+                    save_data()
+                    add_mod_history(cid, uid, f"⚡ Варн (флуд)", f"{count} сообщений за минуту", "AutoMod")
+                    try:
+                        await bot.send_message(
+                            cid,
+                            f"⚡ <a href='tg://user?id={uid}'>{name}</a> получил варн за флуд ({count} сообщ/мин) "
+                            f"— {warnings[cid][uid]}/{cs.get_settings(cid).get('max_warns', MAX_WARNINGS)}",
+                            parse_mode="HTML"
+                        )
+                        if warnings[cid][uid] >= chat_cfg.get("max_warns", MAX_WARNINGS):
+                            await bot.ban_chat_member(cid, uid)
+                            add_mod_history(cid, uid, "🔨 Автобан (варны)", "Лимит варнов", "AutoMod")
+                    except: pass
+
+                elif action == "kick":
+                    try:
+                        await bot.ban_chat_member(cid, uid)
+                        await bot.unban_chat_member(cid, uid)
+                        add_mod_history(cid, uid, "👟 Кик (флуд)", f"{count} сообщений за минуту", "AutoMod")
+                        await bot.send_message(
+                            cid,
+                            f"👟 <a href='tg://user?id={uid}'>{name}</a> кикнут за флуд ({count} сообщ/мин)",
+                            parse_mode="HTML"
+                        )
+                    except: pass
+
+                return True
+        except Exception as _e:
+            pass
+        return False
     async def __call__(self, handler, event: Message, data):
         if isinstance(event, Message) and event.from_user and event.chat.type in ("group","supergroup"):
             chat_stats[event.chat.id][event.from_user.id] += 1
@@ -1262,6 +1343,13 @@ class StatsMiddleware(BaseMiddleware):
             # Сохраняем чат в БД
             try:
                 await db.upsert_chat(cid, event.chat.title or str(cid))
+            except: pass
+            # Проверка флуда по настройкам чата
+            try:
+                if not await is_admin_by_id(cid, uid):
+                    flooded = await self._check_flood(uid, cid, event.from_user.full_name)
+                    if flooded:
+                        return  # не обрабатываем сообщение если флуд
             except: pass
             # Трекинг для уведомлений
             try:
