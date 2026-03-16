@@ -207,3 +207,70 @@ async def send_log(text: str):
         await bot.send_message(log_channel_id, text, parse_mode="HTML")
     except Exception as e:
         log.warning(f"Лог-канал недоступен: {e}")
+
+
+# ══════════════════════════════════════════
+#  РЕПОРТЫ — синхронизация с дашбордом
+# ══════════════════════════════════════════
+
+# Список репортов для дашборда
+# [{cid, cid_title, reporter_id, reporter_name, target_id, target_name,
+#   reason, category, priority, status, ts, idx}]
+reports_cache: list = []
+
+
+def sync_report(cid: int, cid_title: str, idx: int, report: dict):
+    """Добавляет или обновляет репорт в кэше для дашборда"""
+    import time as _t
+    key = f"{cid}:{idx}"
+    # Удаляем старую запись если есть
+    for i, r in enumerate(reports_cache):
+        if r.get("key") == key:
+            reports_cache[i] = {
+                "key": key, "cid": cid, "cid_title": cid_title,
+                "reporter_id": report.get("reporter"),
+                "reporter_name": report.get("reporter_name", "—"),
+                "target_id": report.get("target"),
+                "target_name": report.get("target_name", "—"),
+                "reason": report.get("text", "—"),
+                "category": report.get("category", "—"),
+                "priority": report.get("priority", "NORMAL"),
+                "status": report.get("status", "new"),
+                "ts": report.get("ts", _t.time()),
+                "idx": idx,
+            }
+            return
+
+    # Добавляем новую
+    reports_cache.insert(0, {
+        "key": key, "cid": cid, "cid_title": cid_title,
+        "reporter_id": report.get("reporter"),
+        "reporter_name": report.get("reporter_name", "—"),
+        "target_id": report.get("target"),
+        "target_name": report.get("target_name", "—"),
+        "reason": report.get("text", "—"),
+        "category": report.get("category", "—"),
+        "priority": report.get("priority", "NORMAL"),
+        "status": report.get("status", "new"),
+        "ts": report.get("ts", _t.time()),
+        "idx": idx,
+    })
+
+    # Максимум 200 репортов
+    if len(reports_cache) > 200:
+        reports_cache.pop()
+
+
+def update_report_status(cid: int, idx: int, status: str):
+    """Обновляет статус репорта"""
+    key = f"{cid}:{idx}"
+    for r in reports_cache:
+        if r.get("key") == key:
+            r["status"] = status
+            return
+
+
+def get_reports(status: str = None) -> list:
+    if status:
+        return [r for r in reports_cache if r.get("status") == status]
+    return reports_cache
