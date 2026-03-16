@@ -10370,6 +10370,133 @@ async def cmd_botupdate(message: Message, command: CommandObject):
     except: pass
 
 
+
+# ══════════════════════════════════════════════════════════
+#  📝 СИСТЕМА ЗАМЕТОК МОДЕРАТОРА
+# ══════════════════════════════════════════════════════════
+
+@dp.message(Command("note"))
+async def cmd_note_mod(message: Message, command: CommandObject):
+    """Оставить заметку на юзера — только для модераторов"""
+    if not await check_admin(message):
+        return
+    if not message.reply_to_message:
+        await reply_auto_delete(message,
+            "━━━━━━━━━━━━━━━\n"
+            "📝 <b>ЗАМЕТКА</b>\n"
+            "━━━━━━━━━━━━━━━\n\n"
+            "Реплай на сообщение юзера:\n"
+            "<code>/note текст заметки</code>",
+            parse_mode="HTML")
+        return
+
+    target = message.reply_to_message.from_user
+    text   = command.args or ""
+    if not text:
+        await reply_auto_delete(message, "⚠️ Напиши текст заметки")
+        return
+
+    cid = message.chat.id
+    by  = message.from_user.full_name
+
+    conn = db_connect()
+    # Создаём таблицу если нет
+    conn.execute("""CREATE TABLE IF NOT EXISTS mod_notes
+                    (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     cid INTEGER, uid INTEGER, text TEXT,
+                     by_name TEXT, created_at TEXT DEFAULT (datetime('now')))""")
+    conn.execute(
+        "INSERT INTO mod_notes (cid, uid, text, by_name) VALUES (?,?,?,?)",
+        (cid, target.id, text, by)
+    )
+    conn.commit()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM mod_notes WHERE cid=? AND uid=?", (cid, target.id)
+    ).fetchone()[0]
+    conn.close()
+
+    await reply_auto_delete(message,
+        f"━━━━━━━━━━━━━━━\n"
+        f"📝 <b>ЗАМЕТКА ДОБАВЛЕНА</b>\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"👤 {target.mention_html()}\n"
+        f"📋 {text}\n\n"
+        f"📊 Всего заметок: {count}",
+        parse_mode="HTML")
+
+
+@dp.message(Command("notes"))
+async def cmd_notes_mod(message: Message):
+    """Показать заметки на юзера"""
+    if not await check_admin(message):
+        return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "⚠️ Реплай на сообщение юзера")
+        return
+
+    target = message.reply_to_message.from_user
+    cid    = message.chat.id
+
+    conn = db_connect()
+    try:
+        notes = conn.execute(
+            "SELECT text, by_name, created_at FROM mod_notes "
+            "WHERE cid=? AND uid=? ORDER BY created_at DESC LIMIT 10",
+            (cid, target.id)
+        ).fetchall()
+    except:
+        notes = []
+    conn.close()
+
+    if not notes:
+        await reply_auto_delete(message,
+            f"📝 Заметок на {target.mention_html()} нет",
+            parse_mode="HTML")
+        return
+
+    text = (
+        f"━━━━━━━━━━━━━━━\n"
+        f"📝 <b>ЗАМЕТКИ</b>\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"👤 {target.mention_html()}\n\n"
+    )
+    for i, n in enumerate(notes, 1):
+        dt = str(n["created_at"] or "")[:16]
+        text += f"{i}. <i>{n['text']}</i>\n   👮 {n['by_name']} · {dt}\n\n"
+
+    await reply_auto_delete(message, text, parse_mode="HTML")
+
+
+@dp.message(Command("delnote"))
+async def cmd_delnote_mod(message: Message, command: CommandObject):
+    """Удалить заметку по номеру"""
+    if not await check_admin(message):
+        return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "⚠️ Реплай на сообщение юзера + номер заметки")
+        return
+
+    target = message.reply_to_message.from_user
+    cid    = message.chat.id
+    num    = int(command.args or "1")
+
+    conn = db_connect()
+    try:
+        notes = conn.execute(
+            "SELECT id FROM mod_notes WHERE cid=? AND uid=? ORDER BY created_at DESC",
+            (cid, target.id)
+        ).fetchall()
+        if notes and num <= len(notes):
+            conn.execute("DELETE FROM mod_notes WHERE id=?", (notes[num-1]["id"],))
+            conn.commit()
+            await reply_auto_delete(message, f"✅ Заметка #{num} удалена")
+        else:
+            await reply_auto_delete(message, "❌ Заметка не найдена")
+    except:
+        await reply_auto_delete(message, "❌ Ошибка")
+    conn.close()
+
+
 async def main():
     import time as _tstart
     global bot_start_time
@@ -10386,6 +10513,9 @@ async def main():
     # ── Dashboard ─────────────────────────────────────────
     dashboard.set_bot(bot, ADMIN_IDS)
     await dashboard.start_dashboard()
+
+    # ── Tickets bot reference ──────────────────────────────
+    tkt.set_bot(bot)
 
     # ── Features ──────────────────────────────────────────
     await features.init(bot, dp, ADMIN_IDS, OWNER_ID)
