@@ -2503,9 +2503,20 @@ async def cmd_start(message: Message):
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❓ Команды и помощь",    callback_data="start:help")],
             [InlineKeyboardButton(text="📖 Политика бота",       url="https://telegra.ph/politika-bota-03-15")],
-            [InlineKeyboardButton(text="🎫 Написать в поддержку", url=f"https://t.me/{(await bot.get_me()).username}")],
+            [InlineKeyboardButton(text="🎫 Написать в поддержку", callback_data="start:ticket")],
         ])
     )
+
+
+@dp.callback_query(F.data == "start:ticket")
+async def cb_start_ticket(call: CallbackQuery):
+    chats = await db.get_all_chats()
+    if not chats:
+        chat_list = [(cid, title) for cid, title in known_chats.items()]
+    else:
+        chat_list = [(r["cid"], r["title"]) for r in chats]
+    await tkt.cmd_ticket(call.message, bot, chat_list)
+    await call.answer()
 
 
 @dp.callback_query(F.data == "start:help")
