@@ -1203,7 +1203,7 @@ async def handle_overview(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
 
-    chats = await db.get_all_chats()
+    chats = [dict(r) for r in await db.get_all_chats()]
     ticket_stats = await db.ticket_stats_all()
 
     conn = db.get_conn()
@@ -1695,7 +1695,7 @@ async def handle_admins(request: web.Request):
 async def handle_chats(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
-    chats = await db.get_all_chats()
+    chats = [dict(r) for r in await db.get_all_chats()]
 
     search = request.rel_url.query.get("q", "").lower()
     if search:
@@ -1759,19 +1759,19 @@ async def handle_chat_detail(request: web.Request):
         title = str(cid)
 
     try:
-        top_users = conn.execute("SELECT uid, msg_count FROM chat_stats WHERE cid=? ORDER BY msg_count DESC LIMIT 10", (cid,)).fetchall()
+        top_users = [dict(_r) for _r in conn.execute("SELECT uid, msg_count FROM chat_stats WHERE cid=? ORDER BY msg_count DESC LIMIT 10", (cid,)).fetchall()]
     except:
         top_users = []
     try:
-        top_rep = conn.execute("SELECT uid, score FROM reputation WHERE cid=? ORDER BY score DESC LIMIT 10", (cid,)).fetchall()
+        top_rep = [dict(_r) for _r in conn.execute("SELECT uid, score FROM reputation WHERE cid=? ORDER BY score DESC LIMIT 10", (cid,)).fetchall()]
     except:
         top_rep = []
     try:
-        bans = conn.execute("SELECT uid FROM ban_list WHERE cid=?", (cid,)).fetchall()
+        bans = [dict(_r) for _r in conn.execute("SELECT uid FROM ban_list WHERE cid=?", (cid,)).fetchall()]
     except:
         bans = []
     try:
-        mod_hist = conn.execute("SELECT action, reason, by_name, created_at FROM mod_history WHERE cid=? ORDER BY created_at DESC LIMIT 20", (cid,)).fetchall()
+        mod_hist = [dict(_r) for _r in conn.execute("SELECT action, reason, by_name, created_at FROM mod_history WHERE cid=? ORDER BY created_at DESC LIMIT 20", (cid,)).fetchall()]
     except:
         mod_hist = []
     conn.close()
@@ -1898,19 +1898,19 @@ async def handle_user_detail(request: web.Request):
     uid = int(request.match_info["uid"])
 
     conn = db.get_conn()
-    chats_rows = conn.execute("SELECT k.cid, k.title, cs.msg_count FROM chat_stats cs LEFT JOIN known_chats k ON cs.cid=k.cid WHERE cs.uid=? ORDER BY cs.msg_count DESC", (uid,)).fetchall()
-    rep_rows = conn.execute("SELECT cid, score FROM reputation WHERE uid=? ORDER BY score DESC", (uid,)).fetchall()
-    warn_rows = conn.execute("SELECT cid, count FROM warnings WHERE uid=? AND count>0", (uid,)).fetchall()
+    chats_rows = [dict(_r) for _r in conn.execute("SELECT k.cid, k.title, cs.msg_count FROM chat_stats cs LEFT JOIN known_chats k ON cs.cid=k.cid WHERE cs.uid=? ORDER BY cs.msg_count DESC", (uid,)).fetchall()]
+    rep_rows = [dict(_r) for _r in conn.execute("SELECT cid, score FROM reputation WHERE uid=? ORDER BY score DESC", (uid,)).fetchall()]
+    warn_rows = [dict(_r) for _r in conn.execute("SELECT cid, count FROM warnings WHERE uid=? AND count>0", (uid,)).fetchall()]
     try:
-        hist_rows = conn.execute("SELECT action, reason, by_name, created_at, cid FROM mod_history WHERE uid=? ORDER BY created_at DESC LIMIT 20", (uid,)).fetchall()
+        hist_rows = [dict(_r) for _r in conn.execute("SELECT action, reason, by_name, created_at, cid FROM mod_history WHERE uid=? ORDER BY created_at DESC LIMIT 20", (uid,)).fetchall()]
     except:
         hist_rows = []
     try:
-        ticket_rows = conn.execute("SELECT id, subject, status, created_at FROM tickets WHERE uid=? ORDER BY created_at DESC LIMIT 5", (uid,)).fetchall()
+        ticket_rows = [dict(_r) for _r in conn.execute("SELECT id, subject, status, created_at FROM tickets WHERE uid=? ORDER BY created_at DESC LIMIT 5", (uid,)).fetchall()]
     except:
         ticket_rows = []
     try:
-        notes_rows = conn.execute("SELECT text, by_name, created_at FROM mod_notes WHERE uid=? ORDER BY created_at DESC LIMIT 10", (uid,)).fetchall()
+        notes_rows = [dict(_r) for _r in conn.execute("SELECT text, by_name, created_at FROM mod_notes WHERE uid=? ORDER BY created_at DESC LIMIT 10", (uid,)).fetchall()]
     except:
         notes_rows = []
     conn.close()
@@ -2002,7 +2002,7 @@ async def handle_tickets(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
     status_filter = request.rel_url.query.get("status", "open")
-    tickets = await db.ticket_list(status=status_filter, limit=50)
+    tickets = [dict(r) for r in await db.ticket_list(status=status_filter, limit=50)]
     stats = await db.ticket_stats_all()
 
     tabs = ""
@@ -2052,11 +2052,11 @@ async def handle_ticket_detail(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
     ticket_id = int(request.match_info["ticket_id"])
-    t = await db.ticket_get(ticket_id)
-    if not t:
+    t_raw = await db.ticket_get(ticket_id)
+    if not t_raw:
         raise web.HTTPNotFound()
-    msgs = await db.ticket_msgs(ticket_id)
-    t = dict(t)
+    msgs = [dict(m) for m in await db.ticket_msgs(ticket_id)]
+    t = dict(t_raw)
 
     can_reply = _has_perm(request.cookies.get("dsess_token"), "reply_tickets")
     can_close = _has_perm(request.cookies.get("dsess_token"), "close_tickets")
@@ -2150,7 +2150,8 @@ async def handle_ticket_reply(request: web.Request):
     data = await request.post()
     text = (data.get("text") or "").strip()
     if text and _bot:
-        t = await db.ticket_get(ticket_id)
+        t_row = await db.ticket_get(ticket_id)
+        t = dict(t_row) if t_row else None
         if t and t["status"] != "closed":
             mod_name = sess.get("name", "Модератор") if sess else "Модератор (Dashboard)"
             await db.ticket_msg_add(ticket_id=ticket_id, sender_id=0, sender_name=f"👮 {mod_name}", is_mod=True, text=text)
@@ -2169,7 +2170,8 @@ async def handle_ticket_close_web(request: web.Request):
         raise web.HTTPFound("/dashboard/tickets")
     sess = _get_session(request)
     ticket_id = int(request.match_info["ticket_id"])
-    t = await db.ticket_get(ticket_id)
+    t_row = await db.ticket_get(ticket_id)
+    t = dict(t_row) if t_row else None
     if t:
         await db.ticket_close(ticket_id)
         if _bot:
@@ -2325,7 +2327,7 @@ async def handle_moderation(request: web.Request):
     # Форма быстрого действия
     can_ban = _has_perm(token, "ban_users")
     can_mute = _has_perm(token, "mute_users")
-    chats = await db.get_all_chats()
+    chats = [dict(r) for r in await db.get_all_chats()]
     chat_opts = "".join(f'<option value="{c["cid"]}">{c.get("title","") or c["cid"]}</option>' for c in chats)
 
     _qa_ban_btns = (
@@ -2555,14 +2557,14 @@ async def handle_deleted(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
     cid_filter = request.rel_url.query.get("cid")
-    chats = await db.get_all_chats()
+    chats = [dict(r) for r in await db.get_all_chats()]
 
     conn = db.get_conn()
     try:
         if cid_filter:
-            rows = conn.execute("SELECT * FROM deleted_log WHERE cid=? ORDER BY ts DESC LIMIT 100", (cid_filter,)).fetchall()
+            rows = [dict(_r) for _r in conn.execute("SELECT * FROM deleted_log WHERE cid=? ORDER BY ts DESC LIMIT 100", (cid_filter,)).fetchall()]
         else:
-            rows = conn.execute("SELECT * FROM deleted_log ORDER BY ts DESC LIMIT 100").fetchall()
+            rows = [dict(_r) for _r in [dict(_r) for _r in conn.execute("SELECT * FROM deleted_log ORDER BY ts DESC LIMIT 100").fetchall()]]
     except:
         rows = []
     conn.close()
@@ -2606,17 +2608,17 @@ async def handle_economy(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
     cid_filter = request.rel_url.query.get("cid")
-    chats = await db.get_all_chats()
+    chats = [dict(r) for r in await db.get_all_chats()]
 
     conn = db.get_conn()
     if cid_filter:
-        top_rep = conn.execute("SELECT uid, score FROM reputation WHERE cid=? ORDER BY score DESC LIMIT 20", (cid_filter,)).fetchall()
-        top_xp  = conn.execute("SELECT uid, xp FROM xp_data WHERE cid=? ORDER BY xp DESC LIMIT 20", (cid_filter,)).fetchall()
+        top_rep = [dict(_r) for _r in conn.execute("SELECT uid, score FROM reputation WHERE cid=? ORDER BY score DESC LIMIT 20", (cid_filter,)).fetchall()]
+        top_xp  = [dict(_r) for _r in conn.execute("SELECT uid, xp FROM xp_data WHERE cid=? ORDER BY xp DESC LIMIT 20", (cid_filter,)).fetchall()]
     else:
-        top_rep = conn.execute("SELECT uid, SUM(score) as score FROM reputation GROUP BY uid ORDER BY score DESC LIMIT 20").fetchall()
-        top_xp  = conn.execute("SELECT uid, SUM(xp) as xp FROM xp_data GROUP BY uid ORDER BY xp DESC LIMIT 20").fetchall()
+        top_rep = [dict(_r) for _r in [dict(_r) for _r in conn.execute("SELECT uid, SUM(score) as score FROM reputation GROUP BY uid ORDER BY score DESC LIMIT 20").fetchall()]]
+        top_xp  = [dict(_r) for _r in [dict(_r) for _r in conn.execute("SELECT uid, SUM(xp) as xp FROM xp_data GROUP BY uid ORDER BY xp DESC LIMIT 20").fetchall()]]
     try:
-        act_rows = conn.execute("SELECT day, SUM(count) as total FROM user_activity " + ("WHERE cid=? " if cid_filter else "") + "GROUP BY day ORDER BY day DESC LIMIT 14", *((cid_filter,) if cid_filter else ())).fetchall()
+        act_rows = [dict(_r) for _r in conn.execute("SELECT day, SUM(count) as total FROM user_activity " + ("WHERE cid=? " if cid_filter else "") + "GROUP BY day ORDER BY day DESC LIMIT 14", *((cid_filter,) if cid_filter else ())).fetchall()]
     except:
         act_rows = []
     conn.close()
@@ -2699,8 +2701,8 @@ async def handle_analytics(request: web.Request):
 
     conn = db.get_conn()
     try:
-        daily = conn.execute("SELECT day, SUM(count) as total FROM user_activity GROUP BY day ORDER BY day DESC LIMIT 30").fetchall()
-        top_words = conn.execute("SELECT word, SUM(count) as cnt FROM word_stats GROUP BY word ORDER BY cnt DESC LIMIT 20").fetchall() if False else []
+        daily = [dict(_r) for _r in [dict(_r) for _r in conn.execute("SELECT day, SUM(count) as total FROM user_activity GROUP BY day ORDER BY day DESC LIMIT 30").fetchall()]]
+        top_words = [dict(_r) for _r in [dict(_r) for _r in conn.execute("SELECT word, SUM(count) as cnt FROM word_stats GROUP BY word ORDER BY cnt DESC LIMIT 20").fetchall()]] if False else []
     except:
         daily = []
         top_words = []
@@ -2710,7 +2712,7 @@ async def handle_analytics(request: web.Request):
     d_labels = json.dumps([str(r.get("day", ""))[-5:] for r in daily_data])
     d_values = json.dumps([r.get("total", 0) for r in daily_data])
 
-    chats = await db.get_all_chats()
+    chats = [dict(r) for r in await db.get_all_chats()]
     ticket_stats = await db.ticket_stats_all()
 
     conn2 = db.get_conn()
@@ -2837,7 +2839,7 @@ handle_analytics = require_auth("view_overview")(handle_analytics)
 async def handle_broadcast(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
-    chats = await db.get_all_chats()
+    chats = [dict(r) for r in await db.get_all_chats()]
     result = ""
 
     if request.method == "POST":
@@ -2910,7 +2912,7 @@ handle_broadcast = require_auth("broadcast")(handle_broadcast)
 async def handle_plugins(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
-    chats = await db.get_all_chats()
+    chats = [dict(r) for r in await db.get_all_chats()]
 
     if request.method == "POST":
         data = await request.post()
@@ -3010,7 +3012,7 @@ async def handle_chat_settings(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
     import chat_settings as cs
-    chats = await db.get_all_chats()
+    chats = [dict(r) for r in await db.get_all_chats()]
     cid = int(request.match_info.get("cid", 0))
     if not cid and chats:
         cid = chats[0]["cid"]
@@ -3249,7 +3251,7 @@ async def api_hourly(request: web.Request):
     # Суммируем по всем чатам
     try:
         conn = db.get_conn()
-        rows = conn.execute("SELECT hour, SUM(count) as total FROM hourly_stats GROUP BY hour").fetchall()
+        rows = [dict(_r) for _r in [dict(_r) for _r in conn.execute("SELECT hour, SUM(count) as total FROM hourly_stats GROUP BY hour").fetchall()]]
         conn.close()
         result = {r["hour"]: r["total"] for r in rows}
     except:
@@ -3273,7 +3275,7 @@ async def api_search(request: web.Request):
 
     try:
         if q.isdigit():
-            rows = conn.execute("SELECT DISTINCT uid FROM chat_stats WHERE uid=? LIMIT 5", (int(q),)).fetchall()
+            rows = [dict(_r) for _r in conn.execute("SELECT DISTINCT uid FROM chat_stats WHERE uid=? LIMIT 5", (int(q),)).fetchall()]
         else:
             rows = []
         for r in rows:
@@ -3284,13 +3286,13 @@ async def api_search(request: web.Request):
         pass
 
     try:
-        trows = conn.execute("SELECT id, subject FROM tickets WHERE subject LIKE ? OR CAST(id AS TEXT)=? LIMIT 5", (f"%{q}%", q)).fetchall()
+        trows = [dict(_r) for _r in conn.execute("SELECT id, subject FROM tickets WHERE subject LIKE ? OR CAST(id AS TEXT)=? LIMIT 5", (f"%{q}%", q)).fetchall()]
         tickets = [{"id": r["id"], "subject": r["subject"]} for r in trows]
     except:
         pass
 
     try:
-        crows = conn.execute("SELECT cid, title FROM known_chats WHERE LOWER(title) LIKE ? OR CAST(cid AS TEXT)=? LIMIT 5", (f"%{q}%", q)).fetchall()
+        crows = [dict(_r) for _r in conn.execute("SELECT cid, title FROM known_chats WHERE LOWER(title) LIKE ? OR CAST(cid AS TEXT)=? LIMIT 5", (f"%{q}%", q)).fetchall()]
         chats_res = [{"cid": r["cid"], "title": r["title"]} for r in crows]
     except:
         pass
@@ -3365,15 +3367,15 @@ async def handle_export(request: web.Request):
     export_type = request.match_info.get("type", "stats")
     conn = db.get_conn()
     if export_type == "stats":
-        rows = conn.execute("SELECT k.title, cs.uid, cs.msg_count, COALESCE(r.score,0) as rep, COALESCE(w.count,0) as warns FROM chat_stats cs LEFT JOIN known_chats k ON cs.cid=k.cid LEFT JOIN reputation r ON cs.cid=r.cid AND cs.uid=r.uid LEFT JOIN warnings w ON cs.cid=w.cid AND cs.uid=w.uid ORDER BY cs.msg_count DESC LIMIT 1000").fetchall()
+        rows = [dict(_r) for _r in conn.execute("SELECT k.title, cs.uid, cs.msg_count, COALESCE(r.score,0) as rep, COALESCE(w.count,0) as warns FROM chat_stats cs LEFT JOIN known_chats k ON cs.cid=k.cid LEFT JOIN reputation r ON cs.cid=r.cid AND cs.uid=r.uid LEFT JOIN warnings w ON cs.cid=w.cid AND cs.uid=w.uid ORDER BY cs.msg_count DESC LIMIT 1000").fetchall()]
         conn.close()
         csv = "Чат,UserID,Сообщений,Репутация,Варны\n" + "".join(f"{r['title'] or ''},{r['uid']},{r['msg_count']},{r['rep']},{r['warns']}\n" for r in rows)
     elif export_type == "bans":
-        rows = conn.execute("SELECT k.title, b.uid FROM ban_list b LEFT JOIN known_chats k ON b.cid=k.cid").fetchall()
+        rows = [dict(_r) for _r in conn.execute("SELECT k.title, b.uid FROM ban_list b LEFT JOIN known_chats k ON b.cid=k.cid").fetchall()]
         conn.close()
         csv = "Чат,UserID\n" + "".join(f"{r['title'] or ''},{r['uid']}\n" for r in rows)
     elif export_type == "modhistory":
-        rows = conn.execute("SELECT k.title, m.uid, m.action, m.reason, m.by_name, m.created_at FROM mod_history m LEFT JOIN known_chats k ON m.cid=k.cid ORDER BY m.created_at DESC LIMIT 2000").fetchall()
+        rows = [dict(_r) for _r in conn.execute("SELECT k.title, m.uid, m.action, m.reason, m.by_name, m.created_at FROM mod_history m LEFT JOIN known_chats k ON m.cid=k.cid ORDER BY m.created_at DESC LIMIT 2000").fetchall()]
         conn.close()
         csv = "Чат,UserID,Действие,Причина,Кто,Дата\n" + "".join(f"{r['title'] or ''},{r['uid']},{r['action']},{r['reason'] or ''},{r['by_name']},{str(r['created_at'])[:16]}\n" for r in rows)
     else:
