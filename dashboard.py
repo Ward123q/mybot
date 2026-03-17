@@ -21,6 +21,64 @@ log = logging.getLogger(__name__)
 
 DASHBOARD_TOKEN = os.getenv("DASHBOARD_TOKEN", "changeme123")
 OWNER_TG_ID = 7823802800  # Единственный владелец
+OWNER_RANK   = 15           # Ранг владельца
+
+# ── Дежурства ──────────────────────────────────────────────────
+_duty_active: dict  = {}   # {uid: {uid,name,rank,rank_name,start,end,hours,actions}}
+_duty_history: list = []   # [{uid,name,start,end,duration_mins,actions_count}]
+
+def start_duty(tg_uid: int, name: str, rank: int, hours: float = 8.0, rank_name: str = ""):
+    _duty_active[tg_uid] = {
+        "uid": tg_uid, "name": name, "rank": rank,
+        "rank_name": rank_name, "start": time.time(),
+        "end": time.time() + hours * 3600,
+        "hours": hours, "actions": 0,
+    }
+
+def end_duty(tg_uid: int):
+    d = _duty_active.pop(tg_uid, None)
+    if d:
+        _duty_history.insert(0, {
+            "uid": tg_uid, "name": d["name"],
+            "start": d["start"], "end": time.time(),
+            "duration_mins": int((time.time() - d["start"]) / 60),
+            "actions_count": d.get("actions", 0),
+        })
+        if len(_duty_history) > 300:
+            _duty_history.pop()
+
+def get_duty_status(tg_uid: int):
+    d = _duty_active.get(tg_uid)
+    if not d:
+        return None
+    if time.time() >= d["end"]:
+        end_duty(tg_uid)
+        return None
+    elapsed   = int((time.time() - d["start"]) / 60)
+    remaining = int((d["end"] - time.time()) / 60)
+    return {**d, "elapsed_mins": elapsed, "remaining_mins": remaining,
+            "pct": min(100, int(elapsed / max(d["hours"] * 60, 1) * 100))}
+
+def get_all_on_duty() -> list:
+    return [s for uid in list(_duty_active) if (s := get_duty_status(uid))]
+
+def _increment_duty_actions(tg_uid: int):
+    if tg_uid in _duty_active:
+        _duty_active[tg_uid]["actions"] = _duty_active[tg_uid].get("actions", 0) + 1
+
+def _get_mod_stats(name: str, uid: int) -> dict:
+    try:
+        conn = db.get_conn()
+        bans  = conn.execute("SELECT COUNT(*) FROM mod_history WHERE by_name=? AND action LIKE '%Бан%'", (name,)).fetchone()[0] or 0
+        warns = conn.execute("SELECT COUNT(*) FROM mod_history WHERE by_name=? AND action LIKE '%Варн%'", (name,)).fetchone()[0] or 0
+        mutes = conn.execute("SELECT COUNT(*) FROM mod_history WHERE by_name=? AND action LIKE '%Мут%'", (name,)).fetchone()[0] or 0
+        tkt   = conn.execute("SELECT COUNT(*) FROM dashboard_admin_log WHERE tg_uid=? AND action='TICKET_CLOSE'", (uid,)).fetchone()[0] or 0
+        logins= conn.execute("SELECT COUNT(*) FROM dashboard_admin_log WHERE tg_uid=? AND action='LOGIN'", (uid,)).fetchone()[0] or 0
+        conn.close()
+        return {"bans":bans,"warns":warns,"mutes":mutes,"tickets":tkt,"total":bans+warns+mutes,"logins":logins}
+    except:
+        return {"bans":0,"warns":0,"mutes":0,"tickets":0,"total":0,"logins":0}
+
 
 _bot = None
 _admin_ids = set()
@@ -31,95 +89,121 @@ def set_bot(bot, admin_ids: set):
     _admin_ids = admin_ids
 
 # ══════════════════════════════════════════
-#  СИСТЕМА АДМИНИСТРАЦИИ — 10 РАНГОВ
+#  СИСТЕМА АДМИНИСТРАЦИИ — 15 РАНГОВ
 # ══════════════════════════════════════════
 
+RANK_TIERS = {
+    "junior": {"label": "🔵 Младший состав",  "color": "#607d8b"},
+    "mid":    {"label": "🟢 Средний состав",   "color": "#42a5f5"},
+    "senior": {"label": "🟡 Старший состав",   "color": "#ab47bc"},
+    "high":   {"label": "🟠 Высший состав",    "color": "#ec407a"},
+    "top":    {"label": "🔴 Топ состав",       "color": "#ff7043"},
+    "owner":  {"label": "⭐ Владелец",         "color": "#ffd700"},
+}
+
 DASHBOARD_RANKS = {
-    1: {
-        "name": "👁 Наблюдатель",
-        "color": "#607d8b",
-        "perms": ["view_overview", "view_chats", "view_users"],
-        "desc": "Только просмотр основной статистики"
-    },
-    2: {
-        "name": "📋 Репортёр",
-        "color": "#78909c",
-        "perms": ["view_overview", "view_chats", "view_users", "view_reports", "view_alerts"],
-        "desc": "Просмотр репортов и алертов"
-    },
-    3: {
-        "name": "🎫 Поддержка",
-        "color": "#26a69a",
-        "perms": ["view_overview", "view_chats", "view_users", "view_reports",
-                  "view_alerts", "view_tickets", "reply_tickets"],
-        "desc": "Работа с тикетами и просмотр репортов"
-    },
-    4: {
-        "name": "🛡 Юниор-Мод",
-        "color": "#42a5f5",
-        "perms": ["view_overview", "view_chats", "view_users", "view_reports",
-                  "view_alerts", "view_tickets", "reply_tickets",
-                  "close_tickets", "handle_reports", "view_moderation"],
-        "desc": "Закрытие тикетов, обработка репортов"
-    },
-    5: {
-        "name": "⚔️ Мод",
-        "color": "#66bb6a",
-        "perms": ["view_overview", "view_chats", "view_users", "view_reports",
-                  "view_alerts", "view_tickets", "reply_tickets", "close_tickets",
-                  "handle_reports", "view_moderation", "mute_users", "warn_users",
-                  "view_media", "view_deleted"],
-        "desc": "Мут и варн пользователей, медиа-лог"
-    },
-    6: {
-        "name": "⚡ Старший Мод",
-        "color": "#ffa726",
-        "perms": ["view_overview", "view_chats", "view_users", "view_reports",
-                  "view_alerts", "view_tickets", "reply_tickets", "close_tickets",
-                  "handle_reports", "view_moderation", "mute_users", "warn_users",
-                  "view_media", "view_deleted", "ban_users", "unban_users",
-                  "view_economy"],
-        "desc": "Бан/разбан пользователей, экономика"
-    },
-    7: {
-        "name": "🔱 Хед-Мод",
-        "color": "#ef5350",
-        "perms": ["view_overview", "view_chats", "view_users", "view_reports",
-                  "view_alerts", "view_tickets", "reply_tickets", "close_tickets",
-                  "handle_reports", "view_moderation", "mute_users", "warn_users",
-                  "view_media", "view_deleted", "ban_users", "unban_users",
-                  "view_economy", "manage_plugins", "view_settings"],
-        "desc": "Управление плагинами, настройки просмотра"
-    },
-    8: {
-        "name": "💎 Администратор",
-        "color": "#ab47bc",
-        "perms": ["view_overview", "view_chats", "view_users", "view_reports",
-                  "view_alerts", "view_tickets", "reply_tickets", "close_tickets",
-                  "handle_reports", "view_moderation", "mute_users", "warn_users",
-                  "view_media", "view_deleted", "ban_users", "unban_users",
-                  "view_economy", "manage_plugins", "view_settings",
-                  "edit_settings", "broadcast", "manage_chat_settings"],
-        "desc": "Полное управление настройками и рассылки"
-    },
-    9: {
-        "name": "👑 Со-Владелец",
-        "color": "#ff7043",
-        "perms": ["view_overview", "view_chats", "view_users", "view_reports",
-                  "view_alerts", "view_tickets", "reply_tickets", "close_tickets",
-                  "handle_reports", "view_moderation", "mute_users", "warn_users",
-                  "view_media", "view_deleted", "ban_users", "unban_users",
-                  "view_economy", "manage_plugins", "view_settings",
-                  "edit_settings", "broadcast", "manage_chat_settings",
-                  "manage_admins_view"],
-        "desc": "Просмотр панели администраторов"
-    },
-    10: {
-        "name": "🌟 Владелец",
-        "color": "#ffd700",
-        "perms": ["ALL"],
-        "desc": "Полный доступ ко всему. Только вы."
-    },
+    1:  {"name":"👁 Наблюдатель",       "color":"#607d8b","tier":"junior",
+         "perms":["view_overview","view_chats","view_users"],
+         "desc":"Только просмотр основной статистики"},
+    2:  {"name":"📋 Репортёр",          "color":"#78909c","tier":"junior",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts"],
+         "desc":"Просмотр репортов и алертов"},
+    3:  {"name":"🎫 Поддержка",         "color":"#26a69a","tier":"junior",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets"],
+         "desc":"Работа с тикетами и просмотр репортов"},
+    4:  {"name":"🛡 Юниор-Мод",        "color":"#42a5f5","tier":"junior",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation"],
+         "desc":"Закрытие тикетов, обработка репортов"},
+    5:  {"name":"⚔️ Мод",              "color":"#66bb6a","tier":"mid",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation",
+                  "mute_users","warn_users","view_media","view_deleted"],
+         "desc":"Мут и варн пользователей, медиа-лог"},
+    6:  {"name":"⚡ Старший Мод",       "color":"#ffa726","tier":"mid",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation",
+                  "mute_users","warn_users","view_media","view_deleted",
+                  "ban_users","unban_users","view_economy"],
+         "desc":"Бан/разбан пользователей, экономика"},
+    7:  {"name":"🔱 Хед-Мод",           "color":"#ef5350","tier":"mid",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation",
+                  "mute_users","warn_users","view_media","view_deleted",
+                  "ban_users","unban_users","view_economy","manage_plugins","view_settings"],
+         "desc":"Управление плагинами, настройки просмотра"},
+    8:  {"name":"🌀 Куратор",           "color":"#29b6f6","tier":"senior",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation",
+                  "mute_users","warn_users","view_media","view_deleted",
+                  "ban_users","unban_users","view_economy","manage_plugins","view_settings",
+                  "manage_duty","view_mod_profiles"],
+         "desc":"Управление дежурствами, профили модов"},
+    9:  {"name":"💎 Администратор",     "color":"#ab47bc","tier":"senior",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation",
+                  "mute_users","warn_users","view_media","view_deleted",
+                  "ban_users","unban_users","view_economy","manage_plugins","view_settings",
+                  "manage_duty","view_mod_profiles",
+                  "edit_settings","broadcast","manage_chat_settings"],
+         "desc":"Полное управление настройками и рассылки"},
+    10: {"name":"🔥 Старший Адм",       "color":"#ff7043","tier":"senior",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation",
+                  "mute_users","warn_users","view_media","view_deleted",
+                  "ban_users","unban_users","view_economy","manage_plugins","view_settings",
+                  "manage_duty","view_mod_profiles",
+                  "edit_settings","broadcast","manage_chat_settings",
+                  "manage_admins_view","manage_junior_admins"],
+         "desc":"Управление младшим составом (1-7)"},
+    11: {"name":"⭐ Гл. Администратор", "color":"#ec407a","tier":"high",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation",
+                  "mute_users","warn_users","view_media","view_deleted",
+                  "ban_users","unban_users","view_economy","manage_plugins","view_settings",
+                  "manage_duty","view_mod_profiles",
+                  "edit_settings","broadcast","manage_chat_settings",
+                  "manage_admins_view","manage_junior_admins",
+                  "manage_senior_admins","view_audit_log"],
+         "desc":"Контроль над составом ≤ 10"},
+    12: {"name":"💠 Куратор Сервера",   "color":"#00e5ff","tier":"high",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation",
+                  "mute_users","warn_users","view_media","view_deleted",
+                  "ban_users","unban_users","view_economy","manage_plugins","view_settings",
+                  "manage_duty","view_mod_profiles",
+                  "edit_settings","broadcast","manage_chat_settings",
+                  "manage_admins_view","manage_junior_admins",
+                  "manage_senior_admins","view_audit_log",
+                  "server_settings","manage_all_chats"],
+         "desc":"Глобальные настройки сервера"},
+    13: {"name":"🌙 Зам. Владельца",    "color":"#b39ddb","tier":"top",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation",
+                  "mute_users","warn_users","view_media","view_deleted",
+                  "ban_users","unban_users","view_economy","manage_plugins","view_settings",
+                  "manage_duty","view_mod_profiles",
+                  "edit_settings","broadcast","manage_chat_settings",
+                  "manage_admins_view","manage_junior_admins",
+                  "manage_senior_admins","view_audit_log",
+                  "server_settings","manage_all_chats","manage_admins_all"],
+         "desc":"Заместитель — полный доступ кроме выдачи 14-15"},
+    14: {"name":"👑 Со-Владелец",       "color":"#ff8f00","tier":"top",
+         "perms":["view_overview","view_chats","view_users","view_reports","view_alerts",
+                  "view_tickets","reply_tickets","close_tickets","handle_reports","view_moderation",
+                  "mute_users","warn_users","view_media","view_deleted",
+                  "ban_users","unban_users","view_economy","manage_plugins","view_settings",
+                  "manage_duty","view_mod_profiles",
+                  "edit_settings","broadcast","manage_chat_settings",
+                  "manage_admins_view","manage_junior_admins",
+                  "manage_senior_admins","view_audit_log",
+                  "server_settings","manage_all_chats",
+                  "manage_admins_all","co_owner_actions"],
+         "desc":"Со-Владелец — управление всей администрацией"},
+    15: {"name":"🌟 Владелец",          "color":"#ffd700","tier":"owner",
+         "perms":["ALL"],
+         "desc":"Полный доступ ко всему. Только вы."},
 }
 
 # Таблица администраторов дашборда в памяти + SQLite
@@ -154,7 +238,7 @@ def _init_admin_db():
         # Владелец всегда ранг 10
         conn.execute(
             "INSERT OR REPLACE INTO dashboard_admins (tg_uid, name, rank, granted_by) VALUES (?,?,?,?)",
-            (OWNER_TG_ID, "Владелец", 10, OWNER_TG_ID)
+            (OWNER_TG_ID, "Владелец", OWNER_RANK, OWNER_TG_ID)
         )
         conn.commit()
         conn.close()
@@ -228,7 +312,7 @@ def _has_perm(session_token: str, perm: str) -> bool:
     if not sess:
         return False
     rank = sess.get("rank", 0)
-    if rank == 10:
+    if rank >= OWNER_RANK:
         return True
     rank_perms = DASHBOARD_RANKS.get(rank, {}).get("perms", [])
     return "ALL" in rank_perms or perm in rank_perms
@@ -997,7 +1081,7 @@ def navbar(sess: dict | None = None, active: str = "") -> str:
         {link("plugins", "/dashboard/plugins", "🧩", "Плагины", "manage_plugins")}
         {link("broadcast", "/dashboard/broadcast", "📢", "Рассылка", "broadcast")}
         {link("chat_settings", "/dashboard/chat_settings", "⚙️", "Настройки чатов", "manage_chat_settings")}
-        {link("admins", "/dashboard/admins", "👑", "Администраторы", "view_overview") if rank == 10 else ""}
+        {link("admins", "/dashboard/admins", "👑", "Администраторы", "view_overview") if rank >= OWNER_RANK else ""}
         {link("settings", "/dashboard/settings", "🔧", "Настройки", "view_settings")}
 
         <div class="nav-section">Инструменты</div>
@@ -1430,170 +1514,326 @@ handle_overview = require_auth("view_overview")(handle_overview)
 # ══════════════════════════════════════════
 #  СИСТЕМА АДМИНИСТРАЦИИ (только владелец)
 # ══════════════════════════════════════════
+#  СИСТЕМА АДМИНИСТРАЦИИ — 15 РАНГОВ (только владелец)
+# ══════════════════════════════════════════
 
 async def handle_admins(request: web.Request):
     sess = _get_session(request)
-    if not sess or sess.get("rank") != 10:
+    if not sess or sess.get("rank") < OWNER_RANK:
         raise web.HTTPFound("/dashboard")
     _track_session(request)
 
     result_msg = ""
+    ip = request.headers.get("X-Forwarded-For", request.remote or "").split(",")[0].strip()
 
     if request.method == "POST":
-        data = await request.post()
+        data   = await request.post()
         action = data.get("action", "")
-        tg_uid_str = data.get("tg_uid", "")
-        name = data.get("name", "").strip()
-        rank_str = data.get("rank", "1")
-
         try:
-            tg_uid = int(tg_uid_str)
-            rank = int(rank_str)
+            tg_uid = int(data.get("tg_uid", 0))
+            rank   = int(data.get("rank", 1))
         except:
-            tg_uid = 0
-            rank = 1
+            tg_uid = 0; rank = 1
+        name = data.get("name", "").strip()
 
-        ip = request.headers.get("X-Forwarded-For", request.remote or "").split(",")[0].strip()
-
-        if action == "grant" and tg_uid and name and 1 <= rank <= 9:
+        if action == "grant" and tg_uid and name and 1 <= rank <= OWNER_RANK - 1:
             _grant_admin(tg_uid, name, rank, OWNER_TG_ID)
-            _log_admin_db(OWNER_TG_ID, "GRANT_ADMIN", f"Выдан ранг {rank} ({DASHBOARD_RANKS[rank]['name']}) для {name} ({tg_uid})", ip)
-            result_msg = f"✅ Администратор {name} (ранг {rank}) добавлен!"
+            _log_admin_db(OWNER_TG_ID, "GRANT_ADMIN",
+                          f"Ранг {rank} ({DASHBOARD_RANKS[rank]['name']}) → {name} ({tg_uid})", ip)
+            result_msg = f"✅ {name} получил ранг {DASHBOARD_RANKS[rank]['name']}"
             if _bot:
                 try:
-                    await _bot.send_message(
-                        tg_uid,
-                        f"━━━━━━━━━━━━━━━\n"
-                        f"👑 <b>ДОСТУП К ДАШБОРДУ</b>\n"
-                        f"━━━━━━━━━━━━━━━\n\n"
-                        f"Вам выдан доступ к панели управления CHAT GUARD!\n\n"
+                    await _bot.send_message(tg_uid,
+                        f"━━━━━━━━━━━━━━━\n👑 <b>ДОСТУП К ДАШБОРДУ</b>\n━━━━━━━━━━━━━━━\n\n"
                         f"🎖 Ранг: <b>{DASHBOARD_RANKS[rank]['name']}</b>\n"
-                        f"📋 Права: {DASHBOARD_RANKS[rank]['desc']}\n\n"
-                        f"🔗 Войдите на дашборд, используя ваш Telegram ID.",
-                        parse_mode="HTML"
-                    )
-                except:
-                    pass
+                        f"📋 {DASHBOARD_RANKS[rank]['desc']}\n\n"
+                        f"🔗 Войдите через ваш Telegram ID.", parse_mode="HTML")
+                except: pass
+
         elif action == "revoke" and tg_uid and tg_uid != OWNER_TG_ID:
             admin = _get_admin(tg_uid)
             if admin:
                 _revoke_admin(tg_uid)
-                _log_admin_db(OWNER_TG_ID, "REVOKE_ADMIN", f"Удалён администратор {admin['name']} ({tg_uid})", ip)
-                result_msg = f"✅ Администратор {admin['name']} удалён"
-                # Убиваем активные сессии
+                end_duty(tg_uid)
+                _log_admin_db(OWNER_TG_ID, "REVOKE_ADMIN", f"Удалён {admin['name']} ({tg_uid})", ip)
+                result_msg = f"✅ {admin['name']} удалён из администрации"
                 for k, v in list(_dashboard_sessions.items()):
                     if v.get("uid") == tg_uid:
                         del _dashboard_sessions[k]
                 if _bot:
                     try:
-                        await _bot.send_message(tg_uid, "⚠️ Ваш доступ к дашборду был отозван.")
-                    except:
-                        pass
+                        await _bot.send_message(tg_uid,
+                            "⚠️ <b>Ваш доступ к дашборду отозван.</b>", parse_mode="HTML")
+                    except: pass
+
         elif action == "update_rank" and tg_uid and tg_uid != OWNER_TG_ID:
             admin = _get_admin(tg_uid)
-            if admin and 1 <= rank <= 9:
+            if admin and 1 <= rank <= OWNER_RANK - 1:
+                old_rank = admin["rank"]
                 _grant_admin(tg_uid, admin["name"], rank, OWNER_TG_ID)
-                _log_admin_db(OWNER_TG_ID, "UPDATE_RANK", f"Ранг {admin['name']} изменён на {rank}", ip)
-                result_msg = f"✅ Ранг {admin['name']} изменён на {DASHBOARD_RANKS[rank]['name']}"
-                # Обновляем активную сессию
+                _log_admin_db(OWNER_TG_ID, "UPDATE_RANK",
+                              f"{admin['name']}: {old_rank}→{rank}", ip)
+                result_msg = (
+                    f"✅ {admin['name']}: "
+                    f"{DASHBOARD_RANKS.get(old_rank,{}).get('name','?')} → "
+                    f"{DASHBOARD_RANKS[rank]['name']}"
+                )
                 for k, v in _dashboard_sessions.items():
                     if v.get("uid") == tg_uid:
                         v["rank"] = rank
                 if _bot:
+                    arrow = "📈 повышен" if rank > old_rank else "📉 понижен"
                     try:
-                        await _bot.send_message(
-                            tg_uid,
-                            f"🔄 Ваш ранг в дашборде изменён на: <b>{DASHBOARD_RANKS[rank]['name']}</b>",
-                            parse_mode="HTML"
-                        )
-                    except:
-                        pass
+                        await _bot.send_message(tg_uid,
+                            f"🔄 Ваш ранг {arrow}!\n\n"
+                            f"🎖 Новый ранг: <b>{DASHBOARD_RANKS[rank]['name']}</b>\n"
+                            f"📋 {DASHBOARD_RANKS[rank]['desc']}", parse_mode="HTML")
+                    except: pass
 
-    admins = _get_all_admins()
+        elif action == "duty_start" and tg_uid:
+            try: hours = float(data.get("duty_hours", "8"))
+            except: hours = 8.0
+            admin = _get_admin(tg_uid)
+            if admin:
+                rn = DASHBOARD_RANKS.get(admin["rank"], {}).get("name", "?")
+                start_duty(tg_uid, admin["name"], admin["rank"], hours, rn)
+                _log_admin_db(OWNER_TG_ID, "DUTY_START",
+                              f"{admin['name']} дежурство {hours}ч", ip)
+                result_msg = f"✅ {admin['name']} поставлен на дежурство на {hours}ч"
+                if _bot:
+                    end_dt = datetime.fromtimestamp(time.time() + hours * 3600).strftime("%H:%M %d.%m")
+                    try:
+                        await _bot.send_message(tg_uid,
+                            f"⏰ <b>Начало дежурства</b>\n\n"
+                            f"Вы поставлены на дежурство на <b>{hours}ч</b>.\n"
+                            f"Конец: {end_dt}\nУдачной смены! 🛡", parse_mode="HTML")
+                    except: pass
 
-    # Лог действий
+        elif action == "duty_end" and tg_uid:
+            admin = _get_admin(tg_uid)
+            if admin:
+                d = get_duty_status(tg_uid)
+                end_duty(tg_uid)
+                _log_admin_db(OWNER_TG_ID, "DUTY_END", f"{admin['name']} снят с дежурства", ip)
+                result_msg = f"✅ {admin['name']} снят с дежурства"
+                if _bot:
+                    try:
+                        await _bot.send_message(tg_uid,
+                            "⏹ <b>Дежурство завершено.</b>\nСпасибо за службу! 👮",
+                            parse_mode="HTML")
+                    except: pass
+
+    # ── Данные ──────────────────────────────────────────────────
+    admins    = _get_all_admins()
+    on_duty   = get_all_on_duty()
+    duty_uids = {d["uid"] for d in on_duty}
+
     try:
         conn = db.get_conn()
-        log_rows = conn.execute(
-            "SELECT tg_uid, action, details, ip, ts FROM dashboard_admin_log ORDER BY ts DESC LIMIT 20"
-        ).fetchall()
+        log_rows = [dict(r) for r in conn.execute(
+            "SELECT tg_uid,action,details,ip,ts FROM dashboard_admin_log ORDER BY ts DESC LIMIT 30"
+        ).fetchall()]
         conn.close()
-        log_html = "".join(
-            f"<tr><td style='font-size:11px;color:var(--text2);font-family:JetBrains Mono,monospace;'>{str(r['ts'])[:16]}</td>"
-            f"<td><code>{r['tg_uid']}</code></td>"
-            f"<td style='font-weight:600;'>{r['action']}</td>"
-            f"<td style='color:var(--text2);font-size:12px;'>{r['details'][:60]}</td>"
-            f"<td style='color:var(--text2);font-size:11px;'>{r['ip']}</td>"
-            f"</tr>"
-            for r in [dict(r) for r in log_rows]
-        ) or "<tr><td colspan='5' class='empty-state'>Лог пуст</td></tr>"
     except:
-        log_html = "<tr><td colspan='5' class='empty-state'>Ошибка</td></tr>"
+        log_rows = []
 
-    # Таблица администраторов
-    admins_html = ""
+    log_html = "".join(
+        f"<tr>"
+        f"<td style='font-size:11px;color:var(--text2);font-family:JetBrains Mono,monospace;'>{str(r['ts'])[:16]}</td>"
+        f"<td><code>{r['tg_uid']}</code></td>"
+        f"<td style='font-weight:600;'>{r['action']}</td>"
+        f"<td style='color:var(--text2);font-size:12px;'>{str(r['details'])[:55]}</td>"
+        f"<td style='color:var(--text2);font-size:11px;'>{r['ip']}</td>"
+        f"</tr>"
+        for r in log_rows
+    ) or "<tr><td colspan='5' class='empty-state'>Лог пуст</td></tr>"
+
+    # ── Карточки дежурства ───────────────────────────────────────
+    duty_cards = ""
+    for d in on_duty:
+        ri  = DASHBOARD_RANKS.get(d["rank"], DASHBOARD_RANKS[1])
+        eh  = d["elapsed_mins"] // 60; em = d["elapsed_mins"] % 60
+        rh  = d["remaining_mins"] // 60; rm = d["remaining_mins"] % 60
+        rgb = _hex_to_rgb(ri["color"])
+        duty_cards += (
+            f'<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;'
+            f'padding:16px;border-left:3px solid {ri["color"]};">'
+            f'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">'
+            f'<div><div style="font-weight:700;">{d["name"]}</div>'
+            f'<div style="font-size:12px;color:{ri["color"]};margin-top:2px;">{ri["name"]}</div></div>'
+            f'<span style="font-size:11px;color:var(--success);font-weight:700;">🟢 ДЕЖУРИТ</span></div>'
+            f'<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">'
+            f'⏱ {eh}ч {em}м &nbsp;|&nbsp; ⏳ осталось {rh}ч {rm}м</div>'
+            f'<div style="height:4px;background:var(--bg4);border-radius:2px;margin-bottom:10px;">'
+            f'<div style="height:4px;width:{d["pct"]}%;background:{ri["color"]};border-radius:2px;"></div></div>'
+            f'<div style="font-size:11px;color:var(--text2);margin-bottom:10px;">'
+            f'Действий за смену: <b style="color:var(--accent);">{d.get("actions",0)}</b></div>'
+            f'<div style="display:flex;gap:6px;">'
+            f'<form method="POST" style="display:inline;">'
+            f'<input type="hidden" name="action" value="duty_end">'
+            f'<input type="hidden" name="tg_uid" value="{d["uid"]}">'
+            f'<button class="btn btn-xs btn-danger" type="submit">⏹ Снять</button></form>'
+            f'<a href="/dashboard/mod/{d["uid"]}" class="btn btn-xs btn-ghost">👤 Профиль</a>'
+            f'</div></div>'
+        )
+    if not duty_cards:
+        duty_cards = '<div class="empty-state" style="padding:24px;">Никто не на дежурстве</div>'
+
+    # ── Таблица по тирам ─────────────────────────────────────────
+    tier_order = ["owner","top","high","senior","mid","junior"]
+    by_tier: dict = {t: [] for t in tier_order}
     for a in admins:
-        rank = a["rank"]
-        rank_info = DASHBOARD_RANKS.get(rank, DASHBOARD_RANKS[1])
-        is_owner = a["tg_uid"] == OWNER_TG_ID
-        last = str(a.get("last_login") or "—")[:16]
-        safe_name = a["name"].replace("'", "").replace('"', "")
-        tg_uid = a["tg_uid"]
-        rgb = _hex_to_rgb(rank_info["color"])
-        rcolor = rank_info["color"]
-        rname = rank_info["name"]
-        rdesc = rank_info["desc"]
-        if is_owner:
-            action_cell = "<span style='color:var(--gold);font-size:12px;'>🌟 Владелец</span>"
-        else:
-            action_cell = (
-                f'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
-                f'<button onclick="openRankModal({tg_uid}, \'{safe_name}\', {rank})" class="btn btn-xs btn-ghost">✏️ Ранг</button>'
-                f'<button onclick="revokeAdmin({tg_uid}, \'{safe_name}\')" class="btn btn-xs" style="background:rgba(239,68,68,.1);color:var(--danger);">🗑 Убрать</button>'
-                f'</div>'
+        t = DASHBOARD_RANKS.get(a["rank"], DASHBOARD_RANKS[1]).get("tier","junior")
+        by_tier.setdefault(t, []).append(a)
+
+    admins_sections = ""
+    for tier_key in tier_order:
+        group = by_tier.get(tier_key, [])
+        if not group:
+            continue
+        ti = RANK_TIERS.get(tier_key, {"label": tier_key, "color": "#607d8b"})
+        rows_in_tier = ""
+        for a in group:
+            rank     = a["rank"]
+            ri       = DASHBOARD_RANKS.get(rank, DASHBOARD_RANKS[1])
+            is_owner = a["tg_uid"] == OWNER_TG_ID
+            last     = str(a.get("last_login") or "—")[:16]
+            stats    = _get_mod_stats(a["name"], a["tg_uid"])
+            safe     = str(a["name"]).replace("'","").replace('"',"")
+            uid      = a["tg_uid"]
+            rgb      = _hex_to_rgb(ri["color"])
+            duty_dot = (
+                '<span style="width:8px;height:8px;border-radius:50%;background:var(--success);'
+                'display:inline-block;margin-left:6px;" title="На дежурстве"></span>'
+                if uid in duty_uids else ""
             )
-        admins_html += (
-            f"<tr>"
-            f"<td><code>{tg_uid}</code></td>"
-            f'<td style="font-weight:700;">{a["name"]}</td>'
-            f'<td><span class="badge" style="background:rgba({rgb},.15);color:{rcolor};">{rname}</span></td>'
-            f'<td style="font-size:12px;color:var(--text2);">{rdesc}</td>'
-            f'<td style="font-size:11px;color:var(--text2);">{last}</td>'
-            f"<td>{action_cell}</td>"
-            f"</tr>"
+            if is_owner:
+                action_cell = '<span style="color:var(--gold);font-size:12px;">🌟 Владелец</span>'
+            else:
+                action_cell = (
+                    f'<div style="display:flex;gap:4px;flex-wrap:wrap;">'
+                    f'<button onclick="openRankModal({uid},\'{safe}\',{rank})" class="btn btn-xs btn-ghost">✏️ Ранг</button>'
+                    f'<a href="/dashboard/mod/{uid}" class="btn btn-xs btn-ghost">👤</a>'
+                    f'<button onclick="openDutyModal({uid},\'{safe}\')" class="btn btn-xs btn-ghost">⏰</button>'
+                    f'<button onclick="revokeAdmin({uid},\'{safe}\')" class="btn btn-xs"'
+                    f' style="background:rgba(239,68,68,.1);color:var(--danger);">🗑</button>'
+                    f'</div>'
+                )
+            rows_in_tier += (
+                f"<tr>"
+                f"<td><code style='font-size:11px;'>{uid}</code></td>"
+                f"<td style='font-weight:700;'>{a['name']}{duty_dot}</td>"
+                f"<td><span class='badge' style='background:rgba({rgb},.15);color:{ri['color']};'>"
+                f"{rank} · {ri['name']}</span></td>"
+                f"<td style='font-size:12px;color:var(--text2);'>{ri['desc']}</td>"
+                f"<td style='font-size:12px;font-family:JetBrains Mono,monospace;white-space:nowrap;'>"
+                f"<span style='color:var(--danger);'>{stats['bans']}б</span> "
+                f"<span style='color:var(--warn);'>{stats['warns']}в</span> "
+                f"<span style='color:var(--purple);'>{stats['mutes']}м</span> "
+                f"<span style='color:var(--accent);font-size:11px;'>🎫{stats['tickets']}</span></td>"
+                f"<td style='font-size:11px;color:var(--text2);'>{last}</td>"
+                f"<td>{action_cell}</td>"
+                f"</tr>"
+            )
+        admins_sections += (
+            f'<div style="margin-bottom:20px;">'
+            f'<div style="font-size:11px;color:{ti["color"]};font-weight:700;letter-spacing:1.5px;'
+            f'text-transform:uppercase;padding:8px 0 4px;'
+            f'border-bottom:2px solid {ti["color"]}44;margin-bottom:8px;">{ti["label"]}</div>'
+            f'<table style="width:100%;border-collapse:collapse;">'
+            f'<thead><tr>'
+            f'<th style="font-size:10px;text-transform:uppercase;color:var(--text2);background:var(--bg3);padding:8px 12px;text-align:left;">TG ID</th>'
+            f'<th style="font-size:10px;text-transform:uppercase;color:var(--text2);background:var(--bg3);padding:8px 12px;text-align:left;">Имя</th>'
+            f'<th style="font-size:10px;text-transform:uppercase;color:var(--text2);background:var(--bg3);padding:8px 12px;text-align:left;">Ранг</th>'
+            f'<th style="font-size:10px;text-transform:uppercase;color:var(--text2);background:var(--bg3);padding:8px 12px;text-align:left;">Описание</th>'
+            f'<th style="font-size:10px;text-transform:uppercase;color:var(--text2);background:var(--bg3);padding:8px 12px;text-align:left;">Действия</th>'
+            f'<th style="font-size:10px;text-transform:uppercase;color:var(--text2);background:var(--bg3);padding:8px 12px;text-align:left;">Посл. вход</th>'
+            f'<th style="font-size:10px;text-transform:uppercase;color:var(--text2);background:var(--bg3);padding:8px 12px;text-align:left;">Управление</th>'
+            f'</tr></thead>'
+            f'<tbody>{rows_in_tier}</tbody>'
+            f'</table></div>'
         )
 
-    # Карточки рангов
-    ranks_html = ""
-    for r_id, r_info in sorted(DASHBOARD_RANKS.items()):
-        if r_id == 10:
-            continue
-        perms_preview = ", ".join(r_info["perms"][:4])
-        if len(r_info["perms"]) > 4:
-            perms_preview += f" +{len(r_info['perms'])-4}"
-        ranks_html += f"""
-        <div class="rank-card">
-          <div class="rank-badge" style="background:rgba({_hex_to_rgb(r_info['color'])},.15);color:{r_info['color']};">{r_id}</div>
-          <div style="flex:1;">
-            <div class="rank-name" style="color:{r_info['color']};">{r_info['name']}</div>
-            <div class="rank-desc">{r_info['desc']}</div>
-            <div class="rank-perms">{perms_preview}</div>
-          </div>
-        </div>"""
+    # ── Карточки рангов ──────────────────────────────────────────
+    rank_cards = ""
+    cur_tier   = None
+    for r_id in range(1, OWNER_RANK + 1):
+        ri = DASHBOARD_RANKS[r_id]
+        if ri["tier"] != cur_tier:
+            cur_tier = ri["tier"]
+            ti = RANK_TIERS.get(cur_tier, {"label": cur_tier, "color": "#607d8b"})
+            rank_cards += (
+                f'<div style="font-size:10px;color:{ti["color"]};font-weight:700;letter-spacing:1.5px;'
+                f'text-transform:uppercase;margin:14px 0 6px;">── {ti["label"]} ──</div>'
+            )
+        perms_n  = len(ri["perms"])
+        preview  = ", ".join(ri["perms"][:3]) + (f" +{perms_n-3}" if perms_n > 3 else "")
+        rank_cards += (
+            f'<div class="rank-card" style="margin-bottom:6px;">'
+            f'<div class="rank-badge" style="background:rgba({_hex_to_rgb(ri["color"])},.15);color:{ri["color"]};">{r_id}</div>'
+            f'<div style="flex:1;">'
+            f'<div class="rank-name" style="color:{ri["color"]};font-size:13px;">{ri["name"]}</div>'
+            f'<div class="rank-desc" style="font-size:11px;">{ri["desc"]}</div>'
+            f'<div style="font-size:10px;color:var(--text2);margin-top:2px;">{preview}</div>'
+            f'</div></div>'
+        )
 
-    result_html = f'<div style="padding:12px 16px;background:rgba(34,197,94,.1);border-radius:8px;margin-bottom:20px;color:var(--success);font-weight:600;">{result_msg}</div>' if result_msg else ""
+    result_html = (
+        f'<div style="padding:12px 16px;background:rgba(34,197,94,.1);border-radius:8px;'
+        f'margin-bottom:20px;color:var(--success);font-weight:600;">{result_msg}</div>'
+        if result_msg else ""
+    )
+
+    rank_opts = "".join(
+        f'<option value="{r_id}">{r_id} — {ri["name"]} [{ri["tier"].upper()}] — {ri["desc"]}</option>'
+        for r_id, ri in sorted(DASHBOARD_RANKS.items()) if r_id < OWNER_RANK
+    )
+    rank_opts_short = "".join(
+        f'<option value="{r_id}">{r_id} — {ri["name"]}</option>'
+        for r_id, ri in sorted(DASHBOARD_RANKS.items()) if r_id < OWNER_RANK
+    )
+    ranks_js = json.dumps({
+        str(r_id): {"name": ri["name"], "color": ri["color"],
+                    "desc": ri["desc"], "tier": ri["tier"]}
+        for r_id, ri in DASHBOARD_RANKS.items()
+    })
 
     body = navbar(sess, "admins") + f"""
     <div class="container">
-      <div class="page-title">👑 Управление администраторами
-        <span style="font-size:13px;color:var(--gold);font-weight:600;margin-left:auto;">Только для вас</span>
+      <div class="page-title">👑 Администраторы
+        <span style="font-size:12px;color:var(--gold);font-weight:600;margin-left:auto;">
+          {OWNER_RANK} рангов · {len(admins)} адм · {len(on_duty)} дежурят
+        </span>
       </div>
       {result_html}
 
-      <!-- Добавить администратора -->
-      <div class="grid-2" style="margin-bottom:20px;">
+      <div class="cards" style="grid-template-columns:repeat(6,1fr);margin-bottom:24px;">
+        <div class="card"><div class="card-icon">👥</div><div class="card-label">Всего адм</div>
+          <div class="card-value">{len(admins)}</div></div>
+        <div class="card"><div class="card-icon">🟢</div><div class="card-label">Дежурят</div>
+          <div class="card-value" style="color:var(--success);">{len(on_duty)}</div></div>
+        <div class="card"><div class="card-icon">🔵</div><div class="card-label">Младший</div>
+          <div class="card-value" style="color:#607d8b;">{sum(1 for a in admins if DASHBOARD_RANKS.get(a["rank"],{{}}).get("tier")=="junior")}</div></div>
+        <div class="card"><div class="card-icon">🟡</div><div class="card-label">Средний+</div>
+          <div class="card-value" style="color:#ffa726;">{sum(1 for a in admins if DASHBOARD_RANKS.get(a["rank"],{{}}).get("tier") in ["mid","senior"])}</div></div>
+        <div class="card"><div class="card-icon">🔴</div><div class="card-label">Топ состав</div>
+          <div class="card-value" style="color:#ff7043;">{sum(1 for a in admins if DASHBOARD_RANKS.get(a["rank"],{{}}).get("tier") in ["high","top"])}</div></div>
+        <div class="card"><div class="card-icon">🔐</div><div class="card-label">Сессий</div>
+          <div class="card-value">{len(_dashboard_sessions)}</div></div>
+      </div>
+
+      <div class="section" style="margin-bottom:24px;">
+        <div class="section-header">⏰ Дежурство прямо сейчас
+          <span style="font-size:12px;color:var(--text2);">{len(on_duty)} человек</span>
+        </div>
+        <div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;">
+          {duty_cards}
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:24px;">
         <div class="section">
-          <div class="section-header">➕ Добавить / обновить администратора</div>
+          <div class="section-header">➕ Добавить / обновить</div>
           <div class="section-body">
             <form method="POST">
               <input type="hidden" name="action" value="grant">
@@ -1602,45 +1842,36 @@ async def handle_admins(request: web.Request):
                 <input class="form-control" type="number" name="tg_uid" placeholder="123456789" required>
               </div>
               <div class="form-group">
-                <label>Имя администратора</label>
+                <label>Имя</label>
                 <input class="form-control" type="text" name="name" placeholder="Иван Иванов" required>
               </div>
               <div class="form-group">
-                <label>Ранг (1-9)</label>
-                <select class="form-control" name="rank">
-                  {''.join(f'<option value="{r_id}">{r_id} — {r_info["name"]} — {r_info["desc"]}</option>' for r_id, r_info in sorted(DASHBOARD_RANKS.items()) if r_id < 10)}
+                <label>Ранг (1–{OWNER_RANK-1})</label>
+                <select class="form-control" name="rank" id="grantRankSel" onchange="previewGrantRank(this.value)">
+                  {rank_opts}
                 </select>
+                <div id="grantPreview" style="margin-top:6px;font-size:12px;padding:6px 10px;background:var(--bg3);border-radius:6px;"></div>
               </div>
-              <button class="btn btn-primary" type="submit" style="width:100%;">
-                ✅ Добавить / Обновить
-              </button>
+              <button class="btn btn-primary" type="submit" style="width:100%;">✅ Добавить / Обновить</button>
             </form>
           </div>
         </div>
-
         <div class="section">
-          <div class="section-header">📋 Описание рангов</div>
-          <div style="padding:12px;display:flex;flex-direction:column;gap:8px;max-height:380px;overflow-y:auto;">
-            {ranks_html}
-          </div>
+          <div class="section-header">📋 Все {OWNER_RANK} рангов</div>
+          <div style="padding:12px 16px;max-height:440px;overflow-y:auto;">{rank_cards}</div>
         </div>
       </div>
 
-      <!-- Список администраторов -->
-      <div class="section" style="margin-bottom:20px;">
+      <div class="section" style="margin-bottom:24px;">
         <div class="section-header">
           👥 Все администраторы ({len(admins)})
-          <span style="font-size:12px;color:var(--text2);">Ранг 10 = Владелец (только вы)</span>
+          <span style="font-size:12px;color:var(--text2);">🟢 = дежурит · сгруппированы по уровню</span>
         </div>
-        <table>
-          <thead><tr><th>TG ID</th><th>Имя</th><th>Ранг</th><th>Описание</th><th>Последний вход</th><th>Действия</th></tr></thead>
-          <tbody>{admins_html or "<tr><td colspan='6' class='empty-state'>Нет администраторов</td></tr>"}</tbody>
-        </table>
+        <div style="padding:16px;">{admins_sections or "<div class='empty-state'>Нет администраторов</div>"}</div>
       </div>
 
-      <!-- Лог действий -->
       <div class="section">
-        <div class="section-header">📜 Лог действий</div>
+        <div class="section-header">📜 Лог действий (последние 30)</div>
         <table>
           <thead><tr><th>Время</th><th>TG ID</th><th>Действие</th><th>Детали</th><th>IP</th></tr></thead>
           <tbody>{log_html}</tbody>
@@ -1648,11 +1879,10 @@ async def handle_admins(request: web.Request):
       </div>
     </div>
 
-    <!-- Modal: Изменить ранг -->
     <div class="modal-overlay" id="rankModal">
       <div class="modal">
         <div class="modal-title">✏️ Изменить ранг</div>
-        <form method="POST" id="rankForm">
+        <form method="POST">
           <input type="hidden" name="action" value="update_rank">
           <input type="hidden" name="tg_uid" id="rankUid">
           <div class="form-group">
@@ -1660,11 +1890,16 @@ async def handle_admins(request: web.Request):
             <input class="form-control" id="rankName" readonly>
           </div>
           <div class="form-group">
+            <label>Текущий ранг</label>
+            <div id="rankCurrentBadge" style="margin-top:4px;font-size:13px;font-weight:700;"></div>
+          </div>
+          <div class="form-group">
             <label>Новый ранг</label>
-            <select class="form-control" name="rank" id="rankSelect">
-              {''.join(f'<option value="{r_id}">{r_id} — {r_info["name"]}</option>' for r_id, r_info in sorted(DASHBOARD_RANKS.items()) if r_id < 10)}
+            <select class="form-control" name="rank" id="rankSelect" onchange="updateRankPreview(this.value)">
+              {rank_opts_short}
             </select>
           </div>
+          <div id="rankPreview" style="padding:10px;background:var(--bg3);border-radius:8px;font-size:12px;margin-bottom:4px;"></div>
           <div class="modal-footer">
             <button type="button" class="btn btn-ghost" onclick="closeModal('rankModal')">Отмена</button>
             <button type="submit" class="btn btn-primary">✅ Сохранить</button>
@@ -1673,31 +1908,83 @@ async def handle_admins(request: web.Request):
       </div>
     </div>
 
-    <!-- Modal: Подтверждение удаления -->
+    <div class="modal-overlay" id="dutyModal">
+      <div class="modal">
+        <div class="modal-title">⏰ Назначить дежурство</div>
+        <form method="POST">
+          <input type="hidden" name="action" value="duty_start">
+          <input type="hidden" name="tg_uid" id="dutyUid">
+          <div class="form-group">
+            <label>Администратор</label>
+            <input class="form-control" id="dutyName" readonly>
+          </div>
+          <div class="form-group">
+            <label>Длительность смены</label>
+            <select class="form-control" name="duty_hours">
+              <option value="2">2 часа</option>
+              <option value="4">4 часа</option>
+              <option value="8" selected>8 часов (стандарт)</option>
+              <option value="12">12 часов</option>
+              <option value="24">24 часа</option>
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('dutyModal')">Отмена</button>
+            <button type="submit" class="btn btn-success">⏰ Назначить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <form method="POST" id="revokeForm">
       <input type="hidden" name="action" value="revoke">
       <input type="hidden" name="tg_uid" id="revokeUid">
     </form>
 
     <script>
-    function openRankModal(uid, name, currentRank){{
+    var RANKS = {ranks_js};
+    function previewGrantRank(v) {{
+      var r = RANKS[v]; if(!r) return;
+      document.getElementById('grantPreview').innerHTML =
+        '<span style="color:'+r.color+';font-weight:700;">'+v+' · '+r.name+'</span> — '+r.desc;
+    }}
+    if(document.getElementById('grantRankSel')) previewGrantRank(document.getElementById('grantRankSel').value);
+    function openRankModal(uid, name, currentRank) {{
       document.getElementById('rankUid').value = uid;
-      document.getElementById('rankName').value = name + ' (' + uid + ')';
+      document.getElementById('rankName').value = name+' ('+uid+')';
       document.getElementById('rankSelect').value = currentRank;
+      var r = RANKS[currentRank]||{{}};
+      document.getElementById('rankCurrentBadge').innerHTML =
+        '<span style="color:'+(r.color||'#fff')+';">'+currentRank+' · '+(r.name||'?')+'</span>';
+      updateRankPreview(currentRank);
       openModal('rankModal');
     }}
-    function revokeAdmin(uid, name){{
-      if(confirm('Удалить администратора ' + name + ' (' + uid + ')? Это действие нельзя отменить.')){{
+    function updateRankPreview(v) {{
+      var r = RANKS[v]||{{}};
+      document.getElementById('rankPreview').innerHTML =
+        '<b style="color:'+(r.color||'#fff')+'">'+(r.name||'?')+'</b> — '+(r.desc||'')+
+        ' <span style="font-size:10px;color:var(--text2);">'+(r.tier||'').toUpperCase()+'</span>';
+    }}
+    function openDutyModal(uid, name) {{
+      document.getElementById('dutyUid').value = uid;
+      document.getElementById('dutyName').value = name+' ('+uid+')';
+      openModal('dutyModal');
+    }}
+    function revokeAdmin(uid, name) {{
+      if(confirm('Удалить '+name+' ('+uid+')? Нельзя отменить.')) {{
         document.getElementById('revokeUid').value = uid;
         document.getElementById('revokeForm').submit();
       }}
     }}
+    setInterval(function(){{
+      fetch('/api/live').then(function(r){{return r.json();}}).then(function(d){{
+        if(d.online!==undefined){{var el=document.querySelector('[data-live="online"]');if(el)el.textContent=d.online;}}
+      }}).catch(function(){{}});
+    }},15000);
     </script>
     """ + close_main()
     return web.Response(text=page(body), content_type="text/html")
 
-
-# ══════════════════════════════════════════
 #  ЧАТЫ
 # ══════════════════════════════════════════
 
@@ -3432,6 +3719,157 @@ async def handle_health(request: web.Request):
 #  ЗАПУСК
 # ══════════════════════════════════════════
 
+
+
+# ══════════════════════════════════════════
+#  ПРОФИЛЬ МОДЕРАТОРА
+# ══════════════════════════════════════════
+
+async def handle_mod_profile(request: web.Request):
+    """Страница профиля конкретного модератора."""
+    sess = _get_session(request)
+    _track_session(request)
+    if not sess:
+        raise web.HTTPFound("/dashboard/login")
+
+    target_uid = int(request.match_info.get("uid", 0))
+    admin = _get_admin(target_uid)
+    if not admin:
+        raise web.HTTPFound("/dashboard/admins")
+
+    rank     = admin["rank"]
+    ri       = DASHBOARD_RANKS.get(rank, DASHBOARD_RANKS[1])
+    stats    = _get_mod_stats(admin["name"], target_uid)
+    duty_st  = get_duty_status(target_uid)
+    earned   = _mod_achievements.get(target_uid, {})
+
+    # История дежурств
+    my_hist  = [d for d in _duty_history if d["uid"] == target_uid][:10]
+
+    try:
+        conn = db.get_conn()
+        recent_acts = [dict(r) for r in conn.execute(
+            "SELECT action,reason,created_at FROM mod_history WHERE by_name=? ORDER BY created_at DESC LIMIT 20",
+            (admin["name"],)
+        ).fetchall()]
+        conn.close()
+    except:
+        recent_acts = []
+
+    acts_html = "".join(
+        f"<tr>"
+        f"<td style='font-size:11px;color:var(--text2);'>{str(r['created_at'])[:16]}</td>"
+        f"<td style='font-weight:600;color:{'var(--danger)' if 'Бан' in str(r['action']) else 'var(--warn)'};'>{r['action']}</td>"
+        f"<td style='color:var(--text2);font-size:12px;'>{(str(r.get('reason') or '—'))[:40]}</td>"
+        f"</tr>"
+        for r in recent_acts
+    ) or "<tr><td colspan='3' class='empty-state'>Нет действий</td></tr>"
+
+    hist_html = "".join(
+        f"<tr>"
+        f"<td style='font-size:11px;color:var(--text2);'>{datetime.fromtimestamp(d['start']).strftime('%d.%m %H:%M')}</td>"
+        f"<td>{d['duration_mins']} мин</td>"
+        f"<td style='color:var(--accent);'>{d['actions_count']}</td>"
+        f"</tr>"
+        for d in my_hist
+    ) or "<tr><td colspan='3' class='empty-state'>Нет</td></tr>"
+
+    badges_html = "".join(
+        f'<span title="{ACHIEVEMENTS_DEF[k][1]}: {ACHIEVEMENTS_DEF[k][2]}" style="font-size:26px;cursor:default;">{ACHIEVEMENTS_DEF[k][0]}</span>'
+        for k in earned if k in ACHIEVEMENTS_DEF
+    ) or '<span style="color:var(--text2);font-size:13px;">Нет достижений</span>'
+
+    rgb = _hex_to_rgb(ri["color"])
+
+    duty_widget = ""
+    if duty_st:
+        rh = duty_st["remaining_mins"] // 60; rm = duty_st["remaining_mins"] % 60
+        duty_widget = (
+            f'<div style="margin-top:12px;padding:10px 14px;background:rgba(34,197,94,.08);'
+            f'border-radius:8px;border:1px solid rgba(34,197,94,.2);">'
+            f'<div style="font-size:13px;color:var(--success);font-weight:700;">🟢 На дежурстве</div>'
+            f'<div style="font-size:12px;color:var(--text2);margin-top:4px;">'
+            f'Осталось: {rh}ч {rm}м | Действий: {duty_st.get("actions",0)}</div>'
+            f'<div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:8px;">'
+            f'<div style="height:4px;width:{duty_st["pct"]}%;background:var(--success);border-radius:2px;"></div></div>'
+            f'</div>'
+        )
+
+    body = navbar(sess, "admins") + f"""
+    <div class="container">
+      <div class="page-title">
+        👤 {admin['name']}
+        <a href="/dashboard/admins" class="btn btn-ghost btn-sm" style="margin-left:auto;">← Назад</a>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:24px;">
+        <div class="section">
+          <div class="section-body">
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+              <div style="width:56px;height:56px;border-radius:14px;
+                          background:rgba({rgb},.2);border:2px solid {ri['color']};
+                          display:flex;align-items:center;justify-content:center;font-size:24px;">
+                {ri['name'][0]}
+              </div>
+              <div>
+                <div style="font-size:18px;font-weight:800;">{admin['name']}</div>
+                <span class="badge" style="background:rgba({rgb},.15);color:{ri['color']};margin-top:6px;display:inline-block;">
+                  {rank} · {ri['name']}
+                </span>
+              </div>
+            </div>
+            <div style="font-size:13px;line-height:2.2;border-top:1px solid var(--border);padding-top:12px;">
+              <div><span style="color:var(--text2);">TG ID:</span> <code>{target_uid}</code></div>
+              <div><span style="color:var(--text2);">Уровень:</span> <b style="color:{ri['color']};text-transform:uppercase;">{ri['tier']}</b></div>
+              <div><span style="color:var(--text2);">Права:</span> {len(ri['perms'])} {"(все)" if "ALL" in ri['perms'] else ""}</div>
+              <div><span style="color:var(--text2);">Последний вход:</span> {str(admin.get('last_login') or '—')[:16]}</div>
+              <div><span style="color:var(--text2);">Добавлен:</span> {str(admin.get('granted_at') or '—')[:16]}</div>
+              <div><span style="color:var(--text2);">Входов в систему:</span> {stats['logins']}</div>
+            </div>
+            {duty_widget}
+          </div>
+        </div>
+
+        <div>
+          <div class="cards" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px;">
+            <div class="card"><div class="card-icon">🔨</div><div class="card-label">Банов</div>
+              <div class="card-value" style="color:var(--danger);">{stats['bans']}</div></div>
+            <div class="card"><div class="card-icon">⚡</div><div class="card-label">Варнов</div>
+              <div class="card-value" style="color:var(--warn);">{stats['warns']}</div></div>
+            <div class="card"><div class="card-icon">🔇</div><div class="card-label">Мутов</div>
+              <div class="card-value" style="color:var(--purple);">{stats['mutes']}</div></div>
+            <div class="card"><div class="card-icon">🎫</div><div class="card-label">Тикетов</div>
+              <div class="card-value" style="color:var(--accent);">{stats['tickets']}</div></div>
+          </div>
+          <div class="section">
+            <div class="section-header">🏅 Достижения ({len(earned)})</div>
+            <div style="padding:16px;display:flex;gap:8px;flex-wrap:wrap;">{badges_html}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-header">📋 Последние 20 действий</div>
+          <table>
+            <thead><tr><th>Время</th><th>Действие</th><th>Причина</th></tr></thead>
+            <tbody>{acts_html}</tbody>
+          </table>
+        </div>
+        <div class="section">
+          <div class="section-header">⏰ История дежурств</div>
+          <table>
+            <thead><tr><th>Начало</th><th>Длит.</th><th>Действий</th></tr></thead>
+            <tbody>{hist_html}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_mod_profile = require_auth("view_overview")(handle_mod_profile)
+
 async def start_dashboard():
     _init_admin_db()
     app = web.Application()
@@ -3446,6 +3884,7 @@ async def start_dashboard():
 
     app.router.add_get("/dashboard/admins", handle_admins)
     app.router.add_post("/dashboard/admins", handle_admins)
+    app.router.add_get("/dashboard/mod/{uid}", handle_mod_profile)
 
     app.router.add_get("/dashboard/chats", handle_chats)
     app.router.add_get("/dashboard/chats/{cid}", handle_chat_detail)
