@@ -999,6 +999,15 @@ def navbar(sess: dict | None = None, active: str = "") -> str:
         {link("chat_settings", "/dashboard/chat_settings", "⚙️", "Настройки чатов", "manage_chat_settings")}
         {link("admins", "/dashboard/admins", "👑", "Администраторы", "view_overview") if rank == 10 else ""}
         {link("settings", "/dashboard/settings", "🔧", "Настройки", "view_settings")}
+
+        <div class="nav-section">Инструменты</div>
+        {link("activity_map", "/dashboard/activity_map", "🗺", "Карта активности", "view_overview")}
+        {link("achievements", "/dashboard/achievements", "🎯", "Достижения", "view_overview")}
+        {link("team_chat",    "/dashboard/team_chat",    "💬", "Чат команды", "view_overview")}
+        {link("threats",      "/dashboard/threats",      "🔭", "Разведка угроз", "view_alerts")}
+        {link("appeals",      "/dashboard/appeals",      "⚖️", "Апелляции", "view_reports")}
+        {link("msg_search",   "/dashboard/msg_search",   "🔍", "Поиск сообщений", "view_deleted")}
+        {link("themes",       "/dashboard/themes",       "🎨", "Темы", "view_overview")}
       </nav>
       <div class="sidebar-footer">
         <button onclick="toggleTheme()" class="btn btn-ghost btn-xs">🌙/☀️</button>
@@ -3484,9 +3493,1342 @@ async def start_dashboard():
     app.router.add_post("/api/modaction", api_modaction)
     app.router.add_get("/api/stats", api_stats)
 
+    # ── Новые фичи v3.0 ──
+    app.router.add_get("/dashboard/activity_map",  handle_activity_map)
+    app.router.add_get("/dashboard/achievements",  handle_achievements)
+    app.router.add_get("/dashboard/team_chat",     handle_team_chat)
+    app.router.add_post("/dashboard/team_chat",    handle_team_chat)
+    app.router.add_get("/dashboard/threats",       handle_threats)
+    app.router.add_post("/dashboard/threats",      handle_threats)
+    app.router.add_get("/dashboard/appeals",       handle_appeals)
+    app.router.add_post("/dashboard/appeals",      handle_appeals)
+    app.router.add_get("/dashboard/themes",        handle_themes)
+    app.router.add_post("/dashboard/themes",       handle_themes)
+    app.router.add_get("/dashboard/msg_search",    handle_msg_search)
+    app.router.add_get("/api/team_messages",       api_team_messages)
+    app.router.add_get("/api/mod_stats",           api_mod_stats)
+    app.router.add_get("/api/threats",             api_threats)
+
     port = int(os.getenv("PORT", 8080))
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", port).start()
     log.info(f"✅ Dashboard v2.0 запущен на :{port}")
     return runner
+
+
+# ══════════════════════════════════════════════════════════════════
+#  НОВЫЕ ФИЧИ v3.0
+#  1. 🗺  Карта активности
+#  2. 🎯  Достижения модераторов
+#  3. 💬  Внутренний чат команды
+#  4. 🔭  Разведка угроз
+#  5. ⚖️  Система апелляций
+#  6. 🎨  Кастомные темы
+#  7. 🔍  Поиск по истории сообщений
+# ══════════════════════════════════════════════════════════════════
+
+import math
+
+# ─── In-memory хранилища для новых фич ───────────────────────────
+_team_chat: list = []          # [{uid, name, rank_name, text, ts, color}]
+_threat_log: list = []         # [{uid, name, cid, cid_title, type, score, ts, details}]
+_appeals: list = []            # [{id, uid, name, cid, reason, status, ts, reply, votes}]
+_wiki_pages: dict = {}         # {slug: {title, body, author, ts}}
+_mod_achievements: dict = {}   # {uid: {key: ts}}
+_user_themes: dict = {}        # {sess_token: {accent, bg, font}}
+
+# Достижения
+ACHIEVEMENTS_DEF = {
+    "first_ticket":   ("🎫", "Первый тикет",        "Закрыл первый тикет"),
+    "ticket_10":      ("📬", "Почтальон",            "Закрыл 10 тикетов"),
+    "ticket_50":      ("📮", "Мастер тикетов",       "Закрыл 50 тикетов"),
+    "ticket_100":     ("🏆", "Легенда поддержки",    "Закрыл 100 тикетов"),
+    "ban_10":         ("🔨", "Молоток",              "Выдал 10 банов"),
+    "ban_50":         ("⚒️", "Кувалда",             "Выдал 50 банов"),
+    "warn_20":        ("⚡", "Громовержец",          "Выдал 20 варнов"),
+    "mute_20":        ("🔇", "Тишина",               "Выдал 20 мутов"),
+    "report_10":      ("🚨", "Детектив",             "Обработал 10 репортов"),
+    "login_7":        ("📅", "Постоянство",          "7 дней подряд в дашборде"),
+    "login_30":       ("🌟", "Ветеран",              "30 дней в дашборде"),
+    "appeal_5":       ("⚖️", "Судья",               "Рассмотрел 5 апелляций"),
+    "night_owl":      ("🦉", "Ночная смена",         "Активен после полуночи"),
+    "speed_close":    ("⚡", "Молния",               "Закрыл тикет за 2 минуты"),
+    "threat_caught":  ("🔭", "Разведчик",            "Поймал угрозу через разведку"),
+}
+
+# Типы угроз для разведки
+THREAT_TYPES = {
+    "flood":      ("🌊", "Флуд-атака",        "danger"),
+    "raid":       ("⚔️", "Рейд",             "danger"),
+    "spam_bot":   ("🤖", "Спам-бот",          "danger"),
+    "mass_join":  ("👥", "Массовый вход",     "warn"),
+    "link_spam":  ("🔗", "Ссылочный спам",    "warn"),
+    "scam":       ("💸", "Скам/Фишинг",       "danger"),
+    "coordinated":("🎭", "Координированный",  "danger"),
+}
+
+
+# ══════════════════════════════════════════
+#  🗺  КАРТА АКТИВНОСТИ
+# ══════════════════════════════════════════
+
+async def handle_activity_map(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+
+    chats = [dict(r) for r in await db.get_all_chats()]
+
+    # Собираем данные активности по каждому чату
+    chat_data = []
+    conn = db.get_conn()
+    for c in chats:
+        cid = c["cid"]
+        title = c.get("title") or str(cid)
+        msgs = conn.execute(
+            "SELECT COALESCE(SUM(msg_count),0) FROM chat_stats WHERE cid=?", (cid,)
+        ).fetchone()[0] or 0
+        users = conn.execute(
+            "SELECT COUNT(DISTINCT uid) FROM chat_stats WHERE cid=?", (cid,)
+        ).fetchone()[0] or 0
+        warns = conn.execute(
+            "SELECT COALESCE(SUM(count),0) FROM warnings WHERE cid=?", (cid,)
+        ).fetchone()[0] or 0
+        bans = conn.execute(
+            "SELECT COUNT(*) FROM ban_list WHERE cid=?", (cid,)
+        ).fetchone()[0] or 0
+        # Активность за последний час (онлайн)
+        online_now = sum(
+            1 for d in shared.online_users.values()
+            if d.get("cid") == cid and time.time() - d.get("ts", 0) < 300
+        )
+        # Температура: 0-100
+        temp = min(100, int((online_now * 20) + (msgs / max(users, 1)) * 0.1))
+        chat_data.append({
+            "cid": cid, "title": title[:20], "msgs": msgs,
+            "users": users, "warns": warns, "bans": bans,
+            "online": online_now, "temp": temp,
+        })
+    conn.close()
+
+    chat_data.sort(key=lambda x: x["temp"], reverse=True)
+
+    # JSON для JS
+    chat_json = json.dumps(chat_data)
+
+    # Карточки чатов
+    cards_html = ""
+    for c in chat_data:
+        temp = c["temp"]
+        if temp >= 70:
+            color = "#ef4444"; label = "🔥 Горячо"; bg = "rgba(239,68,68,.08)"
+        elif temp >= 40:
+            color = "#f59e0b"; label = "⚡ Активно"; bg = "rgba(245,158,11,.08)"
+        elif temp >= 15:
+            color = "#22c55e"; label = "💬 Нормально"; bg = "rgba(34,197,94,.08)"
+        else:
+            color = "#64748b"; label = "😴 Тихо"; bg = "rgba(100,116,139,.08)"
+
+        bar_w = max(4, temp)
+        cards_html += (
+            f'<div class="section" style="padding:16px;background:{bg};border-color:{color}33;cursor:pointer;" '
+            f'onclick="window.location=\'/dashboard/chats/{c["cid"]}\'">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+            f'<div style="font-weight:700;font-size:14px;">{c["title"]}</div>'
+            f'<span style="font-size:12px;color:{color};font-weight:700;">{label}</span>'
+            f'</div>'
+            f'<div style="height:6px;background:var(--bg4);border-radius:3px;margin-bottom:10px;">'
+            f'<div style="height:6px;width:{bar_w}%;background:{color};border-radius:3px;transition:width .5s;"></div>'
+            f'</div>'
+            f'<div style="display:flex;gap:16px;font-size:12px;color:var(--text2);">'
+            f'<span>🟢 {c["online"]} онлайн</span>'
+            f'<span>👥 {c["users"]:,}</span>'
+            f'<span>💬 {c["msgs"]:,}</span>'
+            f'<span style="color:#ef4444;">🔨 {c["bans"]}</span>'
+            f'</div>'
+            f'</div>'
+        )
+
+    body = navbar(sess, "activity_map") + f"""
+    <div class="container">
+      <div class="page-title">🗺 Карта активности
+        <span style="font-size:12px;color:var(--text2);font-weight:400;margin-left:auto;">
+          Обновляется каждые 10 сек
+        </span>
+      </div>
+
+      <!-- Пульс системы -->
+      <div class="cards" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px;">
+        <div class="card" style="border-color:var(--success)33;">
+          <div class="card-icon">🟢</div>
+          <div class="card-label">Горячих чатов</div>
+          <div class="card-value" style="color:var(--success);" id="hot-count">
+            {sum(1 for c in chat_data if c["temp"]>=70)}
+          </div>
+        </div>
+        <div class="card" style="border-color:var(--warn)33;">
+          <div class="card-icon">⚡</div>
+          <div class="card-label">Активных чатов</div>
+          <div class="card-value" style="color:var(--warn);" id="active-count">
+            {sum(1 for c in chat_data if 15<=c["temp"]<70)}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-icon">😴</div>
+          <div class="card-label">Тихих чатов</div>
+          <div class="card-value" style="color:var(--text2);" id="quiet-count">
+            {sum(1 for c in chat_data if c["temp"]<15)}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-icon">👥</div>
+          <div class="card-label">Всего онлайн</div>
+          <div class="card-value" data-live="online" id="total-online">
+            {shared.get_online_count()}
+          </div>
+        </div>
+      </div>
+
+      <!-- Визуализация — пузыри -->
+      <div class="section" style="margin-bottom:24px;">
+        <div class="section-header">🫧 Визуализация активности
+          <span style="font-size:12px;color:var(--text2);">размер = участники, цвет = температура</span>
+        </div>
+        <div style="padding:20px;position:relative;height:320px;overflow:hidden;" id="bubble-map">
+          <canvas id="bubbleCanvas" style="width:100%;height:100%;"></canvas>
+        </div>
+      </div>
+
+      <!-- Список чатов -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+        {cards_html}
+      </div>
+    </div>
+
+    <script>
+    var chatData = {chat_json};
+
+    // Bubble визуализация
+    (function() {{
+      var canvas = document.getElementById('bubbleCanvas');
+      var container = document.getElementById('bubble-map');
+      if (!canvas) return;
+
+      canvas.width = container.offsetWidth;
+      canvas.height = 300;
+      var ctx = canvas.getContext('2d');
+
+      var colors = {{
+        hot:    '#ef4444',
+        active: '#f59e0b',
+        normal: '#22c55e',
+        quiet:  '#475569'
+      }};
+
+      var bubbles = chatData.map(function(c, i) {{
+        var angle = (i / chatData.length) * Math.PI * 2;
+        var radius = Math.max(20, Math.min(70, 15 + Math.sqrt(c.users || 1) * 2));
+        var cx = canvas.width/2 + Math.cos(angle) * (canvas.width/2 - radius - 20);
+        var cy = canvas.height/2 + Math.sin(angle) * (canvas.height/2 - radius - 20);
+        var col = c.temp >= 70 ? colors.hot : (c.temp >= 40 ? colors.active : (c.temp >= 15 ? colors.normal : colors.quiet));
+        return {{x: cx, y: cy, r: radius, color: col, title: c.title, online: c.online, temp: c.temp, vx: (Math.random()-0.5)*0.3, vy: (Math.random()-0.5)*0.3}};
+      }});
+
+      var hovered = -1;
+      canvas.addEventListener('mousemove', function(e) {{
+        var rect = canvas.getBoundingClientRect();
+        var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        hovered = -1;
+        bubbles.forEach(function(b, i) {{
+          var dx = mx - b.x, dy = my - b.y;
+          if (Math.sqrt(dx*dx+dy*dy) < b.r) hovered = i;
+        }});
+      }});
+
+      function draw() {{
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Grid
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.lineWidth = 1;
+        for (var i=0;i<canvas.width;i+=50) {{ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }}
+        for (var j=0;j<canvas.height;j+=50) {{ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(canvas.width,j); ctx.stroke(); }}
+
+        bubbles.forEach(function(b, i) {{
+          // Animate
+          b.x += b.vx; b.y += b.vy;
+          if (b.x < b.r || b.x > canvas.width-b.r) b.vx *= -1;
+          if (b.y < b.r || b.y > canvas.height-b.r) b.vy *= -1;
+
+          // Glow
+          var grd = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+          grd.addColorStop(0, b.color + 'cc');
+          grd.addColorStop(1, b.color + '22');
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+          ctx.fillStyle = grd;
+          ctx.fill();
+
+          // Border
+          ctx.strokeStyle = b.color;
+          ctx.lineWidth = hovered === i ? 3 : 1.5;
+          ctx.stroke();
+
+          // Pulse ring for hot chats
+          if (b.temp >= 70) {{
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.r + 6 + Math.sin(Date.now()/300)*4, 0, Math.PI*2);
+            ctx.strokeStyle = b.color + '44';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }}
+
+          // Label
+          ctx.fillStyle = '#e2e8f0';
+          ctx.font = (hovered===i ? 'bold ' : '') + '11px Syne, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(b.title.substring(0,12), b.x, b.y + 2);
+          if (b.online > 0) {{
+            ctx.fillStyle = b.color;
+            ctx.font = 'bold 10px monospace';
+            ctx.fillText('● ' + b.online, b.x, b.y + 14);
+          }}
+        }});
+
+        // Tooltip
+        if (hovered >= 0) {{
+          var b = bubbles[hovered];
+          var tw = 140, th = 60, tx = Math.min(b.x + b.r + 8, canvas.width - tw - 4), ty = Math.max(4, b.y - 30);
+          ctx.fillStyle = 'rgba(14,18,32,0.95)';
+          ctx.strokeStyle = b.color;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(tx, ty, tw, th, 8);
+          ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#e2e8f0';
+          ctx.font = 'bold 12px Syne, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(b.title, tx+8, ty+18);
+          ctx.fillStyle = '#64748b';
+          ctx.font = '11px monospace';
+          ctx.fillText('Online: ' + b.online + '  Temp: ' + b.temp + '%', tx+8, ty+36);
+          ctx.fillText('Color = ' + (b.temp>=70?'🔥 Горячо':b.temp>=40?'⚡ Активно':'💬 Норм'), tx+8, ty+52);
+        }}
+
+        requestAnimationFrame(draw);
+      }}
+      draw();
+
+      // Авто-обновление данных
+      setInterval(function() {{
+        fetch('/api/live').then(function(r) {{ return r.json(); }}).then(function(d) {{
+          document.getElementById('total-online').textContent = d.online || 0;
+        }}).catch(function() {{}});
+      }}, 10000);
+    }})();
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_activity_map = require_auth("view_overview")(handle_activity_map)
+
+
+# ══════════════════════════════════════════
+#  🎯  ДОСТИЖЕНИЯ МОДЕРАТОРОВ
+# ══════════════════════════════════════════
+
+def _check_achievements(tg_uid: int, action: str):
+    """Проверяет и выдаёт достижения. Вызывать после mod-действий."""
+    if tg_uid not in _mod_achievements:
+        _mod_achievements[tg_uid] = {}
+    earned = _mod_achievements[tg_uid]
+    new_badges = []
+
+    try:
+        conn = db.get_conn()
+        bans  = conn.execute("SELECT COUNT(*) FROM mod_history WHERE uid=? AND action LIKE '%Бан%'", (tg_uid,)).fetchone()[0] or 0
+        warns = conn.execute("SELECT COUNT(*) FROM mod_history WHERE uid=? AND action LIKE '%Варн%'", (tg_uid,)).fetchone()[0] or 0
+        mutes = conn.execute("SELECT COUNT(*) FROM mod_history WHERE uid=? AND action LIKE '%Мут%'", (tg_uid,)).fetchone()[0] or 0
+        tkt_closed = conn.execute(
+            "SELECT COUNT(*) FROM dashboard_admin_log WHERE tg_uid=? AND action='TICKET_CLOSE'", (tg_uid,)
+        ).fetchone()[0] or 0
+        rep_handled = conn.execute(
+            "SELECT COUNT(*) FROM dashboard_admin_log WHERE tg_uid=? AND action LIKE 'ACTION_%'", (tg_uid,)
+        ).fetchone()[0] or 0
+        conn.close()
+    except:
+        return []
+
+    checks = [
+        ("ban_10",    bans >= 10),
+        ("ban_50",    bans >= 50),
+        ("warn_20",   warns >= 20),
+        ("mute_20",   mutes >= 20),
+        ("ticket_10", tkt_closed >= 10),
+        ("ticket_50", tkt_closed >= 50),
+        ("ticket_100",tkt_closed >= 100),
+        ("report_10", rep_handled >= 10),
+        ("appeal_5",  sum(1 for a in _appeals if a.get("decided_by") == tg_uid) >= 5),
+        ("night_owl", datetime.now().hour >= 0 and datetime.now().hour <= 5),
+    ]
+    for key, cond in checks:
+        if cond and key not in earned:
+            earned[key] = time.time()
+            new_badges.append(key)
+
+    return new_badges
+
+
+async def handle_achievements(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+
+    admins = _get_all_admins()
+
+    # Строим таблицу достижений
+    rows_html = ""
+    for a in admins:
+        uid = a["tg_uid"]
+        rank = a["rank"]
+        rank_info = DASHBOARD_RANKS.get(rank, DASHBOARD_RANKS[1])
+        earned = _mod_achievements.get(uid, {})
+
+        badges_html = ""
+        for key, ts in sorted(earned.items(), key=lambda x: x[1], reverse=True):
+            if key in ACHIEVEMENTS_DEF:
+                emoji, name, desc = ACHIEVEMENTS_DEF[key]
+                dt = datetime.fromtimestamp(ts).strftime("%d.%m")
+                badges_html += (
+                    f'<span title="{name}: {desc} ({dt})" style="font-size:20px;cursor:default;">{emoji}</span>'
+                )
+        if not badges_html:
+            badges_html = '<span style="color:var(--text2);font-size:12px;">Нет достижений</span>'
+
+        # Статистика
+        try:
+            conn = db.get_conn()
+            total_actions = conn.execute(
+                "SELECT COUNT(*) FROM mod_history WHERE by_name=?", (a["name"],)
+            ).fetchone()[0] or 0
+            conn.close()
+        except:
+            total_actions = 0
+
+        rgb = _hex_to_rgb(rank_info["color"])
+        rows_html += (
+            f"<tr>"
+            f'<td><b>{a["name"]}</b></td>'
+            f'<td><span class="badge" style="background:rgba({rgb},.15);color:{rank_info["color"]};">{rank_info["name"]}</span></td>'
+            f'<td style="font-family:JetBrains Mono,monospace;color:var(--accent);">{total_actions}</td>'
+            f'<td style="font-size:18px;line-height:1.8;">{badges_html}</td>'
+            f'</tr>'
+        )
+
+    # Все достижения — справочник
+    all_ach_html = ""
+    for key, (emoji, name, desc) in ACHIEVEMENTS_DEF.items():
+        all_ach_html += (
+            f'<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">'
+            f'<span style="font-size:24px;">{emoji}</span>'
+            f'<div><div style="font-weight:700;">{name}</div>'
+            f'<div style="font-size:12px;color:var(--text2);">{desc}</div></div>'
+            f'</div>'
+        )
+
+    body = navbar(sess, "achievements") + f"""
+    <div class="container">
+      <div class="page-title">🎯 Достижения модераторов</div>
+
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-header">👥 Команда и награды</div>
+          <table>
+            <thead><tr><th>Модератор</th><th>Ранг</th><th>Действий</th><th>Достижения</th></tr></thead>
+            <tbody>{rows_html or "<tr><td colspan='4' class='empty-state'>Нет модераторов</td></tr>"}</tbody>
+          </table>
+        </div>
+        <div class="section">
+          <div class="section-header">📋 Все достижения ({len(ACHIEVEMENTS_DEF)})</div>
+          <div style="padding:0 20px;max-height:500px;overflow-y:auto;">{all_ach_html}</div>
+        </div>
+      </div>
+
+      <!-- Топ по действиям -->
+      <div class="section" style="margin-top:20px;">
+        <div class="section-header">🏆 Топ модераторов за всё время</div>
+        <div style="padding:16px;"><canvas id="topChart" height="60"></canvas></div>
+      </div>
+    </div>
+    <script>
+    (function() {{
+      if (typeof Chart === 'undefined') return;
+      var ctx = document.getElementById('topChart');
+      if (!ctx) return;
+      fetch('/api/mod_stats').then(function(r) {{ return r.json(); }}).then(function(d) {{
+        new Chart(ctx, {{
+          type: 'bar',
+          data: {{
+            labels: d.names,
+            datasets: [
+              {{label:'Банов', data:d.bans, backgroundColor:'rgba(239,68,68,0.7)', borderRadius:4}},
+              {{label:'Варнов', data:d.warns, backgroundColor:'rgba(245,158,11,0.7)', borderRadius:4}},
+              {{label:'Мутов', data:d.mutes, backgroundColor:'rgba(168,85,247,0.7)', borderRadius:4}},
+            ]
+          }},
+          options: {{
+            responsive:true,
+            plugins:{{legend:{{labels:{{color:'#94a3b8'}}}},tooltip:{{backgroundColor:'rgba(14,18,32,.95)'}}}},
+            scales:{{
+              x:{{ticks:{{color:'#64748b'}},grid:{{display:false}}}},
+              y:{{ticks:{{color:'#64748b'}},grid:{{color:'rgba(255,255,255,0.04)'}}}}
+            }}
+          }}
+        }});
+      }}).catch(function() {{}});
+    }})();
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_achievements = require_auth("view_overview")(handle_achievements)
+
+
+# ══════════════════════════════════════════
+#  💬  ВНУТРЕННИЙ ЧАТ КОМАНДЫ
+# ══════════════════════════════════════════
+
+async def handle_team_chat(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+
+    if request.method == "POST":
+        data = await request.post()
+        text = (data.get("text") or "").strip()
+        if text and sess:
+            rank = sess.get("rank", 1)
+            rank_info = DASHBOARD_RANKS.get(rank, DASHBOARD_RANKS[1])
+            _team_chat.insert(0, {
+                "uid":   sess.get("uid", 0),
+                "name":  sess.get("name", "?"),
+                "rank":  rank_info["name"],
+                "color": rank_info["color"],
+                "text":  text[:500],
+                "ts":    time.time(),
+            })
+            if len(_team_chat) > 200:
+                _team_chat.pop()
+            # SSE уведомление
+            await shared.notify_sse({
+                "type": "team_msg",
+                "from": sess.get("name", "?"),
+                "text": text[:80],
+            })
+        raise web.HTTPFound("/dashboard/team_chat")
+
+    messages_html = ""
+    for m in _team_chat[:50]:
+        dt = datetime.fromtimestamp(m["ts"]).strftime("%d.%m %H:%M")
+        is_me = sess and m["uid"] == sess.get("uid")
+        align = "flex-end" if is_me else "flex-start"
+        bg = "rgba(59,130,246,.12)" if is_me else "var(--bg3)"
+        messages_html += (
+            f'<div style="display:flex;flex-direction:column;align-items:{align};margin-bottom:12px;">'
+            f'<div style="font-size:11px;color:{m["color"]};font-weight:700;margin-bottom:3px;">'
+            f'{m["name"]} · {m["rank"]} · {dt}</div>'
+            f'<div style="background:{bg};padding:10px 14px;border-radius:12px;max-width:75%;font-size:13px;line-height:1.6;">'
+            f'{m["text"]}</div>'
+            f'</div>'
+        )
+
+    if not messages_html:
+        messages_html = '<div class="empty-state" style="padding:40px;">Нет сообщений. Начни разговор!</div>'
+
+    online_mods = [
+        s for s in _dashboard_sessions.values()
+        if time.time() - s.get("login_time", 0) < 3600
+    ]
+    online_html = "".join(
+        f'<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">'
+        f'<span style="width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block;"></span>'
+        f'<span style="font-size:13px;font-weight:600;">{s["name"]}</span>'
+        f'<span style="font-size:11px;color:var(--text2);margin-left:auto;">'
+        f'{DASHBOARD_RANKS.get(s["rank"],DASHBOARD_RANKS[1])["name"]}</span>'
+        f'</div>'
+        for s in online_mods
+    ) or '<div style="color:var(--text2);font-size:13px;padding:12px 0;">Никого онлайн</div>'
+
+    body = navbar(sess, "team_chat") + f"""
+    <div class="container">
+      <div class="page-title">💬 Чат команды</div>
+      <div class="grid-2" style="grid-template-columns:1fr 280px;gap:20px;">
+        <div>
+          <div class="section" style="margin-bottom:16px;">
+            <div class="section-header">💬 Сообщения
+              <span style="font-size:12px;color:var(--text2);">последние 50</span>
+            </div>
+            <div id="chat-messages" style="padding:16px;max-height:480px;overflow-y:auto;display:flex;flex-direction:column;">
+              {messages_html}
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-body">
+              <form method="POST" id="chat-form" style="display:flex;gap:10px;">
+                <input class="form-control" name="text" id="chat-input"
+                  placeholder="Написать команде..." autocomplete="off"
+                  style="flex:1;" maxlength="500">
+                <button class="btn btn-primary" type="submit">📨 Отправить</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="section" style="margin-bottom:16px;">
+            <div class="section-header">🟢 Онлайн ({len(online_mods)})</div>
+            <div style="padding:0 16px;">{online_html}</div>
+          </div>
+          <div class="section">
+            <div class="section-header">⚡ Быстрые фразы</div>
+            <div style="padding:12px;display:flex;flex-direction:column;gap:6px;">
+              {"".join(f'<button class="btn btn-ghost btn-sm" style="text-align:left;" onclick="document.getElementById(\'chat-input\').value=\'{t}\'">{t}</button>' for t in ["✅ Принял дежурство", "🔴 Сдаю дежурство", "⚠️ Нужна помощь", "👀 Слежу за ситуацией", "🔨 Работаю с нарушителем", "✔️ Проблема решена"])}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+    // Авто-обновление чата каждые 5 секунд
+    setInterval(function() {{
+      fetch('/api/team_messages').then(function(r) {{ return r.json(); }}).then(function(d) {{
+        if (d.count !== undefined) {{
+          var container = document.getElementById('chat-messages');
+          if (d.html) container.innerHTML = d.html;
+        }}
+      }}).catch(function() {{}});
+    }}, 5000);
+
+    // Enter для отправки
+    document.getElementById('chat-input').addEventListener('keydown', function(e) {{
+      if (e.key === 'Enter' && !e.shiftKey) {{
+        e.preventDefault();
+        document.getElementById('chat-form').submit();
+      }}
+    }});
+
+    // Скролл вниз
+    var msgs = document.getElementById('chat-messages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_team_chat = require_auth("view_overview")(handle_team_chat)
+
+
+async def api_team_messages(request: web.Request):
+    token = request.cookies.get("dsess_token")
+    if not token or token not in _dashboard_sessions:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    sess = _dashboard_sessions[token]
+    html = ""
+    for m in _team_chat[:50]:
+        dt = datetime.fromtimestamp(m["ts"]).strftime("%d.%m %H:%M")
+        is_me = m["uid"] == sess.get("uid")
+        align = "flex-end" if is_me else "flex-start"
+        bg = "rgba(59,130,246,.12)" if is_me else "var(--bg3)"
+        html += (
+            f'<div style="display:flex;flex-direction:column;align-items:{align};margin-bottom:12px;">'
+            f'<div style="font-size:11px;color:{m["color"]};font-weight:700;margin-bottom:3px;">'
+            f'{m["name"]} · {m["rank"]} · {dt}</div>'
+            f'<div style="background:{bg};padding:10px 14px;border-radius:12px;max-width:75%;font-size:13px;">'
+            f'{m["text"]}</div></div>'
+        )
+    return web.json_response({"html": html or "", "count": len(_team_chat)})
+
+
+# ══════════════════════════════════════════
+#  🔭  РАЗВЕДКА УГРОЗ
+# ══════════════════════════════════════════
+
+def _analyze_threats():
+    """Анализирует shared данные и генерирует угрозы."""
+    now = time.time()
+    new_threats = []
+
+    # 1. Проверка флуда по spam_tracker
+    for key, timestamps in shared.spam_tracker.items():
+        recent = [t for t in timestamps if now - t < 60]
+        if len(recent) >= 20:
+            parts = key.split(":")
+            if len(parts) == 2:
+                cid, uid = int(parts[0]), int(parts[1])
+                name = shared.online_users.get(uid, {}).get("name", f"User {uid}")
+                threat_id = f"flood_{uid}_{int(now//60)}"
+                if not any(t.get("id") == threat_id for t in _threat_log):
+                    new_threats.append({
+                        "id": threat_id, "uid": uid, "name": name,
+                        "cid": cid, "cid_title": f"Chat {cid}",
+                        "type": "flood", "score": min(100, len(recent) * 4),
+                        "ts": now, "details": f"{len(recent)} сообщений за минуту",
+                        "status": "active",
+                    })
+
+    # 2. Массовый вход (много новых онлайн за 5 минут)
+    recent_online = [d for d in shared.online_users.values() if now - d.get("ts", 0) < 300]
+    by_chat = {}
+    for d in recent_online:
+        cid = d.get("cid", 0)
+        by_chat[cid] = by_chat.get(cid, 0) + 1
+    for cid, count in by_chat.items():
+        if count >= 15:
+            threat_id = f"mass_join_{cid}_{int(now//300)}"
+            if not any(t.get("id") == threat_id for t in _threat_log):
+                new_threats.append({
+                    "id": threat_id, "uid": 0, "name": "Группа",
+                    "cid": cid, "cid_title": f"Chat {cid}",
+                    "type": "mass_join", "score": min(100, count * 5),
+                    "ts": now, "details": f"{count} новых юзеров за 5 минут",
+                    "status": "active",
+                })
+
+    # 3. Из алертов
+    for a in shared.alerts[:10]:
+        if a.get("level") == "danger":
+            threat_id = f"alert_{a.get('uid',0)}_{int(a.get('_ts', now)//60)}"
+            if not any(t.get("id") == threat_id for t in _threat_log):
+                new_threats.append({
+                    "id": threat_id,
+                    "uid": a.get("uid", 0),
+                    "name": a.get("desc", "Неизвестно")[:40],
+                    "cid": a.get("cid", 0),
+                    "cid_title": f"Chat {a.get('cid',0)}",
+                    "type": "spam_bot",
+                    "score": 75,
+                    "ts": now,
+                    "details": a.get("desc", "")[:100],
+                    "status": "active",
+                })
+
+    for t in new_threats:
+        _threat_log.insert(0, t)
+    if len(_threat_log) > 100:
+        del _threat_log[100:]
+
+    return new_threats
+
+
+async def handle_threats(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    token = request.cookies.get("dsess_token")
+
+    # Действие над угрозой
+    if request.method == "POST":
+        data = await request.post()
+        action = data.get("action")
+        threat_id = data.get("threat_id")
+        for t in _threat_log:
+            if t.get("id") == threat_id:
+                if action == "resolve":
+                    t["status"] = "resolved"
+                elif action == "ban" and _bot and t.get("uid") and t.get("cid"):
+                    try:
+                        await _bot.ban_chat_member(t["cid"], t["uid"])
+                        t["status"] = "resolved"
+                        showmsg = "Забанен"
+                    except:
+                        pass
+                elif action == "mute" and _bot and t.get("uid") and t.get("cid"):
+                    try:
+                        from aiogram.types import ChatPermissions
+                        await _bot.restrict_chat_member(
+                            t["cid"], t["uid"],
+                            ChatPermissions(can_send_messages=False),
+                            until_date=timedelta(hours=1)
+                        )
+                        t["status"] = "resolved"
+                    except:
+                        pass
+                break
+        raise web.HTTPFound("/dashboard/threats")
+
+    # Запускаем анализ
+    new_threats = _analyze_threats()
+
+    active = [t for t in _threat_log if t.get("status") == "active"]
+    resolved = [t for t in _threat_log if t.get("status") == "resolved"]
+
+    def threat_row(t):
+        ttype = t.get("type", "flood")
+        emoji, label, level = THREAT_TYPES.get(ttype, ("⚠️", "Угроза", "warn"))
+        score = t.get("score", 0)
+        score_color = "#ef4444" if score >= 75 else ("#f59e0b" if score >= 40 else "#22c55e")
+        dt = datetime.fromtimestamp(t.get("ts", 0)).strftime("%d.%m %H:%M")
+        status = t.get("status", "active")
+        status_badge = (
+            '<span class="badge badge-danger">⚡ Активна</span>' if status == "active"
+            else '<span class="badge badge-closed">✅ Решена</span>'
+        )
+        actions = ""
+        if status == "active":
+            tid = t.get("id", "")
+            can_ban = _has_perm(token, "ban_users")
+            can_mute = _has_perm(token, "mute_users")
+            actions = f'<form method="POST" style="display:inline-flex;gap:6px;">'
+            actions += f'<input type="hidden" name="threat_id" value="{tid}">'
+            if can_ban and t.get("uid"):
+                actions += f'<button name="action" value="ban" class="btn btn-xs btn-danger">🔨 Бан</button>'
+            if can_mute and t.get("uid"):
+                actions += f'<button name="action" value="mute" class="btn btn-xs btn-warn">🔇 Мут</button>'
+            actions += f'<button name="action" value="resolve" class="btn btn-xs btn-ghost">✅ Закрыть</button>'
+            actions += f'</form>'
+        return (
+            f"<tr>"
+            f"<td>{emoji} <b>{label}</b></td>"
+            f'<td>{t.get("name","—")}</td>'
+            f'<td style="font-size:12px;color:var(--text2);">{t.get("cid_title","—")}</td>'
+            f'<td style="color:{score_color};font-weight:700;font-family:JetBrains Mono,monospace;">{score}</td>'
+            f'<td style="font-size:12px;color:var(--text2);">{t.get("details","—")[:50]}</td>'
+            f'<td>{status_badge}</td>'
+            f'<td style="font-size:11px;color:var(--text2);">{dt}</td>'
+            f'<td>{actions}</td>'
+            f"</tr>"
+        )
+
+    active_rows = "".join(threat_row(t) for t in active) or "<tr><td colspan='8' class='empty-state'>✅ Угроз не обнаружено</td></tr>"
+    resolved_rows = "".join(threat_row(t) for t in resolved[:20]) or "<tr><td colspan='8' class='empty-state'>Нет</td></tr>"
+
+    # Счётчики по типам
+    type_counts = {}
+    for t in active:
+        tt = t.get("type", "other")
+        type_counts[tt] = type_counts.get(tt, 0) + 1
+
+    type_cards = ""
+    for ttype, (emoji, label, level) in THREAT_TYPES.items():
+        cnt = type_counts.get(ttype, 0)
+        color = "var(--danger)" if level == "danger" else "var(--warn)"
+        type_cards += (
+            f'<div class="card" style="{"border-color:rgba(239,68,68,.3);" if cnt>0 else ""}">'
+            f'<div class="card-icon">{emoji}</div>'
+            f'<div class="card-label">{label}</div>'
+            f'<div class="card-value" style="color:{color if cnt>0 else "var(--text2)"};">{cnt}</div>'
+            f'</div>'
+        )
+
+    body = navbar(sess, "threats") + f"""
+    <div class="container">
+      <div class="page-title">🔭 Разведка угроз
+        <span class="badge badge-danger" style="margin-left:12px;">{len(active)} активных</span>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="location.reload()">🔄 Обновить</button>
+      </div>
+
+      <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:24px;">
+        {type_cards}
+      </div>
+
+      <div class="section" style="margin-bottom:20px;">
+        <div class="section-header">
+          🚨 Активные угрозы ({len(active)})
+          <span style="font-size:12px;color:var(--text2);">Автообновление каждые 30с</span>
+        </div>
+        <table>
+          <thead><tr><th>Тип</th><th>Кто</th><th>Чат</th><th>Score</th><th>Детали</th><th>Статус</th><th>Время</th><th>Действия</th></tr></thead>
+          <tbody>{active_rows}</tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-header">✅ Решённые угрозы ({len(resolved)})</div>
+        <table>
+          <thead><tr><th>Тип</th><th>Кто</th><th>Чат</th><th>Score</th><th>Детали</th><th>Статус</th><th>Время</th><th></th></tr></thead>
+          <tbody>{resolved_rows}</tbody>
+        </table>
+      </div>
+    </div>
+    <script>
+    setInterval(function() {{ location.reload(); }}, 30000);
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_threats = require_auth("view_alerts")(handle_threats)
+
+
+# ══════════════════════════════════════════
+#  ⚖️  СИСТЕМА АПЕЛЛЯЦИЙ
+# ══════════════════════════════════════════
+
+async def handle_appeals(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    token = request.cookies.get("dsess_token")
+
+    if request.method == "POST":
+        data = await request.post()
+        action = data.get("action")
+        appeal_id = int(data.get("appeal_id", -1))
+        reply_text = (data.get("reply") or "").strip()
+
+        for ap in _appeals:
+            if ap.get("id") == appeal_id:
+                if action == "approve" and _has_perm(token, "ban_users"):
+                    ap["status"] = "approved"
+                    ap["reply"] = reply_text or "Апелляция одобрена. Блокировка снята."
+                    ap["decided_by"] = sess.get("uid") if sess else 0
+                    ap["decided_at"] = time.time()
+                    # Разбаниваем
+                    if _bot and ap.get("uid") and ap.get("cid"):
+                        try:
+                            await _bot.unban_chat_member(ap["cid"], ap["uid"], only_if_banned=True)
+                        except:
+                            pass
+                    # Уведомляем юзера
+                    if _bot and ap.get("uid"):
+                        try:
+                            await _bot.send_message(
+                                ap["uid"],
+                                f"✅ <b>Апелляция #{appeal_id} одобрена</b>\n\n"
+                                f"Ваша блокировка снята.\n\n"
+                                f"💬 Ответ: {ap['reply']}",
+                                parse_mode="HTML"
+                            )
+                        except:
+                            pass
+                elif action == "reject":
+                    ap["status"] = "rejected"
+                    ap["reply"] = reply_text or "Апелляция отклонена. Блокировка остаётся в силе."
+                    ap["decided_by"] = sess.get("uid") if sess else 0
+                    ap["decided_at"] = time.time()
+                    if _bot and ap.get("uid"):
+                        try:
+                            await _bot.send_message(
+                                ap["uid"],
+                                f"❌ <b>Апелляция #{appeal_id} отклонена</b>\n\n"
+                                f"💬 Ответ: {ap['reply']}",
+                                parse_mode="HTML"
+                            )
+                        except:
+                            pass
+                elif action == "need_info":
+                    ap["status"] = "pending_info"
+                    ap["reply"] = reply_text
+                    if _bot and ap.get("uid"):
+                        try:
+                            await _bot.send_message(
+                                ap["uid"],
+                                f"❓ <b>По апелляции #{appeal_id} нужна информация</b>\n\n"
+                                f"{reply_text}",
+                                parse_mode="HTML"
+                            )
+                        except:
+                            pass
+                if sess:
+                    _check_achievements(sess.get("uid", 0), "appeal")
+                break
+        raise web.HTTPFound("/dashboard/appeals")
+
+    status_filter = request.rel_url.query.get("status", "pending")
+    filtered = [a for a in _appeals if status_filter == "all" or a.get("status", "pending") == status_filter]
+
+    counts = {}
+    for a in _appeals:
+        s = a.get("status", "pending")
+        counts[s] = counts.get(s, 0) + 1
+
+    tabs = ""
+    for s, label, icon in [("pending","Ожидают","🟡"),("pending_info","Нужна инфо","❓"),("approved","Одобрены","✅"),("rejected","Отклонены","❌"),("all","Все","📋")]:
+        active_cls = "btn-primary" if status_filter == s else "btn-ghost"
+        cnt = counts.get(s, 0) if s != "all" else len(_appeals)
+        tabs += f'<a href="?status={s}" class="btn btn-sm {active_cls}" style="margin-right:6px;">{icon} {label} ({cnt})</a>'
+
+    can_decide = _has_perm(token, "ban_users")
+
+    rows_html = ""
+    for ap in filtered:
+        ap_id = ap.get("id", 0)
+        status = ap.get("status", "pending")
+        st_cls = {"pending":"badge-open","pending_info":"badge-progress","approved":"badge-closed","rejected":"badge-danger"}.get(status,"badge-accent")
+        st_label = {"pending":"🟡 Ожидает","pending_info":"❓ Нужна инфо","approved":"✅ Одобрена","rejected":"❌ Отклонена"}.get(status, status)
+        dt = datetime.fromtimestamp(ap.get("ts", 0)).strftime("%d.%m %H:%M")
+
+        action_form = ""
+        if status in ("pending", "pending_info") and can_decide:
+            action_form = (
+                f'<div style="margin-top:8px;">'
+                f'<form method="POST">'
+                f'<input type="hidden" name="appeal_id" value="{ap_id}">'
+                f'<textarea class="form-control" name="reply" rows="2" placeholder="Ответ юзеру..." style="margin-bottom:8px;font-size:12px;"></textarea>'
+                f'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+                f'<button name="action" value="approve" class="btn btn-xs btn-success">✅ Одобрить</button>'
+                f'<button name="action" value="reject" class="btn btn-xs btn-danger">❌ Отклонить</button>'
+                f'<button name="action" value="need_info" class="btn btn-xs btn-warn">❓ Нужна инфо</button>'
+                f'</div></form></div>'
+            )
+
+        rows_html += (
+            f'<div class="section" style="margin-bottom:12px;padding:16px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+            f'<div style="flex:1;">'
+            f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+            f'<span style="font-weight:700;">#{ap_id} · {ap.get("name","—")}</span>'
+            f'<span class="badge {st_cls}">{st_label}</span>'
+            f'<span style="font-size:11px;color:var(--text2);">{dt}</span>'
+            f'</div>'
+            f'<div style="font-size:13px;color:var(--text2);margin-bottom:4px);">Чат: {ap.get("cid_title","—")}</div>'
+            f'<div style="font-size:13px;background:var(--bg3);padding:10px;border-radius:8px;margin-top:8px;">'
+            f'<b>Причина:</b> {ap.get("reason","—")}</div>'
+            f'{("<div style=\"font-size:12px;color:var(--success);margin-top:6px;\">💬 Ответ: " + ap.get("reply","—") + "</div>") if ap.get("reply") else ""}'
+            f'{action_form}'
+            f'</div>'
+            f'</div></div>'
+        )
+
+    if not rows_html:
+        rows_html = '<div class="empty-state">Апелляций нет</div>'
+
+    body = navbar(sess, "appeals") + f"""
+    <div class="container">
+      <div class="page-title">⚖️ Апелляции
+        <span class="badge badge-open" style="margin-left:12px;">{counts.get("pending",0)} ожидают</span>
+      </div>
+      <div style="margin-bottom:20px;">{tabs}</div>
+      {rows_html}
+    </div>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_appeals = require_auth("view_reports")(handle_appeals)
+
+
+def add_appeal(uid: int, name: str, cid: int, cid_title: str, reason: str):
+    """Вызывается из bot.py когда юзер подаёт апелляцию."""
+    ap_id = len(_appeals) + 1
+    _appeals.insert(0, {
+        "id": ap_id, "uid": uid, "name": name,
+        "cid": cid, "cid_title": cid_title,
+        "reason": reason, "status": "pending",
+        "ts": time.time(), "reply": "", "decided_by": 0,
+    })
+    # SSE уведомление
+    import asyncio as _aio
+    try:
+        loop = _aio.get_event_loop()
+        loop.create_task(shared.notify_sse({
+            "type": "new_appeal",
+            "id": ap_id, "user": name,
+        }))
+    except:
+        pass
+
+
+# ══════════════════════════════════════════
+#  🎨  КАСТОМНЫЕ ТЕМЫ
+# ══════════════════════════════════════════
+
+THEME_PRESETS = {
+    "default":  {"accent":"#3b82f6", "purple":"#a855f7", "bg":"#080b14",  "name":"🌑 Тёмная (по умолч.)"},
+    "ocean":    {"accent":"#06b6d4", "purple":"#0ea5e9", "bg":"#020f1a",  "name":"🌊 Океан"},
+    "forest":   {"accent":"#22c55e", "purple":"#16a34a", "bg":"#020f08",  "name":"🌲 Лес"},
+    "sunset":   {"accent":"#f97316", "purple":"#ef4444", "bg":"#150a03",  "name":"🌅 Закат"},
+    "purple":   {"accent":"#a855f7", "purple":"#ec4899", "bg":"#0d0814",  "name":"💜 Фиолет"},
+    "gold":     {"accent":"#fbbf24", "purple":"#f59e0b", "bg":"#120e00",  "name":"✨ Золото"},
+    "red":      {"accent":"#ef4444", "purple":"#dc2626", "bg":"#130505",  "name":"🔴 Красный"},
+    "mono":     {"accent":"#94a3b8", "purple":"#64748b", "bg":"#080808",  "name":"⬛ Моно"},
+}
+
+async def handle_themes(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    token = request.cookies.get("dsess_token") or ""
+
+    if request.method == "POST":
+        data = await request.post()
+        preset = data.get("preset", "default")
+        custom_accent = data.get("custom_accent", "")
+        custom_bg = data.get("custom_bg", "")
+
+        theme = THEME_PRESETS.get(preset, THEME_PRESETS["default"]).copy()
+        if custom_accent and custom_accent.startswith("#"):
+            theme["accent"] = custom_accent
+        if custom_bg and custom_bg.startswith("#"):
+            theme["bg"] = custom_bg
+
+        _user_themes[token] = theme
+        raise web.HTTPFound("/dashboard/themes")
+
+    current = _user_themes.get(token, THEME_PRESETS["default"])
+
+    presets_html = ""
+    for key, t in THEME_PRESETS.items():
+        is_active = _user_themes.get(token, {}).get("accent") == t["accent"]
+        border = f"border:2px solid {t['accent']};" if is_active else "border:2px solid var(--border);"
+        presets_html += (
+            f'<form method="POST" style="display:inline;">'
+            f'<input type="hidden" name="preset" value="{key}">'
+            f'<button type="submit" style="{border}background:{t["bg"]};'
+            f'padding:14px 18px;border-radius:12px;cursor:pointer;min-width:130px;'
+            f'transition:all .2s;display:inline-flex;flex-direction:column;align-items:center;gap:6px;">'
+            f'<div style="display:flex;gap:6px;">'
+            f'<div style="width:20px;height:20px;border-radius:50%;background:{t["accent"]};"></div>'
+            f'<div style="width:20px;height:20px;border-radius:50%;background:{t["purple"]};"></div>'
+            f'</div>'
+            f'<span style="color:{t["accent"]};font-size:12px;font-weight:700;">{t["name"]}</span>'
+            f'</button></form> '
+        )
+
+    body = navbar(sess, "themes") + f"""
+    <div class="container">
+      <div class="page-title">🎨 Кастомные темы</div>
+
+      <div class="section" style="margin-bottom:24px;max-width:700px;">
+        <div class="section-header">🎨 Готовые пресеты</div>
+        <div style="padding:20px;display:flex;flex-wrap:wrap;gap:10px;">
+          {presets_html}
+        </div>
+      </div>
+
+      <div class="section" style="max-width:480px;">
+        <div class="section-header">✏️ Свои цвета</div>
+        <div class="section-body">
+          <form method="POST">
+            <input type="hidden" name="preset" value="default">
+            <div class="form-group">
+              <label>Акцентный цвет</label>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <input type="color" name="custom_accent" value="{current.get("accent","#3b82f6")}"
+                  style="width:50px;height:40px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;">
+                <input class="form-control" type="text" value="{current.get("accent","#3b82f6")}"
+                  style="flex:1;" oninput="this.previousElementSibling.value=this.value" name="custom_accent_text">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Фон</label>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <input type="color" name="custom_bg" value="{current.get("bg","#080b14")}"
+                  style="width:50px;height:40px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;">
+                <input class="form-control" type="text" value="{current.get("bg","#080b14")}"
+                  style="flex:1;" oninput="this.previousElementSibling.value=this.value" name="custom_bg_text">
+              </div>
+            </div>
+            <button class="btn btn-primary" type="submit" style="width:100%;">✅ Применить</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    // Применяем тему сразу через CSS переменные
+    (function() {{
+      var accent = "{current.get("accent","#3b82f6")}";
+      var bg = "{current.get("bg","#080b14")}";
+      if (accent) {{
+        document.documentElement.style.setProperty("--accent", accent);
+        document.documentElement.style.setProperty("--accent2", accent);
+      }}
+      if (bg) {{
+        document.documentElement.style.setProperty("--bg", bg);
+      }}
+    }})();
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_themes = require_auth("view_overview")(handle_themes)
+
+
+# ══════════════════════════════════════════
+#  🔍  ПОИСК ПО ИСТОРИИ СООБЩЕНИЙ
+# ══════════════════════════════════════════
+
+async def handle_msg_search(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+
+    query = request.rel_url.query.get("q", "").strip()
+    uid_filter = request.rel_url.query.get("uid", "")
+    cid_filter = request.rel_url.query.get("cid", "")
+    date_from = request.rel_url.query.get("from", "")
+    date_to = request.rel_url.query.get("to", "")
+
+    chats = [dict(r) for r in await db.get_all_chats()]
+    chat_opts = '<option value="">Все чаты</option>' + "".join(
+        f'<option value="{c["cid"]}" {"selected" if str(c["cid"])==cid_filter else ""}>'
+        f'{c.get("title","") or c["cid"]}</option>'
+        for c in chats
+    )
+
+    results = []
+    total = 0
+    search_done = bool(query or uid_filter or cid_filter)
+
+    if search_done:
+        try:
+            conn = db.get_conn()
+            conditions = []
+            params = []
+
+            if query:
+                conditions.append("text LIKE ?")
+                params.append(f"%{query}%")
+            if uid_filter:
+                conditions.append("uid = ?")
+                params.append(int(uid_filter))
+            if cid_filter:
+                conditions.append("cid = ?")
+                params.append(int(cid_filter))
+            if date_from:
+                conditions.append("ts >= ?")
+                try:
+                    params.append(datetime.strptime(date_from, "%Y-%m-%d").timestamp())
+                except:
+                    pass
+            if date_to:
+                conditions.append("ts <= ?")
+                try:
+                    params.append((datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)).timestamp())
+                except:
+                    pass
+
+            where = "WHERE " + " AND ".join(conditions) if conditions else ""
+            count_row = conn.execute(f"SELECT COUNT(*) FROM deleted_log {where}", params).fetchone()
+            total = count_row[0] if count_row else 0
+            rows = conn.execute(
+                f"SELECT * FROM deleted_log {where} ORDER BY ts DESC LIMIT 50",
+                params
+            ).fetchall()
+            results = [dict(r) for r in rows]
+            conn.close()
+        except Exception as e:
+            results = []
+            total = 0
+
+    results_html = ""
+    for r in results:
+        uid = r.get("uid", 0)
+        name = r.get("name") or f"User {uid}"
+        text = r.get("text", "")
+        ts = r.get("ts", 0) or r.get("deleted_at", "")
+        try:
+            dt = datetime.fromtimestamp(float(ts)).strftime("%d.%m.%Y %H:%M") if ts else "—"
+        except:
+            dt = str(ts)[:16]
+        cid = r.get("cid", "")
+
+        # Подсветка запроса
+        highlighted = text
+        if query and query.lower() in text.lower():
+            idx = text.lower().find(query.lower())
+            highlighted = (
+                text[:idx] +
+                f'<mark style="background:rgba(251,191,36,.25);color:#fbbf24;border-radius:3px;">' +
+                text[idx:idx+len(query)] +
+                '</mark>' +
+                text[idx+len(query):]
+            )
+
+        results_html += (
+            f'<div style="padding:14px 0;border-bottom:1px solid var(--border);">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+            f'<div style="display:flex;align-items:center;gap:10px;">'
+            f'<a href="/dashboard/users/{uid}" style="font-weight:700;color:var(--accent);">{name}</a>'
+            f'<code style="font-size:11px;">{uid}</code>'
+            f'<span style="font-size:11px;color:var(--text2);">Chat: {cid}</span>'
+            f'</div>'
+            f'<span style="font-size:11px;color:var(--text2);">{dt}</span>'
+            f'</div>'
+            f'<div style="font-size:13px;color:var(--text);line-height:1.6;">{highlighted[:300]}</div>'
+            f'</div>'
+        )
+
+    if search_done and not results_html:
+        results_html = '<div class="empty-state">Ничего не найдено</div>'
+
+    body = navbar(sess, "msg_search") + f"""
+    <div class="container">
+      <div class="page-title">🔍 Поиск по истории сообщений</div>
+
+      <div class="section" style="margin-bottom:24px;">
+        <div class="section-header">🔎 Параметры поиска</div>
+        <div class="section-body">
+          <form method="GET">
+            <div class="grid-2" style="gap:12px;">
+              <div class="form-group">
+                <label>Текст сообщения</label>
+                <input class="form-control" name="q" value="{query}" placeholder="Ключевые слова...">
+              </div>
+              <div class="form-group">
+                <label>Telegram ID пользователя</label>
+                <input class="form-control" name="uid" value="{uid_filter}" placeholder="123456789">
+              </div>
+              <div class="form-group">
+                <label>Чат</label>
+                <select class="form-control" name="cid">{chat_opts}</select>
+              </div>
+              <div class="form-group">
+                <label>Период</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <input class="form-control" type="date" name="from" value="{date_from}" style="flex:1;">
+                  <span style="color:var(--text2);">—</span>
+                  <input class="form-control" type="date" name="to" value="{date_to}" style="flex:1;">
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary" type="submit" style="width:100%;padding:12px;">🔍 Найти</button>
+          </form>
+        </div>
+      </div>
+
+      {"" if not search_done else f'''
+      <div class="section">
+        <div class="section-header">
+          Результаты
+          <span style="font-size:13px;color:var(--text2);font-weight:400;">
+            Найдено: {total} · показано: {len(results)}
+          </span>
+        </div>
+        <div style="padding:0 20px;">{results_html}</div>
+      </div>
+      '''}
+    </div>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_msg_search = require_auth("view_deleted")(handle_msg_search)
+
+
+# ══════════════════════════════════════════
+#  API для новых фич
+# ══════════════════════════════════════════
+
+async def api_mod_stats(request: web.Request):
+    token = request.cookies.get("dsess_token")
+    if not token or token not in _dashboard_sessions:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    try:
+        conn = db.get_conn()
+        rows = conn.execute(
+            "SELECT by_name, "
+            "SUM(CASE WHEN action LIKE '%Бан%' THEN 1 ELSE 0 END) as bans, "
+            "SUM(CASE WHEN action LIKE '%Варн%' THEN 1 ELSE 0 END) as warns, "
+            "SUM(CASE WHEN action LIKE '%Мут%' THEN 1 ELSE 0 END) as mutes "
+            "FROM mod_history GROUP BY by_name ORDER BY (bans+warns+mutes) DESC LIMIT 8"
+        ).fetchall()
+        conn.close()
+        data = [dict(r) for r in rows]
+        return web.json_response({
+            "names": [r["by_name"] for r in data],
+            "bans":  [r["bans"]  for r in data],
+            "warns": [r["warns"] for r in data],
+            "mutes": [r["mutes"] for r in data],
+        })
+    except:
+        return web.json_response({"names":[],"bans":[],"warns":[],"mutes":[]})
+
+
+async def api_threats(request: web.Request):
+    token = request.cookies.get("dsess_token")
+    if not token or token not in _dashboard_sessions:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    _analyze_threats()
+    active = [t for t in _threat_log if t.get("status") == "active"]
+    return web.json_response({"count": len(active), "threats": active[:10]})
