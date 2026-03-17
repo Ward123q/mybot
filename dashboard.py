@@ -6,6 +6,7 @@ dashboard.py — Глобально улучшенная веб-панель у�
 """
 import os
 import json
+import traceback
 import asyncio
 import logging
 import time
@@ -1798,28 +1799,36 @@ async def handle_admins(request: web.Request):
         for r_id, ri in DASHBOARD_RANKS.items()
     })
 
+    # Предвычисляем статы для тиров
+    cnt_junior  = sum(1 for a in admins if DASHBOARD_RANKS.get(a["rank"], DASHBOARD_RANKS[1]).get("tier") == "junior")
+    cnt_mid_sr  = sum(1 for a in admins if DASHBOARD_RANKS.get(a["rank"], DASHBOARD_RANKS[1]).get("tier") in ["mid", "senior"])
+    cnt_top     = sum(1 for a in admins if DASHBOARD_RANKS.get(a["rank"], DASHBOARD_RANKS[1]).get("tier") in ["high", "top"])
+    cnt_admins  = len(admins)
+    cnt_duty    = len(on_duty)
+    cnt_sess    = len(_dashboard_sessions)
+
     body = navbar(sess, "admins") + f"""
     <div class="container">
       <div class="page-title">👑 Администраторы
         <span style="font-size:12px;color:var(--gold);font-weight:600;margin-left:auto;">
-          {OWNER_RANK} рангов · {len(admins)} адм · {len(on_duty)} дежурят
+          {OWNER_RANK} рангов · {cnt_admins} адм · {cnt_duty} дежурят
         </span>
       </div>
       {result_html}
 
       <div class="cards" style="grid-template-columns:repeat(6,1fr);margin-bottom:24px;">
         <div class="card"><div class="card-icon">👥</div><div class="card-label">Всего адм</div>
-          <div class="card-value">{len(admins)}</div></div>
+          <div class="card-value">{cnt_admins}</div></div>
         <div class="card"><div class="card-icon">🟢</div><div class="card-label">Дежурят</div>
-          <div class="card-value" style="color:var(--success);">{len(on_duty)}</div></div>
+          <div class="card-value" style="color:var(--success);">{cnt_duty}</div></div>
         <div class="card"><div class="card-icon">🔵</div><div class="card-label">Младший</div>
-          <div class="card-value" style="color:#607d8b;">{sum(1 for a in admins if DASHBOARD_RANKS.get(a["rank"],{{}}).get("tier")=="junior")}</div></div>
+          <div class="card-value" style="color:#607d8b;">{cnt_junior}</div></div>
         <div class="card"><div class="card-icon">🟡</div><div class="card-label">Средний+</div>
-          <div class="card-value" style="color:#ffa726;">{sum(1 for a in admins if DASHBOARD_RANKS.get(a["rank"],{{}}).get("tier") in ["mid","senior"])}</div></div>
+          <div class="card-value" style="color:#ffa726;">{cnt_mid_sr}</div></div>
         <div class="card"><div class="card-icon">🔴</div><div class="card-label">Топ состав</div>
-          <div class="card-value" style="color:#ff7043;">{sum(1 for a in admins if DASHBOARD_RANKS.get(a["rank"],{{}}).get("tier") in ["high","top"])}</div></div>
+          <div class="card-value" style="color:#ff7043;">{cnt_top}</div></div>
         <div class="card"><div class="card-icon">🔐</div><div class="card-label">Сессий</div>
-          <div class="card-value">{len(_dashboard_sessions)}</div></div>
+          <div class="card-value">{cnt_sess}</div></div>
       </div>
 
       <div class="section" style="margin-bottom:24px;">
@@ -1983,7 +1992,15 @@ async def handle_admins(request: web.Request):
     }},15000);
     </script>
     """ + close_main()
-    return web.Response(text=page(body), content_type="text/html")
+    try:
+        rendered = page(body)
+    except Exception as _e:
+        import traceback
+        tb = traceback.format_exc()
+        log.error(f"handle_admins render ERROR: {_e}\n{tb}")
+        return web.Response(text=f"<pre style='color:red'>RENDER ERROR:\n{tb}</pre>",
+                            content_type="text/html")
+    return web.Response(text=rendered, content_type="text/html")
 
 #  ЧАТЫ
 # ══════════════════════════════════════════
