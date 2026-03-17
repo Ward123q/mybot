@@ -1929,13 +1929,27 @@ async def handle_user_detail(request: web.Request):
     first_cid = chat_ids[0] if chat_ids else "0"
 
     action_btns = ""
+    _uid_s = str(uid)
+    _cid_s = str(first_cid)
     if can_ban:
-        action_btns += f'<button class="btn btn-sm btn-danger" onclick="modAction(\'ban\',{uid},{first_cid},\'Нарушение\',function(){{showToast(\'Забанен\',\'success\');}})">🔨 Бан</button>'
-        action_btns += f'<button class="btn btn-sm btn-success" onclick="modAction(\'unban\',{uid},{first_cid},\'Разбан\')">🕊 Разбан</button>'
+        action_btns += (
+            "<button class=\"btn btn-sm btn-danger\" "
+            "onclick=\"modAction(&apos;ban&apos;," + _uid_s + "," + _cid_s + ",&apos;Нарушение&apos;)\">🔨 Бан</button>"
+        )
+        action_btns += (
+            "<button class=\"btn btn-sm btn-success\" "
+            "onclick=\"modAction(&apos;unban&apos;," + _uid_s + "," + _cid_s + ",&apos;Разбан&apos;)\">🕊 Разбан</button>"
+        )
     if can_mute:
-        action_btns += f'<button class="btn btn-sm btn-warn" onclick="modAction(\'mute\',{uid},{first_cid},\'Мут 1ч\')">🔇 Мут</button>'
+        action_btns += (
+            "<button class=\"btn btn-sm btn-warn\" "
+            "onclick=\"modAction(&apos;mute&apos;," + _uid_s + "," + _cid_s + ",&apos;Мут 1ч&apos;)\">🔇 Мут</button>"
+        )
     if can_warn:
-        action_btns += f'<button class="btn btn-sm btn-ghost" onclick="modAction(\'warn\',{uid},{first_cid},\'Нарушение\')">⚡ Варн</button>'
+        action_btns += (
+            "<button class=\"btn btn-sm btn-ghost\" "
+            "onclick=\"modAction(&apos;warn&apos;," + _uid_s + "," + _cid_s + ",&apos;Нарушение&apos;)\">⚡ Варн</button>"
+        )
 
     hist_html = "".join(f"<tr><td style='font-size:11px;color:var(--text2);'>{str(r['created_at'])[:16]}</td><td style='font-weight:600;'>{r['action']}</td><td style='color:var(--text2);'>{r['reason'] or '—'}</td><td>{r['by_name']}</td></tr>" for r in [dict(x) for x in hist_rows]) or "<tr><td colspan='4' class='empty-state'>Чисто</td></tr>"
 
@@ -2314,6 +2328,14 @@ async def handle_moderation(request: web.Request):
     chats = await db.get_all_chats()
     chat_opts = "".join(f'<option value="{c["cid"]}">{c.get("title","") or c["cid"]}</option>' for c in chats)
 
+    _qa_ban_btns = (
+        '<button class="btn btn-danger btn-sm" onclick="qaAction(\'ban\')">🔨 Бан</button>'
+        '<button class="btn btn-success btn-sm" onclick="qaAction(\'unban\')">🕊 Разбан</button>'
+    ) if can_ban else ""
+    _qa_mute_btn = (
+        '<button class="btn btn-warn btn-sm" onclick="qaAction(\'mute\')">🔇 Мут 1ч</button>'
+    ) if can_mute else ""
+
     quick_form = ""
     if can_ban or can_mute:
         quick_form = f"""
@@ -2336,8 +2358,8 @@ async def handle_moderation(request: web.Request):
                 <input class="form-control" id="qa-reason" placeholder="Нарушение правил">
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                {"<button class='btn btn-danger btn-sm' onclick='qaAction(\"ban\")'>🔨 Бан</button><button class='btn btn-success btn-sm' onclick='qaAction(\"unban\")'>🕊 Разбан</button>" if can_ban else ""}
-                {"<button class='btn btn-warn btn-sm' onclick='qaAction(\"mute\")'>🔇 Мут 1ч</button>" if can_mute else ""}
+                {_qa_ban_btns}
+                {_qa_mute_btn}
               </div>
             </div>
           </div>
