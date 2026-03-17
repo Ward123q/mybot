@@ -932,7 +932,7 @@ function modAction(action, uid, cid, reason, callback){
 
 
 def page(body: str) -> str:
-    return HTML_BASE.format(body=body)
+    return HTML_BASE.replace("{body}", body)
 
 
 def navbar(sess: dict | None = None, active: str = "") -> str:
@@ -1104,7 +1104,7 @@ async def handle_login(request: web.Request):
                 <p style="text-align:center;margin-top:16px;"><a href="/dashboard/login" style="color:var(--text2);font-size:12px;">← Назад</a></p>
               </div>
             </div>"""
-            return web.Response(text=HTML_BASE.format(body=body), content_type="text/html")
+            return web.Response(text=HTML_BASE.replace("{body}", body), content_type="text/html")
 
         # Step 1: проверяем токен + tg_uid
         if token == DASHBOARD_TOKEN and tg_uid_str:
@@ -1154,7 +1154,7 @@ async def handle_login(request: web.Request):
                         <p style="text-align:center;margin-top:16px;"><a href="/dashboard/login" style="color:var(--text2);font-size:12px;">← Назад</a></p>
                       </div>
                     </div>"""
-                    return web.Response(text=HTML_BASE.format(body=body), content_type="text/html")
+                    return web.Response(text=HTML_BASE.replace("{body}", body), content_type="text/html")
         elif token and token != DASHBOARD_TOKEN:
             error = "❌ Неверный токен"
 
@@ -1182,7 +1182,7 @@ async def handle_login(request: web.Request):
         </div>
       </div>
     </div>"""
-    return web.Response(text=HTML_BASE.format(body=body), content_type="text/html")
+    return web.Response(text=HTML_BASE.replace("{body}", body), content_type="text/html")
 
 
 async def handle_logout(request: web.Request):
