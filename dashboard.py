@@ -2433,24 +2433,32 @@ async def handle_alerts(request: web.Request):
     for a in shared.alerts[:50]:
         cls = {"danger": "alert-item", "warn": "alert-item warn", "info": "alert-item info"}.get(a["level"], "alert-item")
         action_btns = ""
-        if a.get("uid") and a.get("cid") and _bot:
-            uid_a, cid_a = a["uid"], a["cid"]
+        a_uid = a.get("uid", 0)
+        a_cid = a.get("cid", 0)
+        a_title = a.get("title", "")
+        a_desc = a.get("desc", "")
+        a_time = a.get("time", "")
+        a_safe_title = a_title.replace("'", "")
+        if a_uid and a_cid and _bot:
             if _has_perm(token, "ban_users"):
-                action_btns += f'<button class="btn btn-xs btn-danger" onclick="modAction(\'ban\',{uid_a},{cid_a},\'Алерт: {a["title"].replace(chr(39),"")}\')">🔨 Бан</button> '
+                action_btns += f'<button class="btn btn-xs btn-danger" onclick="modAction(\'ban\',{a_uid},{a_cid},\'Алерт: {a_safe_title}\')">🔨 Бан</button> '
             if _has_perm(token, "mute_users"):
-                action_btns += f'<button class="btn btn-xs btn-warn" onclick="modAction(\'mute\',{uid_a},{cid_a},\'Алерт\')">🔇 Мут</button> '
-        items += f"""
-        <div class="{cls}">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-            <div>
-              <div style="font-weight:700;">{a['title']}</div>
-              <div style="font-size:12px;color:var(--text2);margin-top:3px;">{a['desc']}</div>
-              {f'<div style="font-size:11px;color:var(--text2);margin-top:3px;">CID: {a["cid"]} · UID: {a["uid"]}</div>' if a.get('uid') else ''}
-              {f'<div style="margin-top:6px;display:flex;gap:6px;">{action_btns}</div>' if action_btns else ''}
-            </div>
-            <span style="font-size:11px;color:var(--text2);white-space:nowrap;margin-left:12px;">{a['time']}</span>
-          </div>
-        </div>"""
+                action_btns += f'<button class="btn btn-xs btn-warn" onclick="modAction(\'mute\',{a_uid},{a_cid},\'Алерт\')">🔇 Мут</button> '
+        uid_line = f'<div style="font-size:11px;color:var(--text2);margin-top:3px;">CID: {a_cid} · UID: {a_uid}</div>' if a_uid else ""
+        btn_line = f'<div style="margin-top:6px;display:flex;gap:6px;">{action_btns}</div>' if action_btns else ""
+        items += (
+            f'<div class="{cls}">'
+            f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+            f'<div>'
+            f'<div style="font-weight:700;">{a_title}</div>'
+            f'<div style="font-size:12px;color:var(--text2);margin-top:3px;">{a_desc}</div>'
+            f'{uid_line}'
+            f'{btn_line}'
+            f'</div>'
+            f'<span style="font-size:11px;color:var(--text2);white-space:nowrap;margin-left:12px;">{a_time}</span>'
+            f'</div>'
+            f'</div>'
+        )
 
     body = navbar(sess, "alerts") + f"""
     <div class="container">
@@ -3008,14 +3016,17 @@ async def handle_chat_settings(request: web.Request):
 
     def tog(key, label, desc=""):
         val = s.get(key, False)
-        return f"""
-        <div class="toggle-wrap">
-          <div class="toggle-info"><b>{label}</b>{f'<span>{desc}</span>' if desc else ''}</div>
-          <label class="toggle-switch">
-            <input type="checkbox" name="{key}" value="1" {"checked" if val else ""}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>"""
+        desc_html = f"<span>{desc}</span>" if desc else ""
+        checked = "checked" if val else ""
+        return (
+            f'<div class="toggle-wrap">'
+            f'<div class="toggle-info"><b>{label}</b>{desc_html}</div>'
+            f'<label class="toggle-switch">'
+            f'<input type="checkbox" name="{key}" value="1" {checked}>'
+            f'<span class="toggle-slider"></span>'
+            f'</label>'
+            f'</div>'
+        )
 
     def inp(key, type_="text", min_=None, max_=None, default=""):
         val = s.get(key, default)
@@ -3115,14 +3126,17 @@ async def handle_settings(request: web.Request):
     s = shared.dashboard_settings
     def tog(key, label, desc=""):
         val = s.get(key, True)
-        return f"""
-        <div class="toggle-wrap">
-          <div class="toggle-info"><b>{label}</b>{f'<span>{desc}</span>' if desc else ''}</div>
-          <label class="toggle-switch">
-            <input type="checkbox" name="{key}" value="1" {"checked" if val else ""}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>"""
+        desc_html = f"<span>{desc}</span>" if desc else ""
+        checked = "checked" if val else ""
+        return (
+            f'<div class="toggle-wrap">'
+            f'<div class="toggle-info"><b>{label}</b>{desc_html}</div>'
+            f'<label class="toggle-switch">'
+            f'<input type="checkbox" name="{key}" value="1" {checked}>'
+            f'<span class="toggle-slider"></span>'
+            f'</label>'
+            f'</div>'
+        )
 
     log_html = "".join(f"<tr><td style='font-size:11px;color:var(--text2);'>{r['time']}</td><td>{r['action']}</td></tr>" for r in shared.admin_action_log[:20]) or "<tr><td colspan='2' class='empty-state'>Нет</td></tr>"
 
