@@ -4057,6 +4057,16 @@ async def handle_team_chat(request: web.Request):
         for s in online_mods
     ) or '<div style="color:var(--text2);font-size:13px;padding:12px 0;">Никого онлайн</div>'
 
+    _quick_phrases = [
+        ("✅", "Принял дежурство"), ("🔴", "Сдаю дежурство"),
+        ("⚠️", "Нужна помощь"), ("👀", "Слежу за ситуацией"),
+        ("🔨", "Работаю с нарушителем"), ("✔️", "Проблема решена"),
+    ]
+    _quick_phrases_html = "".join(
+        f'<button class="btn btn-ghost btn-sm" style="text-align:left;" '
+        f'onclick="setPhrase(this)" data-text="{icon} {t}">{icon} {t}</button>'
+        for icon, t in _quick_phrases
+    )
     body = navbar(sess, "team_chat") + f"""
     <div class="container">
       <div class="page-title">💬 Чат команды</div>
@@ -4089,7 +4099,7 @@ async def handle_team_chat(request: web.Request):
           <div class="section">
             <div class="section-header">⚡ Быстрые фразы</div>
             <div style="padding:12px;display:flex;flex-direction:column;gap:6px;">
-              {"".join(f'<button class="btn btn-ghost btn-sm" style="text-align:left;" onclick="document.getElementById(\'chat-input\').value=\'{t}\'">{t}</button>' for t in ["✅ Принял дежурство", "🔴 Сдаю дежурство", "⚠️ Нужна помощь", "👀 Слежу за ситуацией", "🔨 Работаю с нарушителем", "✔️ Проблема решена"])}
+              {_quick_phrases_html}
             </div>
           </div>
         </div>
@@ -4105,6 +4115,12 @@ async def handle_team_chat(request: web.Request):
         }}
       }}).catch(function() {{}});
     }}, 5000);
+
+    // Быстрые фразы
+    function setPhrase(btn) {{
+      document.getElementById('chat-input').value = btn.getAttribute('data-text');
+      document.getElementById('chat-input').focus();
+    }}
 
     // Enter для отправки
     document.getElementById('chat-input').addEventListener('keydown', function(e) {{
@@ -4465,6 +4481,7 @@ async def handle_appeals(request: web.Request):
                 f'</div></form></div>'
             )
 
+        _ap_reply = ("<div style=\"font-size:12px;color:var(--success);margin-top:6px;\">💬 Ответ: " + ap.get("reply","—") + "</div>") if ap.get("reply") else ""
         rows_html += (
             f'<div class="section" style="margin-bottom:12px;padding:16px;">'
             f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
@@ -4477,7 +4494,7 @@ async def handle_appeals(request: web.Request):
             f'<div style="font-size:13px;color:var(--text2);margin-bottom:4px);">Чат: {ap.get("cid_title","—")}</div>'
             f'<div style="font-size:13px;background:var(--bg3);padding:10px;border-radius:8px;margin-top:8px;">'
             f'<b>Причина:</b> {ap.get("reason","—")}</div>'
-            f'{("<div style=\"font-size:12px;color:var(--success);margin-top:6px;\">💬 Ответ: " + ap.get("reply","—") + "</div>") if ap.get("reply") else ""}'
+            f'{_ap_reply}'
             f'{action_form}'
             f'</div>'
             f'</div></div>'
