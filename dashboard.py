@@ -1528,27 +1528,31 @@ async def handle_admins(request: web.Request):
         rank_info = DASHBOARD_RANKS.get(rank, DASHBOARD_RANKS[1])
         is_owner = a["tg_uid"] == OWNER_TG_ID
         last = str(a.get("last_login") or "—")[:16]
-        admins_html += f"""
-        <tr>
-          <td><code>{a['tg_uid']}</code></td>
-          <td style="font-weight:700;">{a['name']}</td>
-          <td>
-            <span class="badge" style="background:rgba({_hex_to_rgb(rank_info['color'])},.15);color:{rank_info['color']};">
-              {rank_info['name']}
-            </span>
-          </td>
-          <td style="font-size:12px;color:var(--text2);">{rank_info['desc']}</td>
-          <td style="font-size:11px;color:var(--text2);">{last}</td>
-          <td>
-            {"<span style='color:var(--gold);font-size:12px;'>🌟 Владелец</span>" if is_owner else f"""
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <button onclick="openRankModal({a['tg_uid']}, '{a['name'].replace("'", "")}', {rank})"
-                class="btn btn-xs btn-ghost">✏️ Ранг</button>
-              <button onclick="revokeAdmin({a['tg_uid']}, '{a['name'].replace("'", "")}')"
-                class="btn btn-xs" style="background:rgba(239,68,68,.1);color:var(--danger);">🗑 Убрать</button>
-            </div>"""}
-          </td>
-        </tr>"""
+        safe_name = a["name"].replace("'", "").replace('"', "")
+        tg_uid = a["tg_uid"]
+        rgb = _hex_to_rgb(rank_info["color"])
+        rcolor = rank_info["color"]
+        rname = rank_info["name"]
+        rdesc = rank_info["desc"]
+        if is_owner:
+            action_cell = "<span style='color:var(--gold);font-size:12px;'>🌟 Владелец</span>"
+        else:
+            action_cell = (
+                f'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+                f'<button onclick="openRankModal({tg_uid}, \'{safe_name}\', {rank})" class="btn btn-xs btn-ghost">✏️ Ранг</button>'
+                f'<button onclick="revokeAdmin({tg_uid}, \'{safe_name}\')" class="btn btn-xs" style="background:rgba(239,68,68,.1);color:var(--danger);">🗑 Убрать</button>'
+                f'</div>'
+            )
+        admins_html += (
+            f"<tr>"
+            f"<td><code>{tg_uid}</code></td>"
+            f'<td style="font-weight:700;">{a["name"]}</td>'
+            f'<td><span class="badge" style="background:rgba({rgb},.15);color:{rcolor};">{rname}</span></td>'
+            f'<td style="font-size:12px;color:var(--text2);">{rdesc}</td>'
+            f'<td style="font-size:11px;color:var(--text2);">{last}</td>'
+            f"<td>{action_cell}</td>"
+            f"</tr>"
+        )
 
     # Карточки рангов
     ranks_html = ""
