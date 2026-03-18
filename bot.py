@@ -531,7 +531,7 @@ CAPTCHA_CHANNEL_IDS: set = {
 # ── ID закрытого канала для команды /join ─────────────────────
 # Замени 0 на реальный ID своего канала (отрицательное число -100...)
 # Узнать ID: перешли сообщение из канала боту @userinfobot
-CLOSED_CHANNEL_ID = -1002527332271
+CLOSED_CHANNEL_ID = 0
 MAX_WARNINGS     = 3
 ANTI_MAT_ENABLED  = False
 
@@ -7382,6 +7382,120 @@ async def handle_private_message(message: Message):
     uid  = message.from_user.id
     text = message.text or ""
 
+    # ── Капча /join (приоритет 1) ──────────────────────────────
+    if text and not text.startswith("/"):
+        join_entry = _join_captcha.get(uid)
+        if join_entry:
+            answer  = text.strip()
+            correct = join_entry["code"]
+            if answer == correct:
+                _join_captcha.pop(uid, None)
+                join_entry["task"].cancel()
+                try: await bot.delete_message(uid, join_entry["msg_id"])
+                except Exception: pass
+                await _join_send_link(uid, join_entry["name"])
+            else:
+                join_entry["tries"] += 1
+                remaining = _JOIN_MAX_TRIES - join_entry["tries"]
+                if join_entry["tries"] >= _JOIN_MAX_TRIES:
+                    _join_captcha.pop(uid, None)
+                    join_entry["task"].cancel()
+                    try: await bot.delete_message(uid, join_entry["msg_id"])
+                    except Exception: pass
+                    await message.answer(
+                        "❌ <b>Все попытки исчерпаны.</b>\n\nНапиши /join чтобы начать заново.",
+                        parse_mode="HTML")
+                else:
+                    await message.answer(
+                        f"❌ Неверно! Осталось попыток: <b>{remaining}</b>",
+                        parse_mode="HTML")
+            return
+
+    # ── Капча канала chat_join_request (приоритет 2) ───────────
+    if text and not text.startswith("/"):
+        chan_key  = None
+        chan_entry = None
+        for k, e in _channel_captcha.items():
+            if k[1] == uid:
+                chan_key   = k
+                chan_entry = e
+                break
+        if chan_entry:
+            channel_id = chan_entry["channel_id"]
+            correct    = chan_entry["code"]
+            if text.strip() == correct:
+                _channel_captcha.pop(chan_key, None)
+                chan_entry["task"].cancel()
+                try: await bot.delete_message(uid, chan_entry["msg_id"])
+                except Exception: pass
+                try:
+                    await bot.approve_chat_join_request(channel_id, uid)
+                    await message.answer("✅ <b>Верно!</b> Заявка одобрена — добро пожаловать! 🎉",
+                                         parse_mode="HTML")
+                except Exception as e:
+                    await message.answer(f"✅ Пройдено, но ошибка при одобрении: {e}")
+            else:
+                chan_entry["tries"] += 1
+                remaining = _CHANNEL_CAPTCHA_MAX_TRIES - chan_entry["tries"]
+                if chan_entry["tries"] >= _CHANNEL_CAPTCHA_MAX_TRIES:
+                    _channel_captcha.pop(chan_key, None)
+                    chan_entry["task"].cancel()
+                    try: await bot.delete_message(uid, chan_entry["msg_id"])
+                    except Exception: pass
+                    try: await bot.decline_chat_join_request(channel_id, uid)
+                    except Exception: pass
+                    await message.answer(
+                        "❌ <b>Все попытки исчерпаны</b> — заявка отклонена.\n\nМожешь подать снова.",
+                        parse_mode="HTML")
+                else:
+                    await message.answer(
+                        f"❌ Неверно! Осталось попыток: <b>{remaining}</b>",
+                        parse_mode="HTML")
+            return
+
+    # ── Капча группы (captcha.py) (приоритет 3) ───────────────
+    if text and not text.startswith("/"):
+        import captcha as _cap
+        cap_uid   = uid
+        cap_entry = _cap._active.get(cap_uid)
+        if cap_entry and cap_entry.get("mode") == "pm":
+            answer  = text.strip()
+            correct = cap_entry["code"]
+            chat_id = cap_entry["chat_id"]
+            if answer == correct:
+                _cap._active.pop(cap_uid, None)
+                cap_entry["task"].cancel()
+                await _cap._unlock(bot, chat_id, cap_uid)
+                for mid, cid in [(cap_entry.get("pm_msg_id"), cap_uid),
+                                  (cap_entry.get("group_msg_id"), chat_id)]:
+                    if mid:
+                        try: await bot.delete_message(cid, mid)
+                        except Exception: pass
+                await message.answer("✅ <b>Верно!</b> Добро пожаловать в чат 🎉",
+                                     parse_mode="HTML")
+                try:
+                    n = await bot.send_message(chat_id,
+                        f"✅ <b>{cap_entry['name']}</b> прошёл капчу!", parse_mode="HTML")
+                    await asyncio.sleep(8)
+                    try: await n.delete()
+                    except Exception: pass
+                except Exception: pass
+            else:
+                cap_entry["tries"] += 1
+                remaining = _cap.CAPTCHA_MAX_TRIES - cap_entry["tries"]
+                if cap_entry["tries"] >= _cap.CAPTCHA_MAX_TRIES:
+                    _cap._active.pop(cap_uid, None)
+                    cap_entry["task"].cancel()
+                    try: await bot.delete_message(uid, cap_entry.get("pm_msg_id",0))
+                    except Exception: pass
+                    try: await bot.delete_message(chat_id, cap_entry.get("group_msg_id",0))
+                    except Exception: pass
+                    await message.answer("❌ Все попытки исчерпаны.", parse_mode="HTML")
+                    await _cap._punish(bot, chat_id, cap_uid)
+                else:
+                    await message.answer(
+                        f"❌ Неверно! Осталось: <b>{remaining}</b>", parse_mode="HTML")
+            return
 
     # Команды обрабатываются отдельно — кроме /ticket
     if text.startswith("/") and not text.startswith("/ticket"):
@@ -10865,8 +10979,7 @@ async def on_channel_join_request(request: ChatJoinRequest):
         pass
 
 
-@dp.message(F.chat.type == "private", F.text, ~F.text.startswith("/"))
-async def on_channel_captcha_answer(message: Message):
+async def on_channel_captcha_answer_DISABLED(message: Message):
     """Ловит ответ пользователя на капчу канала в ЛС."""
     uid = message.from_user.id
 
@@ -11243,8 +11356,7 @@ async def cmd_join_group(message: Message):
     except Exception: pass
 
 
-@dp.message(F.chat.type == "private", F.text, ~F.text.startswith("/"))
-async def on_join_captcha_answer(message: Message):
+async def on_join_captcha_answer_DISABLED(message: Message):
     """Ловит ответ на капчу /join в ЛС."""
     user_id = message.from_user.id
     entry   = _join_captcha.get(user_id)
