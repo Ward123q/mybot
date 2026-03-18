@@ -14,7 +14,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     Message, ChatPermissions, CallbackQuery,
     InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile,
-    ChatJoinRequest,
+    BufferedInputFile
 )
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiohttp import web
@@ -520,18 +520,6 @@ BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
 OWNER_ID         = 7823802800
 ADMIN_IDS        = {7823802800, 8046083268, 7397338777, 7991589995}
-
-# ── ID каналов где работает капча через join_request ──────────
-# Добавь ID своих каналов. Канал должен быть в режиме "по заявке":
-# Настройки канала → Подписчики → Одобрять вступление вручную
-CAPTCHA_CHANNEL_IDS: set = {
-    # -1001234567890,   # замени на ID своего канала
-}
-
-# ── ID закрытого канала для команды /join ─────────────────────
-# Замени 0 на реальный ID своего канала (отрицательное число -100...)
-# Узнать ID: перешли сообщение из канала боту @userinfobot
-CLOSED_CHANNEL_ID = 0
 MAX_WARNINGS     = 3
 ANTI_MAT_ENABLED  = False
 
@@ -1619,6 +1607,11 @@ async def on_new_member(message: Message):
                 try: await sent.delete()
                 except: pass
             except: pass
+            continue
+
+        # 🔐 Капча
+        if chat_cfg.get("captcha_enabled", True):
+            await cap_start(cid, member.id, member.full_name)
             continue
 
         # Приветствие из настроек
@@ -5492,7 +5485,7 @@ async def cmd_tournament(message: Message, command: CommandObject):
             "/tournament next — следующий раунд\n"
             "/tournament stop — отменить", parse_mode="HTML")
 
-async def tournament_join(message: Message):
+async def cmd_join(message: Message):
     cid = message.chat.id; uid = message.from_user.id
     if cid not in tournament_data or not tournament_data[cid].get("registration"):
         await reply_auto_delete(message, "❌ Регистрация на турнир не открыта!"); return
@@ -7382,120 +7375,6 @@ async def handle_private_message(message: Message):
     uid  = message.from_user.id
     text = message.text or ""
 
-    # ── Капча /join (приоритет 1) ──────────────────────────────
-    if text and not text.startswith("/"):
-        join_entry = _join_captcha.get(uid)
-        if join_entry:
-            answer  = text.strip()
-            correct = join_entry["code"]
-            if answer == correct:
-                _join_captcha.pop(uid, None)
-                join_entry["task"].cancel()
-                try: await bot.delete_message(uid, join_entry["msg_id"])
-                except Exception: pass
-                await _join_send_link(uid, join_entry["name"])
-            else:
-                join_entry["tries"] += 1
-                remaining = _JOIN_MAX_TRIES - join_entry["tries"]
-                if join_entry["tries"] >= _JOIN_MAX_TRIES:
-                    _join_captcha.pop(uid, None)
-                    join_entry["task"].cancel()
-                    try: await bot.delete_message(uid, join_entry["msg_id"])
-                    except Exception: pass
-                    await message.answer(
-                        "❌ <b>Все попытки исчерпаны.</b>\n\nНапиши /join чтобы начать заново.",
-                        parse_mode="HTML")
-                else:
-                    await message.answer(
-                        f"❌ Неверно! Осталось попыток: <b>{remaining}</b>",
-                        parse_mode="HTML")
-            return
-
-    # ── Капча канала chat_join_request (приоритет 2) ───────────
-    if text and not text.startswith("/"):
-        chan_key  = None
-        chan_entry = None
-        for k, e in _channel_captcha.items():
-            if k[1] == uid:
-                chan_key   = k
-                chan_entry = e
-                break
-        if chan_entry:
-            channel_id = chan_entry["channel_id"]
-            correct    = chan_entry["code"]
-            if text.strip() == correct:
-                _channel_captcha.pop(chan_key, None)
-                chan_entry["task"].cancel()
-                try: await bot.delete_message(uid, chan_entry["msg_id"])
-                except Exception: pass
-                try:
-                    await bot.approve_chat_join_request(channel_id, uid)
-                    await message.answer("✅ <b>Верно!</b> Заявка одобрена — добро пожаловать! 🎉",
-                                         parse_mode="HTML")
-                except Exception as e:
-                    await message.answer(f"✅ Пройдено, но ошибка при одобрении: {e}")
-            else:
-                chan_entry["tries"] += 1
-                remaining = _CHANNEL_CAPTCHA_MAX_TRIES - chan_entry["tries"]
-                if chan_entry["tries"] >= _CHANNEL_CAPTCHA_MAX_TRIES:
-                    _channel_captcha.pop(chan_key, None)
-                    chan_entry["task"].cancel()
-                    try: await bot.delete_message(uid, chan_entry["msg_id"])
-                    except Exception: pass
-                    try: await bot.decline_chat_join_request(channel_id, uid)
-                    except Exception: pass
-                    await message.answer(
-                        "❌ <b>Все попытки исчерпаны</b> — заявка отклонена.\n\nМожешь подать снова.",
-                        parse_mode="HTML")
-                else:
-                    await message.answer(
-                        f"❌ Неверно! Осталось попыток: <b>{remaining}</b>",
-                        parse_mode="HTML")
-            return
-
-    # ── Капча группы (captcha.py) (приоритет 3) ───────────────
-    if text and not text.startswith("/"):
-        import captcha as _cap
-        cap_uid   = uid
-        cap_entry = _cap._active.get(cap_uid)
-        if cap_entry and cap_entry.get("mode") == "pm":
-            answer  = text.strip()
-            correct = cap_entry["code"]
-            chat_id = cap_entry["chat_id"]
-            if answer == correct:
-                _cap._active.pop(cap_uid, None)
-                cap_entry["task"].cancel()
-                await _cap._unlock(bot, chat_id, cap_uid)
-                for mid, cid in [(cap_entry.get("pm_msg_id"), cap_uid),
-                                  (cap_entry.get("group_msg_id"), chat_id)]:
-                    if mid:
-                        try: await bot.delete_message(cid, mid)
-                        except Exception: pass
-                await message.answer("✅ <b>Верно!</b> Добро пожаловать в чат 🎉",
-                                     parse_mode="HTML")
-                try:
-                    n = await bot.send_message(chat_id,
-                        f"✅ <b>{cap_entry['name']}</b> прошёл капчу!", parse_mode="HTML")
-                    await asyncio.sleep(8)
-                    try: await n.delete()
-                    except Exception: pass
-                except Exception: pass
-            else:
-                cap_entry["tries"] += 1
-                remaining = _cap.CAPTCHA_MAX_TRIES - cap_entry["tries"]
-                if cap_entry["tries"] >= _cap.CAPTCHA_MAX_TRIES:
-                    _cap._active.pop(cap_uid, None)
-                    cap_entry["task"].cancel()
-                    try: await bot.delete_message(uid, cap_entry.get("pm_msg_id",0))
-                    except Exception: pass
-                    try: await bot.delete_message(chat_id, cap_entry.get("group_msg_id",0))
-                    except Exception: pass
-                    await message.answer("❌ Все попытки исчерпаны.", parse_mode="HTML")
-                    await _cap._punish(bot, chat_id, cap_uid)
-                else:
-                    await message.answer(
-                        f"❌ Неверно! Осталось: <b>{remaining}</b>", parse_mode="HTML")
-            return
 
     # Команды обрабатываются отдельно — кроме /ticket
     if text.startswith("/") and not text.startswith("/ticket"):
@@ -10737,762 +10616,195 @@ async def cmd_delnote_mod(message: Message, command: CommandObject):
     conn.close()
 
 
-
 # ══════════════════════════════════════════════════════════════════
-#  🔐 КАПЧА ДЛЯ КАНАЛА (chat_join_request)
-#  Работает только с закрытыми каналами в режиме "одобрение заявок"
+#  🔐 КАПЧА — ответ прямо в чат, без мута
 # ══════════════════════════════════════════════════════════════════
-
-# Хранилище активных заявок канала
-# { (channel_id, user_id): {code, msg_id, task, tries, name} }
-_channel_captcha: dict = {}
-_CHANNEL_CAPTCHA_TIMEOUT  = 300   # 5 минут (человек может не сразу открыть ЛС)
-_CHANNEL_CAPTCHA_MAX_TRIES = 3
-_CHANNEL_CAPTCHA_DIGITS    = 5
+_CAP_TIMEOUT   = 90
+_CAP_MAX_TRIES = 2
+_CAP_DIGITS    = 5
+_CAP_KICK      = True
+_cap_active: dict = {}  # {(cid,uid): {code,msg_id,task,tries,name}}
 
 
-def _channel_make_image(code: str) -> bytes | None:
-    """Генерирует картинку капчи (такая же как в групповой)."""
+def _cap_image(code: str) -> bytes | None:
     try:
-        import io as _io
+        import io, random as r
         from PIL import Image, ImageDraw, ImageFont, ImageFilter
-        import random as _r
-
         W, H = 280, 100
-        img  = Image.new("RGB", (W, H), (22, 22, 30))
-        draw = ImageDraw.Draw(img)
-
-        for _ in range(W * H // 5):
-            c = _r.randint(35, 75)
-            draw.point((_r.randint(0,W-1), _r.randint(0,H-1)), (c, c, c+_r.randint(0,25)))
+        img = Image.new("RGB", (W, H), (22, 22, 30))
+        d   = ImageDraw.Draw(img)
+        for _ in range(W*H//5):
+            c = r.randint(35,75)
+            d.point((r.randint(0,W-1),r.randint(0,H-1)),(c,c,c+r.randint(0,25)))
         for _ in range(10):
-            col = (_r.randint(50,110), _r.randint(50,110), _r.randint(80,150))
-            draw.line([(_r.randint(0,W), _r.randint(0,H)), (_r.randint(0,W), _r.randint(0,H))],
-                      fill=col, width=1)
-        for _ in range(5):
-            col = (_r.randint(60,120), _r.randint(60,120), _r.randint(100,170))
-            draw.arc([_r.randint(-30,W//2), _r.randint(-30,H//2),
-                      _r.randint(W//2,W+30), _r.randint(H//2,H+30)],
-                     _r.randint(0,360), _r.randint(0,360), fill=col, width=1)
-
-        font = None
+            col=(r.randint(50,110),r.randint(50,110),r.randint(80,150))
+            d.line([(r.randint(0,W),r.randint(0,H)),(r.randint(0,W),r.randint(0,H))],fill=col,width=1)
+        for _ in range(4):
+            col=(r.randint(60,120),r.randint(60,120),r.randint(100,170))
+            d.arc([r.randint(-20,W//2),r.randint(-20,H//2),r.randint(W//2,W+20),r.randint(H//2,H+20)],
+                  r.randint(0,360),r.randint(0,360),fill=col,width=1)
+        font=None
         for fp in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
                    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
                    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
                    "/System/Library/Fonts/Helvetica.ttc",
                    "C:/Windows/Fonts/arialbd.ttf"]:
             try:
-                font = ImageFont.truetype(fp, 52); break
-            except Exception: pass
+                from PIL import ImageFont as IF; font=IF.truetype(fp,52); break
+            except: pass
         if not font:
-            try:    font = ImageFont.load_default(size=52)
-            except: font = ImageFont.load_default()
-
-        palette = [(255,210,80),(100,215,255),(255,120,120),(120,255,140),(210,120,255)]
-        char_w  = (W - 20) // len(code)
-        for i, ch in enumerate(code):
-            col   = palette[i % len(palette)]
-            angle = _r.randint(-25, 25)
-            off   = _r.randint(-10, 10)
-            x     = 10 + i * char_w + _r.randint(-4, 4)
-            layer = Image.new("RGBA", (char_w+12, H), (0,0,0,0))
-            ld    = ImageDraw.Draw(layer)
-            cy    = (H - 52) // 2 + off
-            ld.text((4, cy+2), ch, font=font, fill=(0,0,0,160))
-            ld.text((2, cy),   ch, font=font, fill=col+(255,))
-            rot = layer.rotate(angle, expand=False, resample=Image.BICUBIC)
-            img.paste(rot, (x-2, 0), rot)
-
-        img = img.filter(ImageFilter.GaussianBlur(radius=0.6))
-        d2  = ImageDraw.Draw(img)
+            try:
+                from PIL import ImageFont as IF; font=IF.load_default(size=52)
+            except:
+                from PIL import ImageFont as IF; font=IF.load_default()
+        pal=[(255,210,80),(100,215,255),(255,120,120),(120,255,140),(210,120,255)]
+        cw=(W-20)//len(code)
+        for i,ch in enumerate(code):
+            col=pal[i%len(pal)]; ang=r.randint(-25,25); off=r.randint(-10,10)
+            x=10+i*cw+r.randint(-4,4)
+            lay=Image.new("RGBA",(cw+12,H),(0,0,0,0))
+            ld=ImageDraw.Draw(lay); cy=(H-52)//2+off
+            ld.text((4,cy+2),ch,font=font,fill=(0,0,0,160))
+            ld.text((2,cy),ch,font=font,fill=col+(255,))
+            img.paste(lay.rotate(ang,expand=False,resample=Image.BICUBIC),(x-2,0),
+                      lay.rotate(ang,expand=False,resample=Image.BICUBIC))
+        img=img.filter(ImageFilter.GaussianBlur(radius=0.6))
+        d2=ImageDraw.Draw(img)
         for _ in range(200):
-            c = _r.randint(70, 160)
-            d2.point((_r.randint(0,W-1), _r.randint(0,H-1)), (c, c+5, c+15))
-
-        buf = _io.BytesIO()
-        img.save(buf, format="PNG", optimize=True)
+            c=r.randint(70,160); d2.point((r.randint(0,W-1),r.randint(0,H-1)),(c,c+5,c+15))
+        buf=io.BytesIO(); img.save(buf,format="PNG",optimize=True)
         return buf.getvalue()
     except Exception as e:
-        logging.warning(f"[CHANNEL_CAPTCHA] image error: {e}")
-        return None
+        logging.warning(f"[CAP] image: {e}"); return None
 
 
-async def _channel_captcha_timeout(channel_id: int, user_id: int, name: str):
-    """Таймер — отклоняет заявку по истечению времени."""
-    await asyncio.sleep(_CHANNEL_CAPTCHA_TIMEOUT)
-    entry = _channel_captcha.pop((channel_id, user_id), None)
-    if not entry:
-        return
-
-    logging.info(f"[CHANNEL_CAPTCHA] Таймаут: {name} ({user_id}) канал={channel_id}")
-
-    # Удаляем сообщение с капчей из ЛС
+async def _cap_punish(cid: int, uid: int):
     try:
-        await bot.delete_message(user_id, entry["msg_id"])
-    except Exception:
-        pass
-
-    # Отклоняем заявку
-    try:
-        await bot.decline_chat_join_request(channel_id, user_id)
-    except Exception as e:
-        logging.warning(f"[CHANNEL_CAPTCHA] decline error: {e}")
-
-    # Уведомляем пользователя
-    try:
-        await bot.send_message(
-            user_id,
-            f"⏰ <b>Время истекло</b> — заявка на вступление в канал отклонена.\n\n"
-            f"Попробуй подать заявку снова.",
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
-
-    # Логируем
-    try:
-        await bot.send_message(
-            LOG_CHANNEL_ID,
-            f"🔐 <b>КАПЧА КАНАЛА</b> — Таймаут\n"
-            f"👤 {name} (<code>{user_id}</code>)\n"
-            f"📢 Канал: <code>{channel_id}</code>\n"
-            f"❌ Заявка отклонена",
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
-
-
-@dp.chat_join_request()
-async def on_channel_join_request(request: ChatJoinRequest):
-    """Срабатывает когда кто-то подаёт заявку на вступление в канал."""
-    channel_id = request.chat.id
-    user_id    = request.from_user.id
-    name       = request.from_user.full_name
-    safe_name  = name.replace("<", "&lt;").replace(">", "&gt;")
-
-    # Проверяем что этот канал в списке
-    if CAPTCHA_CHANNEL_IDS and channel_id not in CAPTCHA_CHANNEL_IDS:
-        # Канал не в списке — одобряем автоматически
-        try:
-            await bot.approve_chat_join_request(channel_id, user_id)
-        except Exception:
-            pass
-        return
-
-    # Если список пуст — проверяем все каналы где бот админ
-    # (можно настроить под себя)
-
-    # Уже есть активная капча — игнорируем повторные заявки
-    if (channel_id, user_id) in _channel_captcha:
-        return
-
-    # Генерируем код
-    import random as _r
-    code = "".join(str(_r.randint(0, 9)) for _ in range(_CHANNEL_CAPTCHA_DIGITS))
-
-    # Пробуем отправить капчу в ЛС
-    img_bytes = _channel_make_image(code)
-    caption = (
-        f"🔐 <b>Проверка для вступления в канал</b>\n\n"
-        f"Ты подал заявку на вступление.\n"
-        f"Введи <b>{_CHANNEL_CAPTCHA_DIGITS} цифр</b> с картинки — "
-        f"это подтвердит что ты живой человек.\n\n"
-        f"⏰ У тебя <b>{_CHANNEL_CAPTCHA_TIMEOUT // 60} минут</b>.\n"
-        f"❌ {_CHANNEL_CAPTCHA_MAX_TRIES} ошибки — заявка будет отклонена."
-    )
-
-    msg_id = 0
-    pm_sent = False
-    try:
-        if img_bytes:
-            from aiogram.types import BufferedInputFile as _BIF
-            msg = await bot.send_photo(
-                user_id,
-                _BIF(img_bytes, "captcha.png"),
-                caption=caption,
-                parse_mode="HTML",
-            )
+        if _CAP_KICK:
+            await bot.ban_chat_member(cid, uid)
+            await asyncio.sleep(0.3)
+            await bot.unban_chat_member(cid, uid)
         else:
-            msg = await bot.send_message(
-                user_id,
-                caption + f"\n\n🔢 Код: <code>{code}</code>",
-                parse_mode="HTML",
-            )
-        msg_id  = msg.message_id
-        pm_sent = True
+            await bot.restrict_chat_member(cid, uid,
+                ChatPermissions(can_send_messages=False),
+                until_date=timedelta(hours=24))
     except Exception as e:
-        logging.warning(f"[CHANNEL_CAPTCHA] ЛС недоступны для {user_id}: {e}")
+        logging.warning(f"[CAP] punish: {e}")
 
-    if not pm_sent:
-        # Не можем написать в ЛС — отклоняем с объяснением
-        try:
-            await bot.decline_chat_join_request(channel_id, user_id)
-        except Exception:
-            pass
-        # Пробуем написать через @username если есть
-        username = request.from_user.username
-        logging.info(
-            f"[CHANNEL_CAPTCHA] Отклонена (ЛС недоступны): {name} ({user_id}) "
-            f"username={username}"
-        )
-        try:
-            await bot.send_message(
-                LOG_CHANNEL_ID,
-                f"🔐 <b>КАПЧА КАНАЛА</b> — ЛС недоступны\n"
-                f"👤 {safe_name} (<code>{user_id}</code>)\n"
-                f"{'@' + username if username else 'Нет username'}\n"
-                f"❌ Заявка отклонена автоматически (бот не может написать первым)",
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+
+async def _cap_timeout_task(cid: int, uid: int):
+    await asyncio.sleep(_CAP_TIMEOUT)
+    e = _cap_active.pop((cid, uid), None)
+    if not e:
         return
-
-    # Запускаем таймер
-    task = asyncio.create_task(
-        _channel_captcha_timeout(channel_id, user_id, safe_name)
-    )
-    _channel_captcha[(channel_id, user_id)] = {
-        "code":       code,
-        "msg_id":     msg_id,
-        "task":       task,
-        "tries":      0,
-        "name":       safe_name,
-        "channel_id": channel_id,
-    }
-
-    logging.info(
-        f"[CHANNEL_CAPTCHA] Запущена: {name} ({user_id}) канал={channel_id}"
-    )
-
-    # Лог в канал
+    try: await bot.delete_message(cid, e["msg_id"])
+    except: pass
+    await _cap_punish(cid, uid)
     try:
-        await bot.send_message(
-            LOG_CHANNEL_ID,
-            f"🔐 <b>КАПЧА КАНАЛА</b> — Новая заявка\n"
-            f"👤 {safe_name} (<code>{user_id}</code>)\n"
-            f"📢 Канал: <code>{channel_id}</code>",
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
+        n = await bot.send_message(cid,
+            f"⏰ <b>{e['name']}</b> не прошёл капчу — "
+            f"{'кик' if _CAP_KICK else 'мут'}.", parse_mode="HTML")
+        await asyncio.sleep(8)
+        try: await n.delete()
+        except: pass
+    except: pass
 
 
-async def on_channel_captcha_answer_DISABLED(message: Message):
-    """Ловит ответ пользователя на капчу канала в ЛС."""
-    uid = message.from_user.id
-
-    # Ищем активную капчу канала для этого пользователя
-    entry = None
-    key   = None
-    for k, e in _channel_captcha.items():
-        if k[1] == uid:
-            entry = e
-            key   = k
-            break
-
-    if not entry:
-        return  # нет активной капчи
-
-    channel_id = entry["channel_id"]
-    correct    = entry["code"]
-    answer     = message.text.strip()
-
-    if answer == correct:
-        # ✅ ВЕРНО — одобряем заявку
-        _channel_captcha.pop(key, None)
-        entry["task"].cancel()
-
-        # Удаляем капча-сообщение
-        try:
-            await bot.delete_message(uid, entry["msg_id"])
-        except Exception:
-            pass
-
-        # Одобряем
-        approved = False
-        try:
-            await bot.approve_chat_join_request(channel_id, uid)
-            approved = True
-        except Exception as e:
-            logging.warning(f"[CHANNEL_CAPTCHA] approve error: {e}")
-
-        if approved:
-            await message.answer(
-                "✅ <b>Верно!</b> Заявка одобрена — добро пожаловать в канал! 🎉",
-                parse_mode="HTML",
-            )
-        else:
-            await message.answer(
-                "✅ Капча пройдена, но возникла ошибка при одобрении. "
-                "Обратись к администратору.",
-                parse_mode="HTML",
-            )
-
-        try:
-            await bot.send_message(
-                LOG_CHANNEL_ID,
-                f"✅ <b>КАПЧА КАНАЛА</b> — Пройдена\n"
-                f"👤 {entry['name']} (<code>{uid}</code>)\n"
-                f"📢 Канал: <code>{channel_id}</code>\n"
-                f"{'✅ Заявка одобрена' if approved else '❌ Ошибка одобрения'}",
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
-
-        logging.info(f"[CHANNEL_CAPTCHA] Успех: {entry['name']} ({uid})")
-
-    else:
-        # ❌ НЕВЕРНО
-        entry["tries"] += 1
-        remaining = _CHANNEL_CAPTCHA_MAX_TRIES - entry["tries"]
-        logging.info(
-            f"[CHANNEL_CAPTCHA] Неверно: {entry['name']} ({uid}) "
-            f"попытка {entry['tries']}/{_CHANNEL_CAPTCHA_MAX_TRIES}"
-        )
-
-        if entry["tries"] >= _CHANNEL_CAPTCHA_MAX_TRIES:
-            # Исчерпал попытки
-            _channel_captcha.pop(key, None)
-            entry["task"].cancel()
-
-            try:
-                await bot.delete_message(uid, entry["msg_id"])
-            except Exception:
-                pass
-
-            try:
-                await bot.decline_chat_join_request(channel_id, uid)
-            except Exception as e:
-                logging.warning(f"[CHANNEL_CAPTCHA] decline error: {e}")
-
-            await message.answer(
-                "❌ <b>Все попытки исчерпаны</b> — заявка на вступление отклонена.\n\n"
-                "Ты можешь подать заявку снова.",
-                parse_mode="HTML",
-            )
-
-            try:
-                await bot.send_message(
-                    LOG_CHANNEL_ID,
-                    f"❌ <b>КАПЧА КАНАЛА</b> — Провалена\n"
-                    f"👤 {entry['name']} (<code>{uid}</code>)\n"
-                    f"📢 Канал: <code>{channel_id}</code>\n"
-                    f"❌ Заявка отклонена",
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-
-        else:
-            await message.answer(
-                f"❌ Неверно! Осталось попыток: <b>{remaining}</b>\n"
-                f"Попробуй ещё раз — посмотри внимательно на картинку.",
-                parse_mode="HTML",
-            )
-
-
-
-# ══════════════════════════════════════════════════════════════════
-#  🔗 /join — ВХОД В ЗАКРЫТЫЙ КАНАЛ ЧЕРЕЗ КАПЧУ
-#  Логика:
-#   1. Пользователь пишет /join боту в ЛС
-#   2. Бот присылает капчу (картинка с цифрами)
-#   3. Верно → бот создаёт одноразовую invite ссылку (1 чел, 5 мин)
-#   4. Неверно 3 раза или таймаут → отказ, можно повторить /join
-# ══════════════════════════════════════════════════════════════════
-
-# Хранилище активных /join капч  { user_id: {code, msg_id, task, tries} }
-_join_captcha: dict = {}
-_JOIN_TIMEOUT   = 120   # секунд на ввод
-_JOIN_MAX_TRIES = 3     # попыток
-_JOIN_DIGITS    = 5     # цифр на картинке
-_JOIN_LINK_TTL  = 300   # секунд действия ссылки (5 минут)
-
-
-def _join_make_image(code: str) -> bytes | None:
-    """Генерирует картинку капчи."""
-    try:
-        import io as _io, random as _r
-        from PIL import Image, ImageDraw, ImageFont, ImageFilter
-
-        W, H = 280, 100
-        img  = Image.new("RGB", (W, H), (22, 22, 30))
-        draw = ImageDraw.Draw(img)
-
-        for _ in range(W * H // 5):
-            c = _r.randint(35, 75)
-            draw.point((_r.randint(0, W-1), _r.randint(0, H-1)),
-                       (c, c, c + _r.randint(0, 25)))
-        for _ in range(10):
-            col = (_r.randint(50,110), _r.randint(50,110), _r.randint(80,150))
-            draw.line([(_r.randint(0,W), _r.randint(0,H)),
-                       (_r.randint(0,W), _r.randint(0,H))], fill=col, width=1)
-        for _ in range(5):
-            col = (_r.randint(60,120), _r.randint(60,120), _r.randint(100,170))
-            draw.arc([_r.randint(-30,W//2), _r.randint(-30,H//2),
-                      _r.randint(W//2,W+30), _r.randint(H//2,H+30)],
-                     _r.randint(0,360), _r.randint(0,360), fill=col, width=1)
-
-        font = None
-        for fp in [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "C:/Windows/Fonts/arialbd.ttf",
-        ]:
-            try:
-                font = ImageFont.truetype(fp, 52); break
-            except Exception: pass
-        if not font:
-            try:    font = ImageFont.load_default(size=52)
-            except: font = ImageFont.load_default()
-
-        palette = [(255,210,80),(100,215,255),(255,120,120),
-                   (120,255,140),(210,120,255),(255,170,70)]
-        char_w = (W - 20) // len(code)
-        for i, ch in enumerate(code):
-            col   = palette[i % len(palette)]
-            angle = _r.randint(-25, 25)
-            off   = _r.randint(-10, 10)
-            x     = 10 + i * char_w + _r.randint(-4, 4)
-            layer = Image.new("RGBA", (char_w+12, H), (0,0,0,0))
-            ld    = ImageDraw.Draw(layer)
-            cy    = (H - 52) // 2 + off
-            ld.text((4, cy+2), ch, font=font, fill=(0, 0, 0, 160))
-            ld.text((2, cy),   ch, font=font, fill=col + (255,))
-            rot = layer.rotate(angle, expand=False, resample=Image.BICUBIC)
-            img.paste(rot, (x-2, 0), rot)
-
-        img = img.filter(ImageFilter.GaussianBlur(radius=0.6))
-        d2  = ImageDraw.Draw(img)
-        for _ in range(200):
-            c = _r.randint(70, 160)
-            d2.point((_r.randint(0,W-1), _r.randint(0,H-1)), (c, c+5, c+15))
-
-        buf = _io.BytesIO()
-        img.save(buf, format="PNG", optimize=True)
-        return buf.getvalue()
-    except Exception as e:
-        logging.warning(f"[JOIN] image error: {e}")
-        return None
-
-
-async def _join_timeout(user_id: int):
-    """Кикает по истечению времени."""
-    await asyncio.sleep(_JOIN_TIMEOUT)
-    entry = _join_captcha.pop(user_id, None)
-    if not entry:
+async def cap_start(cid: int, uid: int, name: str):
+    if (cid, uid) in _cap_active:
         return
-    try:
-        await bot.delete_message(user_id, entry["msg_id"])
-    except Exception:
-        pass
-    try:
-        await bot.send_message(
-            user_id,
-            f"⏰ <b>Время истекло</b> — капча не пройдена.\n\n"
-            f"Напиши /join ещё раз чтобы попробовать снова.",
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
-    logging.info(f"[JOIN] Таймаут: {user_id}")
-
-
-async def _join_send_link(user_id: int, name: str):
-    """Создаёт одноразовую invite ссылку и отправляет пользователю."""
-    if not CLOSED_CHANNEL_ID:
-        await bot.send_message(
-            user_id,
-            "⚠️ Канал ещё не настроен. Обратись к администратору.",
-            parse_mode="HTML",
-        )
-        logging.error("[JOIN] CLOSED_CHANNEL_ID = 0, не задан!")
-        return
-
-    from datetime import datetime, timezone, timedelta as _td
-    expire = datetime.now(timezone.utc) + _td(seconds=_JOIN_LINK_TTL)
-
-    try:
-        invite = await bot.create_chat_invite_link(
-            chat_id=CLOSED_CHANNEL_ID,
-            expire_date=expire,
-            member_limit=1,
-            name=f"join_{user_id}",
-        )
-        link = invite.invite_link
-    except Exception as e:
-        logging.error(f"[JOIN] create_chat_invite_link error: {e}")
-        await bot.send_message(
-            user_id,
-            "❌ Не удалось создать ссылку. Возможно бот не администратор канала.\n"
-            "Обратись к администратору.",
-            parse_mode="HTML",
-        )
-        return
-
-    await bot.send_message(
-        user_id,
-        f"✅ <b>Капча пройдена!</b>\n\n"
-        f"🔗 Твоя личная ссылка для входа в канал:\n"
-        f"{link}\n\n"
-        f"⏰ Ссылка действует <b>{_JOIN_LINK_TTL // 60} минут</b> "
-        f"и только для тебя одного.\n"
-        f"Не передавай её другим — она одноразовая.",
-        parse_mode="HTML",
-        disable_web_page_preview=True,
-    )
-
-    # Лог в лог-канал
-    try:
-        safe_name = name.replace("<","&lt;").replace(">","&gt;")
-        await bot.send_message(
-            LOG_CHANNEL_ID,
-            f"🔗 <b>JOIN</b> — Выдана ссылка\n"
-            f"👤 {safe_name} (<code>{user_id}</code>)\n"
-            f"⏰ Действует до: {expire.strftime('%H:%M:%S')}",
-            parse_mode="HTML",
-        )
-    except Exception:
-        pass
-
-    logging.info(f"[JOIN] Ссылка выдана: {name} ({user_id})")
-
-
-@dp.message(Command("join"), F.chat.type == "private")
-async def cmd_join(message: Message):
-    """Команда /join в ЛС — запускает капчу для получения invite ссылки."""
-    user_id = message.from_user.id
-    name    = message.from_user.full_name
-
-    # Уже есть активная капча — напоминаем
-    if user_id in _join_captcha:
-        entry = _join_captcha[user_id]
-        await message.answer(
-            "⬆️ У тебя уже активна капча — введи цифры из картинки выше.\n"
-            "Если картинки не видно — напиши /join ещё раз.",
-            parse_mode="HTML",
-        )
-        return
-
-    # Проверяем не состоит ли уже в канале
-    if CLOSED_CHANNEL_ID:
-        try:
-            member = await bot.get_chat_member(CLOSED_CHANNEL_ID, user_id)
-            if member.status in ("member", "administrator", "creator"):
-                await message.answer(
-                    "✅ Ты уже состоишь в канале!",
-                    parse_mode="HTML",
-                )
-                return
-        except Exception:
-            pass  # пользователь не в канале или ошибка — продолжаем
-
-    # Генерируем капчу
-    code      = "".join(str(random.randint(0, 9)) for _ in range(_JOIN_DIGITS))
-    img_bytes = _join_make_image(code)
-    safe_name = name.replace("<","&lt;").replace(">","&gt;")
-
-    caption = (
-        f"🔐 <b>Верификация для входа в канал</b>\n\n"
-        f"Введи <b>{_JOIN_DIGITS} цифр</b> с картинки одним сообщением.\n"
-        f"⏰ У тебя <b>{_JOIN_TIMEOUT} секунд</b>.\n"
-        f"❌ {_JOIN_MAX_TRIES} ошибки — капча сгорит, напиши /join снова."
-    )
-
-    try:
-        if img_bytes:
-            from aiogram.types import BufferedInputFile as _BIF
-            msg = await message.answer_photo(
-                _BIF(img_bytes, "captcha.png"),
-                caption=caption,
-                parse_mode="HTML",
-            )
-        else:
-            # Фоллбэк — текстовая капча
-            msg = await message.answer(
-                caption + f"\n\n🔢 Код: <code>{code}</code>",
-                parse_mode="HTML",
-            )
-    except Exception as e:
-        logging.error(f"[JOIN] send captcha error: {e}")
-        await message.answer("❌ Ошибка отправки капчи. Попробуй позже.")
-        return
-
-    task = asyncio.create_task(_join_timeout(user_id))
-    _join_captcha[user_id] = {
-        "code":   code,
-        "msg_id": msg.message_id,
-        "task":   task,
-        "tries":  0,
-        "name":   safe_name,
-    }
-    logging.info(f"[JOIN] Капча запущена: {name} ({user_id})")
-
-
-@dp.message(Command("join"))
-async def cmd_join_group(message: Message):
-    """Если написали /join не в ЛС — перенаправляем."""
-    me = await bot.get_me()
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(
-            text="🔐 Получить доступ в ЛС",
-            url=f"https://t.me/{me.username}?start=join",
-        )
+    code = "".join(str(random.randint(0,9)) for _ in range(_CAP_DIGITS))
+    sname = name.replace("<","&lt;").replace(">","&gt;")
+    img   = _cap_image(code)
+    kb    = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Пропустить (адм)",
+                             callback_data=f"capskip:{cid}:{uid}")
     ]])
-    sent = await message.answer(
-        "🔐 Для получения доступа к каналу напиши мне в личные сообщения.",
-        reply_markup=kb,
-    )
-    # Удаляем через 30 сек чтобы не засорять чат
-    await asyncio.sleep(30)
-    try: await sent.delete()
-    except Exception: pass
-    try: await message.delete()
-    except Exception: pass
-
-
-async def on_join_captcha_answer_DISABLED(message: Message):
-    """Ловит ответ на капчу /join в ЛС."""
-    user_id = message.from_user.id
-    entry   = _join_captcha.get(user_id)
-    if not entry:
-        return  # нет активной /join капчи
-
-    answer  = message.text.strip()
-    correct = entry["code"]
-
-    if answer == correct:
-        # ✅ ВЕРНО
-        _join_captcha.pop(user_id, None)
-        entry["task"].cancel()
-
-        # Удаляем картинку капчи
-        try:
-            await bot.delete_message(user_id, entry["msg_id"])
-        except Exception:
-            pass
-
-        # Выдаём ссылку
-        await _join_send_link(user_id, entry["name"])
-
-    else:
-        # ❌ НЕВЕРНО
-        entry["tries"] += 1
-        remaining = _JOIN_MAX_TRIES - entry["tries"]
-
-        if entry["tries"] >= _JOIN_MAX_TRIES:
-            # Исчерпал попытки
-            _join_captcha.pop(user_id, None)
-            entry["task"].cancel()
-            try:
-                await bot.delete_message(user_id, entry["msg_id"])
-            except Exception:
-                pass
-            await message.answer(
-                f"❌ <b>Все попытки исчерпаны.</b>\n\n"
-                f"Напиши /join чтобы начать заново.",
-                parse_mode="HTML",
-            )
-            logging.info(f"[JOIN] Провалена: {entry['name']} ({user_id})")
-        else:
-            await message.answer(
-                f"❌ Неверно! Осталось попыток: <b>{remaining}</b>\n"
-                f"Посмотри внимательно на картинку и попробуй ещё раз.",
-                parse_mode="HTML",
-            )
-            logging.info(
-                f"[JOIN] Неверно: {entry['name']} ({user_id}) "
-                f"попытка {entry['tries']}/{_JOIN_MAX_TRIES}"
-            )
-
-
-
-@dp.message(Command("captest"), F.chat.type == "private")
-async def cmd_captest(message: Message):
-    """Диагностика капчи — только для владельца."""
-    if message.from_user.id != OWNER_ID:
-        return
-
-    lines = ["🔧 <b>Диагностика капчи</b>\n"]
-
-    # 1. Pillow
+    txt = (f"👋 <b>{sname}</b>, добро пожаловать!\n\n"
+           f"🔐 Введи <b>{_CAP_DIGITS} цифр</b> с картинки прямо сюда в чат.\n"
+           f"⏰ У тебя <b>{_CAP_TIMEOUT} секунд</b>.\n"
+           f"❌ {_CAP_MAX_TRIES} ошибки — {'кик' if _CAP_KICK else 'мут'}.")
     try:
-        from PIL import Image, ImageDraw
-        lines.append("✅ Pillow установлен")
-    except ImportError:
-        lines.append("❌ Pillow НЕ установлен — <code>pip install Pillow</code>")
-
-    # 2. captcha.py импорт
-    try:
-        import captcha as _cap
-        lines.append("✅ captcha.py импортирован")
-        lines.append(f"   Активных групповых капч: {len(_cap._active)}")
-    except Exception as e:
-        lines.append(f"❌ captcha.py ошибка: {e}")
-
-    # 3. _join_captcha
-    lines.append(f"✅ Активных /join капч: {len(_join_captcha)}")
-
-    # 4. _channel_captcha
-    try:
-        lines.append(f"✅ Активных channel капч: {len(_channel_captcha)}")
-    except Exception as e:
-        lines.append(f"❌ _channel_captcha: {e}")
-
-    # 5. CLOSED_CHANNEL_ID
-    if CLOSED_CHANNEL_ID:
-        lines.append(f"✅ CLOSED_CHANNEL_ID = <code>{CLOSED_CHANNEL_ID}</code>")
-        # Проверяем права бота в канале
-        try:
-            me = await bot.get_me()
-            member = await bot.get_chat_member(CLOSED_CHANNEL_ID, me.id)
-            if member.status == "administrator":
-                lines.append("✅ Бот — администратор канала")
-            else:
-                lines.append(f"❌ Бот НЕ администратор канала (статус: {member.status})")
-        except Exception as e:
-            lines.append(f"❌ Нет доступа к каналу: {e}")
-    else:
-        lines.append("❌ CLOSED_CHANNEL_ID = 0 — не задан!")
-
-    # 6. Генерируем тестовую картинку
-    try:
-        import captcha as _cap2
-        img = _cap2._join_make_image("12345")
         if img:
-            lines.append(f"✅ Картинка генерируется ({len(img)} байт)")
+            sent = await bot.send_photo(cid, BufferedInputFile(img,"cap.png"),
+                                        caption=txt, parse_mode="HTML", reply_markup=kb)
         else:
-            lines.append("❌ Картинка не генерируется (Pillow?)")
+            sent = await bot.send_message(cid,
+                txt+f"\n\n🔢 Код: <code>{code}</code>",
+                parse_mode="HTML", reply_markup=kb)
+        msg_id = sent.message_id
     except Exception as e:
-        lines.append(f"❌ Ошибка генерации: {e}")
+        logging.error(f"[CAP] send: {e}"); return
+    task = asyncio.create_task(_cap_timeout_task(cid, uid))
+    _cap_active[(cid, uid)] = {"code":code,"msg_id":msg_id,"task":task,"tries":0,"name":sname}
+    logging.info(f"[CAP] start: {name} ({uid}) chat={cid} code={code}")
 
-    # 7. handle_private_message зарегистрирован
-    lines.append("\n<b>Хендлеры в ЛС:</b>")
-    for router_obs in dp.message.middleware._middlewares if hasattr(dp.message, 'middleware') else []:
-        lines.append(f"  • {router_obs}")
 
-    # 8. Тест отправки себе
+@dp.message(F.text, F.chat.type.in_({"group","supergroup"}))
+async def cap_answer(message: Message):
+    if not message.from_user or not message.text:
+        return
+    uid, cid = message.from_user.id, message.chat.id
+    e = _cap_active.get((cid, uid))
+    if not e:
+        return
+    try: await message.delete()
+    except: pass
+    if message.text.strip() == e["code"]:
+        _cap_active.pop((cid, uid)); e["task"].cancel()
+        try: await bot.delete_message(cid, e["msg_id"])
+        except: pass
+        ok = await bot.send_message(cid,
+            f"✅ <b>{e['name']}</b> прошёл проверку!", parse_mode="HTML")
+        await asyncio.sleep(6)
+        try: await ok.delete()
+        except: pass
+        logging.info(f"[CAP] success: {e['name']} ({uid})")
+    else:
+        e["tries"] += 1
+        if e["tries"] >= _CAP_MAX_TRIES:
+            _cap_active.pop((cid, uid)); e["task"].cancel()
+            try: await bot.delete_message(cid, e["msg_id"])
+            except: pass
+            await _cap_punish(cid, uid)
+            fail = await bot.send_message(cid,
+                f"❌ <b>{e['name']}</b> не прошёл — "
+                f"{'кик' if _CAP_KICK else 'мут'}.", parse_mode="HTML")
+            await asyncio.sleep(8)
+            try: await fail.delete()
+            except: pass
+        else:
+            rem = _CAP_MAX_TRIES - e["tries"]
+            w = await bot.send_message(cid,
+                f"❌ <b>{e['name']}</b>, неверно! Осталось: <b>{rem}</b>",
+                parse_mode="HTML")
+            await asyncio.sleep(5)
+            try: await w.delete()
+            except: pass
+
+
+@dp.callback_query(F.data.startswith("capskip:"))
+async def cap_skip(call: CallbackQuery):
     try:
-        test_img = _join_make_image("99999")
-        if test_img:
-            from aiogram.types import BufferedInputFile as _BIF
-            await bot.send_photo(
-                message.from_user.id,
-                _BIF(test_img, "test.png"),
-                caption="🔧 Тестовая картинка капчи",
-            )
-            lines.append("✅ Тестовая картинка отправлена (см. выше)")
-        else:
-            lines.append("❌ Не удалось создать тестовую картинку")
-    except Exception as e:
-        lines.append(f"❌ Ошибка отправки: {e}")
-
-    await message.answer("\n".join(lines), parse_mode="HTML")
+        m = await bot.get_chat_member(call.message.chat.id, call.from_user.id)
+        if m.status not in ("administrator","creator"):
+            await call.answer("❌ Только администраторы", show_alert=True); return
+    except:
+        await call.answer("❌ Ошибка", show_alert=True); return
+    _, cid_s, uid_s = call.data.split(":")
+    cid, uid = int(cid_s), int(uid_s)
+    e = _cap_active.pop((cid, uid), None)
+    if not e:
+        await call.answer("Уже завершена"); return
+    e["task"].cancel()
+    try: await call.message.delete()
+    except: pass
+    await call.answer("✅ Пропущено")
+    n = await bot.send_message(cid,
+        f"✅ Капча для <b>{e['name']}</b> пропущена.", parse_mode="HTML")
+    await asyncio.sleep(8)
+    try: await n.delete()
+    except: pass
 
 
 async def main():
