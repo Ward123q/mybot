@@ -527,6 +527,11 @@ ADMIN_IDS        = {7823802800, 8046083268, 7397338777, 7991589995}
 CAPTCHA_CHANNEL_IDS: set = {
     # -1001234567890,   # замени на ID своего канала
 }
+
+# ── ID закрытого канала для команды /join ─────────────────────
+# Замени 0 на реальный ID своего канала (отрицательное число -100...)
+# Узнать ID: перешли сообщение из канала боту @userinfobot
+CLOSED_CHANNEL_ID = -1002527332271
 MAX_WARNINGS     = 3
 ANTI_MAT_ENABLED  = False
 
@@ -5487,7 +5492,7 @@ async def cmd_tournament(message: Message, command: CommandObject):
             "/tournament next — следующий раунд\n"
             "/tournament stop — отменить", parse_mode="HTML")
 
-async def cmd_join(message: Message):
+async def tournament_join(message: Message):
     cid = message.chat.id; uid = message.from_user.id
     if cid not in tournament_data or not tournament_data[cid].get("registration"):
         await reply_auto_delete(message, "❌ Регистрация на турнир не открыта!"); return
@@ -10973,6 +10978,324 @@ async def on_channel_captcha_answer(message: Message):
                 f"❌ Неверно! Осталось попыток: <b>{remaining}</b>\n"
                 f"Попробуй ещё раз — посмотри внимательно на картинку.",
                 parse_mode="HTML",
+            )
+
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🔗 /join — ВХОД В ЗАКРЫТЫЙ КАНАЛ ЧЕРЕЗ КАПЧУ
+#  Логика:
+#   1. Пользователь пишет /join боту в ЛС
+#   2. Бот присылает капчу (картинка с цифрами)
+#   3. Верно → бот создаёт одноразовую invite ссылку (1 чел, 5 мин)
+#   4. Неверно 3 раза или таймаут → отказ, можно повторить /join
+# ══════════════════════════════════════════════════════════════════
+
+# Хранилище активных /join капч  { user_id: {code, msg_id, task, tries} }
+_join_captcha: dict = {}
+_JOIN_TIMEOUT   = 120   # секунд на ввод
+_JOIN_MAX_TRIES = 3     # попыток
+_JOIN_DIGITS    = 5     # цифр на картинке
+_JOIN_LINK_TTL  = 300   # секунд действия ссылки (5 минут)
+
+
+def _join_make_image(code: str) -> bytes | None:
+    """Генерирует картинку капчи."""
+    try:
+        import io as _io, random as _r
+        from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+        W, H = 280, 100
+        img  = Image.new("RGB", (W, H), (22, 22, 30))
+        draw = ImageDraw.Draw(img)
+
+        for _ in range(W * H // 5):
+            c = _r.randint(35, 75)
+            draw.point((_r.randint(0, W-1), _r.randint(0, H-1)),
+                       (c, c, c + _r.randint(0, 25)))
+        for _ in range(10):
+            col = (_r.randint(50,110), _r.randint(50,110), _r.randint(80,150))
+            draw.line([(_r.randint(0,W), _r.randint(0,H)),
+                       (_r.randint(0,W), _r.randint(0,H))], fill=col, width=1)
+        for _ in range(5):
+            col = (_r.randint(60,120), _r.randint(60,120), _r.randint(100,170))
+            draw.arc([_r.randint(-30,W//2), _r.randint(-30,H//2),
+                      _r.randint(W//2,W+30), _r.randint(H//2,H+30)],
+                     _r.randint(0,360), _r.randint(0,360), fill=col, width=1)
+
+        font = None
+        for fp in [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "C:/Windows/Fonts/arialbd.ttf",
+        ]:
+            try:
+                font = ImageFont.truetype(fp, 52); break
+            except Exception: pass
+        if not font:
+            try:    font = ImageFont.load_default(size=52)
+            except: font = ImageFont.load_default()
+
+        palette = [(255,210,80),(100,215,255),(255,120,120),
+                   (120,255,140),(210,120,255),(255,170,70)]
+        char_w = (W - 20) // len(code)
+        for i, ch in enumerate(code):
+            col   = palette[i % len(palette)]
+            angle = _r.randint(-25, 25)
+            off   = _r.randint(-10, 10)
+            x     = 10 + i * char_w + _r.randint(-4, 4)
+            layer = Image.new("RGBA", (char_w+12, H), (0,0,0,0))
+            ld    = ImageDraw.Draw(layer)
+            cy    = (H - 52) // 2 + off
+            ld.text((4, cy+2), ch, font=font, fill=(0, 0, 0, 160))
+            ld.text((2, cy),   ch, font=font, fill=col + (255,))
+            rot = layer.rotate(angle, expand=False, resample=Image.BICUBIC)
+            img.paste(rot, (x-2, 0), rot)
+
+        img = img.filter(ImageFilter.GaussianBlur(radius=0.6))
+        d2  = ImageDraw.Draw(img)
+        for _ in range(200):
+            c = _r.randint(70, 160)
+            d2.point((_r.randint(0,W-1), _r.randint(0,H-1)), (c, c+5, c+15))
+
+        buf = _io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        return buf.getvalue()
+    except Exception as e:
+        logging.warning(f"[JOIN] image error: {e}")
+        return None
+
+
+async def _join_timeout(user_id: int):
+    """Кикает по истечению времени."""
+    await asyncio.sleep(_JOIN_TIMEOUT)
+    entry = _join_captcha.pop(user_id, None)
+    if not entry:
+        return
+    try:
+        await bot.delete_message(user_id, entry["msg_id"])
+    except Exception:
+        pass
+    try:
+        await bot.send_message(
+            user_id,
+            f"⏰ <b>Время истекло</b> — капча не пройдена.\n\n"
+            f"Напиши /join ещё раз чтобы попробовать снова.",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    logging.info(f"[JOIN] Таймаут: {user_id}")
+
+
+async def _join_send_link(user_id: int, name: str):
+    """Создаёт одноразовую invite ссылку и отправляет пользователю."""
+    if not CLOSED_CHANNEL_ID:
+        await bot.send_message(
+            user_id,
+            "⚠️ Канал ещё не настроен. Обратись к администратору.",
+            parse_mode="HTML",
+        )
+        logging.error("[JOIN] CLOSED_CHANNEL_ID = 0, не задан!")
+        return
+
+    from datetime import datetime, timezone, timedelta as _td
+    expire = datetime.now(timezone.utc) + _td(seconds=_JOIN_LINK_TTL)
+
+    try:
+        invite = await bot.create_chat_invite_link(
+            chat_id=CLOSED_CHANNEL_ID,
+            expire_date=expire,
+            member_limit=1,
+            name=f"join_{user_id}",
+        )
+        link = invite.invite_link
+    except Exception as e:
+        logging.error(f"[JOIN] create_chat_invite_link error: {e}")
+        await bot.send_message(
+            user_id,
+            "❌ Не удалось создать ссылку. Возможно бот не администратор канала.\n"
+            "Обратись к администратору.",
+            parse_mode="HTML",
+        )
+        return
+
+    await bot.send_message(
+        user_id,
+        f"✅ <b>Капча пройдена!</b>\n\n"
+        f"🔗 Твоя личная ссылка для входа в канал:\n"
+        f"{link}\n\n"
+        f"⏰ Ссылка действует <b>{_JOIN_LINK_TTL // 60} минут</b> "
+        f"и только для тебя одного.\n"
+        f"Не передавай её другим — она одноразовая.",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+    # Лог в лог-канал
+    try:
+        safe_name = name.replace("<","&lt;").replace(">","&gt;")
+        await bot.send_message(
+            LOG_CHANNEL_ID,
+            f"🔗 <b>JOIN</b> — Выдана ссылка\n"
+            f"👤 {safe_name} (<code>{user_id}</code>)\n"
+            f"⏰ Действует до: {expire.strftime('%H:%M:%S')}",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+    logging.info(f"[JOIN] Ссылка выдана: {name} ({user_id})")
+
+
+@dp.message(Command("join"), F.chat.type == "private")
+async def cmd_join(message: Message):
+    """Команда /join в ЛС — запускает капчу для получения invite ссылки."""
+    user_id = message.from_user.id
+    name    = message.from_user.full_name
+
+    # Уже есть активная капча — напоминаем
+    if user_id in _join_captcha:
+        entry = _join_captcha[user_id]
+        await message.answer(
+            "⬆️ У тебя уже активна капча — введи цифры из картинки выше.\n"
+            "Если картинки не видно — напиши /join ещё раз.",
+            parse_mode="HTML",
+        )
+        return
+
+    # Проверяем не состоит ли уже в канале
+    if CLOSED_CHANNEL_ID:
+        try:
+            member = await bot.get_chat_member(CLOSED_CHANNEL_ID, user_id)
+            if member.status in ("member", "administrator", "creator"):
+                await message.answer(
+                    "✅ Ты уже состоишь в канале!",
+                    parse_mode="HTML",
+                )
+                return
+        except Exception:
+            pass  # пользователь не в канале или ошибка — продолжаем
+
+    # Генерируем капчу
+    code      = "".join(str(random.randint(0, 9)) for _ in range(_JOIN_DIGITS))
+    img_bytes = _join_make_image(code)
+    safe_name = name.replace("<","&lt;").replace(">","&gt;")
+
+    caption = (
+        f"🔐 <b>Верификация для входа в канал</b>\n\n"
+        f"Введи <b>{_JOIN_DIGITS} цифр</b> с картинки одним сообщением.\n"
+        f"⏰ У тебя <b>{_JOIN_TIMEOUT} секунд</b>.\n"
+        f"❌ {_JOIN_MAX_TRIES} ошибки — капча сгорит, напиши /join снова."
+    )
+
+    try:
+        if img_bytes:
+            from aiogram.types import BufferedInputFile as _BIF
+            msg = await message.answer_photo(
+                _BIF(img_bytes, "captcha.png"),
+                caption=caption,
+                parse_mode="HTML",
+            )
+        else:
+            # Фоллбэк — текстовая капча
+            msg = await message.answer(
+                caption + f"\n\n🔢 Код: <code>{code}</code>",
+                parse_mode="HTML",
+            )
+    except Exception as e:
+        logging.error(f"[JOIN] send captcha error: {e}")
+        await message.answer("❌ Ошибка отправки капчи. Попробуй позже.")
+        return
+
+    task = asyncio.create_task(_join_timeout(user_id))
+    _join_captcha[user_id] = {
+        "code":   code,
+        "msg_id": msg.message_id,
+        "task":   task,
+        "tries":  0,
+        "name":   safe_name,
+    }
+    logging.info(f"[JOIN] Капча запущена: {name} ({user_id})")
+
+
+@dp.message(Command("join"))
+async def cmd_join_group(message: Message):
+    """Если написали /join не в ЛС — перенаправляем."""
+    me = await bot.get_me()
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text="🔐 Получить доступ в ЛС",
+            url=f"https://t.me/{me.username}?start=join",
+        )
+    ]])
+    sent = await message.answer(
+        "🔐 Для получения доступа к каналу напиши мне в личные сообщения.",
+        reply_markup=kb,
+    )
+    # Удаляем через 30 сек чтобы не засорять чат
+    await asyncio.sleep(30)
+    try: await sent.delete()
+    except Exception: pass
+    try: await message.delete()
+    except Exception: pass
+
+
+@dp.message(F.chat.type == "private", F.text, ~F.text.startswith("/"))
+async def on_join_captcha_answer(message: Message):
+    """Ловит ответ на капчу /join в ЛС."""
+    user_id = message.from_user.id
+    entry   = _join_captcha.get(user_id)
+    if not entry:
+        return  # нет активной /join капчи
+
+    answer  = message.text.strip()
+    correct = entry["code"]
+
+    if answer == correct:
+        # ✅ ВЕРНО
+        _join_captcha.pop(user_id, None)
+        entry["task"].cancel()
+
+        # Удаляем картинку капчи
+        try:
+            await bot.delete_message(user_id, entry["msg_id"])
+        except Exception:
+            pass
+
+        # Выдаём ссылку
+        await _join_send_link(user_id, entry["name"])
+
+    else:
+        # ❌ НЕВЕРНО
+        entry["tries"] += 1
+        remaining = _JOIN_MAX_TRIES - entry["tries"]
+
+        if entry["tries"] >= _JOIN_MAX_TRIES:
+            # Исчерпал попытки
+            _join_captcha.pop(user_id, None)
+            entry["task"].cancel()
+            try:
+                await bot.delete_message(user_id, entry["msg_id"])
+            except Exception:
+                pass
+            await message.answer(
+                f"❌ <b>Все попытки исчерпаны.</b>\n\n"
+                f"Напиши /join чтобы начать заново.",
+                parse_mode="HTML",
+            )
+            logging.info(f"[JOIN] Провалена: {entry['name']} ({user_id})")
+        else:
+            await message.answer(
+                f"❌ Неверно! Осталось попыток: <b>{remaining}</b>\n"
+                f"Посмотри внимательно на картинку и попробуй ещё раз.",
+                parse_mode="HTML",
+            )
+            logging.info(
+                f"[JOIN] Неверно: {entry['name']} ({user_id}) "
+                f"попытка {entry['tries']}/{_JOIN_MAX_TRIES}"
             )
 
 
