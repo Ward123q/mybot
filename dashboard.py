@@ -1092,6 +1092,11 @@ def navbar(sess: dict | None = None, active: str = "") -> str:
         {link("threats",      "/dashboard/threats",      "🔭", "Разведка угроз", "view_alerts")}
         {link("appeals",      "/dashboard/appeals",      "⚖️", "Апелляции", "view_reports")}
         {link("msg_search",   "/dashboard/msg_search",   "🔍", "Поиск сообщений", "view_deleted")}
+        {link("wiki",         "/dashboard/wiki",         "📚", "Wiki команды",     "view_overview")}
+        {link("automations",  "/dashboard/automations",  "⚡", "Автоправила",      "view_overview")}
+        {link("reports_cfg",  "/dashboard/reports_cfg",  "📊", "Авто-отчёты",      "view_overview")}
+        {link("bot_control",  "/dashboard/bot_control",  "🤖", "Управление ботом", "view_overview")}
+        {link("voice",        "/dashboard/voice",        "🎙", "Голосовые",        "view_overview")}
         {link("themes",       "/dashboard/themes",       "🎨", "Темы", "view_overview")}
       </nav>
       <div class="sidebar-footer">
@@ -3887,6 +3892,2298 @@ async def handle_mod_profile(request: web.Request):
 
 handle_mod_profile = require_auth("view_overview")(handle_mod_profile)
 
+
+# ══════════════════════════════════════════
+#  📚 ВНУТРЕННЯЯ WIKI
+# ══════════════════════════════════════════
+#
+#  Хранилище: SQLite таблица wiki_pages
+#  История:   SQLite таблица wiki_history
+#  Поиск:     LIKE по title + body
+#  Markdown:  рендер через marked.js (CDN)
+#
+# ══════════════════════════════════════════
+
+def _wiki_init_db():
+    """Создаём таблицы wiki если нет."""
+    try:
+        conn = db.get_conn()
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS wiki_pages (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug       TEXT    UNIQUE NOT NULL,
+            title      TEXT    NOT NULL,
+            body       TEXT    DEFAULT '',
+            category   TEXT    DEFAULT 'Общее',
+            author_id  INTEGER DEFAULT 0,
+            author     TEXT    DEFAULT '',
+            created_at TEXT    DEFAULT (datetime('now')),
+            updated_at TEXT    DEFAULT (datetime('now')),
+            views      INTEGER DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS wiki_history (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            page_id    INTEGER NOT NULL,
+            title      TEXT,
+            body       TEXT,
+            author_id  INTEGER DEFAULT 0,
+            author     TEXT    DEFAULT '',
+            changed_at TEXT    DEFAULT (datetime('now')),
+            diff_size  INTEGER DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_wiki_slug    ON wiki_pages(slug);
+        CREATE INDEX IF NOT EXISTS idx_wiki_history ON wiki_history(page_id);
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.warning(f"_wiki_init_db: {e}")
+
+
+def _wiki_slug(title: str) -> str:
+    """Генерирует slug из заголовка."""
+    import re
+    s = title.lower().strip()
+    s = re.sub(r"[^\w\s-]", "", s)
+    s = re.sub(r"[\s_-]+", "-", s)
+    s = s.strip("-")
+    return s[:80] or "page"
+
+
+def _wiki_get_page(slug: str) -> dict | None:
+    try:
+        conn = db.get_conn()
+        row = conn.execute("SELECT * FROM wiki_pages WHERE slug=?", (slug,)).fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except:
+        return None
+
+
+def _wiki_get_all(search: str = "", category: str = "") -> list:
+    try:
+        conn = db.get_conn()
+        q = "SELECT id,slug,title,category,author,updated_at,views FROM wiki_pages WHERE 1=1"
+        params = []
+        if search:
+            q += " AND (title LIKE ? OR body LIKE ?)"
+            params += [f"%{search}%", f"%{search}%"]
+        if category:
+            q += " AND category=?"
+            params.append(category)
+        q += " ORDER BY updated_at DESC"
+        rows = [dict(r) for r in conn.execute(q, params).fetchall()]
+        conn.close()
+        return rows
+    except:
+        return []
+
+
+def _wiki_get_categories() -> list:
+    try:
+        conn = db.get_conn()
+        rows = conn.execute(
+            "SELECT category, COUNT(*) as cnt FROM wiki_pages GROUP BY category ORDER BY cnt DESC"
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except:
+        return []
+
+
+def _wiki_save_page(slug: str, title: str, body: str, category: str,
+                    author_id: int, author: str) -> int:
+    """Создаёт или обновляет страницу. Возвращает id."""
+    try:
+        conn = db.get_conn()
+        existing = conn.execute(
+            "SELECT id, title, body FROM wiki_pages WHERE slug=?", (slug,)
+        ).fetchone()
+
+        if existing:
+            page_id  = existing["id"]
+            old_body = existing["body"] or ""
+            diff_size = abs(len(body) - len(old_body))
+            # Сохраняем в историю
+            conn.execute(
+                "INSERT INTO wiki_history (page_id,title,body,author_id,author,diff_size) VALUES (?,?,?,?,?,?)",
+                (page_id, existing["title"], old_body, author_id, author, diff_size)
+            )
+            conn.execute(
+                "UPDATE wiki_pages SET title=?,body=?,category=?,author_id=?,author=?,updated_at=datetime('now') WHERE id=?",
+                (title, body, category, author_id, author, page_id)
+            )
+        else:
+            conn.execute(
+                "INSERT INTO wiki_pages (slug,title,body,category,author_id,author) VALUES (?,?,?,?,?,?)",
+                (slug, title, body, category, author_id, author)
+            )
+            page_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        conn.commit()
+        conn.close()
+        return page_id
+    except Exception as e:
+        log.error(f"_wiki_save_page: {e}")
+        return 0
+
+
+def _wiki_delete_page(slug: str):
+    try:
+        conn = db.get_conn()
+        row = conn.execute("SELECT id FROM wiki_pages WHERE slug=?", (slug,)).fetchone()
+        if row:
+            conn.execute("DELETE FROM wiki_history WHERE page_id=?", (row["id"],))
+            conn.execute("DELETE FROM wiki_pages WHERE slug=?", (slug,))
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        log.error(f"_wiki_delete_page: {e}")
+
+
+def _wiki_get_history(page_id: int, limit: int = 20) -> list:
+    try:
+        conn = db.get_conn()
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM wiki_history WHERE page_id=? ORDER BY changed_at DESC LIMIT ?",
+            (page_id, limit)
+        ).fetchall()]
+        conn.close()
+        return rows
+    except:
+        return []
+
+
+def _wiki_increment_views(slug: str):
+    try:
+        conn = db.get_conn()
+        conn.execute("UPDATE wiki_pages SET views=views+1 WHERE slug=?", (slug,))
+        conn.commit()
+        conn.close()
+    except:
+        pass
+
+
+# ── CSS для wiki-страниц (markdown preview) ──────────────────────
+WIKI_MARKDOWN_CSS = """
+<style id="wiki-md-css">
+.md-body { font-size:14px; line-height:1.75; color:var(--text); }
+.md-body h1 { font-size:22px; font-weight:800; margin:0 0 16px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+.md-body h2 { font-size:18px; font-weight:700; margin:24px 0 10px; }
+.md-body h3 { font-size:15px; font-weight:700; margin:18px 0 8px; }
+.md-body p  { margin:0 0 12px; }
+.md-body ul, .md-body ol { margin:0 0 12px; padding-left:20px; }
+.md-body li { margin-bottom:4px; }
+.md-body blockquote { border-left:3px solid var(--accent); margin:12px 0; padding:8px 14px; background:var(--accent-glow); border-radius:0 8px 8px 0; color:var(--text2); }
+.md-body code { background:var(--bg3); padding:2px 6px; border-radius:4px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--accent); }
+.md-body pre  { background:var(--bg3); padding:14px; border-radius:10px; overflow-x:auto; margin:0 0 12px; }
+.md-body pre code { background:none; padding:0; color:var(--text3); }
+.md-body table { width:100%; border-collapse:collapse; margin:0 0 12px; font-size:13px; }
+.md-body th { background:var(--bg3); padding:8px 12px; text-align:left; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+.md-body td { padding:8px 12px; border-bottom:1px solid var(--border); }
+.md-body hr { border:none; border-top:1px solid var(--border); margin:20px 0; }
+.md-body a  { color:var(--accent); text-decoration:none; }
+.md-body a:hover { text-decoration:underline; }
+.md-body img { max-width:100%; border-radius:8px; }
+.md-body strong { font-weight:700; }
+.md-body em { font-style:italic; }
+</style>
+"""
+
+WIKI_CATEGORIES = ["Общее", "Правила", "Инструкции", "Прецеденты", "Технические", "Шаблоны"]
+
+
+# ── Список страниц ───────────────────────────────────────────────
+
+async def handle_wiki_list(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    _wiki_init_db()
+
+    search   = request.rel_url.query.get("q", "").strip()
+    cat_flt  = request.rel_url.query.get("cat", "")
+    pages    = _wiki_get_all(search, cat_flt)
+    cats     = _wiki_get_categories()
+
+    # Статистика
+    total_pages = len(_wiki_get_all())
+    try:
+        conn = db.get_conn()
+        total_edits = conn.execute("SELECT COUNT(*) FROM wiki_history").fetchone()[0] or 0
+        conn.close()
+    except:
+        total_edits = 0
+
+    # Табы категорий
+    cat_tabs = f'<a href="/dashboard/wiki" class="btn btn-sm {"btn-primary" if not cat_flt else "btn-ghost"}" style="margin-right:4px;">Все ({total_pages})</a>'
+    for c in cats:
+        active = "btn-primary" if cat_flt == c["category"] else "btn-ghost"
+        cat_tabs += f'<a href="/dashboard/wiki?cat={c["category"]}" class="btn btn-sm {active}" style="margin-right:4px;">{c["category"]} ({c["cnt"]})</a>'
+
+    # Карточки страниц
+    if pages:
+        cards_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">'
+        for p in pages:
+            upd = str(p.get("updated_at",""))[:16].replace("T"," ")
+            cards_html += (
+                f'<div class="card" style="cursor:pointer;" onclick="window.location=\'/dashboard/wiki/{p["slug"]}\'">'
+                f'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">'
+                f'<span class="badge badge-accent" style="font-size:10px;">{p["category"]}</span>'
+                f'<span style="font-size:11px;color:var(--text2);">👁 {p["views"]}</span>'
+                f'</div>'
+                f'<div style="font-weight:700;font-size:14px;margin-bottom:4px;">{p["title"]}</div>'
+                f'<div style="font-size:12px;color:var(--text2);">✏️ {p["author"] or "—"} · {upd}</div>'
+                f'</div>'
+            )
+        cards_html += "</div>"
+    else:
+        cards_html = f'<div class="empty-state">{"Ничего не найдено по запросу «" + search + "»" if search else "Wiki пустая — создай первую страницу!"}</div>'
+
+    body = navbar(sess, "wiki") + WIKI_MARKDOWN_CSS + f"""
+    <div class="container">
+      <div class="page-title">📚 Внутренняя Wiki
+        <a href="/dashboard/wiki/new" class="btn btn-primary btn-sm" style="margin-left:auto;">✏️ Новая страница</a>
+      </div>
+
+      <div class="cards" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px;">
+        <div class="card"><div class="card-icon">📄</div><div class="card-label">Страниц</div>
+          <div class="card-value">{total_pages}</div></div>
+        <div class="card"><div class="card-icon">✏️</div><div class="card-label">Правок</div>
+          <div class="card-value">{total_edits}</div></div>
+        <div class="card"><div class="card-icon">🗂</div><div class="card-label">Категорий</div>
+          <div class="card-value">{len(cats)}</div></div>
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+        <form method="GET" style="display:flex;gap:8px;flex:1;min-width:200px;">
+          {"<input type='hidden' name='cat' value='" + cat_flt + "'>" if cat_flt else ""}
+          <input class="form-control" name="q" value="{search}"
+            placeholder="🔍 Поиск по заголовку и содержимому..." style="flex:1;">
+          <button class="btn btn-primary btn-sm" type="submit">Найти</button>
+          {"<a href='/dashboard/wiki' class='btn btn-ghost btn-sm'>✕</a>" if search or cat_flt else ""}
+        </form>
+      </div>
+
+      <div style="margin-bottom:20px;display:flex;flex-wrap:wrap;gap:4px;">
+        {cat_tabs}
+      </div>
+
+      {cards_html}
+    </div>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_wiki_list = require_auth("view_overview")(handle_wiki_list)
+
+
+# ── Просмотр страницы ────────────────────────────────────────────
+
+async def handle_wiki_view(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    _wiki_init_db()
+
+    slug = request.match_info.get("slug", "")
+    if slug == "new":
+        raise web.HTTPFound("/dashboard/wiki/new/edit")
+
+    p = _wiki_get_page(slug)
+    if not p:
+        raise web.HTTPFound("/dashboard/wiki")
+
+    _wiki_increment_views(slug)
+    history = _wiki_get_history(p["id"], limit=5)
+    can_edit = _has_perm(request.cookies.get("dsess_token",""), "view_overview")
+
+    hist_html = ""
+    for h in history:
+        dt  = str(h.get("changed_at",""))[:16]
+        dsz = h.get("diff_size", 0)
+        sign = f'+{dsz}' if dsz >= 0 else str(dsz)
+        hist_html += (
+            f'<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;">'
+            f'<div style="display:flex;justify-content:space-between;">'
+            f'<span style="font-weight:600;">{h.get("author","—")}</span>'
+            f'<span style="color:var(--text2);">{dt}</span>'
+            f'</div>'
+            f'<div style="color:var(--text2);margin-top:2px;">'
+            f'<span style="color:{"var(--success)" if dsz>0 else "var(--danger)"};">{sign} симв</span>'
+            f'</div>'
+            f'</div>'
+        )
+    if not hist_html:
+        hist_html = '<div style="color:var(--text2);font-size:12px;padding:8px 0;">Нет правок</div>'
+
+    upd = str(p.get("updated_at",""))[:16].replace("T"," ")
+    crt = str(p.get("created_at",""))[:16].replace("T"," ")
+
+    edit_btn = f'<a href="/dashboard/wiki/{slug}/edit" class="btn btn-primary btn-sm">✏️ Редактировать</a>' if can_edit else ""
+    delete_form = ""
+    if can_edit:
+        delete_form = (
+            f'<form method="POST" action="/dashboard/wiki/{slug}/delete" style="display:inline;">'
+            f'<button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:var(--danger);" '
+            f'onclick="return confirm(\'Удалить страницу?\')">🗑 Удалить</button>'
+            f'</form>'
+        )
+
+    body = navbar(sess, "wiki") + WIKI_MARKDOWN_CSS + f"""
+    <div class="container">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;flex-wrap:wrap;">
+        <a href="/dashboard/wiki" class="btn btn-ghost btn-sm">← Wiki</a>
+        <span class="badge badge-accent">{p["category"]}</span>
+        <span style="font-size:12px;color:var(--text2);margin-left:auto;">👁 {p["views"]} просмотров</span>
+        {edit_btn}
+        {delete_form}
+      </div>
+
+      <div class="grid-2" style="gap:24px;align-items:start;">
+        <div style="grid-column:1/2;">
+          <div class="section">
+            <div class="section-body">
+              <div class="md-body" id="md-render">
+                <p style="color:var(--text2);">Загрузка...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="grid-column:2/3;">
+          <div class="section" style="margin-bottom:16px;">
+            <div class="section-header">ℹ️ Информация</div>
+            <div class="section-body" style="font-size:13px;line-height:2.2;">
+              <div><span style="color:var(--text2);">Создана:</span> {crt}</div>
+              <div><span style="color:var(--text2);">Обновлена:</span> {upd}</div>
+              <div><span style="color:var(--text2);">Автор:</span> {p.get("author","—")}</div>
+              <div><span style="color:var(--text2);">Slug:</span> <code>{slug}</code></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-header">
+              📜 История правок
+              <a href="/dashboard/wiki/{slug}/history" style="font-size:12px;color:var(--accent);font-weight:400;">Все →</a>
+            </div>
+            <div style="padding:0 16px;">{hist_html}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <script>
+    var RAW = {json.dumps(p.get("body",""))};
+    document.addEventListener("DOMContentLoaded", function() {{
+      var el = document.getElementById("md-render");
+      if (el && typeof marked !== "undefined") {{
+        el.innerHTML = marked.parse(RAW);
+      }} else if (el) {{
+        el.innerHTML = "<pre>" + RAW.replace(/</g,"&lt;") + "</pre>";
+      }}
+    }});
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_wiki_view = require_auth("view_overview")(handle_wiki_view)
+
+
+# ── Редактор страницы ────────────────────────────────────────────
+
+async def handle_wiki_edit(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    _wiki_init_db()
+
+    slug      = request.match_info.get("slug", "new")
+    is_new    = (slug == "new")
+    p         = None if is_new else _wiki_get_page(slug)
+    result    = ""
+
+    if request.method == "POST":
+        data     = await request.post()
+        title    = (data.get("title","") or "").strip()
+        body_md  = data.get("body","") or ""
+        category = data.get("category","Общее")
+        new_slug = _wiki_slug(title) if is_new else slug
+
+        if not title:
+            result = '<div style="color:var(--danger);margin-bottom:12px;">⚠️ Заголовок обязателен</div>'
+        else:
+            author_id = sess.get("uid", 0) if sess else 0
+            author    = sess.get("name", "Аноним") if sess else "Аноним"
+            _wiki_save_page(new_slug, title, body_md, category, author_id, author)
+            _log_admin_db(author_id, "WIKI_EDIT", f"{'Создана' if is_new else 'Изменена'}: {title}")
+            raise web.HTTPFound(f"/dashboard/wiki/{new_slug}")
+
+    # Данные для формы
+    f_title    = p["title"]    if p else ""
+    f_body     = p["body"]     if p else ""
+    f_category = p["category"] if p else "Общее"
+
+    cat_opts = "".join(
+        f'<option value="{c}" {"selected" if c == f_category else ""}>{c}</option>'
+        for c in WIKI_CATEGORIES
+    )
+
+    page_title = "Новая страница" if is_new else f'Редактировать: {p["title"] if p else slug}'
+    back_url   = "/dashboard/wiki" if is_new else f"/dashboard/wiki/{slug}"
+
+    body = navbar(sess, "wiki") + WIKI_MARKDOWN_CSS + f"""
+    <div class="container">
+      <div class="page-title">
+        {"✏️ " + page_title}
+        <a href="{back_url}" class="btn btn-ghost btn-sm" style="margin-left:auto;">← Назад</a>
+      </div>
+      {result}
+
+      <form method="POST" id="wikiForm">
+        <div class="grid-2" style="gap:20px;align-items:start;">
+
+          <div>
+            <div class="form-group">
+              <label>Заголовок *</label>
+              <input class="form-control" type="text" name="title"
+                value="{f_title}" placeholder="Название страницы..." required
+                oninput="updatePreviewTitle(this.value)" style="font-size:15px;font-weight:600;">
+            </div>
+            <div class="form-group">
+              <label>Категория</label>
+              <select class="form-control" name="category">{cat_opts}</select>
+            </div>
+            <div class="form-group">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <label style="margin:0;">Содержимое (Markdown)</label>
+                <div style="display:flex;gap:6px;">
+                  <button type="button" class="btn btn-ghost btn-xs" onclick="insertMd('**', '**')"><b>B</b></button>
+                  <button type="button" class="btn btn-ghost btn-xs" onclick="insertMd('*', '*')"><i>I</i></button>
+                  <button type="button" class="btn btn-ghost btn-xs" onclick="insertMd('`', '`')">code</button>
+                  <button type="button" class="btn btn-ghost btn-xs" onclick="insertMd('\\n```\\n', '\\n```\\n')">```</button>
+                  <button type="button" class="btn btn-ghost btn-xs" onclick="insertMd('## ', '')">H2</button>
+                  <button type="button" class="btn btn-ghost btn-xs" onclick="insertMd('- ', '')">list</button>
+                  <button type="button" class="btn btn-ghost btn-xs" onclick="insertMd('> ', '')">quote</button>
+                </div>
+              </div>
+              <textarea class="form-control" name="body" id="wikiBody" rows="22"
+                placeholder="# Заголовок&#10;&#10;Текст страницы..."
+                oninput="updatePreview(this.value)"
+                style="font-family:'JetBrains Mono',monospace;font-size:13px;resize:vertical;">{f_body}</textarea>
+              <div style="font-size:11px;color:var(--text2);margin-top:4px;">
+                Поддерживается Markdown: **жирный**, *курсив*, `код`, ## заголовки, - списки, > цитаты, | таблицы
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-primary" type="submit" style="flex:1;padding:12px;">
+                💾 {'Создать' if is_new else 'Сохранить'}
+              </button>
+              <a href="{back_url}" class="btn btn-ghost" style="padding:12px 20px;">Отмена</a>
+            </div>
+          </div>
+
+          <div>
+            <div class="section" style="position:sticky;top:80px;">
+              <div class="section-header">
+                👁 Предпросмотр
+                <span id="charCount" style="font-size:11px;color:var(--text2);font-weight:400;"></span>
+              </div>
+              <div class="section-body">
+                <h1 id="previewTitle" style="font-size:18px;font-weight:800;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">{f_title or "Заголовок"}</h1>
+                <div class="md-body" id="mdPreview" style="min-height:200px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <script>
+    var editor = document.getElementById("wikiBody");
+    var preview = document.getElementById("mdPreview");
+
+    function updatePreview(val) {{
+      if (typeof marked !== "undefined" && preview) {{
+        preview.innerHTML = marked.parse(val || "");
+      }}
+      var cc = document.getElementById("charCount");
+      if (cc) cc.textContent = (val||"").length + " симв";
+    }}
+    function updatePreviewTitle(val) {{
+      var el = document.getElementById("previewTitle");
+      if (el) el.textContent = val || "Заголовок";
+    }}
+    function insertMd(before, after) {{
+      var start = editor.selectionStart, end = editor.selectionEnd;
+      var sel = editor.value.substring(start, end);
+      var replacement = before + sel + after;
+      editor.value = editor.value.substring(0, start) + replacement + editor.value.substring(end);
+      editor.selectionStart = start + before.length;
+      editor.selectionEnd   = start + before.length + sel.length;
+      editor.focus();
+      updatePreview(editor.value);
+    }}
+    document.addEventListener("DOMContentLoaded", function() {{
+      updatePreview(editor ? editor.value : "");
+    }});
+    // Ctrl+S → сохранить
+    document.addEventListener("keydown", function(e) {{
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {{
+        e.preventDefault();
+        document.getElementById("wikiForm").submit();
+      }}
+    }});
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_wiki_edit = require_auth("view_overview")(handle_wiki_edit)
+
+
+# ── Удаление страницы ────────────────────────────────────────────
+
+async def handle_wiki_delete(request: web.Request):
+    token = request.cookies.get("dsess_token","")
+    if not _has_perm(token, "view_overview"):
+        raise web.HTTPFound("/dashboard/wiki")
+    sess = _get_session(request)
+    slug = request.match_info.get("slug","")
+    if slug:
+        _wiki_delete_page(slug)
+        _log_admin_db(sess.get("uid",0) if sess else 0, "WIKI_DELETE", f"Удалена: {slug}")
+    raise web.HTTPFound("/dashboard/wiki")
+
+
+# ── История правок конкретной страницы ───────────────────────────
+
+async def handle_wiki_history(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    _wiki_init_db()
+
+    slug = request.match_info.get("slug","")
+    p    = _wiki_get_page(slug)
+    if not p:
+        raise web.HTTPFound("/dashboard/wiki")
+
+    history = _wiki_get_history(p["id"], limit=50)
+
+    rows_html = ""
+    for i, h in enumerate(history):
+        dt   = str(h.get("changed_at",""))[:16].replace("T"," ")
+        dsz  = h.get("diff_size",0)
+        sign = f"+{dsz}" if dsz >= 0 else str(dsz)
+        color = "var(--success)" if dsz > 0 else "var(--danger)"
+        # Превью старого текста
+        old_preview = (h.get("body","") or "")[:120].replace("<","&lt;")
+        rows_html += (
+            f'<div style="padding:16px;border-bottom:1px solid var(--border);">'
+            f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">'
+            f'<div style="width:32px;height:32px;border-radius:50%;background:var(--accent-glow);'
+            f'display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--accent);">'
+            f'{len(history)-i}</div>'
+            f'<div style="flex:1;">'
+            f'<div style="font-weight:700;font-size:13px;">{h.get("author","—")}</div>'
+            f'<div style="font-size:11px;color:var(--text2);">{dt}</div>'
+            f'</div>'
+            f'<span style="font-size:12px;font-weight:700;color:{color};font-family:JetBrains Mono,monospace;">{sign} симв</span>'
+            f'</div>'
+            f'<div style="font-size:12px;color:var(--text2);background:var(--bg3);padding:8px 12px;'
+            f'border-radius:6px;font-family:JetBrains Mono,monospace;white-space:pre-wrap;word-break:break-all;">'
+            f'{old_preview}{"..." if len(h.get("body","") or "") > 120 else ""}'
+            f'</div>'
+            f'</div>'
+        )
+    if not rows_html:
+        rows_html = '<div class="empty-state">История правок пуста</div>'
+
+    body = navbar(sess, "wiki") + f"""
+    <div class="container">
+      <div class="page-title">
+        📜 История: {p["title"]}
+        <a href="/dashboard/wiki/{slug}" class="btn btn-ghost btn-sm" style="margin-left:auto;">← Назад</a>
+        <a href="/dashboard/wiki/{slug}/edit" class="btn btn-primary btn-sm">✏️ Редактировать</a>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          Всего правок: {len(history)}
+          <span style="font-size:12px;color:var(--text2);font-weight:400;">последние 50</span>
+        </div>
+        {rows_html}
+      </div>
+    </div>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_wiki_history = require_auth("view_overview")(handle_wiki_history)
+
+
+# ── API: быстрый поиск для quick search ─────────────────────────
+
+async def api_wiki_search(request: web.Request):
+    token = request.cookies.get("dsess_token","")
+    if not token or token not in _dashboard_sessions:
+        return web.json_response({"results":[]})
+    q = request.rel_url.query.get("q","").strip()
+    if len(q) < 2:
+        return web.json_response({"results":[]})
+    pages = _wiki_get_all(search=q)
+    return web.json_response({
+        "results": [{"slug": p["slug"], "title": p["title"], "category": p["category"]}
+                    for p in pages[:8]]
+    })
+
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🎙 ГОЛОСОВЫЕ КОМАНДЫ
+# ══════════════════════════════════════════════════════════════════
+# Команды отправляются боту через HTTP → бот исполняет в Telegram
+# Поддерживаемые фразы (NLU на ключевых словах, без внешних API):
+#   "забань [имя/id]", "замути [имя] на [время]", "сними мут с [имя]",
+#   "выдай варн [имя]", "разбань [имя]", "статус чата", "топ активных",
+#   "заблокируй чат", "разблокируй чат", "отправь объявление [текст]"
+
+_VOICE_PATTERNS = [
+    # (ключевые слова, action, описание)
+    (["забань", "бан", "ban"],                     "ban",          "🔨 Бан пользователя"),
+    (["замути", "мут", "заглуши"],                 "mute",         "🔇 Мут пользователя"),
+    (["сними мут", "размути", "unmute"],           "unmute",       "🔊 Снять мут"),
+    (["варн", "предупреди", "warn"],               "warn",         "⚡ Варн"),
+    (["разбань", "unban"],                         "unban",        "🕊 Разбан"),
+    (["заблокируй чат", "lock", "локдаун"],        "lockdown",     "🔒 Локдаун"),
+    (["разблокируй чат", "unlock", "открой чат"],  "unlock",       "🔓 Открыть чат"),
+    (["статус", "status", "состояние"],            "status",       "📊 Статус"),
+    (["топ активных", "топ юзеров", "топ"],        "top_active",   "🏆 Топ активных"),
+    (["объявление", "объяви", "анонс", "announce"],"announce",     "📢 Объявление"),
+    (["кик", "kick", "выгони"],                    "kick",         "👟 Кик"),
+    (["очисти чат", "clear", "удали сообщения"],   "clear_chat",   "🧹 Очистка"),
+    (["статистика", "стат чата", "аналитика"],     "chat_stats",   "📈 Статистика"),
+    (["рассылка", "broadcast"],                    "broadcast",    "📡 Рассылка"),
+]
+
+def _voice_parse(text: str) -> dict:
+    """Разбирает голосовую команду, возвращает {action, target, arg}."""
+    t = text.lower().strip()
+    result = {"action": None, "target": None, "arg": "", "raw": text}
+
+    for keywords, action, _ in _VOICE_PATTERNS:
+        if any(kw in t for kw in keywords):
+            result["action"] = action
+            break
+
+    if not result["action"]:
+        return result
+
+    # Ищем ID (числовой или @username)
+    import re
+    id_m = re.search(r"id[:\s]*(\d+)", t)
+    at_m = re.search(r"@(\w+)", t)
+    num_m = re.search(r"\b(\d{5,12})\b", t)
+    if id_m:
+        result["target"] = id_m.group(1)
+    elif at_m:
+        result["target"] = "@" + at_m.group(1)
+    elif num_m:
+        result["target"] = num_m.group(1)
+
+    # Время мута
+    time_m = re.search(r"на (\d+)\s*(мин|ч|час|д|день)", t)
+    if time_m:
+        n, unit = int(time_m.group(1)), time_m.group(2)
+        if "мин" in unit:   result["arg"] = f"{n}m"
+        elif "ч" in unit or "час" in unit: result["arg"] = f"{n}h"
+        elif "д" in unit or "ден" in unit: result["arg"] = f"{n}d"
+
+    # Текст объявления
+    if result["action"] == "announce":
+        for kw in ["объявление", "объяви", "анонс", "announce"]:
+            idx = t.find(kw)
+            if idx != -1:
+                after = text[idx + len(kw):].strip(" :–-")
+                if after:
+                    result["arg"] = after
+                break
+
+    return result
+
+def _voice_history_init():
+    try:
+        conn = db.get_conn()
+        conn.execute("""CREATE TABLE IF NOT EXISTS voice_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            admin_id INTEGER, admin_name TEXT,
+            raw_text TEXT, action TEXT, target TEXT, arg TEXT,
+            status TEXT, result TEXT,
+            created_at TEXT DEFAULT (datetime('now')))""")
+        conn.commit(); conn.close()
+    except: pass
+
+async def handle_voice_cmd(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    _voice_history_init()
+    result_html = ""
+
+    if request.method == "POST":
+        data = await request.post()
+        raw_text = (data.get("voice_text") or "").strip()
+        chat_id_str = data.get("chat_id") or ""
+
+        if not raw_text:
+            result_html = '<div style="color:var(--danger);padding:10px;">⚠️ Пустая команда</div>'
+        else:
+            parsed = _voice_parse(raw_text)
+            action = parsed["action"]
+            target = parsed["target"]
+            arg    = parsed["arg"]
+            admin_id   = sess.get("uid", 0) if sess else 0
+            admin_name = sess.get("name", "?") if sess else "?"
+
+            status = "ok"; res_text = ""
+            bot_inst = _bot_instance
+
+            if not action:
+                status = "error"
+                res_text = f"❓ Команда не распознана: «{raw_text}»"
+            elif not bot_inst:
+                status = "error"
+                res_text = "🤖 Бот не подключён к дашборду"
+            else:
+                try:
+                    from aiogram.types import ChatPermissions
+                    from datetime import timedelta
+                    chat_id = int(chat_id_str) if chat_id_str else 0
+
+                    if action == "status":
+                        res_text = "📊 Команда статус выполнена — см. Overview"
+                    elif action == "top_active":
+                        res_text = "🏆 Топ активных — см. раздел Аналитика"
+                    elif action == "lockdown" and chat_id:
+                        await bot_inst.set_chat_permissions(chat_id,
+                            ChatPermissions(can_send_messages=False))
+                        res_text = f"🔒 Чат {chat_id} заблокирован"
+                    elif action == "unlock" and chat_id:
+                        await bot_inst.set_chat_permissions(chat_id,
+                            ChatPermissions(can_send_messages=True,
+                                can_send_media_messages=True, can_send_polls=True,
+                                can_send_other_messages=True, can_add_web_page_previews=True))
+                        res_text = f"🔓 Чат {chat_id} разблокирован"
+                    elif action == "announce" and chat_id and arg:
+                        await bot_inst.send_message(chat_id,
+                            f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{arg}\n\n— Администрация",
+                            parse_mode="HTML")
+                        res_text = f"📢 Объявление отправлено в чат {chat_id}"
+                    elif action in ("ban","mute","unmute","warn","unban","kick") and target and chat_id:
+                        target_id = int(target) if target.isdigit() else 0
+                        if target_id:
+                            if action == "ban":
+                                await bot_inst.ban_chat_member(chat_id, target_id)
+                                res_text = f"🔨 Бан ID{target_id}"
+                            elif action == "mute":
+                                mins = 60
+                                if arg:
+                                    import re
+                                    m = re.match(r"(\d+)([mhd])", arg)
+                                    if m:
+                                        n = int(m.group(1))
+                                        u = m.group(2)
+                                        mins = n if u=="m" else (n*60 if u=="h" else n*1440)
+                                await bot_inst.restrict_chat_member(chat_id, target_id,
+                                    ChatPermissions(can_send_messages=False),
+                                    until_date=timedelta(minutes=mins))
+                                res_text = f"🔇 Мут ID{target_id} на {mins} мин"
+                            elif action == "unmute":
+                                await bot_inst.restrict_chat_member(chat_id, target_id,
+                                    ChatPermissions(can_send_messages=True,
+                                        can_send_media_messages=True, can_send_polls=True,
+                                        can_send_other_messages=True, can_add_web_page_previews=True))
+                                res_text = f"🔊 Мут снят ID{target_id}"
+                            elif action == "unban":
+                                await bot_inst.unban_chat_member(chat_id, target_id, only_if_banned=True)
+                                res_text = f"🕊 Разбан ID{target_id}"
+                            elif action == "kick":
+                                await bot_inst.ban_chat_member(chat_id, target_id)
+                                await bot_inst.unban_chat_member(chat_id, target_id)
+                                res_text = f"👟 Кик ID{target_id}"
+                            elif action == "warn":
+                                res_text = f"⚡ Варн — реализуется через бот. ID{target_id}"
+                        else:
+                            status = "warn"
+                            res_text = f"⚠️ Не удалось определить ID цели: {target}"
+                    elif action == "clear_chat" and chat_id:
+                        res_text = "🧹 Очистка — используй панель модерации"
+                    elif action == "broadcast":
+                        res_text = "📡 Рассылка — используй страницу Broadcast"
+                    else:
+                        status = "warn"
+                        res_text = f"⚠️ Действие «{action}» требует уточнения (чат/цель)"
+
+                    # Логируем
+                    conn = db.get_conn()
+                    conn.execute("""INSERT INTO voice_history
+                        (admin_id,admin_name,raw_text,action,target,arg,status,result)
+                        VALUES (?,?,?,?,?,?,?,?)""",
+                        (admin_id, admin_name, raw_text, action or "", target or "", arg or "", status, res_text))
+                    conn.commit(); conn.close()
+                    _log_admin_db(admin_id, "VOICE_CMD", f"{action}: {res_text}")
+
+                except Exception as e:
+                    status = "error"
+                    res_text = f"❌ Ошибка: {e}"
+
+            color = "var(--success)" if status=="ok" else ("var(--warning)" if status=="warn" else "var(--danger)")
+            icon  = "✅" if status=="ok" else ("⚠️" if status=="warn" else "❌")
+            result_html = (
+                f'<div style="background:var(--bg3);border-left:3px solid {color};'
+                f'padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:20px;">'
+                f'<div style="font-weight:700;margin-bottom:4px;">{icon} {res_text}</div>'
+                f'<div style="font-size:12px;color:var(--text2);">Распознано: {action or "—"}'
+                f' | Цель: {target or "—"} | Аргумент: {arg or "—"}</div>'
+                f'</div>'
+            )
+
+    # Получаем историю
+    history_rows = []
+    try:
+        conn = db.get_conn()
+        history_rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM voice_history ORDER BY created_at DESC LIMIT 30"
+        ).fetchall()]
+        conn.close()
+    except: pass
+
+    # Список чатов для выбора
+    chats = []
+    try:
+        chats = [dict(r) for r in await db.get_all_chats()]
+    except: pass
+    chat_opts = "".join(f'<option value="{c["cid"]}">{c["title"][:30]}</option>' for c in chats)
+
+    # Паттерны подсказок
+    patterns_html = ""
+    for keywords, action, desc in _VOICE_PATTERNS:
+        example = keywords[0]
+        onclick_val = f"document.getElementById(\'voiceText\').value=\'{example} @username\'"
+        patterns_html += (
+            f'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'
+            f'border-bottom:1px solid var(--border);cursor:pointer;" '
+            f'onclick="{onclick_val}">'
+            f'<span style="font-size:13px;flex:1;">{desc}</span>'
+            f'<code style="font-size:11px;background:var(--bg3);padding:2px 6px;border-radius:4px;">'
+            f'{example}</code>'
+            f'</div>'
+        )
+
+    hist_html = ""
+    for h in history_rows:
+        color = "#22c55e" if h.get("status")=="ok" else ("#f59e0b" if h.get("status")=="warn" else "#ef4444")
+        hist_html += (
+            f'<div style="padding:8px 0;border-bottom:1px solid var(--border);">'
+            f'<div style="display:flex;gap:8px;align-items:center;">'
+            f'<span style="width:8px;height:8px;border-radius:50%;background:{color};flex-shrink:0;"></span>'
+            f'<span style="font-size:12px;flex:1;">{h.get("raw_text","")[:60]}</span>'
+            f'<span style="font-size:11px;color:var(--text2);">{str(h.get("created_at",""))[:16]}</span>'
+            f'</div>'
+            f'<div style="font-size:11px;color:var(--text2);padding-left:16px;margin-top:2px;">'
+            f'{h.get("result","")[:80]}</div>'
+            f'</div>'
+        )
+    if not hist_html:
+        hist_html = '<div style="color:var(--text2);font-size:13px;padding:12px 0;">Команд ещё не было</div>'
+
+    body = navbar(sess, "voice") + f"""
+    <div class="container">
+      <div class="page-title">🎙 Голосовые команды</div>
+      {result_html}
+      <div class="grid-2" style="gap:24px;align-items:start;">
+
+        <div>
+          <div class="section">
+            <div class="section-header">🎤 Ввод команды</div>
+            <div class="section-body">
+              <form method="POST">
+                <div class="form-group">
+                  <label>Чат</label>
+                  <select class="form-control" name="chat_id">
+                    <option value="">— выбери чат —</option>
+                    {chat_opts}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Команда текстом (или нажми микрофон)</label>
+                  <div style="display:flex;gap:8px;">
+                    <input class="form-control" type="text" name="voice_text" id="voiceText"
+                      placeholder="Например: замути @user на 30 мин" style="flex:1;">
+                    <button type="button" class="btn btn-primary" id="micBtn"
+                      onclick="startVoice()" title="Говори">🎤</button>
+                  </div>
+                  <div id="voiceStatus" style="font-size:12px;color:var(--text2);margin-top:6px;"></div>
+                </div>
+                <button class="btn btn-primary" type="submit" style="width:100%;">
+                  ▶ Выполнить
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">📜 История команд</div>
+            <div style="padding:0 16px 8px;">{hist_html}</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section">
+            <div class="section-header">📋 Доступные команды</div>
+            <div style="padding:0 16px 8px;font-size:12px;color:var(--text2);padding-top:8px;">
+              Нажми на строку — вставит пример в поле ввода
+            </div>
+            <div style="padding:0 16px 8px;">{patterns_html}</div>
+          </div>
+
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">💡 Примеры фраз</div>
+            <div style="padding:12px 16px;font-size:12px;line-height:2;">
+              <code>забань 123456789</code><br>
+              <code>замути @username на 1 час</code><br>
+              <code>сними мут с 123456789</code><br>
+              <code>заблокируй чат</code><br>
+              <code>объявление Внимание всем!</code><br>
+              <code>статус</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    var recognition = null;
+    function startVoice() {{
+      var btn = document.getElementById("micBtn");
+      var status = document.getElementById("voiceStatus");
+      if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {{
+        status.textContent = "⚠️ Браузер не поддерживает голосовой ввод (используй Chrome)";
+        return;
+      }}
+      if (recognition) {{ recognition.stop(); recognition = null; btn.textContent = "🎤"; return; }}
+      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SR();
+      recognition.lang = "ru-RU";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.onstart = function() {{
+        btn.textContent = "⏹";
+        btn.style.background = "#ef4444";
+        status.textContent = "🔴 Говорите...";
+      }};
+      recognition.onresult = function(e) {{
+        var text = e.results[0][0].transcript;
+        document.getElementById("voiceText").value = text;
+        status.textContent = "✅ Распознано: " + text;
+        btn.textContent = "🎤"; btn.style.background = "";
+        recognition = null;
+      }};
+      recognition.onerror = function(e) {{
+        status.textContent = "❌ Ошибка: " + e.error;
+        btn.textContent = "🎤"; btn.style.background = "";
+        recognition = null;
+      }};
+      recognition.onend = function() {{
+        btn.textContent = "🎤"; btn.style.background = "";
+        recognition = null;
+      }};
+      recognition.start();
+    }}
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_voice_cmd = require_auth("view_overview")(handle_voice_cmd)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  📊 АВТО-ОТЧЁТЫ В КАНАЛ
+# ══════════════════════════════════════════════════════════════════
+
+def _reports_cfg_init():
+    try:
+        conn = db.get_conn()
+        conn.execute("""CREATE TABLE IF NOT EXISTS auto_reports_cfg (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_id TEXT NOT NULL,
+            channel_title TEXT DEFAULT '',
+            schedule TEXT DEFAULT 'daily',
+            hour INTEGER DEFAULT 21,
+            report_type TEXT DEFAULT 'full',
+            enabled INTEGER DEFAULT 1,
+            last_sent TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')))""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS auto_reports_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_id TEXT, report_type TEXT,
+            status TEXT, error TEXT,
+            sent_at TEXT DEFAULT (datetime('now')))""")
+        conn.commit(); conn.close()
+    except: pass
+
+async def _generate_report_text(report_type: str = "full") -> str:
+    """Генерирует HTML-отчёт для отправки в Telegram."""
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    today = now.strftime("%d.%m.%Y")
+
+    lines = [
+        f"📊 <b>АВТО-ОТЧЁТ</b> — {today} {now.strftime('%H:%M')}",
+        "━━━━━━━━━━━━━━━━━━━━━━",
+    ]
+
+    try:
+        conn = db.get_conn()
+
+        # Статистика по чатам
+        chats = await db.get_all_chats()
+        lines.append(f"\n💬 <b>Чатов:</b> {len(chats)}")
+
+        # Тикеты
+        try:
+            t_open = conn.execute("SELECT COUNT(*) FROM tickets WHERE status='open'").fetchone()[0]
+            t_prog = conn.execute("SELECT COUNT(*) FROM tickets WHERE status='in_progress'").fetchone()[0]
+            lines.append(f"🎫 <b>Тикеты:</b> {t_open} открытых, {t_prog} в работе")
+        except: pass
+
+        # Модерация за сегодня
+        try:
+            actions_today = conn.execute(
+                "SELECT COUNT(*) FROM mod_history WHERE date(created_at)=date('now')"
+            ).fetchone()[0]
+            lines.append(f"⚔️ <b>Действий сегодня:</b> {actions_today}")
+        except: pass
+
+        # Топ модераторов
+        if report_type in ("full", "mods"):
+            try:
+                top_mods = conn.execute(
+                    "SELECT by_name, COUNT(*) as cnt FROM mod_history "
+                    "WHERE date(created_at)=date('now') "
+                    "GROUP BY by_name ORDER BY cnt DESC LIMIT 5"
+                ).fetchall()
+                if top_mods:
+                    lines.append("\n🏆 <b>Топ модераторов сегодня:</b>")
+                    for i, m in enumerate(top_mods, 1):
+                        lines.append(f"  {i}. {m['by_name']} — {m['cnt']} действий")
+            except: pass
+
+        # Алерты
+        if report_type in ("full", "security"):
+            try:
+                alerts_today = conn.execute(
+                    "SELECT COUNT(*) FROM dashboard_admin_log WHERE action LIKE '%ALERT%' AND date(created_at)=date('now')"
+                ).fetchone()[0]
+                lines.append(f"\n🚨 <b>Алертов сегодня:</b> {alerts_today}")
+            except: pass
+
+        # Варны и баны из mod_history
+        try:
+            bans = conn.execute(
+                "SELECT COUNT(*) FROM mod_history WHERE action LIKE '%Бан%' AND date(created_at)=date('now')"
+            ).fetchone()[0]
+            warns = conn.execute(
+                "SELECT COUNT(*) FROM mod_history WHERE action LIKE '%Варн%' AND date(created_at)=date('now')"
+            ).fetchone()[0]
+            lines.append(f"\n⚡ <b>Варнов:</b> {warns} | 🔨 <b>Банов:</b> {bans}")
+        except: pass
+
+        conn.close()
+    except Exception as e:
+        lines.append(f"\n⚠️ Частичная ошибка: {e}")
+
+    lines.append("\n━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append("🤖 <i>Chat Guard Dashboard</i>")
+    return "\n".join(lines)
+
+async def _send_report_to_channel(channel_id: str, report_type: str = "full"):
+    """Отправляет отчёт в канал через бота."""
+    bot_inst = _bot_instance
+    if not bot_inst:
+        return False, "Бот не подключён"
+    try:
+        text = await _generate_report_text(report_type)
+        await bot_inst.send_message(int(channel_id), text, parse_mode="HTML")
+        # Лог
+        try:
+            conn = db.get_conn()
+            conn.execute("INSERT INTO auto_reports_log (channel_id,report_type,status) VALUES (?,?,?)",
+                         (channel_id, report_type, "ok"))
+            conn.commit(); conn.close()
+        except: pass
+        return True, "Отчёт отправлен"
+    except Exception as e:
+        try:
+            conn = db.get_conn()
+            conn.execute("INSERT INTO auto_reports_log (channel_id,report_type,status,error) VALUES (?,?,?,?)",
+                         (channel_id, report_type, "error", str(e)))
+            conn.commit(); conn.close()
+        except: pass
+        return False, str(e)
+
+async def handle_reports_cfg(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    _reports_cfg_init()
+    result_html = ""
+
+    if request.method == "POST":
+        data = await request.post()
+        action = data.get("action","")
+
+        if action == "add":
+            channel_id = (data.get("channel_id") or "").strip()
+            channel_title = (data.get("channel_title") or "").strip()
+            schedule = data.get("schedule","daily")
+            hour = int(data.get("hour","21") or 21)
+            report_type = data.get("report_type","full")
+
+            if not channel_id:
+                result_html = '<div class="alert alert-danger">⚠️ Укажи ID канала</div>'
+            else:
+                try:
+                    conn = db.get_conn()
+                    conn.execute("""INSERT INTO auto_reports_cfg
+                        (channel_id,channel_title,schedule,hour,report_type,enabled)
+                        VALUES (?,?,?,?,?,1)""",
+                        (channel_id, channel_title, schedule, hour, report_type))
+                    conn.commit(); conn.close()
+                    _log_admin_db(sess.get("uid",0) if sess else 0, "REPORTS_CFG_ADD", f"Канал: {channel_id}")
+                    result_html = f'<div class="alert alert-success">✅ Канал {channel_id} добавлен</div>'
+                except Exception as e:
+                    result_html = f'<div class="alert alert-danger">❌ {e}</div>'
+
+        elif action == "toggle":
+            cfg_id = data.get("cfg_id","")
+            try:
+                conn = db.get_conn()
+                row = conn.execute("SELECT enabled FROM auto_reports_cfg WHERE id=?", (cfg_id,)).fetchone()
+                if row:
+                    new_val = 0 if row["enabled"] else 1
+                    conn.execute("UPDATE auto_reports_cfg SET enabled=? WHERE id=?", (new_val, cfg_id))
+                    conn.commit()
+                conn.close()
+            except: pass
+
+        elif action == "delete":
+            cfg_id = data.get("cfg_id","")
+            try:
+                conn = db.get_conn()
+                conn.execute("DELETE FROM auto_reports_cfg WHERE id=?", (cfg_id,))
+                conn.commit(); conn.close()
+            except: pass
+
+    # Загружаем конфиги
+    cfgs = []
+    try:
+        conn = db.get_conn()
+        cfgs = [dict(r) for r in conn.execute(
+            "SELECT * FROM auto_reports_cfg ORDER BY id DESC"
+        ).fetchall()]
+        conn.close()
+    except: pass
+
+    # Последние логи
+    logs = []
+    try:
+        conn = db.get_conn()
+        logs = [dict(r) for r in conn.execute(
+            "SELECT * FROM auto_reports_log ORDER BY sent_at DESC LIMIT 20"
+        ).fetchall()]
+        conn.close()
+    except: pass
+
+    sched_map = {"daily":"Ежедневно","weekly":"Еженедельно","hourly":"Каждый час"}
+    type_map  = {"full":"Полный","mods":"Модераторы","security":"Безопасность","tickets":"Тикеты"}
+
+    cfgs_html = ""
+    for c in cfgs:
+        enabled = c.get("enabled",1)
+        status_color = "var(--success)" if enabled else "var(--text2)"
+        status_text  = "🟢 Активен" if enabled else "⚫ Выключен"
+        _cid_val   = c.get("channel_id","")
+        _rtype_val = c.get("report_type","full")
+        _cid_int   = c["id"]
+        cfgs_html += "".join([
+            '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;',
+            'border-bottom:1px solid var(--border);">',
+            '<div style="flex:1;">',
+            f'<div style="font-weight:600;">{c.get("channel_title") or "Канал"} ',
+            f'<code style="font-size:11px;">({_cid_val})</code></div>',
+            f'<div style="font-size:12px;color:var(--text2);">',
+            f'{sched_map.get(c.get("schedule",""),"")} в {c.get("hour","21")}:00 · ',
+            f'{type_map.get(c.get("report_type",""),"")}</div>',
+            '</div>',
+            f'<span style="color:{status_color};font-size:12px;">{status_text}</span>',
+            f'<form method="POST" style="display:inline;">',
+            f'<input type="hidden" name="action" value="toggle">',
+            f'<input type="hidden" name="cfg_id" value="{_cid_int}">',
+            '<button class="btn btn-xs btn-ghost" type="submit">⏯</button>',
+            '</form>',
+            '<form method="POST" style="display:inline;">',
+            '<input type="hidden" name="action" value="delete">',
+            f'<input type="hidden" name="cfg_id" value="{_cid_int}">',
+            '<button class="btn btn-xs" style="color:var(--danger);" ',
+            'onclick="return confirm(\'Удалить?\')" type="submit">\U0001f5d1 Удалить</button>',
+            '</form>',
+            f'<button class="btn btn-xs btn-primary" ',
+            f'onclick="sendNow({_cid_int}, \'{_cid_val}\', \'{_rtype_val}\')">' + '▶ Сейчас</button>',
+            '</div>',
+        ])
+    if not cfgs_html:
+        cfgs_html = '<div class="empty-state">Нет настроенных каналов</div>'
+
+    log_html = ""
+    for l in logs:
+        ok = l.get("status") == "ok"
+        icon = "✅" if ok else "❌"
+        log_html += (
+            f'<div style="font-size:12px;padding:5px 0;border-bottom:1px solid var(--border);">'
+            f'{icon} {l.get("channel_id","")[:15]} · {type_map.get(l.get("report_type",""),"")} · '
+            f'{str(l.get("sent_at",""))[:16]}'
+            f'{f" — {l['error'][:40]}" if not ok and l.get("error") else ""}'
+            f'</div>'
+        )
+    if not log_html:
+        log_html = '<div style="color:var(--text2);font-size:12px;padding:8px 0;">Логов нет</div>'
+
+    hour_opts = "".join(f'<option value="{h}">{h}:00</option>' for h in range(0,24))
+
+    body = navbar(sess, "reports_cfg") + f"""
+    <div class="container">
+      <div class="page-title">📊 Авто-отчёты в канал</div>
+      {result_html}
+
+      <div class="grid-2" style="gap:24px;align-items:start;">
+        <div>
+          <div class="section">
+            <div class="section-header">➕ Добавить канал</div>
+            <div class="section-body">
+              <form method="POST">
+                <input type="hidden" name="action" value="add">
+                <div class="form-group">
+                  <label>ID канала * <span style="font-size:11px;color:var(--text2);">(отрицательное число)</span></label>
+                  <input class="form-control" name="channel_id" placeholder="-1001234567890" required>
+                  <div style="font-size:11px;color:var(--text2);margin-top:4px;">
+                    Чтобы узнать ID: добавь бота в канал и напиши /start
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Название канала</label>
+                  <input class="form-control" name="channel_title" placeholder="Лог-канал">
+                </div>
+                <div class="form-group">
+                  <label>Расписание</label>
+                  <select class="form-control" name="schedule">
+                    <option value="daily">Ежедневно</option>
+                    <option value="weekly">Еженедельно (понедельник)</option>
+                    <option value="hourly">Каждый час</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Час отправки (для daily/weekly)</label>
+                  <select class="form-control" name="hour">{hour_opts}</select>
+                </div>
+                <div class="form-group">
+                  <label>Тип отчёта</label>
+                  <select class="form-control" name="report_type">
+                    <option value="full">Полный (всё)</option>
+                    <option value="mods">Модераторы</option>
+                    <option value="security">Безопасность</option>
+                    <option value="tickets">Тикеты</option>
+                  </select>
+                </div>
+                <button class="btn btn-primary" type="submit" style="width:100%;">➕ Добавить</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section">
+            <div class="section-header">📋 Настроенные каналы</div>
+            <div style="padding:0 16px 8px;">{cfgs_html}</div>
+          </div>
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">📝 Лог отправок</div>
+            <div style="padding:0 16px 8px;">{log_html}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+    function sendNow(cfgId, channelId, reportType) {{
+      if (!confirm('Отправить отчёт прямо сейчас?')) return;
+      fetch('/api/reports_cfg/send_now', {{
+        method: 'POST',
+        headers: {{'Content-Type':'application/json'}},
+        body: JSON.stringify({{channel_id: channelId, report_type: reportType}})
+      }}).then(r=>r.json()).then(d=>{{
+        alert(d.ok ? '✅ ' + d.msg : '❌ ' + d.msg);
+      }});
+    }}
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_reports_cfg = require_auth("view_overview")(handle_reports_cfg)
+
+async def api_reports_send_now(request: web.Request):
+    token = request.cookies.get("dsess_token","")
+    if not _has_perm(token, "view_overview"):
+        return web.json_response({"ok": False, "msg": "Нет доступа"})
+    try:
+        data = await request.json()
+        channel_id  = data.get("channel_id","")
+        report_type = data.get("report_type","full")
+        ok, msg = await _send_report_to_channel(channel_id, report_type)
+        return web.json_response({"ok": ok, "msg": msg})
+    except Exception as e:
+        return web.json_response({"ok": False, "msg": str(e)})
+
+async def _auto_reports_loop():
+    """Фоновая задача — проверяет расписание и отправляет отчёты."""
+    import asyncio as _aio
+    from datetime import datetime
+    while True:
+        await _aio.sleep(60)
+        try:
+            now = datetime.now()
+            conn = db.get_conn()
+            cfgs = [dict(r) for r in conn.execute(
+                "SELECT * FROM auto_reports_cfg WHERE enabled=1"
+            ).fetchall()]
+            conn.close()
+            for c in cfgs:
+                schedule = c.get("schedule","daily")
+                hour     = c.get("hour", 21)
+                last     = c.get("last_sent","")
+                today    = now.strftime("%Y-%m-%d")
+                channel  = c.get("channel_id","")
+                rtype    = c.get("report_type","full")
+                should_send = False
+                if schedule == "hourly":
+                    should_send = not last.startswith(now.strftime("%Y-%m-%d %H"))
+                elif schedule == "daily":
+                    should_send = now.hour == hour and not last.startswith(today)
+                elif schedule == "weekly":
+                    should_send = now.weekday() == 0 and now.hour == hour and not last.startswith(today)
+                if should_send and channel:
+                    ok, _ = await _send_report_to_channel(channel, rtype)
+                    if ok:
+                        conn2 = db.get_conn()
+                        conn2.execute("UPDATE auto_reports_cfg SET last_sent=? WHERE id=?",
+                                      (now.strftime("%Y-%m-%d %H:%M"), c["id"]))
+                        conn2.commit(); conn2.close()
+        except: pass
+
+
+# ══════════════════════════════════════════════════════════════════
+#  ⚡ КОНСТРУКТОР АВТОПРАВИЛ
+# ══════════════════════════════════════════════════════════════════
+#
+#  ЕСЛИ [триггер] И [условие] ТО [действие]
+#  Примеры:
+#    ЕСЛИ warn_count >= 3 ТО mute 60m
+#    ЕСЛИ новый участник + содержит ссылку ТО mute 24h + warn
+#    ЕСЛИ flood >= 10 msg/min ТО mute 5m
+#    ЕСЛИ score < -50 ТО warn + notify_owner
+
+_AUTOMATION_TRIGGERS = {
+    "warn_count":     "⚡ Количество варнов",
+    "msg_per_min":    "💬 Сообщений в минуту (флуд)",
+    "new_member":     "👤 Новый участник",
+    "link_in_msg":    "🔗 Ссылка в сообщении",
+    "reputation":     "⭐ Репутация пользователя",
+    "night_message":  "🌙 Сообщение ночью (23:00–07:00)",
+    "ban_count":      "🔨 Количество банов",
+    "keyword":        "🔤 Ключевое слово в сообщении",
+    "join_age_days":  "📅 Аккаунт моложе N дней",
+    "no_avatar":      "👤 Нет аватарки",
+}
+
+_AUTOMATION_CONDITIONS = {
+    ">=": "≥ больше или равно",
+    "<=": "≤ меньше или равно",
+    ">":  "> строго больше",
+    "<":  "< строго меньше",
+    "==": "= равно",
+    "contains": "содержит (текст)",
+    "true": "= да (без значения)",
+}
+
+_AUTOMATION_ACTIONS = {
+    "mute_5m":    "🔇 Мут на 5 минут",
+    "mute_1h":    "🔇 Мут на 1 час",
+    "mute_24h":   "🔇 Мут на 24 часа",
+    "warn":       "⚡ Выдать варн",
+    "ban":        "🔨 Забанить",
+    "kick":       "👟 Кикнуть",
+    "delete_msg": "🗑 Удалить сообщение",
+    "notify_mods":"📣 Уведомить модов в ЛС",
+    "notify_owner":"👑 Уведомить владельца",
+    "add_to_watch":"👁 Добавить в список наблюдения",
+    "lockdown":   "🔒 Локдаун чата",
+    "send_rules": "📋 Отправить правила в ЛС",
+}
+
+def _automations_init():
+    try:
+        conn = db.get_conn()
+        conn.execute("""CREATE TABLE IF NOT EXISTS automation_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT DEFAULT '',
+            chat_id TEXT DEFAULT 'all',
+            trigger TEXT NOT NULL,
+            condition_op TEXT DEFAULT '>=',
+            condition_val TEXT DEFAULT '3',
+            action TEXT NOT NULL,
+            enabled INTEGER DEFAULT 1,
+            fires INTEGER DEFAULT 0,
+            created_by TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')))""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS automation_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_id INTEGER, rule_name TEXT,
+            chat_id TEXT, uid TEXT, result TEXT,
+            fired_at TEXT DEFAULT (datetime('now')))""")
+        conn.commit(); conn.close()
+    except: pass
+
+async def handle_automations(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    _automations_init()
+    result_html = ""
+
+    if request.method == "POST":
+        data = await request.post()
+        action = data.get("action","")
+
+        if action == "create":
+            name   = (data.get("name") or "Правило").strip()
+            chat_id= (data.get("chat_id") or "all").strip()
+            trig   = data.get("trigger","warn_count")
+            cond_op= data.get("condition_op",">=")
+            cond_val = (data.get("condition_val") or "3").strip()
+            act    = data.get("act","warn")
+            by     = (sess.get("name","?") if sess else "?")
+            try:
+                conn = db.get_conn()
+                conn.execute("""INSERT INTO automation_rules
+                    (name,chat_id,trigger,condition_op,condition_val,action,enabled,created_by)
+                    VALUES (?,?,?,?,?,?,1,?)""",
+                    (name, chat_id, trig, cond_op, cond_val, act, by))
+                conn.commit(); conn.close()
+                _log_admin_db(sess.get("uid",0) if sess else 0, "AUTOMATION_CREATE", f"{name}")
+                result_html = f'<div class="alert alert-success">✅ Правило «{name}» создано</div>'
+            except Exception as e:
+                result_html = f'<div class="alert alert-danger">❌ {e}</div>'
+
+        elif action == "toggle":
+            rule_id = data.get("rule_id","")
+            try:
+                conn = db.get_conn()
+                row = conn.execute("SELECT enabled FROM automation_rules WHERE id=?", (rule_id,)).fetchone()
+                if row:
+                    conn.execute("UPDATE automation_rules SET enabled=? WHERE id=?",
+                                 (0 if row["enabled"] else 1, rule_id))
+                    conn.commit()
+                conn.close()
+            except: pass
+
+        elif action == "delete":
+            rule_id = data.get("rule_id","")
+            try:
+                conn = db.get_conn()
+                conn.execute("DELETE FROM automation_rules WHERE id=?", (rule_id,))
+                conn.commit(); conn.close()
+            except: pass
+
+    # Загружаем правила
+    rules = []
+    try:
+        conn = db.get_conn()
+        rules = [dict(r) for r in conn.execute(
+            "SELECT * FROM automation_rules ORDER BY id DESC"
+        ).fetchall()]
+        conn.close()
+    except: pass
+
+    # Лог срабатываний
+    auto_log = []
+    try:
+        conn = db.get_conn()
+        auto_log = [dict(r) for r in conn.execute(
+            "SELECT * FROM automation_log ORDER BY fired_at DESC LIMIT 30"
+        ).fetchall()]
+        conn.close()
+    except: pass
+
+    # Строим таблицу правил
+    rules_html = ""
+    for r in rules:
+        enabled = r.get("enabled",1)
+        trig_label = _AUTOMATION_TRIGGERS.get(r.get("trigger",""), r.get("trigger",""))
+        act_label  = _AUTOMATION_ACTIONS.get(r.get("action",""), r.get("action",""))
+        cond_label = _AUTOMATION_CONDITIONS.get(r.get("condition_op",""), r.get("condition_op",""))
+        status_color = "#22c55e" if enabled else "#6b7280"
+        rules_html += (
+            f'<div style="padding:14px 0;border-bottom:1px solid var(--border);">'
+            f'<div style="display:flex;align-items:flex-start;gap:12px;">'
+            f'<div style="width:10px;height:10px;border-radius:50%;background:{status_color};'
+            f'margin-top:4px;flex-shrink:0;"></div>'
+            f'<div style="flex:1;">'
+            f'<div style="font-weight:600;font-size:13px;">{r.get("name","?")}</div>'
+            f'<div style="font-size:12px;color:var(--text2);margin-top:3px;">'
+            f'ЕСЛИ <b>{trig_label}</b> {cond_label} <b>{r.get("condition_val","")}</b> '
+            f'→ <b>{act_label}</b>'
+            f'</div>'
+            f'<div style="font-size:11px;color:var(--text2);margin-top:2px;">'
+            f'Чат: {r.get("chat_id","all")} · Сработало: {r.get("fires",0)} раз · {r.get("created_by","")}'
+            f'</div>'
+            f'</div>'
+            f'<div style="display:flex;gap:6px;flex-shrink:0;">'
+            f'<form method="POST" style="display:inline;">'
+            f'<input type="hidden" name="action" value="toggle">'
+            f'<input type="hidden" name="rule_id" value="{r["id"]}">'
+            f'<button class="btn btn-xs btn-ghost" type="submit" title="Вкл/выкл">⏯</button>'
+            f'</form>'
+            f'<form method="POST" style="display:inline;">'
+            f'<input type="hidden" name="action" value="delete">'
+            f'<input type="hidden" name="rule_id" value="{r["id"]}">'
+            f'<button class="btn btn-xs" style="color:var(--danger);" '
+            f'onclick="return confirm(\'Удалить правило?\')" type="submit">🗑</button>'
+            f'</form>'
+            f'</div>'
+            f'</div>'
+            f'</div>'
+        )
+    if not rules_html:
+        rules_html = '<div class="empty-state">Правил нет — создай первое</div>'
+
+    log_html = ""
+    for l in auto_log:
+        log_html += (
+            f'<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);">'
+            f'⚡ <b>{l.get("rule_name","?")}</b> · uid={l.get("uid","?")} · '
+            f'{str(l.get("fired_at",""))[:16]}'
+            f'</div>'
+        )
+    if not log_html:
+        log_html = '<div style="color:var(--text2);font-size:12px;padding:8px 0;">Срабатываний нет</div>'
+
+    # Опции для селектов
+    trig_opts = "".join(f'<option value="{k}">{v}</option>' for k,v in _AUTOMATION_TRIGGERS.items())
+    cond_opts = "".join(f'<option value="{k}">{v}</option>' for k,v in _AUTOMATION_CONDITIONS.items())
+    act_opts  = "".join(f'<option value="{k}">{v}</option>' for k,v in _AUTOMATION_ACTIONS.items())
+
+    # Шаблоны быстрого создания
+    templates = [
+        ("Авто-мут флудеров",    "msg_per_min", ">=", "10",  "mute_5m"),
+        ("Варн за 3 нарушения",  "warn_count",  ">=",  "3",  "notify_mods"),
+        ("Кик новичков со ссылками", "new_member","true","", "kick"),
+        ("Мут ночью",            "night_message","true","",  "mute_1h"),
+        ("Наблюдение за новичками", "join_age_days","<=","7","add_to_watch"),
+    ]
+    tmpl_html = ""
+    for t_name, t_trig, t_op, t_val, t_act in templates:
+        _tmpl_onclick = f"fillTemplate('{t_name}','{t_trig}','{t_op}','{t_val}','{t_act}')"
+        tmpl_html += (
+            f'<button class="btn btn-ghost btn-sm" style="margin:3px;" '
+            f'onclick="{_tmpl_onclick}">'
+            f'{t_name}</button>'
+        )
+
+    body = navbar(sess, "automations") + f"""
+      <div class="page-title">⚡ Конструктор автоправил</div>
+      {result_html}
+
+      <div class="grid-2" style="gap:24px;align-items:start;">
+        <div>
+          <div class="section">
+            <div class="section-header">➕ Создать правило</div>
+            <div class="section-body">
+              <div style="margin-bottom:12px;">
+                <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Шаблоны:</div>
+                {tmpl_html}
+              </div>
+              <form method="POST" id="automForm">
+                <input type="hidden" name="action" value="create">
+                <div class="form-group">
+                  <label>Название правила</label>
+                  <input class="form-control" name="name" id="rName" placeholder="Мой авторуль" required>
+                </div>
+                <div class="form-group">
+                  <label>Применять в чате</label>
+                  <input class="form-control" name="chat_id" value="all" placeholder="all или ID чата">
+                  <div style="font-size:11px;color:var(--text2);margin-top:3px;">all = все чаты</div>
+                </div>
+                <div style="background:var(--bg3);padding:14px;border-radius:10px;margin-bottom:12px;">
+                  <div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:10px;">ЕСЛИ...</div>
+                  <div class="form-group" style="margin-bottom:8px;">
+                    <select class="form-control" name="trigger" id="rTrig">{trig_opts}</select>
+                  </div>
+                  <div style="display:flex;gap:8px;">
+                    <select class="form-control" name="condition_op" id="rOp" style="flex:1;">{cond_opts}</select>
+                    <input class="form-control" name="condition_val" id="rVal" style="flex:1;" placeholder="3">
+                  </div>
+                </div>
+                <div style="background:var(--bg3);padding:14px;border-radius:10px;margin-bottom:16px;">
+                  <div style="font-size:11px;color:var(--text2);font-weight:700;margin-bottom:10px;">ТО...</div>
+                  <select class="form-control" name="act" id="rAct">{act_opts}</select>
+                </div>
+                <button class="btn btn-primary" type="submit" style="width:100%;">
+                  ⚡ Создать правило
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">📝 Лог срабатываний</div>
+            <div style="padding:0 16px 8px;">{log_html}</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section">
+            <div class="section-header">📋 Активные правила ({len(rules)})</div>
+            <div style="padding:0 16px 8px;">{rules_html}</div>
+          </div>
+
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">ℹ️ Как работает</div>
+            <div style="padding:12px 16px;font-size:12px;line-height:1.8;color:var(--text2);">
+              Правила проверяются ботом при каждом событии.<br>
+              Для активации нужно добавить вызов <code>check_automations()</code> в <code>bot.py</code>.<br><br>
+              <b>Пример в bot.py:</b><br>
+              <code style="font-size:11px;background:var(--bg3);padding:4px 8px;border-radius:4px;display:block;margin-top:6px;">
+              from dashboard import check_automations<br>
+              await check_automations(cid, uid, "warn_count", warnings[cid][uid])
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+    function fillTemplate(name, trig, op, val, act) {{
+      document.getElementById("rName").value = name;
+      document.getElementById("rTrig").value = trig;
+      document.getElementById("rOp").value = op;
+      document.getElementById("rVal").value = val;
+      document.getElementById("rAct").value = act;
+    }}
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_automations = require_auth("view_overview")(handle_automations)
+
+async def api_automations_delete(request: web.Request):
+    token = request.cookies.get("dsess_token","")
+    if not _has_perm(token, "view_overview"):
+        return web.json_response({"ok": False})
+    data = await request.json()
+    rule_id = data.get("id","")
+    try:
+        conn = db.get_conn()
+        conn.execute("DELETE FROM automation_rules WHERE id=?", (rule_id,))
+        conn.commit(); conn.close()
+        return web.json_response({"ok": True})
+    except Exception as e:
+        return web.json_response({"ok": False, "msg": str(e)})
+
+async def check_automations(chat_id: int, uid: int, trigger: str, value) -> list:
+    """Проверяет правила и возвращает список действий для выполнения.
+    Вызывать из bot.py: actions = await dashboard.check_automations(cid, uid, 'warn_count', count)
+    """
+    _automations_init()
+    results = []
+    try:
+        conn = db.get_conn()
+        rules = [dict(r) for r in conn.execute(
+            "SELECT * FROM automation_rules WHERE enabled=1 AND trigger=? AND (chat_id='all' OR chat_id=?)",
+            (trigger, str(chat_id))
+        ).fetchall()]
+        conn.close()
+        for r in rules:
+            op  = r.get("condition_op",">=")
+            val_str = r.get("condition_val","0")
+            try:
+                val_num = float(val_str)
+                v       = float(value)
+                match = (
+                    (op == ">=" and v >= val_num) or
+                    (op == "<=" and v <= val_num) or
+                    (op == ">"  and v  > val_num) or
+                    (op == "<"  and v  < val_num) or
+                    (op == "==" and v == val_num) or
+                    (op == "contains" and str(val_str).lower() in str(value).lower()) or
+                    (op == "true")
+                )
+            except:
+                match = (op == "true") or (str(val_str).lower() in str(value).lower())
+            if match:
+                results.append({"rule_id": r["id"], "rule_name": r["name"], "action": r["action"]})
+                # Лог
+                conn2 = db.get_conn()
+                conn2.execute("INSERT INTO automation_log (rule_id,rule_name,chat_id,uid,result) VALUES (?,?,?,?,?)",
+                              (r["id"], r["name"], str(chat_id), str(uid), r["action"]))
+                conn2.execute("UPDATE automation_rules SET fires=fires+1 WHERE id=?", (r["id"],))
+                conn2.commit(); conn2.close()
+    except: pass
+    return results
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🤖 ПОЛНОЕ УПРАВЛЕНИЕ БОТОМ — СИНХРОНИЗАЦИЯ
+# ══════════════════════════════════════════════════════════════════
+#
+#  Страница /dashboard/bot_control — единый центр управления:
+#  - Статус бота (онлайн/оффлайн, аптайм, чаты)
+#  - Прямые команды всем чатам или конкретному
+#  - Управление настройками бота (антимат, автокик, slowmode)
+#  - Массовые действия (рассылка, SOS, разлокдаун)
+#  - Просмотр активных мутов/банов
+#  - Синхронизация данных бот ↔ дашборд
+
+async def handle_bot_control(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    result_html = ""
+
+    if request.method == "POST":
+        data = await request.post()
+        action = data.get("action","")
+        chat_id_str = data.get("chat_id","")
+        bot_inst = _bot_instance
+        sess_uid = sess.get("uid",0) if sess else 0
+
+        try:
+            chat_id = int(chat_id_str) if chat_id_str else 0
+        except:
+            chat_id = 0
+
+        if not bot_inst:
+            result_html = '<div class="alert alert-danger">🤖 Бот не подключён к дашборду</div>'
+        else:
+            try:
+                from aiogram.types import ChatPermissions
+                msg = ""
+
+                if action == "lockdown_all":
+                    locked = 0
+                    chats = await db.get_all_chats()
+                    for c in chats:
+                        try:
+                            await bot_inst.set_chat_permissions(c["cid"],
+                                ChatPermissions(can_send_messages=False))
+                            locked += 1
+                        except: pass
+                    msg = f"🔒 Локдаун применён к {locked} чатам"
+                    _log_admin_db(sess_uid, "BOT_LOCKDOWN_ALL", msg)
+
+                elif action == "unlock_all":
+                    unlocked = 0
+                    chats = await db.get_all_chats()
+                    for c in chats:
+                        try:
+                            await bot_inst.set_chat_permissions(c["cid"],
+                                ChatPermissions(can_send_messages=True,
+                                    can_send_media_messages=True, can_send_polls=True,
+                                    can_send_other_messages=True, can_add_web_page_previews=True))
+                            unlocked += 1
+                        except: pass
+                    msg = f"🔓 Разлокдаун {unlocked} чатов"
+                    _log_admin_db(sess_uid, "BOT_UNLOCK_ALL", msg)
+
+                elif action == "broadcast" and data.get("broadcast_text"):
+                    text = data.get("broadcast_text","").strip()
+                    sent = 0
+                    chats = await db.get_all_chats()
+                    for c in chats:
+                        try:
+                            await bot_inst.send_message(c["cid"],
+                                f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{text}\n\n— Администрация",
+                                parse_mode="HTML")
+                            sent += 1
+                            import asyncio
+                            await asyncio.sleep(0.05)
+                        except: pass
+                    msg = f"📢 Рассылка: {sent} чатов"
+                    _log_admin_db(sess_uid, "BOT_BROADCAST", text[:50])
+
+                elif action == "send_to_chat" and chat_id and data.get("msg_text"):
+                    text = data.get("msg_text","").strip()
+                    await bot_inst.send_message(chat_id, text, parse_mode="HTML")
+                    msg = f"✉️ Сообщение отправлено в {chat_id}"
+                    _log_admin_db(sess_uid, "BOT_SEND_MSG", f"→{chat_id}: {text[:40]}")
+
+                elif action == "lockdown_chat" and chat_id:
+                    await bot_inst.set_chat_permissions(chat_id,
+                        ChatPermissions(can_send_messages=False))
+                    msg = f"🔒 Чат {chat_id} заблокирован"
+                    _log_admin_db(sess_uid, "BOT_LOCK_CHAT", str(chat_id))
+
+                elif action == "unlock_chat" and chat_id:
+                    await bot_inst.set_chat_permissions(chat_id,
+                        ChatPermissions(can_send_messages=True,
+                            can_send_media_messages=True, can_send_polls=True,
+                            can_send_other_messages=True, can_add_web_page_previews=True))
+                    msg = f"🔓 Чат {chat_id} разблокирован"
+                    _log_admin_db(sess_uid, "BOT_UNLOCK_CHAT", str(chat_id))
+
+                elif action == "slowmode" and chat_id:
+                    delay = int(data.get("slowmode_val","30") or 30)
+                    await bot_inst.set_chat_slow_mode_delay(chat_id, delay)
+                    msg = f"🐢 Slowmode {delay}с в чате {chat_id}"
+                    _log_admin_db(sess_uid, "BOT_SLOWMODE", f"{chat_id}: {delay}s")
+
+                elif action == "pin_msg" and chat_id and data.get("msg_id"):
+                    msg_id = int(data.get("msg_id",0))
+                    await bot_inst.pin_chat_message(chat_id, msg_id)
+                    msg = f"📌 Сообщение {msg_id} закреплено в {chat_id}"
+
+                elif action == "unpin_all" and chat_id:
+                    await bot_inst.unpin_all_chat_messages(chat_id)
+                    msg = f"📌 Все сообщения откреплены в {chat_id}"
+
+                elif action == "ban_user" and chat_id and data.get("target_uid"):
+                    target_uid = int(data.get("target_uid",0))
+                    reason = data.get("ban_reason","Нарушение правил")
+                    await bot_inst.ban_chat_member(chat_id, target_uid)
+                    msg = f"🔨 Бан ID{target_uid} в чате {chat_id}"
+                    _log_admin_db(sess_uid, "BOT_BAN", f"{chat_id}:{target_uid} {reason}")
+
+                elif action == "unban_user" and chat_id and data.get("target_uid"):
+                    target_uid = int(data.get("target_uid",0))
+                    await bot_inst.unban_chat_member(chat_id, target_uid, only_if_banned=True)
+                    msg = f"🕊 Разбан ID{target_uid} в чате {chat_id}"
+                    _log_admin_db(sess_uid, "BOT_UNBAN", f"{chat_id}:{target_uid}")
+
+                elif action == "mute_user" and chat_id and data.get("target_uid"):
+                    from datetime import timedelta
+                    target_uid = int(data.get("target_uid",0))
+                    mins = int(data.get("mute_mins","60") or 60)
+                    await bot_inst.restrict_chat_member(chat_id, target_uid,
+                        ChatPermissions(can_send_messages=False),
+                        until_date=timedelta(minutes=mins))
+                    msg = f"🔇 Мут ID{target_uid} на {mins}мин в чате {chat_id}"
+                    _log_admin_db(sess_uid, "BOT_MUTE", f"{chat_id}:{target_uid} {mins}m")
+
+                elif action == "kick_user" and chat_id and data.get("target_uid"):
+                    target_uid = int(data.get("target_uid",0))
+                    await bot_inst.ban_chat_member(chat_id, target_uid)
+                    await bot_inst.unban_chat_member(chat_id, target_uid)
+                    msg = f"👟 Кик ID{target_uid} из чата {chat_id}"
+                    _log_admin_db(sess_uid, "BOT_KICK", f"{chat_id}:{target_uid}")
+
+                elif action == "set_title" and chat_id and data.get("new_title"):
+                    title = data.get("new_title","").strip()
+                    await bot_inst.set_chat_title(chat_id, title)
+                    msg = f"✏️ Название чата {chat_id} изменено на «{title}»"
+
+                elif action == "set_description" and chat_id and data.get("new_desc"):
+                    desc = data.get("new_desc","").strip()
+                    await bot_inst.set_chat_description(chat_id, desc)
+                    msg = f"📝 Описание чата {chat_id} обновлено"
+
+                elif action == "bot_commands_set":
+                    from aiogram.types import BotCommand
+                    commands = [
+                        BotCommand(command="start",   description="Начало работы"),
+                        BotCommand(command="help",    description="Помощь"),
+                        BotCommand(command="profile", description="Мой профиль"),
+                        BotCommand(command="top",     description="Топ активных"),
+                        BotCommand(command="daily",   description="Ежедневный бонус"),
+                        BotCommand(command="rules",   description="Правила чата"),
+                        BotCommand(command="report",  description="Пожаловаться"),
+                        BotCommand(command="ticket",  description="Открыть тикет"),
+                    ]
+                    await bot_inst.set_my_commands(commands)
+                    msg = "✅ Команды бота обновлены"
+
+                elif action == "sync_chats":
+                    # Синхронизируем список чатов из shared в БД
+                    synced = 0
+                    try:
+                        from shared import online_users
+                        # Если есть known_chats в боте — синхронизируем
+                        conn = db.get_conn()
+                        rows = conn.execute("SELECT cid,title FROM known_chats").fetchall()
+                        for r in rows:
+                            conn.execute("INSERT OR REPLACE INTO chats (cid,title) VALUES (?,?)",
+                                        (r[0], r[1]))
+                            synced += 1
+                        conn.commit(); conn.close()
+                    except: pass
+                    msg = f"🔄 Синхронизировано {synced} чатов"
+                else:
+                    msg = "⚠️ Действие не выполнено — проверь параметры"
+
+                color = "var(--success)" if not msg.startswith("⚠️") else "var(--warning)"
+                result_html = (
+                    f'<div style="background:var(--bg3);border-left:3px solid {color};'
+                    f'padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:20px;">'
+                    f'{msg}</div>'
+                )
+            except Exception as e:
+                result_html = f'<div class="alert alert-danger">❌ {e}</div>'
+
+    # Статус бота
+    bot_inst = _bot_instance
+    bot_info_html = ""
+    if bot_inst:
+        try:
+            me = await bot_inst.get_me()
+            bot_info_html = (
+                f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">'
+                f'<div style="width:48px;height:48px;border-radius:50%;background:var(--accent-glow);'
+                f'display:flex;align-items:center;justify-content:center;font-size:22px;">🤖</div>'
+                f'<div>'
+                f'<div style="font-weight:700;">{me.full_name}</div>'
+                f'<div style="font-size:13px;color:var(--text2);">@{me.username} · ID {me.id}</div>'
+                f'<div style="font-size:12px;color:var(--success);margin-top:2px;">🟢 Онлайн</div>'
+                f'</div>'
+                f'</div>'
+            )
+        except:
+            bot_info_html = '<div style="color:var(--danger);">❌ Не удалось получить данные бота</div>'
+    else:
+        bot_info_html = (
+            '<div style="color:var(--danger);">'
+            '❌ Бот не подключён. Убедись что вызван <code>dashboard.set_bot(bot, ADMIN_IDS)</code>'
+            '</div>'
+        )
+
+    # Список чатов
+    chats = []
+    try:
+        chats = [dict(r) for r in await db.get_all_chats()]
+    except: pass
+    chat_opts = "".join(f'<option value="{c["cid"]}">{c["title"][:30]} ({c["cid"]})</option>' for c in chats)
+
+    # Последние действия
+    recent_actions = []
+    try:
+        conn = db.get_conn()
+        recent_actions = [dict(r) for r in conn.execute(
+            "SELECT action,details,created_at FROM dashboard_admin_log "
+            "WHERE action LIKE 'BOT_%' ORDER BY created_at DESC LIMIT 20"
+        ).fetchall()]
+        conn.close()
+    except: pass
+    actions_html = ""
+    for a in recent_actions:
+        actions_html += (
+            f'<div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;">'
+            f'<span style="font-weight:600;">{a.get("action","").replace("BOT_","")}</span> '
+            f'— {(a.get("details","") or "")[:60]} '
+            f'<span style="color:var(--text2);">{str(a.get("created_at",""))[:16]}</span>'
+            f'</div>'
+        )
+    if not actions_html:
+        actions_html = '<div style="color:var(--text2);font-size:12px;padding:8px 0;">Нет истории</div>'
+
+    body = navbar(sess, "bot_control") + f"""
+    <div class="container">
+      <div class="page-title">🤖 Управление ботом</div>
+      {result_html}
+
+      <div class="cards" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px;">
+        <div class="card"><div class="card-icon">🤖</div><div class="card-label">Статус</div>
+          <div class="card-value" style="color:{'var(--success)' if bot_inst else 'var(--danger)'};">
+          {'Онлайн' if bot_inst else 'Офлайн'}</div></div>
+        <div class="card"><div class="card-icon">💬</div><div class="card-label">Чатов</div>
+          <div class="card-value">{len(chats)}</div></div>
+        <div class="card"><div class="card-icon">⚡</div><div class="card-label">Действий</div>
+          <div class="card-value">{len(recent_actions)}</div></div>
+        <div class="card"><div class="card-icon">🔄</div><div class="card-label">Синхронизация</div>
+          <div class="card-value" style="font-size:12px;">Активна</div></div>
+      </div>
+
+      <div class="grid-2" style="gap:24px;align-items:start;">
+        <div>
+          <div class="section">
+            <div class="section-header">🤖 Информация о боте</div>
+            <div style="padding:12px 16px;">{bot_info_html}</div>
+          </div>
+
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">🌍 Массовые действия</div>
+            <div class="section-body">
+              <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+                <form method="POST" style="display:inline;">
+                  <input type="hidden" name="action" value="lockdown_all">
+                  <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:var(--danger);"
+                    onclick="return confirm('Заблокировать ВСЕ чаты?')">🔒 Локдаун всех</button>
+                </form>
+                <form method="POST" style="display:inline;">
+                  <input type="hidden" name="action" value="unlock_all">
+                  <button class="btn btn-sm btn-ghost"
+                    onclick="return confirm('Разблокировать все чаты?')">🔓 Разлокдаун</button>
+                </form>
+                <form method="POST" style="display:inline;">
+                  <input type="hidden" name="action" value="bot_commands_set">
+                  <button class="btn btn-sm btn-ghost">⚙️ Обновить команды</button>
+                </form>
+                <form method="POST" style="display:inline;">
+                  <input type="hidden" name="action" value="sync_chats">
+                  <button class="btn btn-sm btn-ghost">🔄 Синхронизация</button>
+                </form>
+              </div>
+
+              <form method="POST">
+                <input type="hidden" name="action" value="broadcast">
+                <label>Рассылка во все чаты</label>
+                <textarea class="form-control" name="broadcast_text" rows="3"
+                  placeholder="Текст объявления..." style="margin-bottom:8px;"></textarea>
+                <button class="btn btn-primary btn-sm" type="submit"
+                  onclick="return confirm('Отправить во все чаты?')">📢 Рассылка</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">📝 История действий</div>
+            <div style="padding:0 16px 8px;">{actions_html}</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section">
+            <div class="section-header">🎯 Действия в конкретном чате</div>
+            <div class="section-body">
+              <div class="form-group">
+                <label>Выбери чат</label>
+                <select class="form-control" id="globalChat" onchange="setChat(this.value)">
+                  <option value="">— выбери чат —</option>
+                  {chat_opts}
+                </select>
+              </div>
+
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+                <button class="btn btn-sm btn-ghost" onclick="submitAction('lockdown_chat')">🔒 Локдаун</button>
+                <button class="btn btn-sm btn-ghost" onclick="submitAction('unlock_chat')">🔓 Разлок</button>
+                <button class="btn btn-sm btn-ghost" onclick="submitAction('unpin_all')">📌 Открепить всё</button>
+              </div>
+
+              <form method="POST" id="chatActionForm">
+                <input type="hidden" name="chat_id" id="fChatId">
+                <input type="hidden" name="action" id="fAction">
+
+                <div class="form-group">
+                  <label>Slowmode (секунд)</label>
+                  <div style="display:flex;gap:8px;">
+                    <input class="form-control" name="slowmode_val" type="number" value="30" style="flex:1;">
+                    <button class="btn btn-primary btn-sm" type="button"
+                      onclick="submitAction('slowmode')">Применить</button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Отправить сообщение в чат</label>
+                  <textarea class="form-control" name="msg_text" rows="2"
+                    placeholder="HTML поддерживается..."></textarea>
+                  <button class="btn btn-primary btn-sm" type="button" style="margin-top:6px;"
+                    onclick="submitAction('send_to_chat')">✉️ Отправить</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">👤 Действия над пользователем</div>
+            <div class="section-body">
+              <form method="POST">
+                <input type="hidden" name="chat_id" id="userChatId">
+                <div class="form-group">
+                  <label>Чат</label>
+                  <select class="form-control" name="chat_id" id="userChat">
+                    <option value="">— выбери чат —</option>
+                    {chat_opts}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Telegram ID пользователя</label>
+                  <input class="form-control" name="target_uid" type="number" placeholder="123456789">
+                </div>
+                <div class="form-group">
+                  <label>Минуты мута</label>
+                  <input class="form-control" name="mute_mins" type="number" value="60">
+                </div>
+                <div class="form-group">
+                  <label>Причина бана</label>
+                  <input class="form-control" name="ban_reason" value="Нарушение правил">
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:var(--danger);"
+                    name="action" value="ban_user" type="submit"
+                    onclick="return confirm('Забанить?')">🔨 Бан</button>
+                  <button class="btn btn-sm btn-ghost" name="action" value="unban_user" type="submit">🕊 Разбан</button>
+                  <button class="btn btn-sm btn-ghost" name="action" value="mute_user" type="submit">🔇 Мут</button>
+                  <button class="btn btn-sm btn-ghost" name="action" value="kick_user" type="submit"
+                    onclick="return confirm('Кикнуть?')">👟 Кик</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">✏️ Настройки чата</div>
+            <div class="section-body">
+              <form method="POST">
+                <div class="form-group">
+                  <label>Чат</label>
+                  <select class="form-control" name="chat_id">
+                    <option value="">— выбери чат —</option>
+                    {chat_opts}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Новое название</label>
+                  <div style="display:flex;gap:8px;">
+                    <input class="form-control" name="new_title" placeholder="Название чата" style="flex:1;">
+                    <button class="btn btn-primary btn-sm" name="action" value="set_title" type="submit">✓</button>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Описание</label>
+                  <div style="display:flex;gap:8px;">
+                    <input class="form-control" name="new_desc" placeholder="Описание чата" style="flex:1;">
+                    <button class="btn btn-primary btn-sm" name="action" value="set_description" type="submit">✓</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    function setChat(val) {{
+      document.getElementById("fChatId").value = val;
+    }}
+    function submitAction(action) {{
+      var chatVal = document.getElementById("globalChat").value;
+      if (!chatVal && action !== "lockdown_all" && action !== "unlock_all" &&
+          action !== "broadcast" && action !== "bot_commands_set" && action !== "sync_chats") {{
+        alert("Выбери чат!");
+        return;
+      }}
+      document.getElementById("fChatId").value = chatVal;
+      document.getElementById("fAction").value = action;
+      document.getElementById("chatActionForm").submit();
+    }}
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_bot_control = require_auth("view_overview")(handle_bot_control)
+
+async def api_bot_action(request: web.Request):
+    """API для быстрых действий ботом (используется JS)."""
+    token = request.cookies.get("dsess_token","")
+    if not _has_perm(token, "view_overview"):
+        return web.json_response({"ok": False, "msg": "Нет доступа"})
+    bot_inst = _bot_instance
+    if not bot_inst:
+        return web.json_response({"ok": False, "msg": "Бот не подключён"})
+    try:
+        data = await request.json()
+        action   = data.get("action","")
+        chat_id  = int(data.get("chat_id",0))
+        target   = int(data.get("target",0))
+        arg      = data.get("arg","")
+
+        from aiogram.types import ChatPermissions
+        from datetime import timedelta
+
+        if action == "send_message" and chat_id and arg:
+            await bot_inst.send_message(chat_id, arg, parse_mode="HTML")
+            return web.json_response({"ok": True, "msg": "Отправлено"})
+        elif action == "lock" and chat_id:
+            await bot_inst.set_chat_permissions(chat_id, ChatPermissions(can_send_messages=False))
+            return web.json_response({"ok": True, "msg": f"Чат {chat_id} заблокирован"})
+        elif action == "unlock" and chat_id:
+            await bot_inst.set_chat_permissions(chat_id,
+                ChatPermissions(can_send_messages=True, can_send_media_messages=True,
+                    can_send_polls=True, can_send_other_messages=True, can_add_web_page_previews=True))
+            return web.json_response({"ok": True, "msg": f"Чат {chat_id} разблокирован"})
+        elif action == "ban" and chat_id and target:
+            await bot_inst.ban_chat_member(chat_id, target)
+            return web.json_response({"ok": True, "msg": f"Забанен ID{target}"})
+        elif action == "unban" and chat_id and target:
+            await bot_inst.unban_chat_member(chat_id, target, only_if_banned=True)
+            return web.json_response({"ok": True, "msg": f"Разбанен ID{target}"})
+        elif action == "mute" and chat_id and target:
+            mins = int(arg) if arg and str(arg).isdigit() else 60
+            await bot_inst.restrict_chat_member(chat_id, target,
+                ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
+            return web.json_response({"ok": True, "msg": f"Мут ID{target} на {mins}м"})
+        elif action == "kick" and chat_id and target:
+            await bot_inst.ban_chat_member(chat_id, target)
+            await bot_inst.unban_chat_member(chat_id, target)
+            return web.json_response({"ok": True, "msg": f"Кикнут ID{target}"})
+        else:
+            return web.json_response({"ok": False, "msg": f"Неизвестное действие: {action}"})
+    except Exception as e:
+        return web.json_response({"ok": False, "msg": str(e)})
+
+async def api_bot_status(request: web.Request):
+    """Возвращает текущий статус бота."""
+    token = request.cookies.get("dsess_token","")
+    if not _has_perm(token, "view_overview"):
+        return web.json_response({"online": False})
+    bot_inst = _bot_instance
+    if not bot_inst:
+        return web.json_response({"online": False, "name": "—", "username": "—"})
+    try:
+        me = await bot_inst.get_me()
+        chats = await db.get_all_chats()
+        return web.json_response({
+            "online": True,
+            "name": me.full_name,
+            "username": me.username,
+            "id": me.id,
+            "chats_count": len(chats),
+        })
+    except Exception as e:
+        return web.json_response({"online": False, "error": str(e)})
+
+async def api_bot_chats(request: web.Request):
+    """Список чатов бота."""
+    token = request.cookies.get("dsess_token","")
+    if not _has_perm(token, "view_overview"):
+        return web.json_response({"chats": []})
+    try:
+        chats = [dict(r) for r in await db.get_all_chats()]
+        return web.json_response({"chats": chats})
+    except Exception as e:
+        return web.json_response({"chats": [], "error": str(e)})
+
+# Запускаем фоновые задачи авто-отчётов
+import asyncio as _asyncio_bg
+_auto_reports_task = None
+
+def _start_background_tasks():
+    """Вызывается из start_dashboard для запуска фоновых задач."""
+    global _auto_reports_task
+    try:
+        loop = _asyncio_bg.get_event_loop()
+        _auto_reports_task = loop.create_task(_auto_reports_loop())
+    except: pass
+
+
 async def start_dashboard():
     _init_admin_db()
     app = web.Application()
@@ -3961,9 +6258,42 @@ async def start_dashboard():
     app.router.add_get("/dashboard/themes",        handle_themes)
     app.router.add_post("/dashboard/themes",       handle_themes)
     app.router.add_get("/dashboard/msg_search",    handle_msg_search)
+
+    # ── Wiki ──────────────────────────────────────────────────
+    app.router.add_get("/dashboard/wiki",              handle_wiki_list)
+    app.router.add_get("/dashboard/wiki/new",          handle_wiki_edit)
+    app.router.add_post("/dashboard/wiki/new",         handle_wiki_edit)
+    app.router.add_get("/dashboard/wiki/{slug}",       handle_wiki_view)
+    app.router.add_get("/dashboard/wiki/{slug}/edit",  handle_wiki_edit)
+    app.router.add_post("/dashboard/wiki/{slug}/edit", handle_wiki_edit)
+    app.router.add_post("/dashboard/wiki/{slug}/delete", handle_wiki_delete)
+    app.router.add_get("/dashboard/wiki/{slug}/history", handle_wiki_history)
+    app.router.add_get("/api/wiki/search",             api_wiki_search)
+
     app.router.add_get("/api/team_messages",       api_team_messages)
     app.router.add_get("/api/mod_stats",           api_mod_stats)
     app.router.add_get("/api/threats",             api_threats)
+
+    # ── Голосовые команды ──────────────────────────────────
+    app.router.add_post("/dashboard/voice",            handle_voice_cmd)
+    app.router.add_get("/dashboard/voice",             handle_voice_cmd)
+    # ── Авто-отчёты ────────────────────────────────────────
+    app.router.add_get("/dashboard/reports_cfg",       handle_reports_cfg)
+    app.router.add_post("/dashboard/reports_cfg",      handle_reports_cfg)
+    app.router.add_post("/api/reports_cfg/send_now",   api_reports_send_now)
+    # ── Конструктор правил ────────────────────────────────
+    app.router.add_get("/dashboard/automations",       handle_automations)
+    app.router.add_post("/dashboard/automations",      handle_automations)
+    app.router.add_post("/api/automations/delete",     api_automations_delete)
+    # ── Синхронизация с ботом ─────────────────────────────
+    app.router.add_get("/dashboard/bot_control",       handle_bot_control)
+    app.router.add_post("/dashboard/bot_control",      handle_bot_control)
+    app.router.add_post("/api/bot/action",             api_bot_action)
+    app.router.add_get("/api/bot/status",              api_bot_status)
+    app.router.add_get("/api/bot/chats",               api_bot_chats)
+
+    # Запускаем фоновые задачи
+    _start_background_tasks()
 
     port = int(os.getenv("PORT", 8080))
     runner = web.AppRunner(app)
