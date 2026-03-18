@@ -321,7 +321,21 @@ def _has_perm(session_token: str, perm: str) -> bool:
 
 def _get_session(request) -> dict | None:
     token = request.cookies.get("dsess_token")
-    return _dashboard_sessions.get(token)
+    if not token:
+        return None
+    sess = _dashboard_sessions.get(token)
+    if sess and _SESSION_IP_LOCK:
+        current_ip = request.headers.get("X-Forwarded-For", request.remote or "").split(",")[0].strip()
+        session_ip = sess.get("ip", "")
+        if session_ip and current_ip and session_ip != current_ip:
+            log.warning(f"[IP_WATCHDOG] IP change {session_ip}→{current_ip} uid={sess.get('uid')}")
+            _dashboard_sessions.pop(token, None)
+            try:
+                asyncio.ensure_future(_brute_notify_owner(f"IP change {session_ip}→{current_ip}", 0))
+            except:
+                pass
+            return None
+    return sess
 
 
 def _track_session(request, path=""):
@@ -1093,6 +1107,7 @@ def navbar(sess: dict | None = None, active: str = "") -> str:
         {link("appeals",      "/dashboard/appeals",      "⚖️", "Апелляции", "view_reports")}
         {link("msg_search",   "/dashboard/msg_search",   "🔍", "Поиск сообщений", "view_deleted")}
         {link("wiki",         "/dashboard/wiki",         "📚", "Wiki команды",     "view_overview")}
+        {link("incidents",    "/dashboard/incidents",    "🚨", "Инциденты",        "view_overview")}
         {link("automations",  "/dashboard/automations",  "⚡", "Автоправила",      "view_overview")}
         {link("reports_cfg",  "/dashboard/reports_cfg",  "📊", "Авто-отчёты",      "view_overview")}
         {link("bot_control",  "/dashboard/bot_control",  "🤖", "Управление ботом", "view_overview")}
@@ -1133,8 +1148,100 @@ def close_main() -> str:
 #  LOGIN / AUTH
 # ══════════════════════════════════════════
 
+
+# ══════════════════════════════════════════════════════════════════
+#  🔒 ЗАЩИТА СЕССИЙ — БРУТФОРС + IP WATCHDOG
+# ══════════════════════════════════════════════════════════════════
+
+_login_attempts: dict = {}   # {ip: [timestamps]}
+_ip_blocked:    dict = {}   # {ip: unblock_timestamp}
+_BRUTE_MAX       = 5        # попыток
+_BRUTE_WINDOW    = 300      # секунд (5 мин)
+_BRUTE_BLOCK     = 900      # блок на 15 мин
+_SESSION_IP_LOCK = True     # force-logout при смене IP
+
+def _brute_check(ip: str) -> bool:
+    """True = IP заблокирован."""
+    now = time.time()
+    unblock = _ip_blocked.get(ip, 0)
+    if now < unblock:
+        return True
+    return False
+
+def _brute_register_fail(ip: str):
+    """Фиксирует неудачную попытку. Блокирует при превышении лимита."""
+    now = time.time()
+    attempts = [t for t in _login_attempts.get(ip, []) if now - t < _BRUTE_WINDOW]
+    attempts.append(now)
+    _login_attempts[ip] = attempts
+    if len(attempts) >= _BRUTE_MAX:
+        _ip_blocked[ip] = now + _BRUTE_BLOCK
+        log.warning(f"[BRUTE] IP {ip} заблокирован на {_BRUTE_BLOCK//60} мин")
+        # Попытка уведомить владельца
+        try:
+            asyncio.ensure_future(_brute_notify_owner(ip, len(attempts)))
+        except:
+            pass
+
+def _brute_register_success(ip: str):
+    """Сбрасывает счётчик при успехе."""
+    _login_attempts.pop(ip, None)
+    _ip_blocked.pop(ip, None)
+
+async def _brute_notify_owner(ip: str, count: int):
+    """Шлёт алерт владельцу в Telegram."""
+    if not _bot:
+        return
+    try:
+        await _bot.send_message(
+            OWNER_TG_ID,
+            f"🚨 <b>ALERT: Брутфорс атака!</b>\n\n"
+            f"🌐 IP: <code>{ip}</code>\n"
+            f"🔑 Попыток: <b>{count}</b>\n"
+            f"⏰ Заблокирован на 15 минут\n\n"
+            f"<i>Dashboard Security Monitor</i>",
+            parse_mode="HTML"
+        )
+    except:
+        pass
+
+def _session_ip_check(request, sess: dict | None) -> bool:
+    """True = сессия валидна по IP."""
+    if not sess or not _SESSION_IP_LOCK:
+        return True
+    current_ip = request.headers.get("X-Forwarded-For", request.remote or "").split(",")[0].strip()
+    session_ip = sess.get("ip", "")
+    if session_ip and current_ip and current_ip != session_ip:
+        log.warning(f"[SESSION] IP сменился: {session_ip} → {current_ip} для uid={sess.get('uid')}")
+        return False
+    return True
+
+def _brute_remaining(ip: str) -> int:
+    """Возвращает секунд до разблокировки."""
+    return max(0, int(_ip_blocked.get(ip, 0) - time.time()))
+
 async def handle_login(request: web.Request):
     error = ""
+    ip = request.headers.get("X-Forwarded-For", request.remote or "").split(",")[0].strip()
+
+    # Брутфорс проверка
+    if _brute_check(ip):
+        remaining = _brute_remaining(ip)
+        body = f"""
+        <div class="login-bg">
+          <div class="login-box">
+            <div class="login-logo">🚫</div>
+            <div class="login-title">Доступ заблокирован</div>
+            <div class="login-sub" style="color:var(--danger);">
+              Слишком много неудачных попыток.<br>
+              Попробуйте через <b>{remaining // 60} мин {remaining % 60} сек</b>.
+            </div>
+            <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--text2);">
+              IP: {ip}
+            </p>
+          </div>
+        </div>"""
+        return web.Response(text=HTML_BASE.replace("{body}", body), content_type="text/html", status=429)
 
     if request.method == "POST":
         data = await request.post()
@@ -1164,6 +1271,7 @@ async def handle_login(request: web.Request):
                         "ip": ip,
                         "_token": new_sess,
                     }
+                    _brute_register_success(ip)
                     _log_admin_db(tg_uid, "LOGIN", f"Успешный вход с {ip}", ip)
                     # Обновляем last_login
                     try:
@@ -1206,6 +1314,9 @@ async def handle_login(request: web.Request):
             return web.Response(text=HTML_BASE.replace("{body}", body), content_type="text/html")
 
         # Step 1: проверяем токен + tg_uid
+        if token != DASHBOARD_TOKEN and token:
+            _brute_register_fail(ip)
+            error = "❌ Неверный токен"
         if token == DASHBOARD_TOKEN and tg_uid_str:
             try:
                 tg_uid = int(tg_uid_str)
@@ -1216,6 +1327,7 @@ async def handle_login(request: web.Request):
             if tg_uid:
                 admin = _get_admin(tg_uid)
                 if not admin:
+                    _brute_register_fail(ip)
                     error = "❌ Ваш Telegram ID не добавлен в систему. Обратитесь к владельцу."
                 else:
                     code_val = _gen_2fa_code()
@@ -3747,6 +3859,84 @@ async def handle_health(request: web.Request):
 #  ПРОФИЛЬ МОДЕРАТОРА
 # ══════════════════════════════════════════
 
+
+def _mod_activity_json(uid: int) -> str:
+    """Возвращает JSON с активностью мода за 30 дней для Chart.js."""
+    import json
+    from datetime import datetime, timedelta
+    labels = []
+    values = []
+    try:
+        conn = db.get_conn()
+        for i in range(29, -1, -1):
+            day = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+            day_label = (datetime.now() - timedelta(days=i)).strftime("%d.%m")
+            cnt = conn.execute(
+                "SELECT COUNT(*) FROM mod_history WHERE by_name IN "
+                "(SELECT name FROM dashboard_admins WHERE tg_uid=?) "
+                "AND date(created_at)=?", (uid, day)
+            ).fetchone()[0] or 0
+            labels.append(day_label)
+            values.append(cnt)
+        conn.close()
+    except:
+        labels = [str(i) for i in range(30)]
+        values = [0] * 30
+    return json.dumps({"labels": labels, "values": values})
+
+
+def _mod_rank_progress_html(uid: int, rank: int, stats: dict) -> str:
+    """Прогресс-бар до следующего ранга с порогами."""
+    # Пороги для повышения ранга (накопленные действия)
+    RANK_THRESHOLDS = {
+        1: 10, 2: 25, 3: 50, 4: 100, 5: 200,
+        6: 350, 7: 500, 8: 750, 9: 1000, 10: 1500,
+        11: 2000, 12: 3000, 13: 5000, 14: 8000,
+    }
+    if rank >= OWNER_RANK:
+        return '<div style="color:var(--gold);font-weight:700;">⭐ Максимальный ранг достигнут</div>'
+
+    next_rank   = rank + 1
+    threshold   = RANK_THRESHOLDS.get(rank, 9999)
+    total_acts  = stats.get("bans", 0) + stats.get("warns", 0) + stats.get("mutes", 0) + stats.get("tickets", 0)
+    pct         = min(100, int(total_acts / threshold * 100)) if threshold else 100
+    next_name   = DASHBOARD_RANKS.get(next_rank, {}).get("name", "—")
+    next_color  = DASHBOARD_RANKS.get(next_rank, {}).get("color", "#6366f1")
+    rgb         = _hex_to_rgb(next_color)
+    remaining   = max(0, threshold - total_acts)
+
+    metrics = [
+        ("🔨", "Банов",  stats.get("bans",0),    "#ef4444"),
+        ("⚡", "Варнов", stats.get("warns",0),   "#f59e0b"),
+        ("🔇", "Мутов",  stats.get("mutes",0),   "#8b5cf6"),
+        ("🎫", "Тикетов",stats.get("tickets",0), "#3b82f6"),
+    ]
+    metrics_html = "".join(
+        f'<div style="text-align:center;">'
+        f'<div style="font-size:18px;font-weight:700;color:{c};">{v}</div>'
+        f'<div style="font-size:11px;color:var(--text2);">{icon} {label}</div>'
+        f'</div>'
+        for icon, label, v, c in metrics
+    )
+
+    return (
+        f'<div style="margin-bottom:12px;display:flex;justify-content:space-between;font-size:13px;">'
+        f'<span>Текущий: <b>{DASHBOARD_RANKS.get(rank,{{}}).get("name","—")}</b></span>'
+        f'<span>Цель: <b style="color:{next_color};">{next_name}</b></span>'
+        f'</div>'
+        f'<div style="background:var(--bg3);border-radius:8px;height:14px;overflow:hidden;margin-bottom:8px;">'
+        f'<div style="height:100%;width:{pct}%;background:linear-gradient(90deg,rgba({rgb},.6),{next_color});'
+        f'border-radius:8px;transition:width .5s;"></div>'
+        f'</div>'
+        f'<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:16px;">'
+        f'<span>{total_acts} / {threshold} действий</span>'
+        f'<span>{pct}% · осталось {remaining}</span>'
+        f'</div>'
+        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">'
+        f'{metrics_html}'
+        f'</div>'
+    )
+
 async def handle_mod_profile(request: web.Request):
     """Страница профиля конкретного модератора."""
     sess = _get_session(request)
@@ -3870,6 +4060,13 @@ async def handle_mod_profile(request: web.Request):
         </div>
       </div>
 
+      <div class="section" style="margin-bottom:24px;">
+        <div class="section-header">📈 Активность за 30 дней</div>
+        <div style="padding:16px;height:200px;position:relative;">
+          <canvas id="modActivityChart"></canvas>
+        </div>
+      </div>
+
       <div class="grid-2">
         <div class="section">
           <div class="section-header">📋 Последние 20 действий</div>
@@ -3886,7 +4083,47 @@ async def handle_mod_profile(request: web.Request):
           </table>
         </div>
       </div>
+
+      <div class="section">
+        <div class="section-header">🎯 Прогресс до ранга {DASHBOARD_RANKS.get(rank+1, {{}}).get('name', '🌟 Максимум')}</div>
+        <div style="padding:16px;">
+          {_mod_rank_progress_html(target_uid, rank, stats)}
+        </div>
+      </div>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script>
+    (function() {{
+      var ctx = document.getElementById("modActivityChart");
+      if (!ctx) return;
+      var data = {_mod_activity_json(target_uid)};
+      new Chart(ctx, {{
+        type: "line",
+        data: {{
+          labels: data.labels,
+          datasets: [{{
+            label: "Действий",
+            data: data.values,
+            borderColor: "#6366f1",
+            backgroundColor: "rgba(99,102,241,0.1)",
+            borderWidth: 2,
+            pointRadius: 3,
+            fill: true,
+            tension: 0.4
+          }}]
+        }},
+        options: {{
+          responsive: true, maintainAspectRatio: false,
+          plugins: {{ legend: {{ display: false }} }},
+          scales: {{
+            x: {{ grid: {{ display: false }}, ticks: {{ font: {{ size: 10 }} }} }},
+            y: {{ beginAtZero: true, ticks: {{ stepSize: 1, font: {{ size: 10 }} }} }}
+          }}
+        }}
+      }});
+    }})();
+    </script>
     """ + close_main()
     return web.Response(text=page(body), content_type="text/html")
 
@@ -4620,11 +4857,21 @@ def _voice_history_init():
     except: pass
 
 async def handle_voice_cmd(request: web.Request):
+    import traceback as _voice_tb
+    try:
+        return await _handle_voice_cmd_inner(request)
+    except Exception as _voice_err:
+        return web.Response(
+            text=f"<pre style='color:red;padding:20px'>VOICE 500:\n{_voice_tb.format_exc()}</pre>",
+            content_type="text/html", status=500)
+
+async def _handle_voice_cmd_inner(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
     _voice_history_init()
     result_html = ""
 
+    action = None; target = None; arg = ""
     if request.method == "POST":
         data = await request.post()
         raw_text = (data.get("voice_text") or "").strip()
@@ -4729,8 +4976,9 @@ async def handle_voice_cmd(request: web.Request):
                     _log_admin_db(admin_id, "VOICE_CMD", f"{action}: {res_text}")
 
                 except Exception as e:
+                    import traceback as _tvc
                     status = "error"
-                    res_text = f"❌ Ошибка: {e}"
+                    res_text = f"❌ Ошибка: {e} | {_tvc.format_exc()[:200]}"
 
             color = "var(--success)" if status=="ok" else ("var(--warning)" if status=="warn" else "var(--danger)")
             icon  = "✅" if status=="ok" else ("⚠️" if status=="warn" else "❌")
@@ -4897,7 +5145,13 @@ async def handle_voice_cmd(request: web.Request):
     }}
     </script>
     """ + close_main()
-    return web.Response(text=page(body), content_type="text/html")
+    try:
+        rendered = page(body)
+    except Exception as _ve:
+        import traceback as _tb
+        return web.Response(text=f"<pre style='color:red'>VOICE ERROR:\n{_tb.format_exc()}</pre>",
+                            content_type="text/html")
+    return web.Response(text=rendered, content_type="text/html")
 
 handle_voice_cmd = require_auth("view_overview")(handle_voice_cmd)
 
@@ -5656,6 +5910,15 @@ async def check_automations(chat_id: int, uid: int, trigger: str, value) -> list
 #  - Синхронизация данных бот ↔ дашборд
 
 async def handle_bot_control(request: web.Request):
+    import traceback as _bot_tb
+    try:
+     return await _handle_bot_control_inner(request)
+    except Exception as _bot_err:
+        return web.Response(
+            text=f"<pre style='color:red;padding:20px'>BOT_CONTROL 500:\n{_bot_tb.format_exc()}</pre>",
+            content_type="text/html", status=500)
+
+async def _handle_bot_control_inner(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
     result_html = ""
@@ -5836,7 +6099,11 @@ async def handle_bot_control(request: web.Request):
                     f'{msg}</div>'
                 )
             except Exception as e:
-                result_html = f'<div class="alert alert-danger">❌ {e}</div>'
+                import traceback as _tbc
+                result_html = (
+                    f'<div class="alert alert-danger" style="white-space:pre-wrap;">'
+                    f'❌ {e}\n\n{_tbc.format_exc()}</div>'
+                )
 
     # Статус бота
     bot_inst = _bot_instance
@@ -6086,7 +6353,13 @@ async def handle_bot_control(request: web.Request):
     }}
     </script>
     """ + close_main()
-    return web.Response(text=page(body), content_type="text/html")
+    try:
+        rendered = page(body)
+    except Exception as _be:
+        import traceback as _tb
+        return web.Response(text=f"<pre style='color:red'>BOT_CTRL ERROR:\n{_tb.format_exc()}</pre>",
+                            content_type="text/html")
+    return web.Response(text=rendered, content_type="text/html")
 
 handle_bot_control = require_auth("view_overview")(handle_bot_control)
 
@@ -6184,6 +6457,375 @@ def _start_background_tasks():
     except: pass
 
 
+
+# ══════════════════════════════════════════════════════════════════
+#  🚨 СИСТЕМА ИНЦИДЕНТОВ
+# ══════════════════════════════════════════════════════════════════
+
+def _incidents_init():
+    try:
+        conn = db.get_conn()
+        conn.execute("""CREATE TABLE IF NOT EXISTS incidents (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            title       TEXT    NOT NULL,
+            description TEXT    DEFAULT '',
+            severity    TEXT    DEFAULT 'low',
+            status      TEXT    DEFAULT 'open',
+            assigned_to TEXT    DEFAULT '',
+            assigned_uid INTEGER DEFAULT 0,
+            created_by  TEXT    DEFAULT '',
+            created_uid INTEGER DEFAULT 0,
+            postmortem  TEXT    DEFAULT '',
+            created_at  TEXT    DEFAULT (datetime('now')),
+            updated_at  TEXT    DEFAULT (datetime('now')),
+            resolved_at TEXT    DEFAULT '')""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS incident_timeline (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            incident_id INTEGER NOT NULL,
+            author      TEXT    DEFAULT '',
+            author_uid  INTEGER DEFAULT 0,
+            note        TEXT    NOT NULL,
+            created_at  TEXT    DEFAULT (datetime('now')))""")
+        conn.commit(); conn.close()
+    except Exception as e:
+        log.warning(f"_incidents_init: {e}")
+
+_INCIDENT_SEVERITY = {
+    "low":      ("🟢", "Низкий",    "#22c55e"),
+    "medium":   ("🟡", "Средний",   "#f59e0b"),
+    "high":     ("🔴", "Высокий",   "#ef4444"),
+    "critical": ("💀", "Критичный", "#dc2626"),
+}
+_INCIDENT_STATUS = {
+    "open":          ("🔴", "Открыт"),
+    "investigating": ("🟡", "Расследование"),
+    "resolved":      ("✅", "Решён"),
+    "closed":        ("⚫", "Закрыт"),
+}
+
+async def handle_incidents(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    _incidents_init()
+    result_html = ""
+
+    if request.method == "POST":
+        data    = await request.post()
+        action  = data.get("action", "")
+        inc_id  = int(data.get("inc_id", 0) or 0)
+        uid     = sess.get("uid", 0) if sess else 0
+        uname   = sess.get("name", "?") if sess else "?"
+
+        if action == "create":
+            title    = (data.get("title") or "").strip()
+            desc     = (data.get("description") or "").strip()
+            severity = data.get("severity", "low")
+            assigned = (data.get("assigned") or "").strip()
+            if title:
+                conn = db.get_conn()
+                conn.execute(
+                    "INSERT INTO incidents (title,description,severity,assigned_to,created_by,created_uid) VALUES (?,?,?,?,?,?)",
+                    (title, desc, severity, assigned, uname, uid)
+                )
+                new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                # Первая запись в таймлайн
+                conn.execute(
+                    "INSERT INTO incident_timeline (incident_id,author,author_uid,note) VALUES (?,?,?,?)",
+                    (new_id, uname, uid, f"Инцидент создан. Severity: {severity}. {desc[:100]}")
+                )
+                conn.commit(); conn.close()
+                _log_admin_db(uid, "INCIDENT_CREATE", f"#{new_id}: {title}")
+                # Алерт если критичный
+                if severity == "critical" and _bot:
+                    try:
+                        import asyncio as _aio
+                        _aio.ensure_future(_bot.send_message(
+                            OWNER_TG_ID,
+                            f"💀 <b>КРИТИЧНЫЙ ИНЦИДЕНТ #{new_id}</b>\n\n"
+                            f"<b>{title}</b>\n{desc[:200]}\n\n"
+                            f"👤 Создал: {uname}\n"
+                            f"🔗 /dashboard/incidents",
+                            parse_mode="HTML"
+                        ))
+                    except: pass
+                result_html = f'<div class="alert alert-success">✅ Инцидент #{new_id} создан</div>'
+
+        elif action == "add_note" and inc_id:
+            note = (data.get("note") or "").strip()
+            if note:
+                conn = db.get_conn()
+                conn.execute(
+                    "INSERT INTO incident_timeline (incident_id,author,author_uid,note) VALUES (?,?,?,?)",
+                    (inc_id, uname, uid, note)
+                )
+                conn.execute("UPDATE incidents SET updated_at=datetime('now') WHERE id=?", (inc_id,))
+                conn.commit(); conn.close()
+                _log_admin_db(uid, "INCIDENT_NOTE", f"#{inc_id}: {note[:50]}")
+
+        elif action == "update_status" and inc_id:
+            new_status = data.get("new_status", "")
+            postmortem = (data.get("postmortem") or "").strip()
+            if new_status in _INCIDENT_STATUS:
+                conn = db.get_conn()
+                resolved_at = "datetime('now')" if new_status == "resolved" else "NULL"
+                conn.execute(
+                    f"UPDATE incidents SET status=?,updated_at=datetime('now')"
+                    f"{',resolved_at=datetime('+chr(39)+'now'+chr(39)+')' if new_status=='resolved' else ''}"
+                    f"{',postmortem=?' if postmortem else ''} WHERE id=?",
+                    ([new_status] + ([postmortem] if postmortem else []) + [inc_id])
+                )
+                conn.execute(
+                    "INSERT INTO incident_timeline (incident_id,author,author_uid,note) VALUES (?,?,?,?)",
+                    (inc_id, uname, uid, f"Статус изменён → {_INCIDENT_STATUS[new_status][1]}" + (f". Post-mortem: {postmortem[:100]}" if postmortem else ""))
+                )
+                conn.commit(); conn.close()
+                _log_admin_db(uid, "INCIDENT_STATUS", f"#{inc_id}→{new_status}")
+                # Алерт при решении
+                if new_status == "resolved" and _bot:
+                    try:
+                        import asyncio as _aio
+                        inc = db.get_conn().execute("SELECT title,severity FROM incidents WHERE id=?", (inc_id,)).fetchone()
+                        if inc:
+                            _aio.ensure_future(_bot.send_message(
+                                OWNER_TG_ID,
+                                f"✅ <b>Инцидент #{inc_id} решён</b>\n<b>{inc['title']}</b>\n👤 {uname}",
+                                parse_mode="HTML"
+                            ))
+                    except: pass
+
+        elif action == "delete" and inc_id:
+            conn = db.get_conn()
+            conn.execute("DELETE FROM incident_timeline WHERE incident_id=?", (inc_id,))
+            conn.execute("DELETE FROM incidents WHERE id=?", (inc_id,))
+            conn.commit(); conn.close()
+            _log_admin_db(uid, "INCIDENT_DELETE", f"#{inc_id}")
+
+    # Фильтр
+    status_filter = request.rel_url.query.get("status", "open")
+    detail_id     = int(request.rel_url.query.get("id", 0) or 0)
+
+    conn = db.get_conn()
+    if detail_id:
+        # Детальный вид инцидента
+        inc = conn.execute("SELECT * FROM incidents WHERE id=?", (detail_id,)).fetchone()
+        timeline = [dict(r) for r in conn.execute(
+            "SELECT * FROM incident_timeline WHERE incident_id=? ORDER BY created_at ASC",
+            (detail_id,)
+        ).fetchall()]
+        conn.close()
+
+        if not inc:
+            raise web.HTTPFound("/dashboard/incidents")
+
+        inc = dict(inc)
+        sev_icon, sev_label, sev_color = _INCIDENT_SEVERITY.get(inc["severity"], ("🟢","—","#22c55e"))
+        st_icon, st_label = _INCIDENT_STATUS.get(inc["status"], ("🔴","Открыт"))
+
+        tl_html = ""
+        for t in timeline:
+            tl_html += (
+                f'<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">'
+                f'<div style="width:32px;height:32px;border-radius:50%;background:var(--bg3);'
+                f'display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;'
+                f'color:var(--accent);flex-shrink:0;">{t["author"][:1].upper()}</div>'
+                f'<div style="flex:1;">'
+                f'<div style="font-size:12px;font-weight:600;">{t["author"]} '
+                f'<span style="color:var(--text2);font-weight:400;">{str(t["created_at"])[:16]}</span></div>'
+                f'<div style="font-size:13px;margin-top:3px;">{t["note"]}</div>'
+                f'</div></div>'
+            )
+
+        status_opts = "".join(
+            f'<option value="{k}" {"selected" if k==inc["status"] else ""}>{v[0]} {v[1]}</option>'
+            for k, v in _INCIDENT_STATUS.items()
+        )
+
+        body = navbar(sess, "incidents") + f"""
+    <div class="container">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;flex-wrap:wrap;">
+        <a href="/dashboard/incidents" class="btn btn-ghost btn-sm">← Все инциденты</a>
+        <span style="font-size:22px;font-weight:800;">#{inc["id"]} {inc["title"]}</span>
+        <span class="badge" style="background:rgba({_hex_to_rgb(sev_color)},.15);color:{sev_color};">{sev_icon} {sev_label}</span>
+        <span style="color:var(--text2);font-size:13px;">{st_icon} {st_label}</span>
+        <span style="margin-left:auto;font-size:12px;color:var(--text2);">
+          Создан: {str(inc["created_at"])[:16]} · {inc["created_by"]}
+        </span>
+      </div>
+
+      {result_html}
+
+      <div class="grid-2" style="gap:24px;align-items:start;">
+        <div>
+          <div class="section">
+            <div class="section-header">📋 Описание</div>
+            <div style="padding:16px;font-size:14px;line-height:1.7;">{inc["description"] or "—"}</div>
+          </div>
+          {"<div class='section' style='margin-top:20px;'><div class='section-header'>📝 Post-mortem</div><div style='padding:16px;font-size:14px;'>" + inc["postmortem"] + "</div></div>" if inc.get("postmortem") else ""}
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">⚙️ Управление</div>
+            <div class="section-body">
+              <form method="POST">
+                <input type="hidden" name="action" value="update_status">
+                <input type="hidden" name="inc_id" value="{inc["id"]}">
+                <div class="form-group">
+                  <label>Изменить статус</label>
+                  <select class="form-control" name="new_status">{status_opts}</select>
+                </div>
+                <div class="form-group">
+                  <label>Post-mortem (при решении)</label>
+                  <textarea class="form-control" name="postmortem" rows="3"
+                    placeholder="Что произошло, почему, как предотвратить...">{inc.get("postmortem","")}</textarea>
+                </div>
+                <button class="btn btn-primary" type="submit" style="width:100%;">💾 Сохранить</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section">
+            <div class="section-header">📜 Таймлайн ({len(timeline)} записей)</div>
+            <div style="padding:0 16px 8px;">{tl_html or "<div class='empty-state'>Нет записей</div>"}</div>
+          </div>
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">➕ Добавить запись</div>
+            <div class="section-body">
+              <form method="POST">
+                <input type="hidden" name="action" value="add_note">
+                <input type="hidden" name="inc_id" value="{inc["id"]}">
+                <textarea class="form-control" name="note" rows="3"
+                  placeholder="Что происходит, что предпринято..." required></textarea>
+                <button class="btn btn-primary" style="margin-top:8px;width:100%;" type="submit">➕ Добавить</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    """ + close_main()
+        return web.Response(text=page(body), content_type="text/html")
+
+    # Список инцидентов
+    if status_filter == "all":
+        incidents = [dict(r) for r in conn.execute(
+            "SELECT * FROM incidents ORDER BY created_at DESC"
+        ).fetchall()]
+    else:
+        incidents = [dict(r) for r in conn.execute(
+            "SELECT * FROM incidents WHERE status=? ORDER BY created_at DESC",
+            (status_filter,)
+        ).fetchall()]
+
+    counts = {}
+    for s in _INCIDENT_STATUS.keys():
+        counts[s] = conn.execute("SELECT COUNT(*) FROM incidents WHERE status=?", (s,)).fetchone()[0]
+    counts["all"] = conn.execute("SELECT COUNT(*) FROM incidents").fetchone()[0]
+    conn.close()
+
+    tabs_html = ""
+    for s, (icon, label) in _INCIDENT_STATUS.items():
+        active = "btn-primary" if status_filter == s else "btn-ghost"
+        tabs_html += f'<a href="?status={s}" class="btn btn-sm {active}" style="margin-right:4px;">{icon} {label} ({counts.get(s,0)})</a>'
+    tabs_html += f'<a href="?status=all" class="btn btn-sm {"btn-primary" if status_filter=="all" else "btn-ghost"}" style="margin-right:4px;">📋 Все ({counts["all"]})</a>'
+
+    rows_html = ""
+    for inc in incidents:
+        sev_icon, sev_label, sev_color = _INCIDENT_SEVERITY.get(inc["severity"], ("🟢","—","#22c55e"))
+        st_icon, st_label = _INCIDENT_STATUS.get(inc["status"], ("🔴","Открыт"))
+        _inc_url = "/dashboard/incidents?id=" + str(inc["id"])
+        rows_html += (
+            f"<div style='padding:16px;border-bottom:1px solid var(--border);cursor:pointer;' data-url='{_inc_url}' onclick='window.location=this.dataset.url'>"
+            f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+            f"<div style='padding:16px;border-bottom:1px solid var(--border);cursor:pointer;'" 
+            f"onclick='window.location=\"{_inc_url}\"'>"
+            f'background:rgba({_hex_to_rgb(sev_color)},.15);color:{sev_color};">{sev_icon} {sev_label}</span>'
+            f'<span style="font-size:11px;color:var(--text2);">{st_icon} {st_label}</span>'
+            f'<span style="margin-left:auto;font-size:11px;color:var(--text2);">'
+            f'{str(inc["created_at"])[:16]} · {inc["created_by"]}</span>'
+            f'</div>'
+            f'{"<div style=\"font-size:12px;color:var(--text2);margin-top:6px;\">" + inc["description"][:100] + "...</div>" if inc.get("description") else ""}'
+            f'</div>'
+        )
+    if not rows_html:
+        rows_html = '<div class="empty-state">Инцидентов нет</div>'
+
+    sev_opts = "".join(
+        f'<option value="{k}">{v[0]} {v[1]}</option>'
+        for k, v in _INCIDENT_SEVERITY.items()
+    )
+
+    # Получаем список модов для назначения
+    admins = _get_all_admins()
+    admin_opts = "".join(f'<option value="{a["name"]}">{a["name"]} (ранг {a["rank"]})</option>' for a in admins)
+
+    body = navbar(sess, "incidents") + f"""
+    <div class="container">
+      <div class="page-title">🚨 Система инцидентов
+        <span style="font-size:12px;color:var(--danger);font-weight:600;margin-left:auto;">
+          {counts.get("open",0)} открытых · {counts.get("investigating",0)} расследуется
+        </span>
+      </div>
+
+      {result_html}
+
+      <div style="margin-bottom:20px;display:flex;gap:4px;flex-wrap:wrap;">{tabs_html}</div>
+
+      <div class="grid-2" style="gap:24px;align-items:start;">
+        <div>
+          <div class="section">
+            <div class="section-header">📋 Инциденты ({len(incidents)})</div>
+            {rows_html}
+          </div>
+        </div>
+
+        <div>
+          <div class="section">
+            <div class="section-header">➕ Новый инцидент</div>
+            <div class="section-body">
+              <form method="POST">
+                <input type="hidden" name="action" value="create">
+                <div class="form-group">
+                  <label>Заголовок *</label>
+                  <input class="form-control" name="title" placeholder="Что произошло?" required>
+                </div>
+                <div class="form-group">
+                  <label>Описание</label>
+                  <textarea class="form-control" name="description" rows="3"
+                    placeholder="Детали инцидента..."></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Серьёзность</label>
+                  <select class="form-control" name="severity">{sev_opts}</select>
+                </div>
+                <div class="form-group">
+                  <label>Ответственный</label>
+                  <select class="form-control" name="assigned">
+                    <option value="">— не назначен —</option>
+                    {admin_opts}
+                  </select>
+                </div>
+                <button class="btn btn-primary" type="submit" style="width:100%;padding:12px;">
+                  🚨 Создать инцидент
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div class="section" style="margin-top:20px;">
+            <div class="section-header">ℹ️ Severity уровни</div>
+            <div style="padding:12px 16px;">
+              {"".join(f'<div style="padding:5px 0;font-size:13px;">{icon} <b style="color:{color};">{label}</b></div>' for k,(icon,label,color) in _INCIDENT_SEVERITY.items())}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_incidents = require_auth("view_overview")(handle_incidents)
+
+
 async def start_dashboard():
     _init_admin_db()
     app = web.Application()
@@ -6269,6 +6911,8 @@ async def start_dashboard():
     app.router.add_post("/dashboard/wiki/{slug}/delete", handle_wiki_delete)
     app.router.add_get("/dashboard/wiki/{slug}/history", handle_wiki_history)
     app.router.add_get("/api/wiki/search",             api_wiki_search)
+    app.router.add_get("/dashboard/incidents",         handle_incidents)
+    app.router.add_post("/dashboard/incidents",        handle_incidents)
 
     app.router.add_get("/api/team_messages",       api_team_messages)
     app.router.add_get("/api/mod_stats",           api_mod_stats)
@@ -7165,11 +7809,62 @@ async def handle_appeals(request: web.Request):
     _track_session(request)
     token = request.cookies.get("dsess_token")
 
+    # Хранилище голосов: {appeal_id: {voter_uid: "yes"/"no"}}
+    if not hasattr(handle_appeals, "_votes"):
+        handle_appeals._votes = {}
+    _votes = handle_appeals._votes
+
     if request.method == "POST":
         data = await request.post()
         action = data.get("action")
         appeal_id = int(data.get("appeal_id", -1))
         reply_text = (data.get("reply") or "").strip()
+        voter_uid  = sess.get("uid", 0) if sess else 0
+        voter_rank = sess.get("rank", 1) if sess else 1
+
+        # Голосование — доступно с ранга 5+
+        if action in ("vote_yes", "vote_no") and voter_rank >= 5:
+            vote_val = "yes" if action == "vote_yes" else "no"
+            if appeal_id not in _votes:
+                _votes[appeal_id] = {}
+            _votes[appeal_id][voter_uid] = vote_val
+            # Считаем голоса
+            votes = _votes.get(appeal_id, {})
+            yes_v = sum(1 for v in votes.values() if v == "yes")
+            no_v  = sum(1 for v in votes.values() if v == "no")
+            # Авторешение при 3+ голосах
+            for ap in _appeals:
+                if ap.get("id") == appeal_id and ap.get("status") == "pending":
+                    if yes_v >= 3:
+                        ap["status"] = "approved"
+                        ap["reply"] = "✅ Одобрено командой модераторов (3+ голосов За)"
+                        ap["decided_by"] = voter_uid
+                        ap["decided_at"] = time.time()
+                        if _bot and ap.get("uid") and ap.get("cid"):
+                            try:
+                                import asyncio as _aio
+                                _aio.ensure_future(_bot.unban_chat_member(ap["cid"], ap["uid"], only_if_banned=True))
+                                _aio.ensure_future(_bot.send_message(ap["uid"],
+                                    "✅ <b>Твоя апелляция одобрена!</b>\nБлокировка снята командой модераторов.",
+                                    parse_mode="HTML"))
+                            except:
+                                pass
+                        _log_admin_db(voter_uid, "APPEAL_AUTO_APPROVE", f"id={appeal_id} yes={yes_v}")
+                    elif no_v >= 3:
+                        ap["status"] = "rejected"
+                        ap["reply"] = "❌ Отклонено командой модераторов (3+ голосов Против)"
+                        ap["decided_by"] = voter_uid
+                        ap["decided_at"] = time.time()
+                        if _bot and ap.get("uid"):
+                            try:
+                                import asyncio as _aio
+                                _aio.ensure_future(_bot.send_message(ap["uid"],
+                                    "❌ <b>Твоя апелляция отклонена</b> командой модераторов.",
+                                    parse_mode="HTML"))
+                            except:
+                                pass
+                        _log_admin_db(voter_uid, "APPEAL_AUTO_REJECT", f"id={appeal_id} no={no_v}")
+            raise web.HTTPFound("/dashboard/appeals")
 
         for ap in _appeals:
             if ap.get("id") == appeal_id:
@@ -7254,9 +7949,40 @@ async def handle_appeals(request: web.Request):
         dt = datetime.fromtimestamp(ap.get("ts", 0)).strftime("%d.%m %H:%M")
 
         action_form = ""
+        if not hasattr(handle_appeals, "_votes"):
+            handle_appeals._votes = {}
+        _votes = handle_appeals._votes
+        ap_votes = _votes.get(ap_id, {})
+        yes_cnt  = sum(1 for v in ap_votes.values() if v == "yes")
+        no_cnt   = sum(1 for v in ap_votes.values() if v == "no")
+        voter_uid_cur  = sess.get("uid", 0) if sess else 0
+        voter_rank_cur = sess.get("rank", 1) if sess else 1
+        my_vote  = ap_votes.get(voter_uid_cur, "")
+
+        vote_block = ""
+        if status in ("pending", "pending_info") and voter_rank_cur >= 5:
+            y_s = 'background:rgba(34,197,94,.35);' if my_vote == "yes" else 'background:rgba(34,197,94,.1);'
+            n_s = 'background:rgba(239,68,68,.35);'  if my_vote == "no"  else 'background:rgba(239,68,68,.1);'
+            vote_block = (
+                f'<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">'
+                f'<span style="font-size:12px;color:var(--text2);">Голосование ({yes_cnt}✅/{no_cnt}❌ — нужно 3):</span>'
+                f'<form method="POST" style="display:inline;">'
+                f'<input type="hidden" name="appeal_id" value="{ap_id}">'
+                f'<input type="hidden" name="action" value="vote_yes">'
+                f'<button class="btn btn-xs" style="{y_s}color:var(--success);" type="submit">👍 За ({yes_cnt})</button>'
+                f'</form>'
+                f'<form method="POST" style="display:inline;">'
+                f'<input type="hidden" name="appeal_id" value="{ap_id}">'
+                f'<input type="hidden" name="action" value="vote_no">'
+                f'<button class="btn btn-xs" style="{n_s}color:var(--danger);" type="submit">👎 Против ({no_cnt})</button>'
+                f'</form>'
+                f'<span style="font-size:11px;color:var(--text2);">Твой голос: {my_vote or "—"}</span>'
+                f'</div>'
+            )
+
         if status in ("pending", "pending_info") and can_decide:
             action_form = (
-                f'<div style="margin-top:8px;">'
+                vote_block +
                 f'<form method="POST">'
                 f'<input type="hidden" name="appeal_id" value="{ap_id}">'
                 f'<textarea class="form-control" name="reply" rows="2" placeholder="Ответ юзеру..." style="margin-bottom:8px;font-size:12px;"></textarea>'
@@ -7264,8 +7990,11 @@ async def handle_appeals(request: web.Request):
                 f'<button name="action" value="approve" class="btn btn-xs btn-success">✅ Одобрить</button>'
                 f'<button name="action" value="reject" class="btn btn-xs btn-danger">❌ Отклонить</button>'
                 f'<button name="action" value="need_info" class="btn btn-xs btn-warn">❓ Нужна инфо</button>'
-                f'</div></form></div>'
+                f'</div></form>'
             )
+        elif status in ("pending", "pending_info"):
+            action_form = vote_block
+
 
         _ap_reply = ("<div style=\"font-size:12px;color:var(--success);margin-top:6px;\">💬 Ответ: " + ap.get("reply","—") + "</div>") if ap.get("reply") else ""
         rows_html += (
