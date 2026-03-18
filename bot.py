@@ -11411,6 +11411,90 @@ async def on_join_captcha_answer_DISABLED(message: Message):
             )
 
 
+
+@dp.message(Command("captest"), F.chat.type == "private")
+async def cmd_captest(message: Message):
+    """Диагностика капчи — только для владельца."""
+    if message.from_user.id != OWNER_ID:
+        return
+
+    lines = ["🔧 <b>Диагностика капчи</b>\n"]
+
+    # 1. Pillow
+    try:
+        from PIL import Image, ImageDraw
+        lines.append("✅ Pillow установлен")
+    except ImportError:
+        lines.append("❌ Pillow НЕ установлен — <code>pip install Pillow</code>")
+
+    # 2. captcha.py импорт
+    try:
+        import captcha as _cap
+        lines.append("✅ captcha.py импортирован")
+        lines.append(f"   Активных групповых капч: {len(_cap._active)}")
+    except Exception as e:
+        lines.append(f"❌ captcha.py ошибка: {e}")
+
+    # 3. _join_captcha
+    lines.append(f"✅ Активных /join капч: {len(_join_captcha)}")
+
+    # 4. _channel_captcha
+    try:
+        lines.append(f"✅ Активных channel капч: {len(_channel_captcha)}")
+    except Exception as e:
+        lines.append(f"❌ _channel_captcha: {e}")
+
+    # 5. CLOSED_CHANNEL_ID
+    if CLOSED_CHANNEL_ID:
+        lines.append(f"✅ CLOSED_CHANNEL_ID = <code>{CLOSED_CHANNEL_ID}</code>")
+        # Проверяем права бота в канале
+        try:
+            me = await bot.get_me()
+            member = await bot.get_chat_member(CLOSED_CHANNEL_ID, me.id)
+            if member.status == "administrator":
+                lines.append("✅ Бот — администратор канала")
+            else:
+                lines.append(f"❌ Бот НЕ администратор канала (статус: {member.status})")
+        except Exception as e:
+            lines.append(f"❌ Нет доступа к каналу: {e}")
+    else:
+        lines.append("❌ CLOSED_CHANNEL_ID = 0 — не задан!")
+
+    # 6. Генерируем тестовую картинку
+    try:
+        import captcha as _cap2
+        img = _cap2._join_make_image("12345")
+        if img:
+            lines.append(f"✅ Картинка генерируется ({len(img)} байт)")
+        else:
+            lines.append("❌ Картинка не генерируется (Pillow?)")
+    except Exception as e:
+        lines.append(f"❌ Ошибка генерации: {e}")
+
+    # 7. handle_private_message зарегистрирован
+    lines.append("\n<b>Хендлеры в ЛС:</b>")
+    for router_obs in dp.message.middleware._middlewares if hasattr(dp.message, 'middleware') else []:
+        lines.append(f"  • {router_obs}")
+
+    # 8. Тест отправки себе
+    try:
+        test_img = _join_make_image("99999")
+        if test_img:
+            from aiogram.types import BufferedInputFile as _BIF
+            await bot.send_photo(
+                message.from_user.id,
+                _BIF(test_img, "test.png"),
+                caption="🔧 Тестовая картинка капчи",
+            )
+            lines.append("✅ Тестовая картинка отправлена (см. выше)")
+        else:
+            lines.append("❌ Не удалось создать тестовую картинку")
+    except Exception as e:
+        lines.append(f"❌ Ошибка отправки: {e}")
+
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
 async def main():
     import time as _tstart
     global bot_start_time
