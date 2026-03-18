@@ -30,6 +30,7 @@ import features
 import notifications as notif
 import shared
 import chat_settings as cs
+import captcha as cap          # 🔐 Картинка-капча
 
 DB_FILE_MAIN = "skinvault.db"
 
@@ -1607,6 +1608,11 @@ async def on_new_member(message: Message):
                 except: pass
             except: pass
             continue
+
+        # 🔐 Капча — запускаем перед всем остальным
+        if chat_cfg.get("captcha_enabled", True):
+            await cap.start_captcha(bot, cid, member.id, member.full_name)
+            continue   # остальное (приветствие, бонус) — после прохождения капчи
 
         # Приветствие из настроек
         if chat_cfg.get("welcome_enabled", True):
@@ -10656,6 +10662,7 @@ async def main():
     asyncio.create_task(auto_backup_loop())
     asyncio.create_task(daily_idea_loop())
     if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
+    cap.setup(bot, dp)         # 🔐 регистрируем обработчики капчи
     print("✅ Бот запущен!")
     await dp.start_polling(bot)
 
