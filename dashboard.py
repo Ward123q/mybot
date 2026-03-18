@@ -83,10 +83,12 @@ def _get_mod_stats(name: str, uid: int) -> dict:
 
 _bot = None
 _admin_ids = set()
+_bot_instance = None   # алиас, обновляется в set_bot
 
 def set_bot(bot, admin_ids: set):
-    global _bot, _admin_ids
+    global _bot, _admin_ids, _bot_instance
     _bot = bot
+    _bot_instance = bot   # синхронизируем оба имени
     _admin_ids = admin_ids
 
 # ══════════════════════════════════════════
