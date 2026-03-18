@@ -5143,12 +5143,12 @@ async def handle_reports_cfg(request: web.Request):
     for l in logs:
         ok = l.get("status") == "ok"
         icon = "✅" if ok else "❌"
+        err_txt = (" — " + l["error"][:40]) if not ok and l.get("error") else ""
         log_html += (
             f'<div style="font-size:12px;padding:5px 0;border-bottom:1px solid var(--border);">'
             f'{icon} {l.get("channel_id","")[:15]} · {type_map.get(l.get("report_type",""),"")} · '
             f'{str(l.get("sent_at",""))[:16]}'
-            f'{f" — {l['error'][:40]}" if not ok and l.get("error") else ""}'
-            f'</div>'
+            f'{err_txt}'
         )
     if not log_html:
         log_html = '<div style="color:var(--text2);font-size:12px;padding:8px 0;">Логов нет</div>'
