@@ -2328,13 +2328,14 @@ async def _handle_admins_inner(request: web.Request):
         if(d.online!==undefined){{var el=document.querySelector('[data-live="online"]');if(el)el.textContent=d.online;}}
       }}).catch(function(){{}});
     }},15000);
-    </script>
-    document.getElementById('adminSearch') && document.getElementById('adminSearch').addEventListener('input', function() {{
+    var _srch = document.getElementById('adminSearch');
+    if (_srch) _srch.addEventListener('input', function() {{
       var q = this.value.toLowerCase();
       document.querySelectorAll('.admin-row').forEach(function(row) {{
         row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
       }});
     }});
+    </script>
     """ + close_main()
     try:
         rendered = page(body)
