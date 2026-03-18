@@ -1710,6 +1710,64 @@ async def handle_admins(request: web.Request):
                             f"📋 {DASHBOARD_RANKS[rank]['desc']}", parse_mode="HTML")
                     except: pass
 
+        elif action == "kick_session" and tg_uid:
+            # Принудительный выход из всех сессий мода
+            kicked = 0
+            for k, v in list(_dashboard_sessions.items()):
+                if v.get("uid") == tg_uid:
+                    del _dashboard_sessions[k]
+                    kicked += 1
+            _log_admin_db(OWNER_TG_ID, "KICK_SESSION", f"Принудительный выход {tg_uid} ({kicked} сессий)", ip)
+            result_msg = f"✅ Сессии удалены ({kicked} шт.)"
+            if _bot and kicked:
+                try:
+                    await _bot.send_message(tg_uid,
+                        "⚠️ Ваша сессия дашборда принудительно завершена администратором.",
+                        parse_mode="HTML")
+                except: pass
+
+        elif action == "add_note" and tg_uid:
+            note_text = (data.get("note_text") or "").strip()
+            if note_text:
+                try:
+                    conn = db.get_conn()
+                    conn.execute("""CREATE TABLE IF NOT EXISTS admin_notes
+                        (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                         target_uid INTEGER, author_uid INTEGER, author_name TEXT,
+                         note TEXT, created_at TEXT DEFAULT (datetime('now')))""")
+                    conn.execute("INSERT INTO admin_notes (target_uid,author_uid,author_name,note) VALUES (?,?,?,?)",
+                                 (tg_uid, OWNER_TG_ID, "Владелец", note_text))
+                    conn.commit(); conn.close()
+                    result_msg = "✅ Заметка добавлена"
+                except Exception as e:
+                    result_msg = f"❌ {e}"
+
+        elif action == "delete_note":
+            note_id = int(data.get("note_id", 0) or 0)
+            if note_id:
+                try:
+                    conn = db.get_conn()
+                    conn.execute("DELETE FROM admin_notes WHERE id=?", (note_id,))
+                    conn.commit(); conn.close()
+                    result_msg = "✅ Заметка удалена"
+                except: pass
+
+        elif action == "notify_all":
+            msg_text = (data.get("notify_text") or "").strip()
+            if msg_text and _bot:
+                admins_list = _get_all_admins()
+                sent = 0
+                for adm in admins_list:
+                    if adm["tg_uid"] == OWNER_TG_ID: continue
+                    try:
+                        await _bot.send_message(adm["tg_uid"],
+                            f"📣 <b>Сообщение от владельца</b>\n\n{msg_text}",
+                            parse_mode="HTML")
+                        sent += 1
+                    except: pass
+                _log_admin_db(OWNER_TG_ID, "NOTIFY_ALL", msg_text[:80], ip)
+                result_msg = f"✅ Сообщение отправлено {sent} модераторам"
+
         elif action == "duty_start" and tg_uid:
             try: hours = float(data.get("duty_hours", "8"))
             except: hours = 8.0
@@ -1794,6 +1852,11 @@ async def handle_admins(request: web.Request):
             f'<input type="hidden" name="tg_uid" value="{d["uid"]}">'
             f'<button class="btn btn-xs btn-danger" type="submit">⏹ Снять</button></form>'
             f'<a href="/dashboard/mod/{d["uid"]}" class="btn btn-xs btn-ghost">👤 Профиль</a>'
+            f'<form method="POST" style="display:inline;">'
+            f'<input type="hidden" name="action" value="kick_session">'
+            f'<input type="hidden" name="tg_uid" value="{d["uid"]}">'
+            f'<button class="btn btn-xs" style="color:var(--danger);" title="Завершить сессию" type="submit">🔴 Выгнать</button>'
+            f'</form>'
             f'</div></div>'
         )
     if not duty_cards:
@@ -1839,21 +1902,78 @@ async def handle_admins(request: web.Request):
                     f' style="background:rgba(239,68,68,.1);color:var(--danger);">🗑</button>'
                     f'</div>'
                 )
+            # Данные для расширенной строки
+            week_acts   = mod_actions_map.get(a["name"], 0)
+            active_sess = sessions_by_uid.get(uid, [])
+            sess_dot    = (
+                f'<span style="width:7px;height:7px;border-radius:50%;background:#22c55e;'
+                f'display:inline-block;margin-left:4px;" title="{len(active_sess)} активных сессий"></span>'
+                if active_sess else ""
+            )
+            notes_list  = admin_notes_map.get(uid, [])
+            notes_badge = (
+                f'<span style="font-size:10px;background:rgba(99,102,241,.2);color:var(--accent);'
+                f'padding:1px 5px;border-radius:10px;margin-left:4px;" title="Есть заметки">📝{len(notes_list)}</span>'
+                if notes_list else ""
+            )
+            # Прогресс к следующему рангу
+            RANK_THR = {1:10,2:25,3:50,4:100,5:200,6:350,7:500,8:750,9:1000,10:1500,11:2000,12:3000,13:5000,14:8000}
+            total_acts = stats["bans"] + stats["warns"] + stats["mutes"] + stats["tickets"]
+            thr = RANK_THR.get(rank, 9999)
+            prog_pct = min(100, int(total_acts/thr*100)) if thr else 100
+            prog_bar = (
+                f'<div style="height:3px;width:60px;background:var(--bg4);border-radius:2px;display:inline-block;vertical-align:middle;">'
+                f'<div style="height:3px;width:{prog_pct}%;background:{ri["color"]};border-radius:2px;"></div>'
+                f'</div> <span style="font-size:10px;color:var(--text2);">{prog_pct}%</span>'
+            ) if not is_owner else ""
+
+            # Кнопки управления — добавляем заметку и выгнать сессию
+            if not is_owner:
+                action_cell = (
+                    f'<div style="display:flex;gap:4px;flex-wrap:wrap;">'
+                    f'<button onclick="openRankModal({uid},{safe!r},{rank})" class="btn btn-xs btn-ghost">✏️ Ранг</button>'
+                    f'<a href="/dashboard/mod/{uid}" class="btn btn-xs btn-ghost">👤</a>'
+                    f'<button onclick="openDutyModal({uid},{safe!r})" class="btn btn-xs btn-ghost">⏰</button>'
+                    f'<button onclick="openNoteModal({uid},{safe!r})" class="btn btn-xs btn-ghost" title="Добавить заметку">📝</button>'
+                    (f'<button onclick="kickSess({uid})" class="btn btn-xs" style="color:var(--danger);" title="Выгнать">🔴</button>' if active_sess else "") +
+                    f'<button onclick="revokeAdmin({uid},{safe!r})" class="btn btn-xs" style="background:rgba(239,68,68,.1);color:var(--danger);">🗑</button>'
+                    f'</div>'
+                )
             rows_in_tier += (
-                f"<tr>"
-                f"<td><code style='font-size:11px;'>{uid}</code></td>"
-                f"<td style='font-weight:700;'>{a['name']}{duty_dot}</td>"
-                f"<td><span class='badge' style='background:rgba({rgb},.15);color:{ri['color']};'>"
-                f"{rank} · {ri['name']}</span></td>"
-                f"<td style='font-size:12px;color:var(--text2);'>{ri['desc']}</td>"
-                f"<td style='font-size:12px;font-family:JetBrains Mono,monospace;white-space:nowrap;'>"
-                f"<span style='color:var(--danger);'>{stats['bans']}б</span> "
-                f"<span style='color:var(--warn);'>{stats['warns']}в</span> "
-                f"<span style='color:var(--purple);'>{stats['mutes']}м</span> "
-                f"<span style='color:var(--accent);font-size:11px;'>🎫{stats['tickets']}</span></td>"
-                f"<td style='font-size:11px;color:var(--text2);'>{last}</td>"
-                f"<td>{action_cell}</td>"
-                f"</tr>"
+                f'<tr class="admin-row" style="cursor:default;">'
+                f'<td><code style="font-size:11px;">{uid}</code></td>'
+                f'<td style="font-weight:700;">{a["name"]}{duty_dot}{sess_dot}{notes_badge}</td>'
+                f'<td>'
+                f'<span class="badge" style="background:rgba({rgb},.15);color:{ri["color"]};">'
+                f'{rank} · {ri["name"]}</span>'
+                f'<div style="margin-top:4px;">{prog_bar}</div>'
+                f'</td>'
+                f'<td style="font-size:12px;color:var(--text2);">{ri["desc"]}</td>'
+                f'<td style="font-size:12px;font-family:JetBrains Mono,monospace;white-space:nowrap;">'
+                f'<span style="color:var(--danger);">{stats["bans"]}б</span> '
+                f'<span style="color:var(--warn);">{stats["warns"]}в</span> '
+                f'<span style="color:var(--purple);">{stats["mutes"]}м</span> '
+                f'<span style="color:var(--accent);font-size:11px;">🎫{stats["tickets"]}</span>'
+                f'<div style="font-size:10px;color:var(--text2);margin-top:2px;">7 дней: <b>{week_acts}</b></div>'
+                f'</td>'
+                f'<td style="font-size:11px;color:var(--text2);">{last}</td>'
+                f'<td>{action_cell}</td>'
+                f'</tr>'
+                + (
+                    f'<tr class="admin-row"><td colspan="7" style="padding:0 12px 10px;background:rgba(99,102,241,.04);">'
+                    f'<div style="font-size:11px;color:var(--text2);">📝 Заметки: '
+                    + " | ".join(
+                        f'{n["note"][:60]} <span style="color:var(--text3);">— {str(n["created_at"])[:10]}</span>'
+                        f'<form method="POST" style="display:inline;margin-left:4px;">'
+                        f'<input type="hidden" name="action" value="delete_note">'
+                        f'<input type="hidden" name="note_id" value="{n["id"]}">'
+                        f'<button class="btn btn-xs" style="color:var(--danger);padding:0 4px;font-size:10px;" type="submit">×</button>'
+                        f'</form>'
+                        for n in notes_list[:3]
+                    )
+                    + f'</div></td></tr>'
+                    if notes_list else ""
+                )
             )
         admins_sections += (
             f'<div style="margin-bottom:20px;">'
@@ -1925,6 +2045,45 @@ async def handle_admins(request: web.Request):
     cnt_admins  = len(admins)
     cnt_duty    = len(on_duty)
     cnt_sess    = len(_dashboard_sessions)
+
+
+    # Заметки из БД
+    admin_notes_map = {}
+    try:
+        conn = db.get_conn()
+        conn.execute("""CREATE TABLE IF NOT EXISTS admin_notes
+            (id INTEGER PRIMARY KEY AUTOINCREMENT,
+             target_uid INTEGER, author_uid INTEGER, author_name TEXT,
+             note TEXT, created_at TEXT DEFAULT (datetime('now')))""")
+        for row in conn.execute("SELECT * FROM admin_notes ORDER BY created_at DESC").fetchall():
+            r = dict(row)
+            admin_notes_map.setdefault(r["target_uid"], []).append(r)
+        conn.close()
+    except: pass
+
+    # Топ действий каждого мода за 7 дней
+    mod_actions_map = {}
+    try:
+        conn = db.get_conn()
+        for row in conn.execute(
+            "SELECT by_name, COUNT(*) as cnt FROM mod_history "
+            "WHERE created_at >= datetime('now','-7 days') GROUP BY by_name"
+        ).fetchall():
+            r = dict(row)
+            mod_actions_map[r["by_name"]] = r["cnt"]
+        conn.close()
+    except: pass
+
+    # Активные сессии по uid
+    sessions_by_uid = {}
+    for _tok, _sv in _dashboard_sessions.items():
+        _uid_s = _sv.get("uid")
+        if _uid_s:
+            sessions_by_uid.setdefault(_uid_s, []).append({
+                "ip": _sv.get("ip","?"),
+                "login_time": _sv.get("login_time", 0),
+                "tok": _tok,
+            })
 
     body = navbar(sess, "admins") + f"""
     <div class="container">
@@ -2104,12 +2263,45 @@ async def handle_admins(request: web.Request):
         document.getElementById('revokeForm').submit();
       }}
     }}
+    </script>
+
+      <div class="section" style="margin-top:24px;">
+        <div class="section-header">
+          📣 Уведомить всю команду
+        </div>
+        <div class="section-body">
+          <form method="POST" style="display:flex;gap:10px;">
+            <input type="hidden" name="action" value="notify_all">
+            <input class="form-control" name="notify_text" placeholder="Текст сообщения для всех модераторов..." style="flex:1;">
+            <button class="btn btn-primary btn-sm" type="submit">📣 Отправить всем</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:24px;">
+        <div class="section-header">🔍 Поиск по составу</div>
+        <div style="padding:12px 16px 4px;">
+          <input class="form-control" id="adminSearch" placeholder="Поиск по имени, ID, рангу..." style="max-width:400px;">
+        </div>
+        <div style="padding:0 16px 16px;font-size:12px;color:var(--text2);">
+          Показывает строки в реальном времени без перезагрузки
+        </div>
+      </div>
+
+    </div>
+    <script>
     setInterval(function(){{
       fetch('/api/live').then(function(r){{return r.json();}}).then(function(d){{
         if(d.online!==undefined){{var el=document.querySelector('[data-live="online"]');if(el)el.textContent=d.online;}}
       }}).catch(function(){{}});
     }},15000);
     </script>
+    document.getElementById('adminSearch') && document.getElementById('adminSearch').addEventListener('input', function() {{
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('.admin-row').forEach(function(row) {{
+        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+      }});
+    }});
     """ + close_main()
     try:
         rendered = page(body)
@@ -3452,12 +3644,12 @@ async def handle_chat_settings(request: web.Request):
     if request.method == "POST":
         data = await request.post()
         settings = cs.get_settings(cid)
-        for key in ["close_time","open_time","quiet_start","quiet_end","welcome_text","announce_text","flood_action","verify_question","verify_answer"]:
+        for key in ["close_time","open_time","quiet_start","quiet_end","welcome_text","announce_text","flood_action","verify_question","verify_answer","chat_language","cmd_prefix","log_channel_id","accent_color"]:
             if key in data:
                 settings[key] = data[key]
-        for key in ["schedule_enabled","quiet_enabled","auto_mute_newcomers","auto_kick_inactive","welcome_enabled","welcome_delete_prev","verify_enabled","antispam_enabled","antimat_enabled","antilink_enabled","antisticker_enabled","anticaps_enabled","xp_enabled","rep_enabled","games_enabled","economy_enabled","anon_enabled","clans_enabled","announce_enabled","rules_remind_enabled"]:
+        for key in ["schedule_enabled","quiet_enabled","auto_mute_newcomers","auto_kick_inactive","welcome_enabled","welcome_delete_prev","verify_enabled","antispam_enabled","antimat_enabled","antilink_enabled","antisticker_enabled","anticaps_enabled","xp_enabled","rep_enabled","games_enabled","economy_enabled","anon_enabled","clans_enabled","announce_enabled","rules_remind_enabled","auto_kick_bots","quarantine_mode","antiforward_enabled","antijoin_spam","require_join_request","block_photos","block_videos","block_stickers","block_gifs","block_voice","block_files","block_polls","block_inline","double_xp_weekend","hide_members_count","translate_enabled","track_activity","track_words","newspaper_enabled","events_enabled","silent_admin_actions"]:
             settings[key] = data.get(key) == "1"
-        for key, default in [("max_warns",3),("warn_expiry_days",30),("mute_duration",60),("newcomer_mute_hours",1),("inactive_days",30),("flood_msgs",10),("caps_percent",70),("xp_per_msg",5),("rep_cooldown_hours",1),("daily_bonus",50),("newcomer_bonus",100),("announce_interval",100),("rules_remind_interval",200)]:
+        for key, default in [("max_warns",3),("warn_expiry_days",30),("mute_duration",60),("newcomer_mute_hours",1),("inactive_days",30),("flood_msgs",10),("caps_percent",70),("xp_per_msg",5),("rep_cooldown_hours",1),("daily_bonus",50),("newcomer_bonus",100),("announce_interval",100),("rules_remind_interval",200),("min_account_age_days",0),("max_msg_length",0),("max_msgs_per_hour",0),("slowmode_delay",0),("min_level_to_chat",0),("newspaper_hour",9)]:
             try:
                 settings[key] = int(data.get(key, default))
             except:
@@ -3547,10 +3739,72 @@ async def handle_chat_settings(request: web.Request):
               f'<div class="form-group"><label>Каждые N сообщений</label>{inp("announce_interval","number",10,10000)}</div>',
               tog("rules_remind_enabled","Напоминание правил"),
             )}
+
+            {section_block("🔒 Безопасность",
+              tog("auto_kick_bots","Автокик ботов при входе"),
+              tog("quarantine_mode","Карантин (мут новичков 24ч)"),
+              tog("antiforward_enabled","Запрет пересылки сообщений"),
+              tog("antijoin_spam","Защита от вступления спам-ботов"),
+              tog("require_join_request","Запрос на вступление"),
+              f'<div class="form-group" style="margin-top:8px;"><label>Минимальный возраст аккаунта (дней)</label>{inp("min_account_age_days","number",0,3650,0)}</div>',
+            )}
+
+            {section_block("🖼 Медиафильтр",
+              tog("block_photos","Запрет фото"),
+              tog("block_videos","Запрет видео"),
+              tog("block_stickers","Запрет стикеров"),
+              tog("block_gifs","Запрет GIF"),
+              tog("block_voice","Запрет голосовых"),
+              tog("block_files","Запрет файлов"),
+              tog("block_polls","Запрет опросов"),
+              tog("block_inline","Запрет инлайн-ботов"),
+            )}
           </div>
         </div>
+
+        <div class="grid-2" style="margin-top:0;">
+          <div>
+            {section_block("💰 Экономика чата",
+              f'<div class="form-group"><label>Бонус за ежедневный вход</label>{inp("daily_bonus","number",0,10000,50)}</div>',
+              f'<div class="form-group"><label>Бонус новому участнику</label>{inp("newcomer_bonus","number",0,10000,0)}</div>',
+              f'<div class="form-group"><label>XP за сообщение</label>{inp("xp_per_msg","number",0,100,5)}</div>',
+              f'<div class="form-group"><label>Кулдаун репутации (часов)</label>{inp("rep_cooldown_hours","number",0,168,1)}</div>',
+              tog("double_xp_weekend","Двойной XP в выходные"),
+            )}
+
+            {section_block("⚙️ Лимиты",
+              f'<div class="form-group"><label>Макс. длина сообщения (0=без лимита)</label>{inp("max_msg_length","number",0,10000,0)}</div>',
+              f'<div class="form-group"><label>Макс. сообщений в час на юзера</label>{inp("max_msgs_per_hour","number",0,10000,0)}</div>',
+              f'<div class="form-group"><label>Slowmode (секунд, 0=выкл)</label>{inp("slowmode_delay","number",0,900,0)}</div>',
+              f'<div class="form-group"><label>Минимальный уровень для сообщений</label>{inp("min_level_to_chat","number",0,500,0)}</div>',
+              tog("hide_members_count","Скрыть счётчик участников"),
+            )}
+          </div>
+          <div>
+            {section_block("🌍 Локализация",
+              f'<div class="form-group"><label>Язык бота в этом чате</label><select class="form-control" name="chat_language"><option value="ru" {"selected" if s.get("chat_language","ru")=="ru" else ""}>🇷🇺 Русский</option><option value="en" {"selected" if s.get("chat_language")=="en" else ""}>🇬🇧 English</option><option value="uk" {"selected" if s.get("chat_language")=="uk" else ""}>🇺🇦 Українська</option></select></div>',
+              f'<div class="form-group"><label>Кастомный префикс команд</label>{inp("cmd_prefix","text",default="/")}</div>',
+              tog("translate_enabled","Авто-перевод сообщений"),
+            )}
+
+            {section_block("📊 Аналитика",
+              tog("track_activity","Отслеживать активность по часам"),
+              tog("track_words","Анализ топ слов"),
+              tog("newspaper_enabled","Ежедневная газета чата"),
+              tog("events_enabled","Ивенты (двойной XP)"),
+              f'<div class="form-group" style="margin-top:8px;"><label>Час газеты (0-23)</label>{inp("newspaper_hour","number",0,23,9)}</div>',
+            )}
+
+            {section_block("🎨 Внешний вид",
+              f'<div class="form-group"><label>Цвет акцента (hex)</label><input class="form-control" type="color" name="accent_color" value="{s.get("accent_color","#6366f1")}"></div>',
+              f'<div class="form-group"><label>Кастомный лог-канал (ID)</label>{inp("log_channel_id","text",default="")}</div>',
+              tog("silent_admin_actions","Тихие действия (без уведомлений)"),
+            )}
+          </div>
+        </div>
+
         <button class="btn btn-primary" type="submit" style="width:100%;padding:14px;font-size:15px;margin-top:8px;">
-          💾 Сохранить настройки
+          💾 Сохранить все настройки
         </button>
       </form>
     </div>""" + close_main()
@@ -5942,6 +6196,7 @@ async def _handle_bot_control_inner(request: web.Request):
         else:
             try:
                 from aiogram.types import ChatPermissions
+                from aiogram.methods import SetChatSlowModeDelay, UnpinAllChatMessages, SetChatTitle, SetChatDescription, SetMyCommands
                 msg = ""
 
                 if action == "lockdown_all":
@@ -6008,7 +6263,7 @@ async def _handle_bot_control_inner(request: web.Request):
 
                 elif action == "slowmode" and chat_id:
                     delay = int(data.get("slowmode_val","30") or 30)
-                    await bot_inst.set_chat_slow_mode_delay(chat_id, delay)
+                    await bot_inst(SetChatSlowModeDelay(chat_id=chat_id, slow_mode_delay=delay))
                     msg = f"🐢 Slowmode {delay}с в чате {chat_id}"
                     _log_admin_db(sess_uid, "BOT_SLOWMODE", f"{chat_id}: {delay}s")
 
@@ -6018,7 +6273,7 @@ async def _handle_bot_control_inner(request: web.Request):
                     msg = f"📌 Сообщение {msg_id} закреплено в {chat_id}"
 
                 elif action == "unpin_all" and chat_id:
-                    await bot_inst.unpin_all_chat_messages(chat_id)
+                    await bot_inst(UnpinAllChatMessages(chat_id=chat_id))
                     msg = f"📌 Все сообщения откреплены в {chat_id}"
 
                 elif action == "ban_user" and chat_id and data.get("target_uid"):
@@ -6053,12 +6308,12 @@ async def _handle_bot_control_inner(request: web.Request):
 
                 elif action == "set_title" and chat_id and data.get("new_title"):
                     title = data.get("new_title","").strip()
-                    await bot_inst.set_chat_title(chat_id, title)
+                    await bot_inst(SetChatTitle(chat_id=chat_id, title=title))
                     msg = f"✏️ Название чата {chat_id} изменено на «{title}»"
 
                 elif action == "set_description" and chat_id and data.get("new_desc"):
                     desc = data.get("new_desc","").strip()
-                    await bot_inst.set_chat_description(chat_id, desc)
+                    await bot_inst(SetChatDescription(chat_id=chat_id, description=desc))
                     msg = f"📝 Описание чата {chat_id} обновлено"
 
                 elif action == "bot_commands_set":
@@ -6073,7 +6328,7 @@ async def _handle_bot_control_inner(request: web.Request):
                         BotCommand(command="report",  description="Пожаловаться"),
                         BotCommand(command="ticket",  description="Открыть тикет"),
                     ]
-                    await bot_inst.set_my_commands(commands)
+                    await bot_inst.set_my_commands(commands=commands)
                     msg = "✅ Команды бота обновлены"
 
                 elif action == "sync_chats":
