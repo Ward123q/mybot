@@ -1,523 +1,417 @@
 # captcha.py — Картинка-капча для Telegram бота (aiogram 3.x)
 #
+# ЛОГИКА:
+#   1. Новый участник входит в чат
+#   2. Бот мутит его в ГРУППЕ
+#   3. В группу: кнопка "Пройти капчу в личке"
+#   4. В ЛИЧКЕ бот присылает картинку с 5 цифрами
+#   5. Пользователь отвечает В ЛИЧКЕ
+#   6. Верно -> размут в группе
+#   7. Таймаут / неверно -> кик
+#
 # УСТАНОВКА:
 #   pip install Pillow
 #
-# ПОДКЛЮЧЕНИЕ В bot.py (добавить в начало):
+# ПОДКЛЮЧЕНИЕ В bot.py:
 #   import captcha as cap
-#   cap.setup(bot, dp)
-#
-# Капча запускается автоматически при входе нового участника.
-# Настройки — константы ниже.
+#   cap.setup(bot, dp)   # до start_polling
+#   # в on_new_member:
+#   await cap.start_captcha(bot, cid, member.id, member.full_name)
 
 import asyncio
 import io
 import random
-import time
-import math
 import logging
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import (
     Message, CallbackQuery, ChatPermissions,
-    InlineKeyboardMarkup, InlineKeyboardButton,
     BufferedInputFile,
+    InlineKeyboardMarkup, InlineKeyboardButton,
 )
 
 log = logging.getLogger(__name__)
 
-# ══════════════════════════════════════════════════════════════════
-#  ⚙️ НАСТРОЙКИ
-# ══════════════════════════════════════════════════════════════════
-
-CAPTCHA_TIMEOUT   = 90      # секунд на решение
-CAPTCHA_KICK      = True    # кикнуть при ошибке/таймауте (False = только мут)
-CAPTCHA_DIGITS    = 5       # количество цифр в капче
-CAPTCHA_WIDTH     = 280     # ширина картинки
-CAPTCHA_HEIGHT    = 100     # высота картинки
-CAPTCHA_MAX_TRIES = 2       # попыток перед киком (1 = сразу кик)
-
-# Чаты где капча ОТКЛЮЧЕНА (список cid)
+# =====================================================================
+#  НАСТРОЙКИ
+# =====================================================================
+CAPTCHA_TIMEOUT   = 120
+CAPTCHA_KICK      = True
+CAPTCHA_DIGITS    = 5
+CAPTCHA_WIDTH     = 280
+CAPTCHA_HEIGHT    = 100
+CAPTCHA_MAX_TRIES = 2
 CAPTCHA_EXCLUDE_CHATS: set = set()
 
-# ══════════════════════════════════════════════════════════════════
-#  🗄 ХРАНИЛИЩЕ АКТИВНЫХ КАПЧ
-# ══════════════════════════════════════════════════════════════════
-# { (chat_id, user_id): {code, msg_id, task, tries, name} }
+# =====================================================================
+#  ХРАНИЛИЩЕ  { user_id: {code, chat_id, group_msg_id, pm_msg_id, task, tries, name} }
+# =====================================================================
 _active: dict = {}
 
 
-# ══════════════════════════════════════════════════════════════════
-#  🎨 ГЕНЕРАЦИЯ КАРТИНКИ
-# ══════════════════════════════════════════════════════════════════
-
+# =====================================================================
+#  ГЕНЕРАЦИЯ КАРТИНКИ
+# =====================================================================
 def _generate_image(code: str) -> bytes:
-    """Генерирует PNG с кодом, шумом и искажениями через Pillow."""
     try:
         from PIL import Image, ImageDraw, ImageFont, ImageFilter
     except ImportError:
-        raise RuntimeError("Установи Pillow: pip install Pillow")
+        raise RuntimeError("pip install Pillow")
 
     W, H = CAPTCHA_WIDTH, CAPTCHA_HEIGHT
-
-    # Фон — тёмно-серый с лёгким шумом
-    img = Image.new("RGB", (W, H), color=(28, 28, 35))
+    img  = Image.new("RGB", (W, H), (22, 22, 30))
     draw = ImageDraw.Draw(img)
 
-    # Шумовые пиксели
-    for _ in range(W * H // 6):
-        x = random.randint(0, W - 1)
-        y = random.randint(0, H - 1)
-        c = random.randint(40, 90)
-        draw.point((x, y), fill=(c, c, c + random.randint(0, 20)))
+    for _ in range(W * H // 5):
+        c = random.randint(35, 75)
+        draw.point((random.randint(0,W-1), random.randint(0,H-1)), (c, c, c+random.randint(0,25)))
 
-    # Линии помехи
-    for _ in range(8):
-        x1 = random.randint(0, W)
-        y1 = random.randint(0, H)
-        x2 = random.randint(0, W)
-        y2 = random.randint(0, H)
-        col = (
-            random.randint(50, 120),
-            random.randint(50, 120),
-            random.randint(80, 150),
-        )
-        draw.line([(x1, y1), (x2, y2)], fill=col, width=1)
+    for _ in range(10):
+        col = (random.randint(50,110), random.randint(50,110), random.randint(80,150))
+        draw.line([(random.randint(0,W), random.randint(0,H)),
+                   (random.randint(0,W), random.randint(0,H))], fill=col, width=1)
 
-    # Дуги помехи
-    for _ in range(4):
-        x0 = random.randint(-20, W // 2)
-        y0 = random.randint(-20, H // 2)
-        x1 = random.randint(W // 2, W + 20)
-        y1 = random.randint(H // 2, H + 20)
-        col = (random.randint(60, 130), random.randint(60, 130), random.randint(100, 180))
-        draw.arc([x0, y0, x1, y1], start=random.randint(0, 360),
-                 end=random.randint(0, 360), fill=col, width=1)
+    for _ in range(5):
+        col = (random.randint(60,120), random.randint(60,120), random.randint(100,170))
+        x0,y0 = random.randint(-30,W//2), random.randint(-30,H//2)
+        x1,y1 = random.randint(W//2,W+30), random.randint(H//2,H+30)
+        draw.arc([x0,y0,x1,y1], random.randint(0,360), random.randint(0,360), fill=col, width=1)
 
-    # Попробуем шрифт, иначе дефолтный
     font_size = 52
     font = None
-    font_paths = [
+    for fp in [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
         "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
-        "C:/Windows/Fonts/arial.ttf",
-    ]
-    for fp in font_paths:
+        "C:/Windows/Fonts/arialbd.ttf",
+    ]:
         try:
-            from PIL import ImageFont as _IF
-            font = _IF.truetype(fp, font_size)
-            break
-        except Exception:
-            pass
-
+            from PIL import ImageFont as _F; font = _F.truetype(fp, font_size); break
+        except Exception: pass
     if font is None:
         try:
-            from PIL import ImageFont as _IF
-            font = _IF.load_default(size=font_size)
+            from PIL import ImageFont as _F; font = _F.load_default(size=font_size)
         except Exception:
-            from PIL import ImageFont as _IF
-            font = _IF.load_default()
+            from PIL import ImageFont as _F; font = _F.load_default()
 
-    # Рисуем каждую цифру с индивидуальным смещением и поворотом
-    char_w = (W - 20) // len(code)
-    colors = [
-        (255, 220, 100), (100, 220, 255), (255, 130, 130),
-        (130, 255, 130), (220, 130, 255), (255, 180, 80),
-    ]
+    palette = [(255,210,80),(100,215,255),(255,120,120),(120,255,140),(210,120,255),(255,170,70)]
+    char_w  = (W - 20) // len(code)
     for i, ch in enumerate(code):
-        col = colors[i % len(colors)]
-        angle = random.randint(-22, 22)
-        offset_y = random.randint(-8, 8)
-        x = 10 + i * char_w + random.randint(-3, 3)
-        y = (H - font_size) // 2 + offset_y
+        col    = palette[i % len(palette)]
+        angle  = random.randint(-25, 25)
+        offset = random.randint(-10, 10)
+        x      = 10 + i * char_w + random.randint(-4, 4)
+        layer  = Image.new("RGBA", (char_w+12, H), (0,0,0,0))
+        ld     = ImageDraw.Draw(layer)
+        cy     = (H - font_size) // 2 + offset
+        ld.text((4, cy+2), ch, font=font, fill=(0,0,0,160))
+        ld.text((2, cy),   ch, font=font, fill=col+(255,))
+        rot = layer.rotate(angle, expand=False, resample=Image.BICUBIC)
+        img.paste(rot, (x-2, 0), rot)
 
-        # Рисуем в маленький слой, поворачиваем, вставляем
-        char_img = Image.new("RGBA", (char_w + 10, H), (0, 0, 0, 0))
-        char_draw = ImageDraw.Draw(char_img)
-
-        # Тень
-        char_draw.text((4, (H - font_size) // 2 + 2), ch,
-                       font=font, fill=(0, 0, 0, 180))
-        # Основной текст
-        char_draw.text((2, (H - font_size) // 2), ch,
-                       font=font, fill=col + (255,))
-
-        rotated = char_img.rotate(angle, expand=False, resample=Image.BICUBIC)
-        img.paste(rotated, (x - 2, 0), rotated)
-
-    # Лёгкий blur для слияния
-    img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
-
-    # Точки поверх (второй слой шума)
-    draw2 = ImageDraw.Draw(img)
-    for _ in range(180):
-        x = random.randint(0, W - 1)
-        y = random.randint(0, H - 1)
-        c = random.randint(80, 160)
-        draw2.point((x, y), fill=(c, c + 10, c + 20))
+    from PIL import ImageFilter
+    img  = img.filter(ImageFilter.GaussianBlur(radius=0.6))
+    d2   = ImageDraw.Draw(img)
+    for _ in range(200):
+        c = random.randint(70,160)
+        d2.point((random.randint(0,W-1), random.randint(0,H-1)), (c, c+5, c+15))
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
 
 
-# ══════════════════════════════════════════════════════════════════
-#  ⏱ ТАЙМЕР — КИК ПО ИСТЕЧЕНИЮ ВРЕМЕНИ
-# ══════════════════════════════════════════════════════════════════
-
-async def _timeout_task(bot: Bot, chat_id: int, user_id: int, name: str):
-    """Ждёт CAPTCHA_TIMEOUT секунд, потом кикает если не решил."""
+# =====================================================================
+#  ТАЙМЕР КИКА
+# =====================================================================
+async def _timeout_task(bot: Bot, user_id: int):
     await asyncio.sleep(CAPTCHA_TIMEOUT)
-    entry = _active.pop((chat_id, user_id), None)
+    entry = _active.pop(user_id, None)
     if not entry:
-        return  # уже решил или уже удалён
-
-    log.info(f"[CAPTCHA] Таймаут: {name} ({user_id}) в чате {chat_id}")
-
-    # Удаляем сообщение с капчей
-    try:
-        await bot.delete_message(chat_id, entry["msg_id"])
-    except Exception:
-        pass
-
-    # Уведомление
-    try:
-        notif = await bot.send_message(
-            chat_id,
-            f"⏰ <b>{name}</b> не прошёл капчу за {CAPTCHA_TIMEOUT} сек — "
-            f"{'кик' if CAPTCHA_KICK else 'мут'}.",
-            parse_mode="HTML",
-        )
-        await asyncio.sleep(8)
+        return
+    chat_id = entry["chat_id"]
+    log.info(f"[CAPTCHA] Таймаут: {entry['name']} ({user_id})")
+    for mid, cid in [(entry["pm_msg_id"], user_id), (entry["group_msg_id"], chat_id)]:
         try:
-            await notif.delete()
-        except Exception:
-            pass
-    except Exception:
-        pass
-
-    # Кик или мут
+            if mid: await bot.delete_message(cid, mid)
+        except Exception: pass
     await _punish(bot, chat_id, user_id)
+    try:
+        n = await bot.send_message(chat_id,
+            f"⏰ <b>{entry['name']}</b> не прошёл капчу — "
+            f"{'кик' if CAPTCHA_KICK else 'мут'}.", parse_mode="HTML")
+        await asyncio.sleep(10)
+        try: await n.delete()
+        except Exception: pass
+    except Exception: pass
 
 
 async def _punish(bot: Bot, chat_id: int, user_id: int):
-    """Кик или мут нарушителя."""
     try:
         if CAPTCHA_KICK:
             await bot.ban_chat_member(chat_id, user_id)
+            await asyncio.sleep(0.3)
             await bot.unban_chat_member(chat_id, user_id)
         else:
             from datetime import timedelta
-            await bot.restrict_chat_member(
-                chat_id, user_id,
+            await bot.restrict_chat_member(chat_id, user_id,
                 ChatPermissions(can_send_messages=False),
-                until_date=timedelta(hours=24),
-            )
+                until_date=timedelta(hours=24))
     except Exception as e:
-        log.warning(f"[CAPTCHA] _punish error: {e}")
+        log.warning(f"[CAPTCHA] punish: {e}")
 
 
 async def _unlock(bot: Bot, chat_id: int, user_id: int):
-    """Снимает ограничения после успешной капчи."""
     try:
-        await bot.restrict_chat_member(
-            chat_id, user_id,
-            ChatPermissions(
-                can_send_messages=True,
-                can_send_media_messages=True,
-                can_send_polls=True,
-                can_send_other_messages=True,
-                can_add_web_page_previews=True,
-                can_change_info=False,
-                can_invite_users=True,
-                can_pin_messages=False,
-            ),
-        )
+        await bot.restrict_chat_member(chat_id, user_id,
+            ChatPermissions(can_send_messages=True, can_send_media_messages=True,
+                can_send_polls=True, can_send_other_messages=True,
+                can_add_web_page_previews=True, can_change_info=False,
+                can_invite_users=True, can_pin_messages=False))
     except Exception as e:
-        log.warning(f"[CAPTCHA] _unlock error: {e}")
+        log.warning(f"[CAPTCHA] unlock: {e}")
 
 
-# ══════════════════════════════════════════════════════════════════
-#  📨 ЗАПУСК КАПЧИ
-# ══════════════════════════════════════════════════════════════════
-
+# =====================================================================
+#  ЗАПУСК КАПЧИ
+# =====================================================================
 async def start_captcha(bot: Bot, chat_id: int, user_id: int, name: str):
-    """
-    Вызывать из on_new_member.
-    Мутит участника, отправляет картинку с кодом, запускает таймер.
-    """
-    if chat_id in CAPTCHA_EXCLUDE_CHATS:
+    if chat_id in CAPTCHA_EXCLUDE_CHATS or user_id in _active:
         return
 
-    # Если уже есть активная капча — не спамим
-    if (chat_id, user_id) in _active:
-        return
-
-    # Мутим сразу
+    # Мутим
     try:
-        await bot.restrict_chat_member(
-            chat_id, user_id,
-            ChatPermissions(can_send_messages=False),
-        )
+        await bot.restrict_chat_member(chat_id, user_id,
+            ChatPermissions(can_send_messages=False))
     except Exception as e:
-        log.warning(f"[CAPTCHA] restrict error: {e}")
+        log.warning(f"[CAPTCHA] restrict: {e}")
 
-    # Генерируем код
-    code = "".join(str(random.randint(0, 9)) for _ in range(CAPTCHA_DIGITS))
+    code      = "".join(str(random.randint(0,9)) for _ in range(CAPTCHA_DIGITS))
+    safe_name = name.replace("<","&lt;").replace(">","&gt;")
+    me        = await bot.get_me()
+    bot_link  = f"https://t.me/{me.username}?start=captcha_{user_id}"
 
-    # Картинка
-    try:
-        img_bytes = _generate_image(code)
-    except Exception as e:
-        log.error(f"[CAPTCHA] image gen error: {e}")
-        # Фоллбэк — текстовая капча
-        code = str(random.randint(10000, 99999))
-        img_bytes = None
-
-    # Кнопка пропустить (для владельца)
-    skip_kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(
-            text="✅ Пропустить (для администраторов)",
-            callback_data=f"captcha_skip:{chat_id}:{user_id}",
-        )
+    # Кнопки в группе
+    group_kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🔐 Пройти капчу в личке →", url=bot_link),
+        InlineKeyboardButton(text="✅ Пропустить (адм)",
+                             callback_data=f"captcha_skip:{chat_id}:{user_id}"),
     ]])
 
-    safe_name = name.replace("<", "&lt;").replace(">", "&gt;")
-    caption = (
-        f"👋 <b>{safe_name}</b>, добро пожаловать!\n\n"
-        f"🔐 <b>Введи цифры с картинки</b> одним сообщением.\n"
-        f"⏰ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>.\n"
-        f"❌ {CAPTCHA_MAX_TRIES} неверных попытки — {'кик' if CAPTCHA_KICK else 'мут на 24ч'}."
-    )
+    # Сообщение в группу
+    group_msg_id = 0
+    try:
+        gm = await bot.send_message(chat_id,
+            f"👋 <b>{safe_name}</b>, добро пожаловать!\n\n"
+            f"🔐 Для входа пройди капчу — нажми кнопку и реши её в личке с ботом.\n"
+            f"⏰ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>.",
+            parse_mode="HTML", reply_markup=group_kb)
+        group_msg_id = gm.message_id
+    except Exception as e:
+        log.error(f"[CAPTCHA] group msg: {e}")
 
+    # Шлём капчу в ЛС
+    pm_msg_id = 0
+    try:
+        img_bytes = _generate_image(code)
+    except Exception:
+        img_bytes = None
+
+    pm_text = (
+        f"🔐 <b>Капча для входа</b>\n\n"
+        f"Введи <b>{CAPTCHA_DIGITS} цифр</b> с картинки одним сообщением.\n"
+        f"⏰ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>.\n"
+        f"❌ {CAPTCHA_MAX_TRIES} ошибки — {'кик' if CAPTCHA_KICK else 'мут 24ч'}."
+    )
     try:
         if img_bytes:
-            sent = await bot.send_photo(
-                chat_id,
-                photo=BufferedInputFile(img_bytes, filename="captcha.png"),
-                caption=caption,
-                parse_mode="HTML",
-                reply_markup=skip_kb,
-            )
+            pm = await bot.send_photo(user_id,
+                BufferedInputFile(img_bytes, "captcha.png"),
+                caption=pm_text, parse_mode="HTML")
         else:
-            # Текстовый фоллбэк
-            sent = await bot.send_message(
-                chat_id,
-                caption + f"\n\n<code>{code}</code>",
-                parse_mode="HTML",
-                reply_markup=skip_kb,
-            )
+            pm = await bot.send_message(user_id,
+                pm_text + f"\n\n🔢 Код: <code>{code}</code>", parse_mode="HTML")
+        pm_msg_id = pm.message_id
     except Exception as e:
-        log.error(f"[CAPTCHA] send error: {e}")
-        return
+        # Пользователь ещё не написал боту — ЛС закрыты
+        log.warning(f"[CAPTCHA] PM недоступен для {user_id}: {e}")
+        try:
+            await bot.edit_message_reply_markup(chat_id, group_msg_id,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="📩 Сначала напиши боту", url=f"https://t.me/{me.username}"),
+                    InlineKeyboardButton(text="🔐 Потом нажми сюда →", url=bot_link),
+                ],[
+                    InlineKeyboardButton(text="✅ Пропустить (адм)",
+                                         callback_data=f"captcha_skip:{chat_id}:{user_id}"),
+                ]]))
+        except Exception: pass
 
-    # Запускаем таймер
-    task = asyncio.create_task(
-        _timeout_task(bot, chat_id, user_id, safe_name)
-    )
-
-    _active[(chat_id, user_id)] = {
-        "code":   code,
-        "msg_id": sent.message_id,
-        "task":   task,
-        "tries":  0,
-        "name":   safe_name,
+    task = asyncio.create_task(_timeout_task(bot, user_id))
+    _active[user_id] = {
+        "code": code, "chat_id": chat_id,
+        "group_msg_id": group_msg_id, "pm_msg_id": pm_msg_id,
+        "task": task, "tries": 0, "name": safe_name,
     }
-    log.info(f"[CAPTCHA] Запущена для {name} ({user_id}) в чате {chat_id}, код={code}")
+    log.info(f"[CAPTCHA] Запущена: {name} ({user_id}) чат={chat_id}")
 
 
-# ══════════════════════════════════════════════════════════════════
-#  ✉️ ОБРАБОТЧИК ОТВЕТА ПОЛЬЗОВАТЕЛЯ
-# ══════════════════════════════════════════════════════════════════
-
-async def _on_message(message: Message):
-    """Ловит любое сообщение — проверяет есть ли активная капча."""
-    if not message.from_user or not message.text:
+# =====================================================================
+#  /start captcha_xxx — повторная отправка если ЛС были закрыты
+# =====================================================================
+async def _on_start(message: Message):
+    if not message.text:
+        return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].startswith("captcha_"):
         return
 
-    key = (message.chat.id, message.from_user.id)
-    entry = _active.get(key)
+    uid   = message.from_user.id
+    entry = _active.get(uid)
+    if not entry:
+        await message.answer("✅ Капча уже не активна.")
+        return
+    if entry.get("pm_msg_id"):
+        await message.answer("⬆️ Капча уже отправлена выше — введи цифры.")
+        return
+
+    # Генерируем и шлём
+    try: img_bytes = _generate_image(entry["code"])
+    except Exception: img_bytes = None
+
+    pm_text = (
+        f"🔐 <b>Капча для входа</b>\n\n"
+        f"Введи <b>{CAPTCHA_DIGITS} цифр</b> с картинки.\n"
+        f"⏰ Осталось ~<b>{CAPTCHA_TIMEOUT} секунд</b>.\n"
+        f"❌ {CAPTCHA_MAX_TRIES} ошибки — {'кик' if CAPTCHA_KICK else 'мут'}."
+    )
+    try:
+        if img_bytes:
+            pm = await message.answer_photo(BufferedInputFile(img_bytes,"captcha.png"),
+                caption=pm_text, parse_mode="HTML")
+        else:
+            pm = await message.answer(
+                pm_text + f"\n\n🔢 Код: <code>{entry['code']}</code>", parse_mode="HTML")
+        entry["pm_msg_id"] = pm.message_id
+    except Exception as e:
+        log.error(f"[CAPTCHA] retry PM: {e}")
+
+
+# =====================================================================
+#  ОТВЕТ ПОЛЬЗОВАТЕЛЯ — ТОЛЬКО В ЛС
+# =====================================================================
+async def _on_answer(message: Message):
+    if message.chat.type != "private" or not message.from_user or not message.text:
+        return
+    if message.text.startswith("/"):
+        return
+
+    uid   = message.from_user.id
+    entry = _active.get(uid)
     if not entry:
         return
 
-    # Удаляем ответ пользователя из чата (не засоряем)
-    try:
-        await message.delete()
-    except Exception:
-        pass
-
-    answer = message.text.strip()
+    chat_id = entry["chat_id"]
     correct = entry["code"]
 
-    if answer == correct:
-        # ✅ ВЕРНО
-        _active.pop(key, None)
+    if message.text.strip() == correct:
+        # ВЕРНО
+        _active.pop(uid, None)
         entry["task"].cancel()
+        await _unlock(message.bot, chat_id, uid)
 
-        await _unlock(message.bot, message.chat.id, message.from_user.id)
+        for mid, cid in [(entry["pm_msg_id"], uid), (entry["group_msg_id"], chat_id)]:
+            try:
+                if mid: await message.bot.delete_message(cid, mid)
+            except Exception: pass
 
+        await message.answer("✅ <b>Верно!</b> Капча пройдена — добро пожаловать в чат 🎉",
+                              parse_mode="HTML")
         try:
-            await message.bot.delete_message(message.chat.id, entry["msg_id"])
-        except Exception:
-            pass
-
-        ok_msg = await message.answer(
-            f"✅ <b>{entry['name']}</b> прошёл проверку! Добро пожаловать 🎉",
-            parse_mode="HTML",
-        )
-        await asyncio.sleep(6)
-        try:
-            await ok_msg.delete()
-        except Exception:
-            pass
-
-        log.info(f"[CAPTCHA] Успех: {entry['name']} ({message.from_user.id})")
+            n = await message.bot.send_message(chat_id,
+                f"✅ <b>{entry['name']}</b> прошёл капчу!", parse_mode="HTML")
+            await asyncio.sleep(8)
+            try: await n.delete()
+            except Exception: pass
+        except Exception: pass
+        log.info(f"[CAPTCHA] Успех: {entry['name']} ({uid})")
 
     else:
-        # ❌ НЕВЕРНО
+        # НЕВЕРНО
         entry["tries"] += 1
-        log.info(
-            f"[CAPTCHA] Неверно: {entry['name']} ({message.from_user.id}), "
-            f"попытка {entry['tries']}/{CAPTCHA_MAX_TRIES}"
-        )
-
+        remaining = CAPTCHA_MAX_TRIES - entry["tries"]
+        log.info(f"[CAPTCHA] Неверно: {entry['name']} ({uid}) попытка {entry['tries']}")
         if entry["tries"] >= CAPTCHA_MAX_TRIES:
-            # Исчерпал попытки
-            _active.pop(key, None)
+            _active.pop(uid, None)
             entry["task"].cancel()
-
             try:
-                await message.bot.delete_message(message.chat.id, entry["msg_id"])
-            except Exception:
-                pass
-
-            fail_msg = await message.answer(
-                f"❌ <b>{entry['name']}</b> не прошёл капчу — "
-                f"{'кик' if CAPTCHA_KICK else 'мут'}.",
-                parse_mode="HTML",
-            )
-            await asyncio.sleep(5)
+                if entry["group_msg_id"]:
+                    await message.bot.delete_message(chat_id, entry["group_msg_id"])
+            except Exception: pass
+            await message.answer(
+                f"❌ Все попытки исчерпаны — {'кик' if CAPTCHA_KICK else 'мут на 24ч'}.",
+                parse_mode="HTML")
+            await _punish(message.bot, chat_id, uid)
             try:
-                await fail_msg.delete()
-            except Exception:
-                pass
-
-            await _punish(message.bot, message.chat.id, message.from_user.id)
+                n = await message.bot.send_message(chat_id,
+                    f"❌ <b>{entry['name']}</b> не прошёл капчу.", parse_mode="HTML")
+                await asyncio.sleep(8)
+                try: await n.delete()
+                except Exception: pass
+            except Exception: pass
         else:
-            remaining = CAPTCHA_MAX_TRIES - entry["tries"]
-            try:
-                warn_msg = await message.answer(
-                    f"❌ Неверно, <b>{entry['name']}</b>! "
-                    f"Осталось попыток: <b>{remaining}</b>",
-                    parse_mode="HTML",
-                )
-                await asyncio.sleep(4)
-                try:
-                    await warn_msg.delete()
-                except Exception:
-                    pass
-            except Exception:
-                pass
+            await message.answer(
+                f"❌ Неверно! Осталось попыток: <b>{remaining}</b>", parse_mode="HTML")
 
 
-# ══════════════════════════════════════════════════════════════════
-#  🔘 CALLBACK — ПРОПУСТИТЬ (для администраторов)
-# ══════════════════════════════════════════════════════════════════
-
-async def _on_skip_callback(call: CallbackQuery):
-    """Администратор нажал 'Пропустить'."""
+# =====================================================================
+#  КНОПКА ПРОПУСТИТЬ
+# =====================================================================
+async def _on_skip(call: CallbackQuery):
     try:
-        member = await call.bot.get_chat_member(call.message.chat.id, call.from_user.id)
-        is_admin = member.status in ("administrator", "creator")
-    except Exception:
-        is_admin = False
+        m = await call.bot.get_chat_member(call.message.chat.id, call.from_user.id)
+        ok = m.status in ("administrator","creator")
+    except Exception: ok = False
+    if not ok:
+        await call.answer("❌ Только администраторы", show_alert=True); return
 
-    if not is_admin:
-        await call.answer("❌ Только администраторы могут пропустить капчу", show_alert=True)
-        return
-
-    _, chat_id_s, user_id_s = call.data.split(":")
-    chat_id = int(chat_id_s)
-    user_id = int(user_id_s)
-    key = (chat_id, user_id)
-
-    entry = _active.pop(key, None)
+    _, cid_s, uid_s = call.data.split(":")
+    chat_id, user_id = int(cid_s), int(uid_s)
+    entry = _active.pop(user_id, None)
     if not entry:
-        await call.answer("Капча уже завершена", show_alert=False)
-        return
+        await call.answer("Капча уже завершена"); return
 
     entry["task"].cancel()
     await _unlock(call.bot, chat_id, user_id)
-
+    try: await call.message.delete()
+    except Exception: pass
     try:
-        await call.message.delete()
-    except Exception:
-        pass
-
-    await call.answer("✅ Капча пропущена администратором", show_alert=False)
-    skip_msg = await call.bot.send_message(
-        chat_id,
-        f"✅ Капча для <b>{entry['name']}</b> пропущена администратором "
-        f"<b>{call.from_user.full_name}</b>.",
-        parse_mode="HTML",
-    )
-    await asyncio.sleep(8)
+        await call.bot.send_message(user_id,
+            f"✅ Администратор <b>{call.from_user.full_name}</b> пропустил капчу — ты в чате!",
+            parse_mode="HTML")
+    except Exception: pass
+    await call.answer("✅ Пропущено")
     try:
-        await skip_msg.delete()
-    except Exception:
-        pass
+        n = await call.bot.send_message(chat_id,
+            f"✅ Капча для <b>{entry['name']}</b> пропущена администратором.",
+            parse_mode="HTML")
+        await asyncio.sleep(8)
+        try: await n.delete()
+        except Exception: pass
+    except Exception: pass
+    log.info(f"[CAPTCHA] Пропущена admin={call.from_user.id} user={user_id}")
 
-    log.info(
-        f"[CAPTCHA] Пропущена admin={call.from_user.id} "
-        f"для user={user_id} в чате {chat_id}"
-    )
 
-
-# ══════════════════════════════════════════════════════════════════
-#  🔌 ПОДКЛЮЧЕНИЕ К ДИСПЕТЧЕРУ
-# ══════════════════════════════════════════════════════════════════
-
+# =====================================================================
+#  SETUP
+# =====================================================================
 def setup(bot_instance: Bot, dp: Dispatcher):
-    """
-    Регистрирует обработчики в диспетчере.
-    Вызывай один раз в bot.py до start_polling:
-        import captcha as cap
-        cap.setup(bot, dp)
-    """
-    # Ответы на капчу — только приватные или групповые сообщения с текстом
-    dp.message.register(
-        _on_message,
-        F.text & ~F.text.startswith("/"),
-    )
+    dp.message.register(_on_start,  F.chat.type=="private", F.text.startswith("/start"))
+    dp.message.register(_on_answer, F.chat.type=="private", F.text, ~F.text.startswith("/"))
+    dp.callback_query.register(_on_skip, F.data.startswith("captcha_skip:"))
+    log.info("[CAPTCHA] Зарегистрирован (ЛС-режим)")
 
-    # Кнопка "пропустить"
-    dp.callback_query.register(
-        _on_skip_callback,
-        F.data.startswith("captcha_skip:"),
-    )
-
-    log.info("[CAPTCHA] Модуль зарегистрирован")
-
-
-# ══════════════════════════════════════════════════════════════════
-#  📊 СТАТУС (для дашборда)
-# ══════════════════════════════════════════════════════════════════
-
-def get_active_count() -> int:
-    """Сколько сейчас активных капч."""
-    return len(_active)
-
-
+def get_active_count() -> int: return len(_active)
 def get_active_list() -> list:
-    """Список активных капч для дашборда."""
-    result = []
-    for (cid, uid), entry in _active.items():
-        result.append({
-            "chat_id":  cid,
-            "user_id":  uid,
-            "name":     entry["name"],
-            "tries":    entry["tries"],
-        })
-    return result
+    return [{"user_id":uid,"chat_id":e["chat_id"],"name":e["name"],"tries":e["tries"]}
+            for uid,e in _active.items()]
