@@ -6733,18 +6733,18 @@ async def handle_incidents(request: web.Request):
         sev_icon, sev_label, sev_color = _INCIDENT_SEVERITY.get(inc["severity"], ("🟢","—","#22c55e"))
         st_icon, st_label = _INCIDENT_STATUS.get(inc["status"], ("🔴","Открыт"))
         _inc_url = "/dashboard/incidents?id=" + str(inc["id"])
+        _inc_desc = ("<div style=\"font-size:12px;color:var(--text2);margin-top:6px;\">" + inc["description"][:100] + "...</div>") if inc.get("description") else ""
         rows_html += (
             f"<div style='padding:16px;border-bottom:1px solid var(--border);cursor:pointer;' data-url='{_inc_url}' onclick='window.location=this.dataset.url'>"
             f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
             f"<div style='padding:16px;border-bottom:1px solid var(--border);cursor:pointer;'" 
-            f"onclick='window.location=\"{_inc_url}\"'>"
+            "onclick=\"location.href='" + _inc_url + "'\">"
             f'background:rgba({_hex_to_rgb(sev_color)},.15);color:{sev_color};">{sev_icon} {sev_label}</span>'
             f'<span style="font-size:11px;color:var(--text2);">{st_icon} {st_label}</span>'
             f'<span style="margin-left:auto;font-size:11px;color:var(--text2);">'
             f'{str(inc["created_at"])[:16]} · {inc["created_by"]}</span>'
             f'</div>'
-            f'{"<div style=\"font-size:12px;color:var(--text2);margin-top:6px;\">" + inc["description"][:100] + "...</div>" if inc.get("description") else ""}'
-            f'</div>'
+            f'{_inc_desc}'
         )
     if not rows_html:
         rows_html = '<div class="empty-state">Инцидентов нет</div>'
