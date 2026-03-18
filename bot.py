@@ -1338,6 +1338,12 @@ class StatsMiddleware(BaseMiddleware):
         return False
     async def __call__(self, handler, event: Message, data):
         if isinstance(event, Message) and event.from_user and event.chat.type in ("group","supergroup"):
+            # Капча имеет абсолютный приоритет — проверяем до любой обработки
+            if event.text and not event.text.startswith("/"):
+                _key = (event.chat.id, event.from_user.id)
+                if _key in _cap_active:
+                    await cap_answer(event)
+                    return  # не передаём дальше
             chat_stats[event.chat.id][event.from_user.id] += 1
             known_chats[event.chat.id] = event.chat.title or str(event.chat.id)
             uid, cid = event.from_user.id, event.chat.id
@@ -3905,6 +3911,9 @@ async def cmd_botstats(message: Message):
 @dp.message(F.text & ~F.text.startswith("/") & F.chat.type.in_({"group", "supergroup"}))
 async def autist_commands(message: Message):
     if not message.text: return
+    # Капча имеет приоритет
+    if message.from_user and (message.chat.id, message.from_user.id) in _cap_active:
+        await cap_answer(message); return
     text_lower = message.text.strip().lower()
     if not text_lower.startswith("аутист"): return
     fun_only = ["обозвать", "поженить", "казнить", "диагноз", "профессия", "похитить", "дуэль"]
@@ -5035,6 +5044,10 @@ async def cmd_guess(message: Message):
 @dp.message(F.text.regexp(r'^\d+$'))
 async def guess_handler(message: Message):
     cid = message.chat.id
+    # Капча имеет приоритет — если активна, передаём управление ей
+    if message.from_user and (cid, message.from_user.id) in _cap_active:
+        await cap_answer(message)
+        return
     if cid not in guess_games: return
     game = guess_games[cid]
     try: num = int(message.text)
@@ -7196,6 +7209,9 @@ async def cmd_trivia(message: Message):
 @dp.message(F.text & ~F.text.startswith("/") & F.chat.type.in_({"group", "supergroup"}))
 async def handle_trivia_answer(message: Message):
     cid = message.chat.id
+    # Капча имеет приоритет
+    if message.from_user and (cid, message.from_user.id) in _cap_active:
+        await cap_answer(message); return
     if cid not in trivia_active: return
     q = trivia_active[cid]
     if q["answerer"] is not None: return
