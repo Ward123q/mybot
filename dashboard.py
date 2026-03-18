@@ -1110,6 +1110,7 @@ def navbar(sess: dict | None = None, active: str = "") -> str:
         {link("msg_search",   "/dashboard/msg_search",   "🔍", "Поиск сообщений", "view_deleted")}
         {link("wiki",         "/dashboard/wiki",         "📚", "Wiki команды",     "view_overview")}
         {link("incidents",    "/dashboard/incidents",    "🚨", "Инциденты",        "view_overview")}
+        {link("command_center","/dashboard/command_center","🎮", "Command Center",  "view_overview")}
         {link("automations",  "/dashboard/automations",  "⚡", "Автоправила",      "view_overview")}
         {link("reports_cfg",  "/dashboard/reports_cfg",  "📊", "Авто-отчёты",      "view_overview")}
         {link("bot_control",  "/dashboard/bot_control",  "🤖", "Управление ботом", "view_overview")}
@@ -1638,6 +1639,18 @@ handle_overview = require_auth("view_overview")(handle_overview)
 # ══════════════════════════════════════════
 
 async def handle_admins(request: web.Request):
+    import traceback as _adm_tb
+    try:
+        return await _handle_admins_inner(request)
+    except web.HTTPException:
+        raise
+    except Exception as _adm_err:
+        return web.Response(
+            text="<pre style='color:red;padding:20px;white-space:pre-wrap'>"
+                 "ADMINS 500:\n" + _adm_tb.format_exc() + "</pre>",
+            content_type="text/html", status=200)
+
+async def _handle_admins_inner(request: web.Request):
     sess = _get_session(request)
     if not sess or sess.get("rank") < OWNER_RANK:
         raise web.HTTPFound("/dashboard")
@@ -1869,6 +1882,44 @@ async def handle_admins(request: web.Request):
         t = DASHBOARD_RANKS.get(a["rank"], DASHBOARD_RANKS[1]).get("tier","junior")
         by_tier.setdefault(t, []).append(a)
 
+    # Заметки из БД
+    admin_notes_map = {}
+    try:
+        conn = db.get_conn()
+        conn.execute("""CREATE TABLE IF NOT EXISTS admin_notes
+            (id INTEGER PRIMARY KEY AUTOINCREMENT,
+             target_uid INTEGER, author_uid INTEGER, author_name TEXT,
+             note TEXT, created_at TEXT DEFAULT (datetime('now')))""")
+        for row in conn.execute("SELECT * FROM admin_notes ORDER BY created_at DESC").fetchall():
+            r = dict(row)
+            admin_notes_map.setdefault(r["target_uid"], []).append(r)
+        conn.close()
+    except: pass
+
+    # Топ действий каждого мода за 7 дней
+    mod_actions_map = {}
+    try:
+        conn = db.get_conn()
+        for row in conn.execute(
+            "SELECT by_name, COUNT(*) as cnt FROM mod_history "
+            "WHERE created_at >= datetime('now','-7 days') GROUP BY by_name"
+        ).fetchall():
+            r = dict(row)
+            mod_actions_map[r["by_name"]] = r["cnt"]
+        conn.close()
+    except: pass
+
+    # Активные сессии по uid
+    sessions_by_uid = {}
+    for _tok, _sv in _dashboard_sessions.items():
+        _uid_s = _sv.get("uid")
+        if _uid_s:
+            sessions_by_uid.setdefault(_uid_s, []).append({
+                "ip": _sv.get("ip","?"),
+                "login_time": _sv.get("login_time", 0),
+                "tok": _tok,
+            })
+
     admins_sections = ""
     for tier_key in tier_order:
         group = by_tier.get(tier_key, [])
@@ -2046,44 +2097,6 @@ async def handle_admins(request: web.Request):
     cnt_duty    = len(on_duty)
     cnt_sess    = len(_dashboard_sessions)
 
-
-    # Заметки из БД
-    admin_notes_map = {}
-    try:
-        conn = db.get_conn()
-        conn.execute("""CREATE TABLE IF NOT EXISTS admin_notes
-            (id INTEGER PRIMARY KEY AUTOINCREMENT,
-             target_uid INTEGER, author_uid INTEGER, author_name TEXT,
-             note TEXT, created_at TEXT DEFAULT (datetime('now')))""")
-        for row in conn.execute("SELECT * FROM admin_notes ORDER BY created_at DESC").fetchall():
-            r = dict(row)
-            admin_notes_map.setdefault(r["target_uid"], []).append(r)
-        conn.close()
-    except: pass
-
-    # Топ действий каждого мода за 7 дней
-    mod_actions_map = {}
-    try:
-        conn = db.get_conn()
-        for row in conn.execute(
-            "SELECT by_name, COUNT(*) as cnt FROM mod_history "
-            "WHERE created_at >= datetime('now','-7 days') GROUP BY by_name"
-        ).fetchall():
-            r = dict(row)
-            mod_actions_map[r["by_name"]] = r["cnt"]
-        conn.close()
-    except: pass
-
-    # Активные сессии по uid
-    sessions_by_uid = {}
-    for _tok, _sv in _dashboard_sessions.items():
-        _uid_s = _sv.get("uid")
-        if _uid_s:
-            sessions_by_uid.setdefault(_uid_s, []).append({
-                "ip": _sv.get("ip","?"),
-                "login_time": _sv.get("login_time", 0),
-                "tok": _tok,
-            })
 
     body = navbar(sess, "admins") + f"""
     <div class="container">
@@ -7103,6 +7116,662 @@ async def handle_incidents(request: web.Request):
 handle_incidents = require_auth("view_overview")(handle_incidents)
 
 
+# ══════════════════════════════════════════════════════════════════
+#  🎮 LIVE COMMAND CENTER
+# ══════════════════════════════════════════════════════════════════
+#  Страница /dashboard/command_center
+#  - Live-лента событий (SSE): сообщения, варны, баны, жалобы
+#  - Мини-терминал: любые команды боту прямо в браузере
+#  - Карточки всех чатов с live-счётчиками
+#  - Быстрые действия по любому юзеру (ID/username)
+#  - Глобальный оверлей статуса: онлайн, алерты, дежурные
+#  - История команд в сессии
+
+_cc_event_log: list = []   # последние 200 событий для новых клиентов
+_CC_MAX_EVENTS = 200
+
+def _cc_push_event(etype: str, text: str, chat: str = "", uid: int = 0):
+    """Добавляет событие в лог и рассылает по SSE."""
+    import json, time as _t, datetime as _dt
+    event = {
+        "type":  etype,
+        "text":  text,
+        "chat":  chat,
+        "uid":   uid,
+        "ts":    _t.time(),
+        "time":  _dt.datetime.now().strftime("%H:%M:%S"),
+    }
+    _cc_event_log.append(event)
+    if len(_cc_event_log) > _CC_MAX_EVENTS:
+        _cc_event_log.pop(0)
+    # Рассылаем через shared SSE
+    try:
+        payload = json.dumps(event, ensure_ascii=False)
+        for q in list(shared.sse_clients):
+            try:
+                q.put_nowait(f"cc:{payload}")
+            except:
+                pass
+    except:
+        pass
+
+
+async def handle_command_center(request: web.Request):
+    import json, time as _t, traceback as _tb
+    try:
+        return await _handle_command_center_inner(request)
+    except Exception as e:
+        return web.Response(
+            text=f"<pre style='color:red;padding:20px'>COMMAND CENTER ERROR:\n{_tb.format_exc()}</pre>",
+            content_type="text/html"
+        )
+
+
+async def _handle_command_center_inner(request: web.Request):
+    import json, time as _t
+    sess = _get_session(request)
+    _track_session(request)
+
+    result = {"ok": False, "msg": ""}
+
+    # ── POST: выполнить команду ──────────────────────────────────
+    if request.method == "POST":
+        data    = await request.post()
+        cmd     = (data.get("cmd") or "").strip()
+        chat_id = int(data.get("chat_id") or 0)
+        target  = (data.get("target") or "").strip()
+        arg     = (data.get("arg") or "").strip()
+        uid_s   = sess.get("uid", 0) if sess else 0
+        uname   = sess.get("name", "?") if sess else "?"
+
+        if not _bot:
+            result = {"ok": False, "msg": "🤖 Бот не подключён"}
+        elif not chat_id and cmd not in ("status", "broadcast", "sos_on", "sos_off"):
+            result = {"ok": False, "msg": "⚠️ Выбери чат"}
+        else:
+            try:
+                from aiogram.types import ChatPermissions
+                from datetime import timedelta
+
+                # Парсим target → int uid если возможно
+                target_uid = 0
+                if target:
+                    try:
+                        target_uid = int(target)
+                    except:
+                        pass
+
+                # ── Команды ─────────────────────────────────────
+                if cmd == "lock":
+                    await _bot.set_chat_permissions(chat_id, ChatPermissions(can_send_messages=False))
+                    msg = f"🔒 Чат {chat_id} заблокирован"
+
+                elif cmd == "unlock":
+                    await _bot.set_chat_permissions(chat_id, ChatPermissions(
+                        can_send_messages=True, can_send_media_messages=True,
+                        can_send_polls=True, can_send_other_messages=True,
+                        can_add_web_page_previews=True))
+                    msg = f"🔓 Чат {chat_id} разблокирован"
+
+                elif cmd == "announce":
+                    if not arg:
+                        result = {"ok": False, "msg": "⚠️ Введи текст объявления"}
+                        raise ValueError("no arg")
+                    await _bot.send_message(chat_id,
+                        f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{arg}\n\n— Администрация",
+                        parse_mode="HTML")
+                    msg = f"📢 Объявление отправлено в {chat_id}"
+
+                elif cmd == "ban" and target_uid:
+                    await _bot.ban_chat_member(chat_id, target_uid)
+                    msg = f"🔨 Бан ID{target_uid} в чате {chat_id}"
+
+                elif cmd == "unban" and target_uid:
+                    await _bot.unban_chat_member(chat_id, target_uid, only_if_banned=True)
+                    msg = f"🕊 Разбан ID{target_uid}"
+
+                elif cmd == "mute" and target_uid:
+                    mins = int(arg) if arg.isdigit() else 60
+                    await _bot.restrict_chat_member(chat_id, target_uid,
+                        ChatPermissions(can_send_messages=False),
+                        until_date=timedelta(minutes=mins))
+                    msg = f"🔇 Мут ID{target_uid} на {mins}мин"
+
+                elif cmd == "unmute" and target_uid:
+                    await _bot.restrict_chat_member(chat_id, target_uid,
+                        ChatPermissions(can_send_messages=True,
+                            can_send_media_messages=True, can_send_polls=True,
+                            can_send_other_messages=True, can_add_web_page_previews=True))
+                    msg = f"🔊 Размут ID{target_uid}"
+
+                elif cmd == "kick" and target_uid:
+                    await _bot.ban_chat_member(chat_id, target_uid)
+                    await _bot.unban_chat_member(chat_id, target_uid)
+                    msg = f"👟 Кик ID{target_uid}"
+
+                elif cmd == "pin" and arg:
+                    # arg = message_id
+                    try:
+                        await _bot.pin_chat_message(chat_id, int(arg))
+                        msg = f"📌 Сообщение {arg} закреплено"
+                    except:
+                        msg = "❌ Не удалось закрепить"
+
+                elif cmd == "slowmode":
+                    delay = int(arg) if arg.isdigit() else 30
+                    from aiogram.methods import SetChatSlowModeDelay
+                    await _bot(SetChatSlowModeDelay(chat_id=chat_id, slow_mode_delay=delay))
+                    msg = f"🐢 Slowmode {delay}с"
+
+                elif cmd == "send" and arg:
+                    await _bot.send_message(chat_id, arg, parse_mode="HTML")
+                    msg = f"✉️ Сообщение отправлено"
+
+                elif cmd == "sos_on":
+                    chats_all = await db.get_all_chats()
+                    locked = 0
+                    for c in chats_all:
+                        try:
+                            await _bot.set_chat_permissions(c["cid"],
+                                ChatPermissions(can_send_messages=False))
+                            locked += 1
+                        except: pass
+                    msg = f"🚨 SOS: {locked} чатов заблокировано"
+
+                elif cmd == "sos_off":
+                    chats_all = await db.get_all_chats()
+                    unlocked = 0
+                    for c in chats_all:
+                        try:
+                            await _bot.set_chat_permissions(c["cid"],
+                                ChatPermissions(can_send_messages=True,
+                                    can_send_media_messages=True, can_send_polls=True,
+                                    can_send_other_messages=True,
+                                    can_add_web_page_previews=True))
+                            unlocked += 1
+                        except: pass
+                    msg = f"✅ Разлокдаун: {unlocked} чатов"
+
+                elif cmd == "broadcast":
+                    if not arg:
+                        result = {"ok": False, "msg": "⚠️ Введи текст"}
+                        raise ValueError("no arg")
+                    chats_all = await db.get_all_chats()
+                    sent = 0
+                    for c in chats_all:
+                        try:
+                            await _bot.send_message(c["cid"],
+                                f"📢 <b>Сообщение от администрации</b>\n\n{arg}",
+                                parse_mode="HTML")
+                            sent += 1
+                            import asyncio as _aio
+                            await _aio.sleep(0.05)
+                        except: pass
+                    msg = f"📡 Рассылка: {sent} чатов"
+
+                elif cmd == "status":
+                    me = await _bot.get_me()
+                    chats_all = await db.get_all_chats()
+                    online = shared.get_online_count()
+                    msg = (f"🤖 @{me.username} · "
+                           f"💬 {len(chats_all)} чатов · "
+                           f"👥 {online} онлайн · "
+                           f"🚨 {len(shared.alerts)} алертов")
+                else:
+                    result = {"ok": False, "msg": f"❓ Неизвестная команда: {cmd}"}
+                    raise ValueError("unknown cmd")
+
+                result = {"ok": True, "msg": msg}
+                _cc_push_event("cmd", f"[{uname}] {cmd}: {msg}", str(chat_id), uid_s)
+                _log_admin_db(uid_s, f"CC_{cmd.upper()}", msg)
+
+            except ValueError:
+                pass
+            except Exception as e:
+                result = {"ok": False, "msg": f"❌ {e}"}
+                _cc_push_event("error", f"[{uname}] Ошибка {cmd}: {e}")
+
+        # JSON ответ для AJAX
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return web.json_response(result)
+
+    # ── GET: рендер страницы ─────────────────────────────────────
+    chats = []
+    try:
+        chats = [dict(r) for r in await db.get_all_chats()]
+    except: pass
+
+    # Статистика по каждому чату
+    chat_stats_map = {}
+    try:
+        conn = db.get_conn()
+        for c in chats:
+            cid = c["cid"]
+            warns = conn.execute(
+                "SELECT COUNT(*) FROM mod_history WHERE cid=? AND action LIKE '%Варн%' AND date(created_at)=date('now')",
+                (cid,)).fetchone()[0] or 0
+            bans = conn.execute(
+                "SELECT COUNT(*) FROM mod_history WHERE cid=? AND action LIKE '%Бан%' AND date(created_at)=date('now')",
+                (cid,)).fetchone()[0] or 0
+            msgs_today = conn.execute(
+                "SELECT COUNT(*) FROM mod_history WHERE cid=? AND date(created_at)=date('now')",
+                (cid,)).fetchone()[0] or 0
+            chat_stats_map[cid] = {"warns": warns, "bans": bans, "actions": msgs_today}
+        conn.close()
+    except: pass
+
+    # Онлайн модераторы
+    on_duty_list = get_all_on_duty()
+    online_count = shared.get_online_count()
+    alerts_count = len(shared.alerts)
+    open_tickets = 0
+    try:
+        conn = db.get_conn()
+        open_tickets = conn.execute("SELECT COUNT(*) FROM tickets WHERE status='open'").fetchone()[0]
+        conn.close()
+    except: pass
+
+    # Последние 50 событий для initial load
+    recent_events = _cc_event_log[-50:][::-1]
+
+    # Строим карточки чатов
+    chat_cards_html = ""
+    for c in chats[:20]:
+        cid    = c["cid"]
+        title  = (c.get("title") or str(cid))[:22]
+        st     = chat_stats_map.get(cid, {})
+        warns  = st.get("warns", 0)
+        bans   = st.get("bans", 0)
+        heat   = "🔥" if warns + bans > 5 else ("⚡" if warns + bans > 2 else "✅")
+        chat_cards_html += (
+            f'<div class="cc-chat-card" data-cid="{cid}" onclick="selectChat({cid},\'{title}\')">'
+            f'<div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+            f'{heat} {title}</div>'
+            f'<div style="font-size:10px;color:var(--text2);margin-top:4px;display:flex;gap:8px;">'
+            f'<span>⚡{warns}в</span><span>🔨{bans}б</span>'
+            f'</div></div>'
+        )
+    if not chat_cards_html:
+        chat_cards_html = '<div style="color:var(--text2);font-size:12px;padding:12px;">Чатов нет</div>'
+
+    # История команд из лога
+    cmd_history_html = ""
+    for ev in recent_events[:30]:
+        color = {"cmd": "var(--accent)", "error": "var(--danger)", "warn": "var(--warn)"}.get(ev.get("type"), "var(--text2)")
+        cmd_history_html += (
+            f'<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:11px;">'
+            f'<span style="color:var(--text2);">{ev.get("time","")}</span> '
+            f'<span style="color:{color};">{ev.get("text","")[:80]}</span>'
+            f'</div>'
+        )
+    if not cmd_history_html:
+        cmd_history_html = '<div style="color:var(--text2);font-size:12px;padding:8px 0;">Команд ещё не было</div>'
+
+    # Дежурные
+    duty_html = ""
+    for d in on_duty_list[:5]:
+        ri = DASHBOARD_RANKS.get(d.get("rank", 1), DASHBOARD_RANKS[1])
+        duty_html += (
+            f'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">'
+            f'<div style="width:8px;height:8px;border-radius:50%;background:var(--success);flex-shrink:0;"></div>'
+            f'<div style="flex:1;font-size:12px;font-weight:600;">{d.get("name","?")}</div>'
+            f'<div style="font-size:10px;color:{ri["color"]};">{ri["name"]}</div>'
+            f'</div>'
+        )
+    if not duty_html:
+        duty_html = '<div style="color:var(--text2);font-size:12px;padding:8px 0;">Никто не дежурит</div>'
+
+    # Чаты для select
+    chat_opts = "".join(
+        f'<option value="{c["cid"]}">{(c.get("title") or str(c["cid"]))[:30]} ({c["cid"]})</option>'
+        for c in chats
+    )
+
+    result_html = ""
+    if result.get("msg"):
+        color = "var(--success)" if result["ok"] else "var(--danger)"
+        result_html = (
+            f'<div style="background:var(--bg3);border-left:3px solid {color};'
+            f'padding:10px 14px;border-radius:0 8px 8px 0;margin-bottom:16px;font-size:13px;">'
+            f'{result["msg"]}</div>'
+        )
+
+    body = navbar(sess, "command_center") + f"""
+    <div style="padding:0;max-width:100%;margin:0 auto;">
+
+      <!-- ── Статус-бар ── -->
+      <div style="background:var(--bg2);border-bottom:1px solid var(--border);
+                  padding:10px 24px;display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:10px;height:10px;border-radius:50%;
+               background:{'#22c55e' if _bot else '#ef4444'};"></div>
+          <span style="font-size:13px;font-weight:600;">
+            {'🟢 Бот онлайн' if _bot else '🔴 Бот офлайн'}
+          </span>
+        </div>
+        <div style="font-size:13px;">👥 <b id="cc-online">{online_count}</b> онлайн</div>
+        <div style="font-size:13px;">💬 <b>{len(chats)}</b> чатов</div>
+        <div style="font-size:13px;">🎫 <b id="cc-tickets">{open_tickets}</b> тикетов</div>
+        <div style="font-size:13px;{'color:var(--danger);font-weight:700;' if alerts_count else ''}">
+          🚨 <b id="cc-alerts">{alerts_count}</b> алертов
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <form method="POST" style="display:inline;">
+            <input type="hidden" name="cmd" value="sos_on">
+            <button class="btn btn-sm" style="background:rgba(239,68,68,.15);color:var(--danger);"
+              onclick="return confirm('🚨 Заблокировать ВСЕ чаты?')">🚨 SOS ВКЛ</button>
+          </form>
+          <form method="POST" style="display:inline;">
+            <input type="hidden" name="cmd" value="sos_off">
+            <button class="btn btn-sm btn-ghost"
+              onclick="return confirm('Разблокировать все чаты?')">✅ SOS ВЫКЛ</button>
+          </form>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:260px 1fr 300px;gap:0;height:calc(100vh - 120px);overflow:hidden;">
+
+        <!-- ── Левая колонка: Чаты ── -->
+        <div style="border-right:1px solid var(--border);overflow-y:auto;padding:0;">
+          <div style="padding:12px 16px;font-size:11px;font-weight:700;color:var(--text2);
+               text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border);
+               position:sticky;top:0;background:var(--bg1);">
+            💬 Чаты ({len(chats)})
+            <input id="chatSearch" placeholder="Поиск..." style="display:block;width:100%;margin-top:6px;
+              padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);
+              color:var(--text1);font-size:11px;" oninput="filterChats(this.value)">
+          </div>
+          <div id="chatList" style="padding:8px;">
+            {chat_cards_html}
+          </div>
+        </div>
+
+        <!-- ── Центр: терминал команд ── -->
+        <div style="display:flex;flex-direction:column;overflow:hidden;">
+
+          <!-- Выбранный чат + статус -->
+          <div style="padding:12px 20px;border-bottom:1px solid var(--border);
+               background:var(--bg2);display:flex;gap:12px;align-items:center;">
+            <div style="flex:1;">
+              <span style="font-size:12px;color:var(--text2);">Активный чат:</span>
+              <span id="activeChatName" style="font-size:14px;font-weight:700;margin-left:8px;">
+                — не выбран —
+              </span>
+            </div>
+            <select id="chatSelect" class="form-control" style="max-width:240px;font-size:12px;"
+              onchange="selectChatById(this.value)">
+              <option value="">— выбери чат —</option>
+              {chat_opts}
+            </select>
+          </div>
+
+          {result_html}
+
+          <!-- Кнопки быстрых команд -->
+          <div style="padding:12px 20px;border-bottom:1px solid var(--border);
+               display:flex;gap:6px;flex-wrap:wrap;background:var(--bg2);">
+            <button class="cc-quick-btn" onclick="runCmd('lock')" 
+              style="background:rgba(239,68,68,.12);color:#ef4444;">🔒 Локдаун</button>
+            <button class="cc-quick-btn" onclick="runCmd('unlock')"
+              style="background:rgba(34,197,94,.12);color:#22c55e;">🔓 Открыть</button>
+            <button class="cc-quick-btn" onclick="runCmdPrompt('ban','ID пользователя для бана:')"
+              style="background:rgba(239,68,68,.08);color:#ef4444;">🔨 Бан</button>
+            <button class="cc-quick-btn" onclick="runCmdPrompt('unban','ID для разбана:')"
+              style="background:rgba(34,197,94,.08);color:#22c55e;">🕊 Разбан</button>
+            <button class="cc-quick-btn" onclick="runCmdMute()"
+              style="background:rgba(139,92,246,.12);color:#8b5cf6;">🔇 Мут</button>
+            <button class="cc-quick-btn" onclick="runCmdPrompt('unmute','ID для размута:')"
+              style="background:rgba(139,92,246,.08);color:#8b5cf6;">🔊 Размут</button>
+            <button class="cc-quick-btn" onclick="runCmdPrompt('kick','ID для кика:')"
+              style="background:rgba(245,158,11,.12);color:#f59e0b;">👟 Кик</button>
+            <button class="cc-quick-btn" onclick="runCmdAnnounce()"
+              style="background:rgba(99,102,241,.12);color:#6366f1;">📢 Анонс</button>
+            <button class="cc-quick-btn" onclick="runCmdSlowmode()"
+              style="background:rgba(6,182,212,.12);color:#06b6d4;">🐢 Slowmode</button>
+            <button class="cc-quick-btn" onclick="runCmd('status')"
+              style="background:rgba(107,114,128,.15);color:var(--text2);">📊 Статус</button>
+          </div>
+
+          <!-- Ввод произвольной команды -->
+          <div style="padding:12px 20px;border-bottom:1px solid var(--border);background:var(--bg2);">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <div style="color:var(--accent);font-family:monospace;font-size:14px;flex-shrink:0;">❯</div>
+              <input id="termInput" class="form-control" placeholder="cmd [target] [arg]  — напр: ban 123456  или  announce Внимание!"
+                style="font-family:monospace;font-size:12px;flex:1;"
+                onkeydown="if(event.key==='Enter')sendTermCmd()">
+              <button class="btn btn-primary btn-sm" onclick="sendTermCmd()" style="flex-shrink:0;">▶</button>
+            </div>
+            <div style="font-size:10px;color:var(--text2);margin-top:5px;line-height:1.8;">
+              Команды: <code>lock</code> <code>unlock</code> <code>ban ID</code> <code>mute ID мин</code>
+              <code>kick ID</code> <code>announce текст</code> <code>send текст</code>
+              <code>slowmode N</code> <code>broadcast текст</code> <code>status</code>
+            </div>
+          </div>
+
+          <!-- Лента ответов терминала -->
+          <div id="termOutput" style="flex:1;overflow-y:auto;padding:12px 20px;
+               font-family:JetBrains Mono,monospace;font-size:12px;background:var(--bg1);">
+            <div style="color:var(--text2);">Command Center готов. Выбери чат и отправляй команды.</div>
+          </div>
+        </div>
+
+        <!-- ── Правая колонка: лента событий + дежурные ── -->
+        <div style="border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;">
+
+          <!-- Дежурные -->
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border);">
+            <div style="font-size:11px;font-weight:700;color:var(--text2);
+                 text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">
+              🟢 На дежурстве ({len(on_duty_list)})
+            </div>
+            {duty_html}
+          </div>
+
+          <!-- Live лента событий -->
+          <div style="flex:1;overflow-y:auto;">
+            <div style="padding:10px 16px;font-size:11px;font-weight:700;color:var(--text2);
+                 text-transform:uppercase;letter-spacing:.1em;
+                 border-bottom:1px solid var(--border);position:sticky;top:0;
+                 background:var(--bg1);display:flex;justify-content:space-between;align-items:center;">
+              <span>📡 Live события</span>
+              <span id="liveStatus" style="font-size:9px;color:var(--text2);">●</span>
+            </div>
+            <div id="eventFeed" style="padding:0 12px;">
+              {cmd_history_html}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <style>
+    .cc-chat-card {{
+      padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;
+      border:1px solid transparent;transition:all .15s;
+    }}
+    .cc-chat-card:hover {{ background:var(--bg3);border-color:var(--border); }}
+    .cc-chat-card.active {{ background:rgba(99,102,241,.15);border-color:var(--accent); }}
+    .cc-quick-btn {{
+      padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;
+      border:none;transition:opacity .15s;
+    }}
+    .cc-quick-btn:hover {{ opacity:.8; }}
+    #termOutput {{ scrollbar-width:thin; }}
+    </style>
+
+    <script>
+    var _activeCid = 0;
+    var _activeName = '';
+    var _cmdHistory = [];
+    var _historyIdx = -1;
+
+    function selectChat(cid, name) {{
+      _activeCid = cid;
+      _activeName = name;
+      document.getElementById('activeChatName').textContent = name + ' (' + cid + ')';
+      document.getElementById('chatSelect').value = cid;
+      document.querySelectorAll('.cc-chat-card').forEach(function(c) {{
+        c.classList.toggle('active', c.dataset.cid == cid);
+      }});
+      appendOutput('✅ Выбран чат: ' + name + ' (' + cid + ')', 'var(--accent)');
+    }}
+    function selectChatById(cid) {{
+      var opt = document.querySelector('#chatSelect option[value="'+cid+'"]');
+      if (opt) selectChat(cid, opt.textContent.split(' (')[0]);
+    }}
+    function filterChats(q) {{
+      q = q.toLowerCase();
+      document.querySelectorAll('.cc-chat-card').forEach(function(c) {{
+        c.style.display = c.textContent.toLowerCase().includes(q) ? '' : 'none';
+      }});
+    }}
+
+    function appendOutput(text, color) {{
+      color = color || 'var(--text1)';
+      var d = document.getElementById('termOutput');
+      var now = new Date().toTimeString().slice(0,8);
+      var div = document.createElement('div');
+      div.style.cssText = 'padding:3px 0;border-bottom:1px solid var(--border);';
+      div.innerHTML = '<span style="color:var(--text2);">' + now + '</span> '
+        + '<span style="color:' + color + ';">' + text + '</span>';
+      d.prepend(div);
+    }}
+
+    function submitCmd(cmd, target, arg) {{
+      var fd = new FormData();
+      fd.append('cmd', cmd);
+      fd.append('chat_id', _activeCid);
+      fd.append('target', target || '');
+      fd.append('arg', arg || '');
+      appendOutput('❯ ' + cmd + (target?' '+target:'') + (arg?' '+arg:''), 'var(--accent)');
+      fetch(window.location.href, {{
+        method: 'POST',
+        headers: {{'X-Requested-With': 'XMLHttpRequest'}},
+        body: fd
+      }}).then(function(r){{return r.json();}}).then(function(d){{
+        appendOutput(d.msg, d.ok ? 'var(--success)' : 'var(--danger)');
+      }}).catch(function(e){{
+        appendOutput('❌ Сетевая ошибка: ' + e, 'var(--danger)');
+      }});
+    }}
+
+    function runCmd(cmd) {{
+      if (!_activeCid && !['status','broadcast','sos_on','sos_off'].includes(cmd)) {{
+        appendOutput('⚠️ Выбери чат!', 'var(--warn)'); return;
+      }}
+      submitCmd(cmd, '', '');
+    }}
+    function runCmdPrompt(cmd, label) {{
+      if (!_activeCid) {{ appendOutput('⚠️ Выбери чат!', 'var(--warn)'); return; }}
+      var v = prompt(label); if (!v) return;
+      submitCmd(cmd, v, '');
+    }}
+    function runCmdMute() {{
+      if (!_activeCid) {{ appendOutput('⚠️ Выбери чат!', 'var(--warn)'); return; }}
+      var uid = prompt('ID для мута:'); if (!uid) return;
+      var mins = prompt('Минут (Enter = 60):') || '60';
+      submitCmd('mute', uid, mins);
+    }}
+    function runCmdAnnounce() {{
+      if (!_activeCid) {{ appendOutput('⚠️ Выбери чат!', 'var(--warn)'); return; }}
+      var text = prompt('Текст объявления:'); if (!text) return;
+      submitCmd('announce', '', text);
+    }}
+    function runCmdSlowmode() {{
+      if (!_activeCid) {{ appendOutput('⚠️ Выбери чат!', 'var(--warn)'); return; }}
+      var sec = prompt('Задержка (секунд, 0=выкл):') || '30';
+      submitCmd('slowmode', '', sec);
+    }}
+
+    function sendTermCmd() {{
+      var input = document.getElementById('termInput');
+      var raw = input.value.trim();
+      if (!raw) return;
+      _cmdHistory.unshift(raw); _historyIdx = -1;
+      var parts = raw.split(/\\s+/);
+      var cmd = parts[0];
+      var target = '';
+      var arg = '';
+      // Парсим: cmd [target/число] [остаток]
+      var cmdsWithTarget = ['ban','unban','mute','unmute','kick'];
+      if (cmdsWithTarget.includes(cmd) && parts.length >= 2) {{
+        target = parts[1];
+        arg = parts.slice(2).join(' ');
+      }} else {{
+        arg = parts.slice(1).join(' ');
+      }}
+      if (!_activeCid && !['status','broadcast','sos_on','sos_off'].includes(cmd)) {{
+        appendOutput('⚠️ Выбери чат слева!', 'var(--warn)');
+        return;
+      }}
+      submitCmd(cmd, target, arg);
+      input.value = '';
+    }}
+
+    // Стрелки вверх/вниз для истории команд
+    document.getElementById('termInput').addEventListener('keydown', function(e) {{
+      if (e.key === 'ArrowUp') {{
+        _historyIdx = Math.min(_historyIdx + 1, _cmdHistory.length - 1);
+        if (_cmdHistory[_historyIdx]) this.value = _cmdHistory[_historyIdx];
+        e.preventDefault();
+      }} else if (e.key === 'ArrowDown') {{
+        _historyIdx = Math.max(_historyIdx - 1, -1);
+        this.value = _historyIdx >= 0 ? _cmdHistory[_historyIdx] : '';
+        e.preventDefault();
+      }}
+    }});
+
+    // SSE лента событий
+    (function() {{
+      var feed = document.getElementById('eventFeed');
+      var status = document.getElementById('liveStatus');
+      function connect() {{
+        var es = new EventSource('/dashboard/sse');
+        es.onopen = function() {{
+          status.style.color = '#22c55e';
+          status.title = 'Live';
+        }};
+        es.onmessage = function(e) {{
+          if (!e.data || e.data === 'connected') return;
+          if (!e.data.startsWith('cc:')) return;
+          try {{
+            var ev = JSON.parse(e.data.slice(3));
+            var colors = {{cmd:'var(--accent)',error:'var(--danger)',warn:'var(--warn)',ban:'#ef4444',mute:'#8b5cf6',report:'#f59e0b'}};
+            var color = colors[ev.type] || 'var(--text2)';
+            var div = document.createElement('div');
+            div.style.cssText = 'padding:5px 0;border-bottom:1px solid var(--border);font-size:11px;animation:fadeIn .3s;';
+            div.innerHTML = '<span style="color:var(--text2);">' + ev.time + '</span> '
+              + (ev.chat ? '<span style="font-size:10px;background:var(--bg3);padding:1px 5px;border-radius:4px;margin:0 4px;">'+ ev.chat.slice(-10) +'</span> ' : '')
+              + '<span style="color:' + color + ';">' + ev.text + '</span>';
+            feed.prepend(div);
+            // Ограничим 100 записей
+            while (feed.children.length > 100) feed.removeChild(feed.lastChild);
+          }} catch(e) {{}}
+        }};
+        es.onerror = function() {{
+          status.style.color = '#ef4444';
+          status.title = 'Disconnected';
+          setTimeout(connect, 3000);
+        }};
+      }}
+      connect();
+    }})();
+
+    // Обновление счётчиков каждые 10 сек
+    setInterval(function() {{
+      fetch('/api/live').then(function(r){{return r.json();}}).then(function(d){{
+        if (d.online !== undefined) document.getElementById('cc-online').textContent = d.online;
+        if (d.alerts !== undefined) document.getElementById('cc-alerts').textContent = d.alerts;
+      }}).catch(function(){{}});
+    }}, 10000);
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+
+handle_command_center = require_auth("view_overview")(handle_command_center)
+
+
 async def start_dashboard():
     _init_admin_db()
     app = web.Application()
@@ -7212,6 +7881,8 @@ async def start_dashboard():
     app.router.add_post("/api/bot/action",             api_bot_action)
     app.router.add_get("/api/bot/status",              api_bot_status)
     app.router.add_get("/api/bot/chats",               api_bot_chats)
+    app.router.add_get("/dashboard/command_center",    handle_command_center)
+    app.router.add_post("/dashboard/command_center",   handle_command_center)
 
     # Запускаем фоновые задачи
     _start_background_tasks()
