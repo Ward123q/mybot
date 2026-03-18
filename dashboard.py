@@ -1890,53 +1890,53 @@ async def handle_admins(request: web.Request):
                 'display:inline-block;margin-left:6px;" title="На дежурстве"></span>'
                 if uid in duty_uids else ""
             )
-            if is_owner:
-                action_cell = '<span style="color:var(--gold);font-size:12px;">🌟 Владелец</span>'
-            else:
-                action_cell = (
-                    f'<div style="display:flex;gap:4px;flex-wrap:wrap;">'
-                    f'<button onclick="openRankModal({uid},\'{safe}\',{rank})" class="btn btn-xs btn-ghost">✏️ Ранг</button>'
-                    f'<a href="/dashboard/mod/{uid}" class="btn btn-xs btn-ghost">👤</a>'
-                    f'<button onclick="openDutyModal({uid},\'{safe}\')" class="btn btn-xs btn-ghost">⏰</button>'
-                    f'<button onclick="revokeAdmin({uid},\'{safe}\')" class="btn btn-xs"'
-                    f' style="background:rgba(239,68,68,.1);color:var(--danger);">🗑</button>'
-                    f'</div>'
-                )
-            # Данные для расширенной строки
+            # Расширенные данные
             week_acts   = mod_actions_map.get(a["name"], 0)
             active_sess = sessions_by_uid.get(uid, [])
-            sess_dot    = (
-                f'<span style="width:7px;height:7px;border-radius:50%;background:#22c55e;'
-                f'display:inline-block;margin-left:4px;" title="{len(active_sess)} активных сессий"></span>'
+            notes_list  = admin_notes_map.get(uid, [])
+            RANK_THR    = {1:10,2:25,3:50,4:100,5:200,6:350,7:500,8:750,9:1000,10:1500,11:2000,12:3000,13:5000,14:8000}
+            total_acts  = stats["bans"] + stats["warns"] + stats["mutes"] + stats["tickets"]
+            thr         = RANK_THR.get(rank, 9999)
+            prog_pct    = min(100, int(total_acts / thr * 100)) if thr else 100
+
+            sess_dot = (
+                '<span style="width:7px;height:7px;border-radius:50%;background:#22c55e;'
+                'display:inline-block;margin-left:4px;" title="Активная сессия"></span>'
                 if active_sess else ""
             )
-            notes_list  = admin_notes_map.get(uid, [])
             notes_badge = (
                 f'<span style="font-size:10px;background:rgba(99,102,241,.2);color:var(--accent);'
-                f'padding:1px 5px;border-radius:10px;margin-left:4px;" title="Есть заметки">📝{len(notes_list)}</span>'
+                f'padding:1px 5px;border-radius:10px;margin-left:4px;">📝{len(notes_list)}</span>'
                 if notes_list else ""
             )
-            # Прогресс к следующему рангу
-            RANK_THR = {1:10,2:25,3:50,4:100,5:200,6:350,7:500,8:750,9:1000,10:1500,11:2000,12:3000,13:5000,14:8000}
-            total_acts = stats["bans"] + stats["warns"] + stats["mutes"] + stats["tickets"]
-            thr = RANK_THR.get(rank, 9999)
-            prog_pct = min(100, int(total_acts/thr*100)) if thr else 100
             prog_bar = (
-                f'<div style="height:3px;width:60px;background:var(--bg4);border-radius:2px;display:inline-block;vertical-align:middle;">'
+                f'<div style="height:3px;width:60px;background:var(--bg4);border-radius:2px;'
+                f'display:inline-block;vertical-align:middle;">'
                 f'<div style="height:3px;width:{prog_pct}%;background:{ri["color"]};border-radius:2px;"></div>'
                 f'</div> <span style="font-size:10px;color:var(--text2);">{prog_pct}%</span>'
             ) if not is_owner else ""
 
-            # Кнопки управления — добавляем заметку и выгнать сессию
-            if not is_owner:
+            # action_cell — одна чистая версия
+            if is_owner:
+                action_cell = '<span style="color:var(--gold);font-size:12px;">🌟 Владелец</span>'
+            else:
+                kick_btn = (
+                    f'<button onclick="kickSess({uid})" class="btn btn-xs"'
+                    f' style="color:var(--danger);" title="Выгнать из сессии">🔴</button>'
+                    if active_sess else ""
+                )
                 action_cell = (
                     f'<div style="display:flex;gap:4px;flex-wrap:wrap;">'
-                    f'<button onclick="openRankModal({uid},{safe!r},{rank})" class="btn btn-xs btn-ghost">✏️ Ранг</button>'
+                    f'<button onclick="openRankModal({uid},{safe!r},{rank})"'
+                    f' class="btn btn-xs btn-ghost">✏️ Ранг</button>'
                     f'<a href="/dashboard/mod/{uid}" class="btn btn-xs btn-ghost">👤</a>'
-                    f'<button onclick="openDutyModal({uid},{safe!r})" class="btn btn-xs btn-ghost">⏰</button>'
-                    f'<button onclick="openNoteModal({uid},{safe!r})" class="btn btn-xs btn-ghost" title="Добавить заметку">📝</button>'
-                    (f'<button onclick="kickSess({uid})" class="btn btn-xs" style="color:var(--danger);" title="Выгнать">🔴</button>' if active_sess else "") +
-                    f'<button onclick="revokeAdmin({uid},{safe!r})" class="btn btn-xs" style="background:rgba(239,68,68,.1);color:var(--danger);">🗑</button>'
+                    f'<button onclick="openDutyModal({uid},{safe!r})"'
+                    f' class="btn btn-xs btn-ghost">⏰</button>'
+                    f'<button onclick="openNoteModal({uid},{safe!r})"'
+                    f' class="btn btn-xs btn-ghost" title="Заметка">📝</button>'
+                    + kick_btn +
+                    f'<button onclick="revokeAdmin({uid},{safe!r})" class="btn btn-xs"'
+                    f' style="background:rgba(239,68,68,.1);color:var(--danger);">🗑</button>'
                     f'</div>'
                 )
             rows_in_tier += (
@@ -2262,6 +2262,26 @@ async def handle_admins(request: web.Request):
         document.getElementById('revokeUid').value = uid;
         document.getElementById('revokeForm').submit();
       }}
+    }}
+    function openNoteModal(uid, name) {{
+      var text = prompt('Заметка для ' + name + ':');
+      if (!text) return;
+      var f = document.createElement('form');
+      f.method = 'POST';
+      f.innerHTML = '<input name="action" value="add_note">'
+        + '<input name="tg_uid" value="' + uid + '">'
+        + '<input name="note_text" value="' + text.replace(/"/g,'&quot;') + '">';
+      document.body.appendChild(f);
+      f.submit();
+    }}
+    function kickSess(uid) {{
+      if (!confirm('Выгнать пользователя из всех сессий?')) return;
+      var f = document.createElement('form');
+      f.method = 'POST';
+      f.innerHTML = '<input name="action" value="kick_session">'
+        + '<input name="tg_uid" value="' + uid + '">';
+      document.body.appendChild(f);
+      f.submit();
     }}
     </script>
 
