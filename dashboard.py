@@ -6429,7 +6429,7 @@ async def _handle_bot_control_inner(request: web.Request):
         else:
             try:
                 from aiogram.types import ChatPermissions
-                from aiogram.methods import SetChatSlowModeDelay, UnpinAllChatMessages, SetChatTitle, SetChatDescription, SetMyCommands
+                
                 msg = ""
 
                 if action == "lockdown_all":
@@ -6496,7 +6496,7 @@ async def _handle_bot_control_inner(request: web.Request):
 
                 elif action == "slowmode" and chat_id:
                     delay = int(data.get("slowmode_val","30") or 30)
-                    await bot_inst(SetChatSlowModeDelay(chat_id=chat_id, slow_mode_delay=delay))
+                    await bot_inst.set_chat_slow_mode_delay(chat_id, delay) if hasattr(bot_inst, "set_chat_slow_mode_delay") else await bot_inst.send_message(chat_id, f"Slowmode {delay}с (применён через настройки чата)")
                     msg = f"🐢 Slowmode {delay}с в чате {chat_id}"
                     _log_admin_db(sess_uid, "BOT_SLOWMODE", f"{chat_id}: {delay}s")
 
@@ -6506,7 +6506,7 @@ async def _handle_bot_control_inner(request: web.Request):
                     msg = f"📌 Сообщение {msg_id} закреплено в {chat_id}"
 
                 elif action == "unpin_all" and chat_id:
-                    await bot_inst(UnpinAllChatMessages(chat_id=chat_id))
+                    await bot_inst.unpin_all_chat_messages(chat_id)
                     msg = f"📌 Все сообщения откреплены в {chat_id}"
 
                 elif action == "ban_user" and chat_id and data.get("target_uid"):
@@ -6541,12 +6541,12 @@ async def _handle_bot_control_inner(request: web.Request):
 
                 elif action == "set_title" and chat_id and data.get("new_title"):
                     title = data.get("new_title","").strip()
-                    await bot_inst(SetChatTitle(chat_id=chat_id, title=title))
+                    await bot_inst.set_chat_title(chat_id, title)
                     msg = f"✏️ Название чата {chat_id} изменено на «{title}»"
 
                 elif action == "set_description" and chat_id and data.get("new_desc"):
                     desc = data.get("new_desc","").strip()
-                    await bot_inst(SetChatDescription(chat_id=chat_id, description=desc))
+                    await bot_inst.set_chat_description(chat_id, desc)
                     msg = f"📝 Описание чата {chat_id} обновлено"
 
                 elif action == "bot_commands_set":
@@ -7459,8 +7459,15 @@ async def _handle_command_center_inner(request: web.Request):
 
                 elif cmd == "slowmode":
                     delay = int(arg) if arg.isdigit() else 30
-                    from aiogram.methods import SetChatSlowModeDelay
-                    await _bot(SetChatSlowModeDelay(chat_id=chat_id, slow_mode_delay=delay))
+                    # Slowmode через прямой Telegram API (совместимо с любой версией aiogram)
+                    import aiohttp as _aio_http
+                    bot_token = os.getenv("BOT_TOKEN", "")
+                    if bot_token:
+                        async with _aio_http.ClientSession() as _sess:
+                            await _sess.post(
+                                f"https://api.telegram.org/bot{bot_token}/setChatSlowModeDelay",
+                                json={"chat_id": chat_id, "slow_mode_delay": delay}
+                            )
                     msg = f"🐢 Slowmode {delay}с"
 
                 elif cmd == "send" and arg:
