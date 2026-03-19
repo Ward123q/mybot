@@ -1283,6 +1283,9 @@ def navbar(sess: dict | None = None, active: str = "") -> str:
         {link("broadcast", "/dashboard/broadcast", "📢", "Рассылка", "broadcast")}
         {link("chat_settings", "/dashboard/chat_settings", "⚙️", "Настройки чатов", "manage_chat_settings")}
         {link("admins", "/dashboard/admins", "👑", "Администраторы", "view_overview") if rank >= OWNER_RANK else ""}
+        {f'<a href="/dashboard/owner" class="nav-link{"  active" if active=="owner" else ""}">'
+         f'<span class="nav-icon">🌟</span><span>Панель владельца</span></a>'
+         if rank >= OWNER_RANK else ""}
         {link("settings", "/dashboard/settings", "🔧", "Настройки", "view_settings")}
 
         <div class="nav-section">Инструменты</div>
@@ -6978,6 +6981,9 @@ import asyncio as _asyncio_bg
 _auto_reports_task = None
 
 def _start_background_tasks():
+    _owner_init_tables()
+    import asyncio as _aio
+    _aio.get_event_loop().create_task(_backup_loop()) if _aio.get_event_loop().is_running() else None
     """Вызывается из start_dashboard для запуска фоновых задач."""
     global _auto_reports_task
     try:
@@ -8404,6 +8410,803 @@ async def handle_mini_app(request: web.Request):
         return web.Response(text="<h1>mini_app.html не найден</h1>", content_type="text/html", status=404)
 
 
+# owner_features.py — вставляется в dashboard.py перед start_dashboard()
+
+import secrets as _sec
+import hashlib as _hl
+import gzip as _gz
+import shutil as _sh
+import os as _os_bk
+
+# ══════════════════════════════════════════════════════════════════
+#  🗄 ИНИЦИАЛИЗАЦИЯ ТАБЛИЦ
+# ══════════════════════════════════════════════════════════════════
+def _owner_init_tables():
+    try:
+        conn = db.get_conn()
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS vip_users (
+            uid INTEGER PRIMARY KEY,
+            username TEXT, granted_by INTEGER,
+            tier TEXT DEFAULT 'standard',
+            expires_at TEXT, granted_at TEXT DEFAULT (datetime('now')),
+            note TEXT DEFAULT ''
+        );
+        CREATE TABLE IF NOT EXISTS network_bans (
+            uid INTEGER PRIMARY KEY,
+            reason TEXT, banned_by INTEGER,
+            banned_at TEXT DEFAULT (datetime('now')),
+            chat_origin INTEGER DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS backup_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT, size_bytes INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            status TEXT DEFAULT 'ok', note TEXT DEFAULT ''
+        );
+        CREATE TABLE IF NOT EXISTS mod_2fa_settings (
+            uid INTEGER PRIMARY KEY,
+            enabled INTEGER DEFAULT 1,
+            actions TEXT DEFAULT 'ban,kick,revoke'
+        );
+        CREATE TABLE IF NOT EXISTS push_settings (
+            uid INTEGER PRIMARY KEY,
+            new_ticket INTEGER DEFAULT 1,
+            new_alert INTEGER DEFAULT 1,
+            new_report INTEGER DEFAULT 1,
+            new_appeal INTEGER DEFAULT 1,
+            quiet_start TEXT DEFAULT '23:00',
+            quiet_end TEXT DEFAULT '08:00'
+        );
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.warning(f"[OWNER] init tables: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  ⭐ VIP СИСТЕМА
+# ══════════════════════════════════════════════════════════════════
+def _vip_get_all() -> list:
+    try:
+        conn = db.get_conn()
+        rows = conn.execute("SELECT * FROM vip_users ORDER BY expires_at DESC").fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except: return []
+
+def _vip_grant(uid: int, username: str, tier: str, days: int, granted_by: int, note: str = ""):
+    import datetime as _dt
+    exp = (_dt.datetime.now() + _dt.timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    conn = db.get_conn()
+    conn.execute("""INSERT INTO vip_users (uid,username,granted_by,tier,expires_at,note)
+        VALUES (?,?,?,?,?,?) ON CONFLICT(uid) DO UPDATE SET
+        tier=excluded.tier, expires_at=excluded.expires_at,
+        granted_by=excluded.granted_by, note=excluded.note""",
+        (uid, username, granted_by, tier, exp, note))
+    conn.commit(); conn.close()
+
+def _vip_revoke(uid: int):
+    conn = db.get_conn()
+    conn.execute("DELETE FROM vip_users WHERE uid=?", (uid,))
+    conn.commit(); conn.close()
+
+def _vip_is_active(uid: int) -> bool:
+    try:
+        conn = db.get_conn()
+        row = conn.execute(
+            "SELECT expires_at FROM vip_users WHERE uid=? AND expires_at > datetime('now')",
+            (uid,)).fetchone()
+        conn.close()
+        return row is not None
+    except: return False
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🌐 СЕТЬ ЧАТОВ — ГЛОБАЛЬНЫЙ БАН
+# ══════════════════════════════════════════════════════════════════
+def _netban_get_all() -> list:
+    try:
+        conn = db.get_conn()
+        rows = conn.execute("SELECT * FROM network_bans ORDER BY banned_at DESC LIMIT 100").fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except: return []
+
+def _netban_is_banned(uid: int) -> bool:
+    try:
+        conn = db.get_conn()
+        row = conn.execute("SELECT 1 FROM network_bans WHERE uid=?", (uid,)).fetchone()
+        conn.close()
+        return row is not None
+    except: return False
+
+async def _netban_apply(uid: int, reason: str, banned_by: int, chat_origin: int = 0):
+    """Баним юзера во всех чатах сети."""
+    conn = db.get_conn()
+    conn.execute("""INSERT INTO network_bans (uid,reason,banned_by,chat_origin)
+        VALUES (?,?,?,?) ON CONFLICT(uid) DO UPDATE SET
+        reason=excluded.reason, banned_by=excluded.banned_by""",
+        (uid, reason, banned_by, chat_origin))
+    conn.commit(); conn.close()
+    if _bot:
+        chats = await db.get_all_chats()
+        banned = 0
+        for c in chats:
+            try:
+                await _bot.ban_chat_member(c["cid"], uid)
+                banned += 1
+            except: pass
+        return banned
+    return 0
+
+async def _netban_remove(uid: int):
+    """Разбаниваем во всех чатах."""
+    conn = db.get_conn()
+    conn.execute("DELETE FROM network_bans WHERE uid=?", (uid,))
+    conn.commit(); conn.close()
+    if _bot:
+        chats = await db.get_all_chats()
+        for c in chats:
+            try: await _bot.unban_chat_member(c["cid"], uid, only_if_banned=True)
+            except: pass
+
+
+# ══════════════════════════════════════════════════════════════════
+#  💾 АВТО-БЭКАП
+# ══════════════════════════════════════════════════════════════════
+async def _do_backup(manual: bool = False) -> dict:
+    """Создаёт gzip бэкап БД и шлёт в лог-канал."""
+    import datetime as _dt, io as _io
+    try:
+        db_path = _os_bk.path.abspath("skinvault.db")
+        if not _os_bk.path.exists(db_path):
+            return {"ok": False, "error": "БД не найдена"}
+
+        ts    = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        fname = f"backup_{ts}{'_manual' if manual else ''}.db.gz"
+        size  = _os_bk.path.getsize(db_path)
+
+        # Сжимаем в памяти
+        buf = _io.BytesIO()
+        with open(db_path, "rb") as f_in, _gz.GzipFile(fileobj=buf, mode="wb") as gz:
+            gz.write(f_in.read())
+        gz_data = buf.getvalue()
+        gz_size = len(gz_data)
+
+        # Шлём в лог-канал
+        if _bot:
+            from aiogram.types import BufferedInputFile
+            caption = (
+                f"💾 <b>{'Ручной' if manual else 'Авто'}-бэкап</b>\n\n"
+                f"📅 {_dt.datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
+                f"📦 Размер: {size//1024} КБ → {gz_size//1024} КБ (gzip)\n"
+                f"🗄 Файл: <code>{fname}</code>"
+            )
+            await _bot.send_document(
+                LOG_CHANNEL_ID,
+                document=BufferedInputFile(gz_data, filename=fname),
+                caption=caption, parse_mode="HTML"
+            )
+
+        # Логируем
+        conn = db.get_conn()
+        conn.execute("INSERT INTO backup_log (filename,size_bytes,note) VALUES (?,?,?)",
+                     (fname, gz_size, "manual" if manual else "auto"))
+        conn.commit(); conn.close()
+
+        return {"ok": True, "filename": fname, "size": gz_size}
+    except Exception as e:
+        log.error(f"[BACKUP] error: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+async def _backup_loop():
+    """Авто-бэкап каждые 6 часов."""
+    import asyncio as _aio
+    await _aio.sleep(30)  # ждём запуска бота
+    while True:
+        await _do_backup()
+        await _aio.sleep(6 * 3600)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🔐 2FA ДЛЯ КРИТИЧЕСКИХ ДЕЙСТВИЙ
+# ══════════════════════════════════════════════════════════════════
+_2fa_action_pending: dict = {}  # {uid: {action, code, expires, data}}
+
+def _2fa_is_required(uid: int, action: str) -> bool:
+    """Проверяет нужна ли 2FA для данного действия."""
+    try:
+        conn = db.get_conn()
+        row = conn.execute("SELECT enabled, actions FROM mod_2fa_settings WHERE uid=?",
+                           (uid,)).fetchone()
+        conn.close()
+        if not row:
+            # По умолчанию — включена для всех
+            return action in ("ban", "kick", "revoke_admin", "update_rank", "global_ban")
+        if not row["enabled"]:
+            return False
+        actions = (row["actions"] or "").split(",")
+        return action in actions
+    except: return False
+
+async def _2fa_send_code(uid: int, action: str, action_data: dict = None) -> str:
+    """Генерирует и отправляет код 2FA."""
+    import random as _r
+    code = str(_r.randint(100000, 999999))
+    _2fa_action_pending[uid] = {
+        "code":    code,
+        "action":  action,
+        "data":    action_data or {},
+        "expires": time.time() + 300,
+    }
+    if _bot:
+        try:
+            await _bot.send_message(uid,
+                f"🔐 <b>Подтверждение действия</b>\n\n"
+                f"Действие: <b>{action}</b>\n"
+                f"Код подтверждения:\n\n"
+                f"<code>{code}</code>\n\n"
+                f"⏰ Действителен 5 минут.\n"
+                f"Введи на странице дашборда.",
+                parse_mode="HTML")
+        except Exception as e:
+            log.warning(f"[2FA] send error: {e}")
+    return code
+
+def _2fa_verify(uid: int, code: str) -> bool:
+    """Проверяет код 2FA."""
+    pending = _2fa_action_pending.get(uid)
+    if not pending:
+        return False
+    if time.time() > pending["expires"]:
+        _2fa_action_pending.pop(uid, None)
+        return False
+    if pending["code"] == code.strip():
+        _2fa_action_pending.pop(uid, None)
+        return True
+    return False
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🔔 PUSH-УВЕДОМЛЕНИЯ МОДЕРАТОРАМ
+# ══════════════════════════════════════════════════════════════════
+def _push_get_settings(uid: int) -> dict:
+    try:
+        conn = db.get_conn()
+        row = conn.execute("SELECT * FROM push_settings WHERE uid=?", (uid,)).fetchone()
+        conn.close()
+        if row: return dict(row)
+    except: pass
+    return {"uid": uid, "new_ticket": 1, "new_alert": 1,
+            "new_report": 1, "new_appeal": 1,
+            "quiet_start": "23:00", "quiet_end": "08:00"}
+
+def _push_save_settings(uid: int, s: dict):
+    try:
+        conn = db.get_conn()
+        conn.execute("""INSERT INTO push_settings
+            (uid,new_ticket,new_alert,new_report,new_appeal,quiet_start,quiet_end)
+            VALUES (?,?,?,?,?,?,?)
+            ON CONFLICT(uid) DO UPDATE SET
+            new_ticket=excluded.new_ticket, new_alert=excluded.new_alert,
+            new_report=excluded.new_report, new_appeal=excluded.new_appeal,
+            quiet_start=excluded.quiet_start, quiet_end=excluded.quiet_end""",
+            (uid, s.get("new_ticket",1), s.get("new_alert",1),
+             s.get("new_report",1), s.get("new_appeal",1),
+             s.get("quiet_start","23:00"), s.get("quiet_end","08:00")))
+        conn.commit(); conn.close()
+    except Exception as e:
+        log.warning(f"[PUSH] save: {e}")
+
+def _push_is_quiet(uid: int) -> bool:
+    """Тихий час — не беспокоить."""
+    import datetime as _dt
+    try:
+        s = _push_get_settings(uid)
+        now = _dt.datetime.now().strftime("%H:%M")
+        qs, qe = s.get("quiet_start","23:00"), s.get("quiet_end","08:00")
+        if qs <= qe:
+            return qs <= now <= qe
+        else:  # переход через полночь
+            return now >= qs or now <= qe
+    except: return False
+
+async def push_notify(event_type: str, text: str, kb=None):
+    """Рассылает push-уведомление всем модам с включённым типом события."""
+    if not _bot: return
+    admins = _get_all_admins()
+    for adm in admins:
+        uid = adm["tg_uid"]
+        if uid == OWNER_TG_ID: continue
+        if _push_is_quiet(uid): continue
+        s = _push_get_settings(uid)
+        if not s.get(event_type, 1): continue
+        try:
+            await _bot.send_message(uid, text, parse_mode="HTML",
+                                     reply_markup=kb)
+        except: pass
+
+
+# ══════════════════════════════════════════════════════════════════
+#  👑 СТРАНИЦА ВЛАДЕЛЬЦА
+# ══════════════════════════════════════════════════════════════════
+async def handle_owner_panel(request: web.Request):
+    sess = _get_session(request)
+    if not sess or sess.get("rank") < OWNER_RANK:
+        raise web.HTTPFound("/dashboard")
+    _track_session(request)
+
+    result_msg = ""
+    result_ok  = True
+
+    if request.method == "POST":
+        data   = await request.post()
+        action = data.get("action","")
+        uid_s  = sess.get("uid", OWNER_TG_ID)
+
+        # ── VIP ──────────────────────────────────────
+        if action == "vip_grant":
+            try:
+                vip_uid  = int(data.get("vip_uid",0))
+                vip_user = data.get("vip_username","").strip()
+                vip_tier = data.get("vip_tier","standard")
+                vip_days = int(data.get("vip_days",30))
+                vip_note = data.get("vip_note","").strip()
+                _vip_grant(vip_uid, vip_user, vip_tier, vip_days, uid_s, vip_note)
+                _log_admin_db(uid_s, "VIP_GRANT", f"{vip_uid} {vip_tier} {vip_days}d")
+                result_msg = f"✅ VIP выдан: {vip_user} ({vip_uid}) на {vip_days} дней"
+                if _bot:
+                    try:
+                        await _bot.send_message(vip_uid,
+                            f"⭐ <b>Поздравляем!</b>\n\n"
+                            f"Вам выдан VIP-статус <b>{vip_tier}</b> на <b>{vip_days} дней</b>.\n"
+                            f"{('📝 ' + vip_note) if vip_note else ''}",
+                            parse_mode="HTML")
+                    except: pass
+            except Exception as e:
+                result_msg = f"❌ {e}"; result_ok = False
+
+        elif action == "vip_revoke":
+            vip_uid = int(data.get("vip_uid",0))
+            _vip_revoke(vip_uid)
+            _log_admin_db(uid_s, "VIP_REVOKE", str(vip_uid))
+            result_msg = f"✅ VIP отозван: {vip_uid}"
+
+        # ── Сеть чатов — глобальный бан ──────────────
+        elif action == "netban_add":
+            try:
+                nb_uid    = int(data.get("nb_uid",0))
+                nb_reason = data.get("nb_reason","Нарушение").strip()
+                banned    = await _netban_apply(nb_uid, nb_reason, uid_s)
+                _log_admin_db(uid_s, "NETBAN_ADD", f"{nb_uid}: {nb_reason}")
+                result_msg = f"✅ Глобальный бан: {nb_uid} ({banned} чатов)"
+                await push_notify("new_alert",
+                    f"🌐 <b>Глобальный бан</b>\n"
+                    f"ID: <code>{nb_uid}</code>\nПричина: {nb_reason}")
+            except Exception as e:
+                result_msg = f"❌ {e}"; result_ok = False
+
+        elif action == "netban_remove":
+            nb_uid = int(data.get("nb_uid",0))
+            await _netban_remove(nb_uid)
+            _log_admin_db(uid_s, "NETBAN_REMOVE", str(nb_uid))
+            result_msg = f"✅ Глобальный бан снят: {nb_uid}"
+
+        # ── Бэкап ─────────────────────────────────────
+        elif action == "backup_now":
+            res = await _do_backup(manual=True)
+            if res["ok"]:
+                result_msg = f"✅ Бэкап создан: {res['filename']} ({res['size']//1024} КБ)"
+            else:
+                result_msg = f"❌ Ошибка: {res['error']}"; result_ok = False
+
+        # ── Завершить все сессии ──────────────────────
+        elif action == "kill_all_sessions":
+            my_token = request.cookies.get("dsess_token","")
+            killed = 0
+            for k in list(_dashboard_sessions.keys()):
+                if k != my_token:
+                    del _dashboard_sessions[k]
+                    killed += 1
+            _log_admin_db(uid_s, "KILL_SESSIONS", f"Killed {killed}")
+            result_msg = f"✅ Завершено {killed} сессий"
+
+        # ── Push настройки владельца ──────────────────
+        elif action == "save_push":
+            target_uid = int(data.get("push_uid", uid_s))
+            _push_save_settings(target_uid, {
+                "new_ticket": 1 if data.get("p_ticket") else 0,
+                "new_alert":  1 if data.get("p_alert")  else 0,
+                "new_report": 1 if data.get("p_report") else 0,
+                "new_appeal": 1 if data.get("p_appeal") else 0,
+                "quiet_start": data.get("quiet_start","23:00"),
+                "quiet_end":   data.get("quiet_end","08:00"),
+            })
+            result_msg = "✅ Настройки push сохранены"
+
+        raise web.HTTPFound("/dashboard/owner")
+
+    # ── Данные для страницы ───────────────────────────
+    admins     = _get_all_admins()
+    vip_list   = _vip_get_all()
+    netban_list= _netban_get_all()
+    on_duty    = get_all_on_duty()
+    sessions_n = len(_dashboard_sessions)
+    online_n   = shared.get_online_count()
+    alerts_n   = len(shared.alerts)
+
+    # Бэкап-лог
+    backup_rows = []
+    try:
+        conn = db.get_conn()
+        backup_rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM backup_log ORDER BY created_at DESC LIMIT 10").fetchall()]
+        conn.close()
+    except: pass
+
+    # Статистика команды за месяц
+    team_stats = []
+    for adm in admins:
+        if adm["tg_uid"] == OWNER_TG_ID: continue
+        st = _get_mod_stats(adm["name"], adm["tg_uid"])
+        total = st["bans"] + st["warns"] + st["mutes"] + st["tickets"]
+        team_stats.append({**adm, "total": total, "stats": st})
+    team_stats.sort(key=lambda x: x["total"], reverse=True)
+
+    # Рейтинговые медали
+    medals = ["🥇","🥈","🥉"] + [""] * 20
+
+    # HTML VIP
+    vip_html = ""
+    for v in vip_list[:15]:
+        import datetime as _dt
+        exp  = v.get("expires_at","")[:10]
+        try:
+            exp_dt = _dt.datetime.strptime(exp, "%Y-%m-%d")
+            days_left = (exp_dt - _dt.datetime.now()).days
+            if days_left < 0:   status_cls, status_txt = "badge-danger", "Истёк"
+            elif days_left < 7: status_cls, status_txt = "badge-open",   f"{days_left}д"
+            else:               status_cls, status_txt = "badge-closed",  f"{days_left}д"
+        except:
+            status_cls, status_txt = "badge-accent", exp
+        tier_icon = {"premium":"💎","standard":"⭐","trial":"🔰"}.get(v.get("tier","standard"),"⭐")
+        vip_html += (
+            f'<tr><td><code>{v["uid"]}</code></td>'
+            f'<td>{tier_icon} {v.get("username") or "—"}</td>'
+            f'<td><span class="badge {status_cls}">{status_txt}</span></td>'
+            f'<td style="font-size:11px;color:var(--t2);">{v.get("note","")[:30]}</td>'
+            f'<td><form method="POST" style="display:inline;">'
+            f'<input type="hidden" name="action" value="vip_revoke">'
+            f'<input type="hidden" name="vip_uid" value="{v["uid"]}">'
+            f'<button class="btn btn-xs btn-danger" type="submit">✕</button></form></td></tr>'
+        )
+    if not vip_html:
+        vip_html = '<tr><td colspan="5" style="text-align:center;color:var(--t2);padding:20px;">Нет VIP участников</td></tr>'
+
+    # HTML NetBan
+    netban_html = ""
+    for nb in netban_list[:15]:
+        netban_html += (
+            f'<tr><td><code>{nb["uid"]}</code></td>'
+            f'<td>{nb.get("reason","—")[:40]}</td>'
+            f'<td style="font-size:11px;color:var(--t2);">{str(nb.get("banned_at",""))[:10]}</td>'
+            f'<td><form method="POST" style="display:inline;">'
+            f'<input type="hidden" name="action" value="netban_remove">'
+            f'<input type="hidden" name="nb_uid" value="{nb["uid"]}">'
+            f'<button class="btn btn-xs btn-success" type="submit">🕊</button></form></td></tr>'
+        )
+    if not netban_html:
+        netban_html = '<tr><td colspan="4" style="text-align:center;color:var(--t2);padding:20px;">Список пуст</td></tr>'
+
+    # HTML команда
+    team_html = ""
+    for i, adm in enumerate(team_stats[:10]):
+        ri    = DASHBOARD_RANKS.get(adm["rank"], DASHBOARD_RANKS[1])
+        medal = medals[i]
+        team_html += (
+            f'<tr>'
+            f'<td style="font-size:16px;">{medal or str(i+1)}</td>'
+            f'<td style="font-weight:600;">{adm["name"]}</td>'
+            f'<td><span class="badge" style="background:rgba({_hex_to_rgb(ri["color"])},.15);color:{ri["color"]};">'
+            f'{ri["name"]}</span></td>'
+            f'<td style="font-family:\'Space Mono\',monospace;color:var(--acc);font-weight:700;">{adm["total"]}</td>'
+            f'<td style="font-size:11px;color:var(--t2);">'
+            f'🔨{adm["stats"]["bans"]} ⚡{adm["stats"]["warns"]} 🔇{adm["stats"]["mutes"]}</td>'
+            f'</tr>'
+        )
+
+    # HTML бэкапы
+    backup_html = ""
+    for b in backup_rows:
+        sz = f"{b.get('size_bytes',0)//1024} КБ"
+        backup_html += (
+            f'<tr><td style="font-size:11px;font-family:monospace;">{b.get("filename","?")}</td>'
+            f'<td style="font-size:11px;">{sz}</td>'
+            f'<td style="font-size:11px;color:var(--t2);">{str(b.get("created_at",""))[:16]}</td>'
+            f'<td><span class="badge badge-closed">✓</span></td></tr>'
+        )
+    if not backup_html:
+        backup_html = '<tr><td colspan="4" style="text-align:center;color:var(--t2);padding:20px;">Бэкапов ещё нет</td></tr>'
+
+    result_html = ""
+    if result_msg:
+        color = "var(--acc)" if result_ok else "var(--red)"
+        result_html = (
+            f'<div style="background:rgba(0,229,160,.08);border-left:3px solid {color};'
+            f'padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:20px;font-size:13px;">'
+            f'{result_msg}</div>'
+        )
+
+    body = navbar(sess, "owner") + f"""
+    <div class="container">
+      <div class="page-title">
+        👑 Панель владельца
+        <span style="font-size:12px;color:var(--ylw);font-family:'Space Mono',monospace;
+          background:rgba(251,191,36,.1);padding:3px 10px;border-radius:20px;margin-left:8px;">
+          РАНГ {OWNER_RANK} · ТОЛЬКО ДЛЯ ВАС
+        </span>
+      </div>
+
+      {result_html}
+
+      <!-- ── Статы ── -->
+      <div class="cards" style="grid-template-columns:repeat(6,1fr);margin-bottom:20px;">
+        <div class="card" style="--c:var(--acc);">
+          <span class="card-icon">👥</span>
+          <div class="card-value">{len(admins)}</div>
+          <div class="card-label">Администраторов</div>
+        </div>
+        <div class="card" style="--c:var(--blue);">
+          <span class="card-icon">💬</span>
+          <div class="card-value" id="ow-chats">...</div>
+          <div class="card-label">Чатов</div>
+        </div>
+        <div class="card" style="--c:var(--ylw);">
+          <span class="card-icon">🟢</span>
+          <div class="card-value">{len(on_duty)}</div>
+          <div class="card-label">Дежурных</div>
+        </div>
+        <div class="card" style="--c:var(--pur);">
+          <span class="card-icon">🖥</span>
+          <div class="card-value">{sessions_n}</div>
+          <div class="card-label">Сессий</div>
+        </div>
+        <div class="card" style="--c:var(--red);">
+          <span class="card-icon">🚨</span>
+          <div class="card-value">{alerts_n}</div>
+          <div class="card-label">Алертов</div>
+        </div>
+        <div class="card" style="--c:var(--cyan);">
+          <span class="card-icon">⭐</span>
+          <div class="card-value">{len(vip_list)}</div>
+          <div class="card-label">VIP</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- ── Безопасность ── -->
+        <div class="section">
+          <div class="section-header">🔒 Безопасность системы</div>
+          <div class="section-body">
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;">
+                <span>Активных сессий дашборда</span>
+                <span style="font-family:'Space Mono',monospace;color:var(--acc);">{sessions_n}</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;">
+                <span>Пользователей онлайн</span>
+                <span style="font-family:'Space Mono',monospace;color:var(--acc);">{online_n}</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;">
+                <span>В глобальном бан-листе</span>
+                <span style="font-family:'Space Mono',monospace;color:var(--red);">{len(netban_list)}</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <form method="POST">
+                <input type="hidden" name="action" value="kill_all_sessions">
+                <button class="btn btn-danger btn-sm" type="submit"
+                  onclick="return confirm('Завершить ВСЕ сессии кроме текущей?')">
+                  🔴 Завершить все сессии
+                </button>
+              </form>
+              <a href="/dashboard/export" class="btn btn-ghost btn-sm">📋 Лог доступа</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Управление системой ── -->
+        <div class="section">
+          <div class="section-header">⚙️ Управление системой</div>
+          <div class="section-body">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+              <form method="POST">
+                <input type="hidden" name="action" value="backup_now">
+                <button class="btn btn-success btn-sm" type="submit">💾 Бэкап сейчас</button>
+              </form>
+              <a href="/dashboard/bot_control" class="btn btn-ghost btn-sm">🤖 Управление ботом</a>
+              <a href="/dashboard/settings" class="btn btn-ghost btn-sm">🔧 Настройки</a>
+            </div>
+            <div style="font-size:11px;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Токен дашборда</div>
+            <div style="font-family:'Space Mono',monospace;font-size:12px;
+              background:var(--bg3);padding:8px 12px;border-radius:8px;
+              display:flex;align-items:center;justify-content:space-between;">
+              <span id="tok-val">••••••••••••••••</span>
+              <button class="btn btn-xs btn-ghost" onclick="toggleToken()">👁</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Рейтинг команды ── -->
+      <div class="section" style="margin-bottom:16px;">
+        <div class="section-header">📊 Рейтинг команды (всё время)</div>
+        <table>
+          <thead><tr>
+            <th style="width:40px;">#</th>
+            <th>Имя</th><th>Ранг</th>
+            <th>Очки</th><th>Детали</th>
+          </tr></thead>
+          <tbody>{team_html or '<tr><td colspan="5" style="text-align:center;color:var(--t2);padding:20px;">Нет данных</td></tr>'}</tbody>
+        </table>
+      </div>
+
+      <div class="grid-2">
+        <!-- ── VIP ── -->
+        <div class="section">
+          <div class="section-header">⭐ VIP участники</div>
+          <div style="padding:14px 16px;border-bottom:1px solid var(--br0);">
+            <form method="POST" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <input type="hidden" name="action" value="vip_grant">
+              <div>
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label>Telegram ID</label>
+                  <input class="form-control" name="vip_uid" type="number" placeholder="123456789" required>
+                </div>
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label>Username</label>
+                  <input class="form-control" name="vip_username" placeholder="@username">
+                </div>
+              </div>
+              <div>
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label>Тип VIP</label>
+                  <select class="form-control" name="vip_tier">
+                    <option value="trial">🔰 Trial (тест)</option>
+                    <option value="standard" selected>⭐ Standard</option>
+                    <option value="premium">💎 Premium</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label>Дней</label>
+                  <input class="form-control" name="vip_days" type="number" value="30" min="1" max="3650">
+                </div>
+              </div>
+              <div style="grid-column:1/-1;">
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label>Заметка (опционально)</label>
+                  <input class="form-control" name="vip_note" placeholder="Причина выдачи...">
+                </div>
+                <button class="btn btn-primary btn-sm" type="submit" style="width:100%;">⭐ Выдать VIP</button>
+              </div>
+            </form>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>ID</th><th>Username</th><th>Срок</th><th>Заметка</th><th></th></tr></thead>
+              <tbody>{vip_html}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── Сеть чатов ── -->
+        <div class="section">
+          <div class="section-header">🌐 Глобальный бан-лист</div>
+          <div style="padding:14px 16px;border-bottom:1px solid var(--br0);">
+            <form method="POST" style="display:flex;flex-direction:column;gap:8px;">
+              <input type="hidden" name="action" value="netban_add">
+              <div class="form-group" style="margin-bottom:0;">
+                <label>Telegram ID</label>
+                <input class="form-control" name="nb_uid" type="number" placeholder="ID пользователя" required>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>Причина</label>
+                <input class="form-control" name="nb_reason" placeholder="Причина бана во всех чатах" required>
+              </div>
+              <button class="btn btn-danger btn-sm" type="submit"
+                onclick="return confirm('Забанить во ВСЕХ чатах сети?')">
+                🚫 Глобальный бан
+              </button>
+            </form>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>ID</th><th>Причина</th><th>Дата</th><th></th></tr></thead>
+              <tbody>{netban_html}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Авто-бэкапы ── -->
+      <div class="section" style="margin-bottom:16px;">
+        <div class="section-header">💾 История бэкапов</div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Файл</th><th>Размер</th><th>Дата</th><th>Статус</th></tr></thead>
+            <tbody>{backup_html}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── Push настройки ── -->
+      <div class="section" style="margin-bottom:16px;">
+        <div class="section-header">🔔 Push-уведомления (мои настройки)</div>
+        <div class="section-body">
+          <form method="POST">
+            <input type="hidden" name="action" value="save_push">
+            <input type="hidden" name="push_uid" value="{sess.get('uid', OWNER_TG_ID)}">
+            <div class="grid-2" style="gap:16px;">
+              <div>
+                <div style="font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Получать уведомления о:</div>
+                {"".join(f'''<div class="toggle-wrap">
+                  <div class="toggle-info"><b>{lbl}</b></div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" name="{key}" value="1"
+                      {"checked" if _push_get_settings(sess.get("uid",OWNER_TG_ID)).get(key.replace("p_","new_"),1) else ""}>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>''' for key, lbl in [("p_ticket","Новые тикеты"),("p_alert","Критические алерты"),("p_report","Новые репорты"),("p_appeal","Апелляции")])}
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Тихий час (не беспокоить):</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                  <div class="form-group"><label>С</label>
+                    <input class="form-control" type="time" name="quiet_start"
+                      value="{_push_get_settings(sess.get("uid",OWNER_TG_ID)).get("quiet_start","23:00")}">
+                  </div>
+                  <div class="form-group"><label>До</label>
+                    <input class="form-control" type="time" name="quiet_end"
+                      value="{_push_get_settings(sess.get("uid",OWNER_TG_ID)).get("quiet_end","08:00")}">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm" type="submit" style="margin-top:12px;">💾 Сохранить</button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+
+    <script>
+    fetch('/api/live').then(r=>r.json()).then(d=>{{
+      if(d.online!==undefined){{
+        var el=document.getElementById('ow-chats');
+        if(el) el.textContent=d.online;
+      }}
+    }}).catch(()=>{{}});
+    // Загружаем кол-во чатов
+    fetch('/api/bot/chats').then(r=>r.json()).then(d=>{{
+      var el=document.getElementById('ow-chats');
+      if(el&&d.chats) el.textContent=d.chats.length;
+    }}).catch(()=>{{}});
+    // Показать/скрыть токен
+    var _tokVisible=false;
+    function toggleToken(){{
+      var el=document.getElementById('tok-val');
+      _tokVisible=!_tokVisible;
+      el.textContent=_tokVisible?'{DASHBOARD_TOKEN}':'••••••••••••••••';
+    }}
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_owner_panel = require_auth("view_overview")(handle_owner_panel)
+
 async def start_dashboard():
     _init_admin_db()
     app = web.Application()
@@ -8525,6 +9328,9 @@ async def start_dashboard():
     app.router.add_get("/api/mini/me",                 api_mini_me)
     app.router.add_get("/dashboard/command_center",    handle_command_center)
     app.router.add_post("/dashboard/command_center",   handle_command_center)
+    # ── Owner Panel ───────────────────────────────────────
+    app.router.add_get("/dashboard/owner",  handle_owner_panel)
+    app.router.add_post("/dashboard/owner", handle_owner_panel)
 
     # Запускаем фоновые задачи
     _start_background_tasks()

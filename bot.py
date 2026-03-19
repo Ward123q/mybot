@@ -13,8 +13,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     Message, ChatPermissions, CallbackQuery,
-    InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile,
-    BufferedInputFile
+    InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 )
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
 from aiohttp import web
@@ -1338,12 +1337,6 @@ class StatsMiddleware(BaseMiddleware):
         return False
     async def __call__(self, handler, event: Message, data):
         if isinstance(event, Message) and event.from_user and event.chat.type in ("group","supergroup"):
-            # Капча имеет абсолютный приоритет — проверяем до любой обработки
-            if event.text and not event.text.startswith("/"):
-                _key = (event.chat.id, event.from_user.id)
-                if _key in _cap_active:
-                    await cap_answer(event)
-                    return  # не передаём дальше
             chat_stats[event.chat.id][event.from_user.id] += 1
             known_chats[event.chat.id] = event.chat.title or str(event.chat.id)
             uid, cid = event.from_user.id, event.chat.id
@@ -1613,11 +1606,6 @@ async def on_new_member(message: Message):
                 try: await sent.delete()
                 except: pass
             except: pass
-            continue
-
-        # 🔐 Капча
-        if chat_cfg.get("captcha_enabled", True):
-            await cap_start(cid, member.id, member.full_name)
             continue
 
         # Приветствие из настроек
@@ -3911,9 +3899,6 @@ async def cmd_botstats(message: Message):
 @dp.message(F.text & ~F.text.startswith("/") & F.chat.type.in_({"group", "supergroup"}))
 async def autist_commands(message: Message):
     if not message.text: return
-    # Капча имеет приоритет
-    if message.from_user and (message.chat.id, message.from_user.id) in _cap_active:
-        await cap_answer(message); return
     text_lower = message.text.strip().lower()
     if not text_lower.startswith("аутист"): return
     fun_only = ["обозвать", "поженить", "казнить", "диагноз", "профессия", "похитить", "дуэль"]
@@ -5044,10 +5029,6 @@ async def cmd_guess(message: Message):
 @dp.message(F.text.regexp(r'^\d+$'))
 async def guess_handler(message: Message):
     cid = message.chat.id
-    # Капча имеет приоритет — если активна, передаём управление ей
-    if message.from_user and (cid, message.from_user.id) in _cap_active:
-        await cap_answer(message)
-        return
     if cid not in guess_games: return
     game = guess_games[cid]
     try: num = int(message.text)
@@ -6735,6 +6716,12 @@ async def cmd_start_ref(message: Message, command: CommandObject):
         else:
             chat_list = [(r["cid"], r["title"]) for r in chats]
         await tkt.cmd_ticket(message, bot, chat_list)
+        # Push-уведомление модераторам
+        try:
+            await dashboard.push_notify("new_ticket",
+                f"🎫 <b>Новый тикет</b>\n"
+                f"От: {message.from_user.full_name} (<code>{message.from_user.id}</code>)")
+        except Exception: pass
         return
 
     if not command.args or not command.args.startswith("ref_"): return
@@ -7209,9 +7196,6 @@ async def cmd_trivia(message: Message):
 @dp.message(F.text & ~F.text.startswith("/") & F.chat.type.in_({"group", "supergroup"}))
 async def handle_trivia_answer(message: Message):
     cid = message.chat.id
-    # Капча имеет приоритет
-    if message.from_user and (cid, message.from_user.id) in _cap_active:
-        await cap_answer(message); return
     if cid not in trivia_active: return
     q = trivia_active[cid]
     if q["answerer"] is not None: return
@@ -10630,197 +10614,6 @@ async def cmd_delnote_mod(message: Message, command: CommandObject):
     except:
         await reply_auto_delete(message, "❌ Ошибка")
     conn.close()
-
-
-# ══════════════════════════════════════════════════════════════════
-#  🔐 КАПЧА — ответ прямо в чат, без мута
-# ══════════════════════════════════════════════════════════════════
-_CAP_TIMEOUT   = 90
-_CAP_MAX_TRIES = 2
-_CAP_DIGITS    = 5
-_CAP_KICK      = True
-_cap_active: dict = {}  # {(cid,uid): {code,msg_id,task,tries,name}}
-
-
-def _cap_image(code: str) -> bytes | None:
-    try:
-        import io, random as r
-        from PIL import Image, ImageDraw, ImageFont, ImageFilter
-        W, H = 280, 100
-        img = Image.new("RGB", (W, H), (22, 22, 30))
-        d   = ImageDraw.Draw(img)
-        for _ in range(W*H//5):
-            c = r.randint(35,75)
-            d.point((r.randint(0,W-1),r.randint(0,H-1)),(c,c,c+r.randint(0,25)))
-        for _ in range(10):
-            col=(r.randint(50,110),r.randint(50,110),r.randint(80,150))
-            d.line([(r.randint(0,W),r.randint(0,H)),(r.randint(0,W),r.randint(0,H))],fill=col,width=1)
-        for _ in range(4):
-            col=(r.randint(60,120),r.randint(60,120),r.randint(100,170))
-            d.arc([r.randint(-20,W//2),r.randint(-20,H//2),r.randint(W//2,W+20),r.randint(H//2,H+20)],
-                  r.randint(0,360),r.randint(0,360),fill=col,width=1)
-        font=None
-        for fp in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                   "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-                   "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-                   "/System/Library/Fonts/Helvetica.ttc",
-                   "C:/Windows/Fonts/arialbd.ttf"]:
-            try:
-                from PIL import ImageFont as IF; font=IF.truetype(fp,52); break
-            except: pass
-        if not font:
-            try:
-                from PIL import ImageFont as IF; font=IF.load_default(size=52)
-            except:
-                from PIL import ImageFont as IF; font=IF.load_default()
-        pal=[(255,210,80),(100,215,255),(255,120,120),(120,255,140),(210,120,255)]
-        cw=(W-20)//len(code)
-        for i,ch in enumerate(code):
-            col=pal[i%len(pal)]; ang=r.randint(-25,25); off=r.randint(-10,10)
-            x=10+i*cw+r.randint(-4,4)
-            lay=Image.new("RGBA",(cw+12,H),(0,0,0,0))
-            ld=ImageDraw.Draw(lay); cy=(H-52)//2+off
-            ld.text((4,cy+2),ch,font=font,fill=(0,0,0,160))
-            ld.text((2,cy),ch,font=font,fill=col+(255,))
-            img.paste(lay.rotate(ang,expand=False,resample=Image.BICUBIC),(x-2,0),
-                      lay.rotate(ang,expand=False,resample=Image.BICUBIC))
-        img=img.filter(ImageFilter.GaussianBlur(radius=0.6))
-        d2=ImageDraw.Draw(img)
-        for _ in range(200):
-            c=r.randint(70,160); d2.point((r.randint(0,W-1),r.randint(0,H-1)),(c,c+5,c+15))
-        buf=io.BytesIO(); img.save(buf,format="PNG",optimize=True)
-        return buf.getvalue()
-    except Exception as e:
-        logging.warning(f"[CAP] image: {e}"); return None
-
-
-async def _cap_punish(cid: int, uid: int):
-    try:
-        if _CAP_KICK:
-            await bot.ban_chat_member(cid, uid)
-            await asyncio.sleep(0.3)
-            await bot.unban_chat_member(cid, uid)
-        else:
-            await bot.restrict_chat_member(cid, uid,
-                ChatPermissions(can_send_messages=False),
-                until_date=timedelta(hours=24))
-    except Exception as e:
-        logging.warning(f"[CAP] punish: {e}")
-
-
-async def _cap_timeout_task(cid: int, uid: int):
-    await asyncio.sleep(_CAP_TIMEOUT)
-    e = _cap_active.pop((cid, uid), None)
-    if not e:
-        return
-    try: await bot.delete_message(cid, e["msg_id"])
-    except: pass
-    await _cap_punish(cid, uid)
-    try:
-        n = await bot.send_message(cid,
-            f"⏰ <b>{e['name']}</b> не прошёл капчу — "
-            f"{'кик' if _CAP_KICK else 'мут'}.", parse_mode="HTML")
-        await asyncio.sleep(8)
-        try: await n.delete()
-        except: pass
-    except: pass
-
-
-async def cap_start(cid: int, uid: int, name: str):
-    if (cid, uid) in _cap_active:
-        return
-    code = "".join(str(random.randint(0,9)) for _ in range(_CAP_DIGITS))
-    sname = name.replace("<","&lt;").replace(">","&gt;")
-    img   = _cap_image(code)
-    kb    = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Пропустить (адм)",
-                             callback_data=f"capskip:{cid}:{uid}")
-    ]])
-    txt = (f"👋 <b>{sname}</b>, добро пожаловать!\n\n"
-           f"🔐 Введи <b>{_CAP_DIGITS} цифр</b> с картинки прямо сюда в чат.\n"
-           f"⏰ У тебя <b>{_CAP_TIMEOUT} секунд</b>.\n"
-           f"❌ {_CAP_MAX_TRIES} ошибки — {'кик' if _CAP_KICK else 'мут'}.")
-    try:
-        if img:
-            sent = await bot.send_photo(cid, BufferedInputFile(img,"cap.png"),
-                                        caption=txt, parse_mode="HTML", reply_markup=kb)
-        else:
-            sent = await bot.send_message(cid,
-                txt+f"\n\n🔢 Код: <code>{code}</code>",
-                parse_mode="HTML", reply_markup=kb)
-        msg_id = sent.message_id
-    except Exception as e:
-        logging.error(f"[CAP] send: {e}"); return
-    task = asyncio.create_task(_cap_timeout_task(cid, uid))
-    _cap_active[(cid, uid)] = {"code":code,"msg_id":msg_id,"task":task,"tries":0,"name":sname}
-    logging.info(f"[CAP] start: {name} ({uid}) chat={cid} code={code}")
-
-
-@dp.message(F.text, F.chat.type.in_({"group","supergroup"}))
-async def cap_answer(message: Message):
-    if not message.from_user or not message.text:
-        return
-    uid, cid = message.from_user.id, message.chat.id
-    e = _cap_active.get((cid, uid))
-    if not e:
-        return
-    try: await message.delete()
-    except: pass
-    if message.text.strip() == e["code"]:
-        _cap_active.pop((cid, uid)); e["task"].cancel()
-        try: await bot.delete_message(cid, e["msg_id"])
-        except: pass
-        ok = await bot.send_message(cid,
-            f"✅ <b>{e['name']}</b> прошёл проверку!", parse_mode="HTML")
-        await asyncio.sleep(6)
-        try: await ok.delete()
-        except: pass
-        logging.info(f"[CAP] success: {e['name']} ({uid})")
-    else:
-        e["tries"] += 1
-        if e["tries"] >= _CAP_MAX_TRIES:
-            _cap_active.pop((cid, uid)); e["task"].cancel()
-            try: await bot.delete_message(cid, e["msg_id"])
-            except: pass
-            await _cap_punish(cid, uid)
-            fail = await bot.send_message(cid,
-                f"❌ <b>{e['name']}</b> не прошёл — "
-                f"{'кик' if _CAP_KICK else 'мут'}.", parse_mode="HTML")
-            await asyncio.sleep(8)
-            try: await fail.delete()
-            except: pass
-        else:
-            rem = _CAP_MAX_TRIES - e["tries"]
-            w = await bot.send_message(cid,
-                f"❌ <b>{e['name']}</b>, неверно! Осталось: <b>{rem}</b>",
-                parse_mode="HTML")
-            await asyncio.sleep(5)
-            try: await w.delete()
-            except: pass
-
-
-@dp.callback_query(F.data.startswith("capskip:"))
-async def cap_skip(call: CallbackQuery):
-    try:
-        m = await bot.get_chat_member(call.message.chat.id, call.from_user.id)
-        if m.status not in ("administrator","creator"):
-            await call.answer("❌ Только администраторы", show_alert=True); return
-    except:
-        await call.answer("❌ Ошибка", show_alert=True); return
-    _, cid_s, uid_s = call.data.split(":")
-    cid, uid = int(cid_s), int(uid_s)
-    e = _cap_active.pop((cid, uid), None)
-    if not e:
-        await call.answer("Уже завершена"); return
-    e["task"].cancel()
-    try: await call.message.delete()
-    except: pass
-    await call.answer("✅ Пропущено")
-    n = await bot.send_message(cid,
-        f"✅ Капча для <b>{e['name']}</b> пропущена.", parse_mode="HTML")
-    await asyncio.sleep(8)
-    try: await n.delete()
-    except: pass
 
 
 async def main():
