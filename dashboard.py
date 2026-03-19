@@ -423,7 +423,7 @@ HTML_BASE = """<!DOCTYPE html>
 <html lang="ru" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>CHAT GUARD — Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -653,6 +653,7 @@ HTML_BASE = """<!DOCTYPE html>
 
   /* ── TABLE ─────────────────────────────── */
   table { width: 100%; border-collapse: collapse; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
   th {
     font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
     color: var(--text2); background: var(--bg3); padding: 10px 16px;
@@ -681,6 +682,7 @@ HTML_BASE = """<!DOCTYPE html>
   /* ── BUTTONS ───────────────────────────── */
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
     padding: 8px 16px; border-radius: 8px; font-size: 13px;
     font-weight: 700; text-decoration: none; border: none;
     cursor: pointer; transition: all .15s;
@@ -849,18 +851,82 @@ HTML_BASE = """<!DOCTYPE html>
 
   /* ── MOBILE ────────────────────────────── */
   @media (max-width: 900px) {
-    .sidebar { transform: translateX(-100%); }
+    .sidebar {
+      transform: translateX(-100%);
+      position: fixed; top: 0; left: 0; height: 100vh;
+      z-index: 200; transition: transform .25s ease;
+      box-shadow: 4px 0 24px rgba(0,0,0,.6);
+    }
     .sidebar.open { transform: translateX(0); }
-    .main { margin-left: 0; }
-    .sidebar-toggle { display: flex; }
-    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .sidebar-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.55); z-index: 199;
+    }
+    .sidebar-overlay.active { display: block; }
+    .main { margin-left: 0 !important; }
+    .sidebar-toggle { display: flex !important; }
+    .grid-2, .grid-3 { grid-template-columns: 1fr !important; }
     .cards { grid-template-columns: 1fr 1fr; }
-    .search-global input { width: 160px; }
+    .search-global { display: none; }
+    .container { padding: 16px; }
+    .page-title { font-size: 18px; margin-bottom: 16px; }
+    table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .modal { width: 95vw !important; max-height: 90vh; overflow-y: auto; }
+    #cc-grid {
+      display: flex !important; flex-direction: column !important;
+      height: auto !important;
+    }
+    #cc-left, #cc-right {
+      width: 100% !important; height: 280px;
+      border-right: none !important; border-left: none !important;
+      border-bottom: 1px solid var(--border);
+    }
+    #cc-center { min-height: 400px; }
   }
-  @media (max-width: 500px) {
+  @media (max-width: 600px) {
+    #mobile-search-btn { display: flex !important; }
     .cards { grid-template-columns: 1fr; }
+    .topbar { padding: 10px 12px; }
+    .topbar-title { font-size: 13px; }
+    .topbar-right .btn { display: none; }
+    .page-title { font-size: 15px; }
+    .section-header { font-size: 13px; }
+    .btn { font-size: 12px; padding: 6px 10px; }
+    .btn-xs { font-size: 10px; padding: 2px 6px; }
+    .form-control { font-size: 13px; }
+    .cards[style*="grid-template-columns:repeat(4"] {
+      grid-template-columns: 1fr 1fr !important;
+    }
+  }
+  @media (max-width: 400px) {
+    .container { padding: 10px; }
+    .cards { grid-template-columns: 1fr; }
+    .page-title { font-size: 14px; }
   }
 
+
+  /* ══ МОБИЛЬНЫЙ НИЖНИЙ NAVBAR ══════════════════════════════════ */
+  #mobile-bottom-nav {
+    display: none;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--bg2); border-top: 1px solid var(--border);
+    padding: 8px 0 env(safe-area-inset-bottom, 8px);
+    z-index: 150; justify-content: space-around; align-items: center;
+  }
+  #mobile-bottom-nav a {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 3px; color: var(--text2); text-decoration: none;
+    font-size: 10px; padding: 4px 8px; border-radius: 8px;
+    transition: color .15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #mobile-bottom-nav a.active,
+  #mobile-bottom-nav a:hover { color: var(--accent); }
+  #mobile-bottom-nav .nav-icon { font-size: 20px; }
+  @media (max-width: 900px) {
+    #mobile-bottom-nav { display: flex; }
+    .main { padding-bottom: 70px; }
+  }
   /* ── QUICK SEARCH OVERLAY ──────────────── */
   #qs-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.5);
@@ -914,7 +980,17 @@ function toggleTheme(){
 
 // ─── Sidebar ─────────────────────────────
 function toggleSidebar(){
-  document.querySelector('.sidebar').classList.toggle('open');
+  var sb = document.querySelector('.sidebar');
+  var ov = document.getElementById('sb-overlay');
+  var open = sb.classList.toggle('open');
+  if(ov) ov.classList.toggle('active', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+function closeSidebar(){
+  document.querySelector('.sidebar').classList.remove('open');
+  var ov = document.getElementById('sb-overlay');
+  if(ov) ov.classList.remove('active');
+  document.body.style.overflow = '';
 }
 
 // ─── Toast ───────────────────────────────
@@ -971,6 +1047,22 @@ function handleQSKey(e){
     if(/^\\d+$/.test(v)) window.location='/dashboard/users/'+v;
   }
 }
+
+// Закрываем sidebar при навигации на мобиле
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.nav-item').forEach(function(link){
+    link.addEventListener('click', function(){
+      if(window.innerWidth <= 900) closeSidebar();
+    });
+  });
+  // Свайп влево закрывает sidebar
+  var ts = 0;
+  document.addEventListener('touchstart', function(e){ ts = e.touches[0].clientX; }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    var dx = e.changedTouches[0].clientX - ts;
+    if(dx < -50 && document.querySelector('.sidebar.open')) closeSidebar();
+  }, {passive:true});
+});
 
 // ─── Live Stats (SSE) ─────────────────────
 (function(){
@@ -1061,7 +1153,8 @@ def navbar(sess: dict | None = None, active: str = "") -> str:
         ts = {"open": 0}
 
     nav = f"""
-    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Меню" style="font-size:20px;line-height:1;">☰</button>
+    <div class="sidebar-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
     <div class="sidebar">
       <div class="sidebar-brand">
         <div class="logo">⚡</div>
@@ -1144,7 +1237,22 @@ def _hex_to_rgb(hex_color: str) -> str:
 
 
 def close_main() -> str:
-    return "</div>"  # close .main
+    return """</div>
+<nav id="mobile-bottom-nav">
+  <a href="/dashboard"><span style="font-size:20px;">📊</span><span>Обзор</span></a>
+  <a href="/dashboard/chats"><span style="font-size:20px;">💬</span><span>Чаты</span></a>
+  <a href="/dashboard/command_center"><span style="font-size:20px;">🎮</span><span>Команды</span></a>
+  <a href="/dashboard/tickets"><span style="font-size:20px;">🎫</span><span>Тикеты</span></a>
+  <a href="#" onclick="toggleSidebar();return false;"><span style="font-size:20px;">☰</span><span>Меню</span></a>
+</nav>
+<script>
+(function(){{
+  var path=window.location.pathname;
+  document.querySelectorAll('#mobile-bottom-nav a').forEach(function(a){{
+    if(a.href && path===new URL(a.href,location).pathname) a.style.color='var(--accent)';
+  }});
+}})();
+</script>"""
 
 
 # ══════════════════════════════════════════
@@ -7470,10 +7578,10 @@ async def _handle_command_center_inner(request: web.Request):
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:260px 1fr 300px;gap:0;height:calc(100vh - 120px);overflow:hidden;">
+      <div style="display:grid;grid-template-columns:260px 1fr 300px;gap:0;height:calc(100vh - 120px);overflow:hidden;" id="cc-grid">
 
         <!-- ── Левая колонка: Чаты ── -->
-        <div style="border-right:1px solid var(--border);overflow-y:auto;padding:0;">
+        <div id="cc-left" style="border-right:1px solid var(--border);overflow-y:auto;padding:0;">
           <div style="padding:12px 16px;font-size:11px;font-weight:700;color:var(--text2);
                text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border);
                position:sticky;top:0;background:var(--bg1);">
@@ -7557,7 +7665,7 @@ async def _handle_command_center_inner(request: web.Request):
         </div>
 
         <!-- ── Правая колонка: лента событий + дежурные ── -->
-        <div style="border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;">
+        <div id="cc-right" style="border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;">
 
           <!-- Дежурные -->
           <div style="padding:12px 16px;border-bottom:1px solid var(--border);">
@@ -7773,6 +7881,391 @@ async def _handle_command_center_inner(request: web.Request):
 handle_command_center = require_auth("view_overview")(handle_command_center)
 
 
+
+# ══════════════════════════════════════════════════════════════════
+#  📱 TELEGRAM MINI APP — API
+# ══════════════════════════════════════════════════════════════════
+import hashlib, hmac as _hmac, urllib.parse as _uparse
+import json as _json
+
+_mini_tokens: dict = {}   # {token: {uid, name, rank, ts}}
+
+
+def _verify_init_data(init_data: str) -> dict | None:
+    """Верифицирует initData от Telegram WebApp через HMAC-SHA256."""
+    bot_token = os.getenv("BOT_TOKEN", "")
+    if not bot_token:
+        return None
+    try:
+        # Парсим init_data
+        parsed = dict(_uparse.parse_qsl(init_data, keep_blank_values=True))
+        check_hash = parsed.pop("hash", "")
+        # Строка для проверки — отсортированные key=value через newline
+        data_check = "\n".join(
+            f"{k}={v}" for k, v in sorted(parsed.items())
+        )
+        # Секретный ключ = HMAC-SHA256("WebAppData", bot_token)
+        secret = _hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+        # Вычисляем hash
+        expected = _hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+        if not _hmac.compare_digest(expected, check_hash):
+            return None
+        # Проверяем не устарели ли данные (10 минут)
+        auth_date = int(parsed.get("auth_date", 0))
+        if time.time() - auth_date > 600:
+            return None
+        # Возвращаем данные пользователя
+        user_json = parsed.get("user", "{}")
+        return _json.loads(user_json)
+    except Exception as e:
+        log.warning(f"[MINI] verify_init_data error: {e}")
+        return None
+
+
+async def api_mini_auth(request: web.Request):
+    """POST /api/mini/auth — авторизация Mini App через initData."""
+    try:
+        body = await request.json()
+        init_data = body.get("initData", "")
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+    if not init_data:
+        return web.json_response({"ok": False, "error": "No initData"}, status=400)
+
+    # Верифицируем
+    user = _verify_init_data(init_data)
+    if not user:
+        return web.json_response({"ok": False, "error": "Invalid initData"}, status=403)
+
+    uid = user.get("id")
+    if not uid:
+        return web.json_response({"ok": False, "error": "No user id"}, status=403)
+
+    # Проверяем что пользователь есть в администрации
+    admin = _get_admin(uid)
+    if not admin:
+        return web.json_response({"ok": False, "error": "Not an admin"}, status=403)
+
+    # Генерируем токен
+    token = secrets.token_hex(32)
+    _mini_tokens[token] = {
+        "uid":   uid,
+        "name":  admin["name"],
+        "rank":  admin["rank"],
+        "ts":    time.time(),
+    }
+    # Чистим старые токены (> 24ч)
+    cutoff = time.time() - 86400
+    for k in [k for k, v in _mini_tokens.items() if v["ts"] < cutoff]:
+        del _mini_tokens[k]
+
+    ri = DASHBOARD_RANKS.get(admin["rank"], DASHBOARD_RANKS[1])
+    return web.json_response({
+        "ok":    True,
+        "token": token,
+        "user":  {"uid": uid, "name": admin["name"],
+                  "rank": admin["rank"], "rank_name": ri["name"]},
+    })
+
+
+def _mini_auth(request) -> dict | None:
+    """Проверяет X-Mini-Token заголовок."""
+    token = request.headers.get("X-Mini-Token", "")
+    if not token:
+        return None
+    sess = _mini_tokens.get(token)
+    if not sess:
+        return None
+    # Токен живёт 24ч
+    if time.time() - sess["ts"] > 86400:
+        del _mini_tokens[token]
+        return None
+    return sess
+
+
+async def api_mini_stats(request: web.Request):
+    """GET /api/mini/stats — основная статистика."""
+    sess = _mini_auth(request)
+    if not sess:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    try:
+        online_count  = shared.get_online_count()
+        alerts_count  = len(shared.alerts)
+        on_duty_list  = get_all_on_duty()
+
+        conn = db.get_conn()
+        bans_total = conn.execute("SELECT COUNT(*) FROM ban_list").fetchone()[0] or 0
+        tickets_open = 0
+        try:
+            tickets_open = conn.execute(
+                "SELECT COUNT(*) FROM tickets WHERE status='open'"
+            ).fetchone()[0] or 0
+        except Exception:
+            pass
+        conn.close()
+
+        # Последние события из лог-таблицы
+        events = []
+        try:
+            conn2 = db.get_conn()
+            rows = conn2.execute(
+                "SELECT action, details, created_at FROM dashboard_admin_log "
+                "ORDER BY created_at DESC LIMIT 10"
+            ).fetchall()
+            conn2.close()
+            icon_map = {
+                "BAN": "🔨", "WARN": "⚡", "MUTE": "🔇", "KICK": "👟",
+                "LOGIN": "🔑", "GRANT": "👑", "REVOKE": "❌",
+                "TICKET": "🎫", "INCIDENT": "🚨",
+            }
+            for r in rows:
+                act = str(r["action"] or "")
+                icon = next((v for k, v in icon_map.items() if k in act.upper()), "📋")
+                events.append({
+                    "icon": icon,
+                    "text": (r["details"] or act)[:60],
+                    "time": str(r["created_at"] or "")[:16],
+                })
+        except Exception:
+            pass
+
+        duty = [
+            {"name": d.get("name", "?"),
+             "rank_name": DASHBOARD_RANKS.get(d.get("rank", 1), DASHBOARD_RANKS[1])["name"]}
+            for d in on_duty_list[:5]
+        ]
+
+        return web.json_response({
+            "ok":          True,
+            "online":      online_count,
+            "alerts":      alerts_count,
+            "tickets_open": tickets_open,
+            "bans":        bans_total,
+            "duty":        duty,
+            "events":      events,
+        })
+    except Exception as e:
+        log.error(f"[MINI] stats error: {e}")
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+async def api_mini_tickets(request: web.Request):
+    """GET /api/mini/tickets?status=open"""
+    sess = _mini_auth(request)
+    if not sess:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    status = request.rel_url.query.get("status", "open")
+    try:
+        conn = db.get_conn()
+        if status == "all":
+            rows = conn.execute(
+                "SELECT * FROM tickets ORDER BY created_at DESC LIMIT 50"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM tickets WHERE status=? ORDER BY created_at DESC LIMIT 50",
+                (status,)
+            ).fetchall()
+        conn.close()
+        tickets = [dict(r) for r in rows]
+        return web.json_response({"ok": True, "tickets": tickets})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+async def api_mini_ticket_detail(request: web.Request):
+    """GET /api/mini/ticket/{id}"""
+    sess = _mini_auth(request)
+    if not sess:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    tid = int(request.match_info.get("id", 0))
+    try:
+        conn = db.get_conn()
+        row = conn.execute("SELECT * FROM tickets WHERE id=?", (tid,)).fetchone()
+        conn.close()
+        if not row:
+            return web.json_response({"ok": False, "error": "Not found"}, status=404)
+        return web.json_response({"ok": True, "ticket": dict(row)})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+async def api_mini_ticket_close(request: web.Request):
+    """POST /api/mini/ticket/{id}/close"""
+    sess = _mini_auth(request)
+    if not sess:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    tid = int(request.match_info.get("id", 0))
+    try:
+        conn = db.get_conn()
+        conn.execute(
+            "UPDATE tickets SET status='closed' WHERE id=?", (tid,)
+        )
+        conn.commit(); conn.close()
+        _log_admin_db(sess["uid"], "TICKET_CLOSE_MINI", f"#{tid}")
+        return web.json_response({"ok": True, "msg": f"Тикет #{tid} закрыт"})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+async def api_mini_chats(request: web.Request):
+    """GET /api/mini/chats — список чатов."""
+    sess = _mini_auth(request)
+    if not sess:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    try:
+        chats = [dict(r) for r in await db.get_all_chats()]
+        return web.json_response({"ok": True, "chats": chats[:30]})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+async def api_mini_action(request: web.Request):
+    """POST /api/mini/action — действие над пользователем/чатом."""
+    sess = _mini_auth(request)
+    if not sess:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    if not _bot:
+        return web.json_response({"ok": False, "msg": "Бот не подключён"})
+
+    try:
+        body    = await request.json()
+        action  = body.get("action", "")
+        uid     = int(body.get("user_id", 0) or 0)
+        cid     = int(body.get("chat_id", 0) or 0)
+        arg     = str(body.get("arg", "") or "")
+    except Exception:
+        return web.json_response({"ok": False, "msg": "Invalid JSON"}, status=400)
+
+    try:
+        from aiogram.types import ChatPermissions
+        from datetime import timedelta as _td
+
+        msg = ""
+
+        if action == "ban" and uid and cid:
+            await _bot.ban_chat_member(cid, uid)
+            msg = f"🔨 Бан ID{uid}"
+            _log_admin_db(sess["uid"], "MINI_BAN", f"{cid}:{uid}")
+
+        elif action == "unban" and uid and cid:
+            await _bot.unban_chat_member(cid, uid, only_if_banned=True)
+            msg = f"🕊 Разбан ID{uid}"
+            _log_admin_db(sess["uid"], "MINI_UNBAN", f"{cid}:{uid}")
+
+        elif action == "kick" and uid and cid:
+            await _bot.ban_chat_member(cid, uid)
+            await _bot.unban_chat_member(cid, uid)
+            msg = f"👟 Кик ID{uid}"
+            _log_admin_db(sess["uid"], "MINI_KICK", f"{cid}:{uid}")
+
+        elif action == "mute" and uid and cid:
+            mins = int(arg) if arg.isdigit() else 60
+            await _bot.restrict_chat_member(cid, uid,
+                ChatPermissions(can_send_messages=False),
+                until_date=_td(minutes=mins))
+            msg = f"🔇 Мут ID{uid} на {mins}мин"
+            _log_admin_db(sess["uid"], "MINI_MUTE", f"{cid}:{uid} {mins}m")
+
+        elif action == "unmute" and uid and cid:
+            await _bot.restrict_chat_member(cid, uid,
+                ChatPermissions(can_send_messages=True,
+                    can_send_media_messages=True, can_send_polls=True,
+                    can_send_other_messages=True, can_add_web_page_previews=True))
+            msg = f"🔊 Размут ID{uid}"
+            _log_admin_db(sess["uid"], "MINI_UNMUTE", f"{cid}:{uid}")
+
+        elif action == "warn" and uid:
+            msg = f"⚡ Варн ID{uid} (через бот-команду)"
+            _log_admin_db(sess["uid"], "MINI_WARN", f"uid={uid}")
+
+        elif action == "send_message" and cid and arg:
+            await _bot.send_message(cid, arg, parse_mode="HTML")
+            msg = f"✉️ Сообщение отправлено"
+            _log_admin_db(sess["uid"], "MINI_MSG", f"→{cid}: {arg[:40]}")
+
+        elif action == "lock" and cid:
+            await _bot.set_chat_permissions(cid,
+                ChatPermissions(can_send_messages=False))
+            msg = f"🔒 Чат {cid} заблокирован"
+            _log_admin_db(sess["uid"], "MINI_LOCK", str(cid))
+
+        elif action == "unlock" and cid:
+            await _bot.set_chat_permissions(cid,
+                ChatPermissions(can_send_messages=True,
+                    can_send_media_messages=True, can_send_polls=True,
+                    can_send_other_messages=True, can_add_web_page_previews=True))
+            msg = f"🔓 Чат {cid} разблокирован"
+            _log_admin_db(sess["uid"], "MINI_UNLOCK", str(cid))
+
+        else:
+            return web.json_response({"ok": False, "msg": f"Неизвестное действие: {action}"})
+
+        return web.json_response({"ok": True, "msg": msg})
+
+    except Exception as e:
+        log.error(f"[MINI] action error: {e}")
+        return web.json_response({"ok": False, "msg": str(e)}, status=500)
+
+
+async def api_mini_me(request: web.Request):
+    """GET /api/mini/me — профиль текущего мода."""
+    sess = _mini_auth(request)
+    if not sess:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    uid   = sess["uid"]
+    admin = _get_admin(uid)
+    if not admin:
+        return web.json_response({"ok": False, "error": "Not found"}, status=404)
+
+    ri    = DASHBOARD_RANKS.get(admin["rank"], DASHBOARD_RANKS[1])
+    stats = _get_mod_stats(admin["name"], uid)
+
+    recent = []
+    try:
+        conn = db.get_conn()
+        rows = conn.execute(
+            "SELECT action, created_at FROM mod_history WHERE by_id=? "
+            "ORDER BY created_at DESC LIMIT 10",
+            (uid,)
+        ).fetchall()
+        conn.close()
+        recent = [{"action": r["action"], "created_at": str(r["created_at"])} for r in rows]
+    except Exception:
+        pass
+
+    return web.json_response({
+        "ok":    True,
+        "admin": {
+            "name":      admin["name"],
+            "rank":      admin["rank"],
+            "rank_name": ri["name"],
+        },
+        "stats":  stats,
+        "recent": recent,
+    })
+
+
+async def handle_mini_app(request: web.Request):
+    """GET /mini — отдаёт mini_app.html."""
+    import os as _os
+    html_path = _os.path.join(_os.path.dirname(__file__), "mini_app.html")
+    try:
+        with open(html_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        return web.Response(text=html, content_type="text/html")
+    except FileNotFoundError:
+        return web.Response(text="<h1>mini_app.html не найден</h1>", content_type="text/html", status=404)
+
+
 async def start_dashboard():
     _init_admin_db()
     app = web.Application()
@@ -7882,6 +8375,16 @@ async def start_dashboard():
     app.router.add_post("/api/bot/action",             api_bot_action)
     app.router.add_get("/api/bot/status",              api_bot_status)
     app.router.add_get("/api/bot/chats",               api_bot_chats)
+    # ── Mini App ──────────────────────────────────────────────
+    app.router.add_get("/mini",                        handle_mini_app)
+    app.router.add_post("/api/mini/auth",              api_mini_auth)
+    app.router.add_get("/api/mini/stats",              api_mini_stats)
+    app.router.add_get("/api/mini/tickets",            api_mini_tickets)
+    app.router.add_get("/api/mini/ticket/{id}",        api_mini_ticket_detail)
+    app.router.add_post("/api/mini/ticket/{id}/close", api_mini_ticket_close)
+    app.router.add_get("/api/mini/chats",              api_mini_chats)
+    app.router.add_post("/api/mini/action",            api_mini_action)
+    app.router.add_get("/api/mini/me",                 api_mini_me)
     app.router.add_get("/dashboard/command_center",    handle_command_center)
     app.router.add_post("/dashboard/command_center",   handle_command_center)
 
