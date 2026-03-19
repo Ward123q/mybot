@@ -6431,6 +6431,22 @@ async def _handle_bot_control_inner(request: web.Request):
                 from aiogram.types import ChatPermissions
                 
                 msg = ""
+                _adm_name = sess.get("name","Администратор") if sess else "Администратор"
+
+                async def _notify(cid, text):
+                    """Отправляет уведомление в чат от имени администрации."""
+                    try:
+                        n = await bot_inst.send_message(cid,
+                            f"<b>🛡 Администрация</b> | {text}",
+                            parse_mode="HTML")
+                        # Автоудаление через 30 сек
+                        import asyncio as _al
+                        async def _del():
+                            await _al.sleep(30)
+                            try: await bot_inst.delete_message(cid, n.message_id)
+                            except: pass
+                        _al.create_task(_del())
+                    except: pass
 
                 if action == "lockdown_all":
                     locked = 0
@@ -6443,6 +6459,9 @@ async def _handle_bot_control_inner(request: web.Request):
                         except: pass
                     msg = f"🔒 Локдаун применён к {locked} чатам"
                     _log_admin_db(sess_uid, "BOT_LOCKDOWN_ALL", msg)
+                    chats2 = await db.get_all_chats()
+                    for c2 in chats2:
+                        await _notify(c2["cid"], f"🔒 Чат заблокирован администратором <b>{_adm_name}</b>")
 
                 elif action == "unlock_all":
                     unlocked = 0
@@ -6457,6 +6476,9 @@ async def _handle_bot_control_inner(request: web.Request):
                         except: pass
                     msg = f"🔓 Разлокдаун {unlocked} чатов"
                     _log_admin_db(sess_uid, "BOT_UNLOCK_ALL", msg)
+                    chats3 = await db.get_all_chats()
+                    for c3 in chats3:
+                        await _notify(c3["cid"], f"🔓 Чат разблокирован администратором <b>{_adm_name}</b>")
 
                 elif action == "broadcast" and data.get("broadcast_text"):
                     text = data.get("broadcast_text","").strip()
@@ -6485,6 +6507,7 @@ async def _handle_bot_control_inner(request: web.Request):
                         ChatPermissions(can_send_messages=False))
                     msg = f"🔒 Чат {chat_id} заблокирован"
                     _log_admin_db(sess_uid, "BOT_LOCK_CHAT", str(chat_id))
+                    await _notify(chat_id, f"🔒 Чат заблокирован администратором <b>{_adm_name}</b>")
 
                 elif action == "unlock_chat" and chat_id:
                     await bot_inst.set_chat_permissions(chat_id,
@@ -6493,12 +6516,23 @@ async def _handle_bot_control_inner(request: web.Request):
                             can_send_other_messages=True, can_add_web_page_previews=True))
                     msg = f"🔓 Чат {chat_id} разблокирован"
                     _log_admin_db(sess_uid, "BOT_UNLOCK_CHAT", str(chat_id))
+                    await _notify(chat_id, f"🔓 Чат открыт администратором <b>{_adm_name}</b>")
 
                 elif action == "slowmode" and chat_id:
                     delay = int(data.get("slowmode_val","30") or 30)
-                    await bot_inst.set_chat_slow_mode_delay(chat_id, delay) if hasattr(bot_inst, "set_chat_slow_mode_delay") else await bot_inst.send_message(chat_id, f"Slowmode {delay}с (применён через настройки чата)")
+                    _bot_token = os.getenv("BOT_TOKEN","")
+                    import aiohttp as _ah
+                    async with _ah.ClientSession() as _s:
+                        _r = await _s.post(
+                            f"https://api.telegram.org/bot{_bot_token}/setChatSlowModeDelay",
+                            json={"chat_id": chat_id, "slow_mode_delay": delay}
+                        )
+                        _rd = await _r.json()
+                    if not _rd.get("ok"):
+                        raise Exception(_rd.get("description","Telegram error"))
                     msg = f"🐢 Slowmode {delay}с в чате {chat_id}"
                     _log_admin_db(sess_uid, "BOT_SLOWMODE", f"{chat_id}: {delay}s")
+                    await _notify(chat_id, f"🐢 Slowmode {'включён: ' + str(delay) + 'с' if delay else 'отключён'} — <b>{_adm_name}</b>")
 
                 elif action == "pin_msg" and chat_id and data.get("msg_id"):
                     msg_id = int(data.get("msg_id",0))
@@ -6515,12 +6549,14 @@ async def _handle_bot_control_inner(request: web.Request):
                     await bot_inst.ban_chat_member(chat_id, target_uid)
                     msg = f"🔨 Бан ID{target_uid} в чате {chat_id}"
                     _log_admin_db(sess_uid, "BOT_BAN", f"{chat_id}:{target_uid} {reason}")
+                    await _notify(chat_id, f"🔨 Пользователь <code>{target_uid}</code> заблокирован — <b>{_adm_name}</b>\nПричина: {reason}")
 
                 elif action == "unban_user" and chat_id and data.get("target_uid"):
                     target_uid = int(data.get("target_uid",0))
                     await bot_inst.unban_chat_member(chat_id, target_uid, only_if_banned=True)
                     msg = f"🕊 Разбан ID{target_uid} в чате {chat_id}"
                     _log_admin_db(sess_uid, "BOT_UNBAN", f"{chat_id}:{target_uid}")
+                    await _notify(chat_id, f"🕊 Пользователь <code>{target_uid}</code> разблокирован — <b>{_adm_name}</b>")
 
                 elif action == "mute_user" and chat_id and data.get("target_uid"):
                     from datetime import timedelta
@@ -6531,6 +6567,7 @@ async def _handle_bot_control_inner(request: web.Request):
                         until_date=timedelta(minutes=mins))
                     msg = f"🔇 Мут ID{target_uid} на {mins}мин в чате {chat_id}"
                     _log_admin_db(sess_uid, "BOT_MUTE", f"{chat_id}:{target_uid} {mins}m")
+                    await _notify(chat_id, f"🔇 Пользователь <code>{target_uid}</code> замучен на <b>{mins} мин</b> — {_adm_name}")
 
                 elif action == "kick_user" and chat_id and data.get("target_uid"):
                     target_uid = int(data.get("target_uid",0))
@@ -6538,11 +6575,13 @@ async def _handle_bot_control_inner(request: web.Request):
                     await bot_inst.unban_chat_member(chat_id, target_uid)
                     msg = f"👟 Кик ID{target_uid} из чата {chat_id}"
                     _log_admin_db(sess_uid, "BOT_KICK", f"{chat_id}:{target_uid}")
+                    await _notify(chat_id, f"👟 Пользователь <code>{target_uid}</code> исключён — <b>{_adm_name}</b>")
 
                 elif action == "set_title" and chat_id and data.get("new_title"):
                     title = data.get("new_title","").strip()
                     await bot_inst.set_chat_title(chat_id, title)
                     msg = f"✏️ Название чата {chat_id} изменено на «{title}»"
+                    await _notify(chat_id, f"✏️ Название чата изменено на <b>{title}</b> — {_adm_name}")
 
                 elif action == "set_description" and chat_id and data.get("new_desc"):
                     desc = data.get("new_desc","").strip()
@@ -7459,16 +7498,17 @@ async def _handle_command_center_inner(request: web.Request):
 
                 elif cmd == "slowmode":
                     delay = int(arg) if arg.isdigit() else 30
-                    # Slowmode через прямой Telegram API (совместимо с любой версией aiogram)
-                    import aiohttp as _aio_http
-                    bot_token = os.getenv("BOT_TOKEN", "")
-                    if bot_token:
-                        async with _aio_http.ClientSession() as _sess:
-                            await _sess.post(
-                                f"https://api.telegram.org/bot{bot_token}/setChatSlowModeDelay",
-                                json={"chat_id": chat_id, "slow_mode_delay": delay}
-                            )
-                    msg = f"🐢 Slowmode {delay}с"
+                    _bot_token2 = os.getenv("BOT_TOKEN","")
+                    import aiohttp as _ah2
+                    async with _ah2.ClientSession() as _s2:
+                        _r2 = await _s2.post(
+                            f"https://api.telegram.org/bot{_bot_token2}/setChatSlowModeDelay",
+                            json={"chat_id": chat_id, "slow_mode_delay": delay}
+                        )
+                        _rd2 = await _r2.json()
+                    if not _rd2.get("ok"):
+                        raise Exception(_rd2.get("description","Telegram error"))
+                    msg = f"🐢 Slowmode {delay}с в чате {chat_id}"
 
                 elif cmd == "send" and arg:
                     await _bot.send_message(chat_id, arg, parse_mode="HTML")
