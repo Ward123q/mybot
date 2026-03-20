@@ -1337,11 +1337,6 @@ class StatsMiddleware(BaseMiddleware):
         return False
     async def __call__(self, handler, event: Message, data):
         if isinstance(event, Message) and event.from_user and event.chat.type in ("group","supergroup"):
-            # 🔐 Капча — абсолютный приоритет
-            if event.text and not event.text.startswith("/"):
-                if (event.chat.id, event.from_user.id) in _cap:
-                    await cap_check(event)
-                    return
             chat_stats[event.chat.id][event.from_user.id] += 1
             known_chats[event.chat.id] = event.chat.title or str(event.chat.id)
             uid, cid = event.from_user.id, event.chat.id
@@ -1612,11 +1607,6 @@ async def on_new_member(message: Message):
                 except: pass
             except: pass
             continue
-
-        # 🔐 КАПЧА
-        if chat_cfg.get("captcha_enabled", True):
-            await cap_start(cid, member.id, member.full_name)
-            continue  # приветствие и бонусы — после прохождения
 
         # Приветствие из настроек
         if chat_cfg.get("welcome_enabled", True):
@@ -3934,7 +3924,7 @@ async def autist_commands(message: Message):
                 "скрин","взрыв","корона","вызов","шпион","жребий","громко","молния","магнит","цель",
                 "напомни","закреп","голос","рост","тишина",
                 "температура","неделя","режим","лог","рестарт","сос",
-                "стикермут","гифмут","войсмут","всёмут","подарить","предложить","разлюбить"]:
+                "стикермут","гифмут","войсмут","всёмут","подарить","предложить","разлюбить","допрос","карантин","наблюдение","испытание","псих","детектор","жертва дня","герой дня","конкурс","присяга","рулетка"]:
         if rest.startswith(cmd):
             action = cmd; rest = rest[len(cmd):].strip(); break
     if not action: return
@@ -3980,6 +3970,22 @@ async def autist_commands(message: Message):
 
     if not target and action not in NO_TARGET_CMDS:
         await reply_auto_delete(message, "↩️ Ответь на сообщение или укажи @юзернейм / ID."); return
+
+    # ── Защита: нельзя применить к боту или самому себе ──
+    if target:
+        me = await bot.get_me()
+        if target.id == me.id:
+            await reply_auto_delete(message, "🤖 Нельзя применить к боту!"); return
+        if target.id == message.from_user.id and action in ("бан","мут","кик","захуесосить","варн"):
+            await reply_auto_delete(message, "😅 Нельзя применить к самому себе!"); return
+        admin_actions = {"бан","мут","кик","захуесосить","варн","снять варн","разварн",
+                         "размут","разбан","медиамут","всёмут","стикермут","гифмут","войсмут"}
+        if action in admin_actions:
+            try:
+                tm_check = await bot.get_chat_member(cid, target.id)
+                if tm_check.status in ("administrator","creator"):
+                    await reply_auto_delete(message, "🛡 Нельзя применить к администратору!"); return
+            except: pass
 
     duration_mins = None; duration_label = None; reason = "Нарушение правил"
     time_match = _re.match(r"^(\d+)\s*(д|ч|м)\s*", rest)
@@ -4984,6 +4990,114 @@ async def autist_commands(message: Message):
                         sent_count += 1
                     except: pass
             except: pass
+        elif action == "допрос":
+            import random as _rnd_d
+            questions = ["Где ты был в ночь с пятницы на понедельник?",
+                "Объясни почему не отвечал на сообщения 3 дня.",
+                "Признавайся — ты флудил в другом чате?",
+                "Кто твои сообщники в этом чате?",
+                "Зачем читаешь и не отвечаешь?"]
+            q = _rnd_d.choice(questions)
+            await reply_auto_delete(message,
+                f"🔦 <b>ДОПРОС</b>\n\n{tname}, вам вопрос:\n❓ <i>{q}</i>\n\nУ вас 30 секунд.",
+                parse_mode="HTML")
+        elif action == "карантин":
+            import random as _rnd_k
+            days = _rnd_k.randint(1,14)
+            diseases = ["чатовирус","мемофобия","флудит","оффтопикоз","спамопатия"]
+            await reply_auto_delete(message,
+                f"🏥 <b>КАРАНТИН</b>\n\n{tname} отправляется в карантин на <b>{days} дней</b>.\n"
+                f"Диагноз: <b>{_rnd_k.choice(diseases)}</b>", parse_mode="HTML")
+        elif action == "наблюдение":
+            await reply_auto_delete(message,
+                f"👁 <b>СЛЕЖКА</b>\n\n{tname} взят под наблюдение. Все действия записываются. 📹",
+                parse_mode="HTML")
+        elif action == "испытание":
+            import random as _rnd_i
+            trials = ["написать 100 сообщений без ошибок","не писать в чат 24 часа",
+                "привести нового участника","написать стих про чат","поставить 50 реакций"]
+            await reply_auto_delete(message,
+                f"⚔️ <b>ИСПЫТАНИЕ</b>\n\n{tname}: <i>{_rnd_i.choice(trials)}</i>\nСрок: 24 часа.",
+                parse_mode="HTML")
+        elif action == "псих":
+            import random as _rnd_p
+            diagnoses = ["синдром постоянного онлайна","мемозависимость 3 стадии",
+                "хронический оффтопик","острый флудит","навязчивая отправка войсов"]
+            await reply_auto_delete(message,
+                f"🧠 <b>ДИАГНОЗ</b>\n\n{tname}: <b>{_rnd_p.choice(diagnoses)}</b>\n"
+                f"Рекомендовано: покинуть чат на выходные.", parse_mode="HTML")
+        elif action == "детектор":
+            import random as _rnd_det
+            lies = _rnd_det.randint(0,100)
+            verdict = "ЛЖЕЦ 🤥" if lies>60 else ("ПОДОЗРИТЕЛЬНО 🤨" if lies>30 else "ЧЕСТНЫЙ ✅")
+            await reply_auto_delete(message,
+                f"🔬 <b>ДЕТЕКТОР ЛЖИ</b>\n\n{tname}\nУровень лжи: <b>{lies}%</b>\n"
+                f"Вердикт: <b>{verdict}</b>", parse_mode="HTML")
+        elif action == "жертва дня":
+            import random as _rnd_j
+            users_j = [u for u in chat_stats.get(cid,{}).keys()
+                       if u != (await bot.get_me()).id and u != message.from_user.id]
+            if not users_j:
+                await reply_auto_delete(message, "😔 Нет кандидатов"); return
+            vid = _rnd_j.choice(users_j)
+            try: vm = await bot.get_chat_member(cid,vid); vn = vm.user.mention_html()
+            except: vn = f"<code>{vid}</code>"
+            fates_j = ["должен угостить всех","обязан отвечать на все вопросы",
+                "сегодня дежурит по чату","пишет стих по требованию"]
+            await reply_auto_delete(message,
+                f"🎯 <b>ЖЕРТВА ДНЯ</b>\n\n{vn} — {_rnd_j.choice(fates_j)}! 😈",
+                parse_mode="HTML")
+        elif action == "герой дня":
+            import datetime as _dt_h
+            today = _dt_h.date.today().isoformat()
+            top_t = sorted([(u,user_activity.get(cid,{}).get(u,{}).get(today,0))
+                for u in user_activity.get(cid,{})], key=lambda x:x[1], reverse=True)
+            if not top_t or top_t[0][1]==0:
+                await reply_auto_delete(message,"😴 Сегодня все молчали"); return
+            hid,hmsgs = top_t[0]
+            try: hm = await bot.get_chat_member(cid,hid); hn = hm.user.mention_html()
+            except: hn = f"<code>{hid}</code>"
+            await reply_auto_delete(message,
+                f"🦸 <b>ГЕРОЙ ДНЯ</b>\n\n{hn} — <b>{hmsgs}</b> сообщений сегодня! 👏",
+                parse_mode="HTML")
+        elif action == "конкурс":
+            import random as _rnd_c
+            prizes_c = ["100 репутации","титул Победителя","право назначить жертву дня"]
+            tasks_c  = ["первым написать слово победа","угадать число от 1 до 10","написать стих про чат"]
+            await reply_auto_delete(message,
+                f"🏆 <b>КОНКУРС!</b>\n\nЗадание: <b>{_rnd_c.choice(tasks_c)}</b>\n"
+                f"Приз: <b>{_rnd_c.choice(prizes_c)}</b>\n\nНачали! ⏱", parse_mode="HTML")
+        elif action == "присяга":
+            await reply_auto_delete(message,
+                f"🫡 <b>ПРИСЯГА</b>\n\n{tname}, повторяй:\n\n"
+                f"<i>Я клянусь не флудить, не спамить, уважать правила. "
+                f"Если нарушу — приму бан без обид.</i>\n\nАминь. 🙏", parse_mode="HTML")
+        elif action == "рулетка":
+            import random as _rnd_rul
+            outcomes_r = [
+                (40, f"✅ {tname} повезло — ничего не случилось!"),
+                (25, f"⚡ {tname} получает предупреждение судьбы!"),
+                (20, f"🔇 {tname} замолкает на 5 минут по велению рулетки!"),
+                (10, f"🎁 {tname} получает +50 репутации!"),
+                (5,  f"💎 ДЖЕКПОТ! {tname} получает +200 репутации!"),
+            ]
+            chosen_r = _rnd_rul.choices(outcomes_r, weights=[o[0] for o in outcomes_r], k=1)[0]
+            if "замолкает" in chosen_r[1] and target:
+                try:
+                    await bot.restrict_chat_member(cid, target.id,
+                        ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=5))
+                except: pass
+            elif "репутации" in chosen_r[1] and target:
+                try:
+                    bonus_r = 200 if "ДЖЕКПОТ" in chosen_r[1] else 50
+                    conn_rul = db_connect()
+                    conn_rul.execute("INSERT INTO reputation (cid,uid,score) VALUES (?,?,?) "
+                        "ON CONFLICT(cid,uid) DO UPDATE SET score=score+?",
+                        (cid,target.id,bonus_r,bonus_r))
+                    conn_rul.commit(); conn_rul.close()
+                except: pass
+            await reply_auto_delete(message,
+                f"🎡 <b>РУЛЕТКА СУДЬБЫ</b>\n\n{chosen_r[1]}", parse_mode="HTML")
             await reply_auto_delete(message,
                 f"📝 Переслал последние ~<b>{sent_count}</b> записей из лога в личку",
                 parse_mode="HTML")
@@ -5039,10 +5153,6 @@ async def cmd_guess(message: Message):
 @dp.message(F.text.regexp(r'^\d+$'))
 async def guess_handler(message: Message):
     cid = message.chat.id
-    # Капча имеет приоритет
-    if message.from_user and (cid, message.from_user.id) in _cap:
-        await cap_check(message)
-        return
     if cid not in guess_games: return
     game = guess_games[cid]
     try: num = int(message.text)
@@ -10622,217 +10732,6 @@ async def cmd_delnote_mod(message: Message, command: CommandObject):
     except:
         await reply_auto_delete(message, "❌ Ошибка")
     conn.close()
-
-
-
-# ══════════════════════════════════════════════════════════════════
-#  🔐 ВСТРОЕННАЯ КАПЧА
-# ══════════════════════════════════════════════════════════════════
-_cap: dict = {}   # {(cid,uid): {code,msg_id,task,tries,name}}
-_CAP_TIMEOUT   = 90
-_CAP_MAX_TRIES = 2
-_CAP_DIGITS    = 5
-_CAP_KICK      = True
-
-
-def _cap_img(code: str):
-    """Генерирует картинку капчи. Возвращает bytes или None."""
-    try:
-        import io, random as r
-        from PIL import Image, ImageDraw, ImageFont, ImageFilter
-        W, H = 280, 100
-        img  = Image.new("RGB", (W, H), (20, 20, 30))
-        d    = ImageDraw.Draw(img)
-        for _ in range(W*H//4):
-            c = r.randint(30, 70)
-            d.point((r.randint(0,W-1), r.randint(0,H-1)), (c,c,c+r.randint(0,30)))
-        for _ in range(8):
-            col = (r.randint(40,100), r.randint(40,100), r.randint(60,140))
-            d.line([(r.randint(0,W),r.randint(0,H)),(r.randint(0,W),r.randint(0,H))],
-                   fill=col, width=1)
-        font = None
-        for fp in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                   "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-                   "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-                   "/System/Library/Fonts/Helvetica.ttc",
-                   "C:/Windows/Fonts/arialbd.ttf"]:
-            try:
-                from PIL import ImageFont as _IF
-                font = _IF.truetype(fp, 52); break
-            except: pass
-        if not font:
-            try:
-                from PIL import ImageFont as _IF; font = _IF.load_default(size=52)
-            except:
-                from PIL import ImageFont as _IF; font = _IF.load_default()
-        pal = [(255,210,80),(100,215,255),(255,110,110),(110,255,140),(210,110,255)]
-        cw  = (W-20)//len(code)
-        for i, ch in enumerate(code):
-            col = pal[i % len(pal)]
-            ang = r.randint(-25, 25)
-            off = r.randint(-10, 10)
-            x   = 10 + i*cw + r.randint(-4, 4)
-            lay = Image.new("RGBA", (cw+12, H), (0,0,0,0))
-            ld  = ImageDraw.Draw(lay)
-            cy  = (H-52)//2 + off
-            ld.text((4, cy+2), ch, font=font, fill=(0,0,0,160))
-            ld.text((2, cy),   ch, font=font, fill=col+(255,))
-            rot = lay.rotate(ang, expand=False, resample=Image.BICUBIC)
-            img.paste(rot, (x-2, 0), rot)
-        img = img.filter(ImageFilter.GaussianBlur(radius=0.6))
-        d2  = ImageDraw.Draw(img)
-        for _ in range(180):
-            c = r.randint(60,150)
-            d2.point((r.randint(0,W-1), r.randint(0,H-1)), (c,c+5,c+15))
-        buf = io.BytesIO()
-        img.save(buf, format="PNG", optimize=True)
-        return buf.getvalue()
-    except Exception as _e:
-        logging.warning(f"[CAP] img: {_e}")
-        return None
-
-
-async def _cap_timeout(cid: int, uid: int):
-    await asyncio.sleep(_CAP_TIMEOUT)
-    e = _cap.pop((cid, uid), None)
-    if not e: return
-    try: await bot.delete_message(cid, e["msg_id"])
-    except: pass
-    await _cap_punish(cid, uid)
-    try:
-        n = await bot.send_message(cid,
-            f"⏰ <b>{e['name']}</b> не прошёл капчу — "
-            f"{'кик' if _CAP_KICK else 'мут'}.", parse_mode="HTML")
-        await asyncio.sleep(8)
-        try: await n.delete()
-        except: pass
-    except: pass
-
-
-async def _cap_punish(cid: int, uid: int):
-    try:
-        if _CAP_KICK:
-            await bot.ban_chat_member(cid, uid)
-            await asyncio.sleep(0.3)
-            await bot.unban_chat_member(cid, uid)
-        else:
-            await bot.restrict_chat_member(cid, uid,
-                ChatPermissions(can_send_messages=False),
-                until_date=timedelta(hours=24))
-    except Exception as _e:
-        logging.warning(f"[CAP] punish: {_e}")
-
-
-async def cap_start(cid: int, uid: int, name: str):
-    """Запуск капчи для нового участника."""
-    if (cid, uid) in _cap:
-        return  # уже идёт
-    code  = "".join(str(random.randint(0,9)) for _ in range(_CAP_DIGITS))
-    sname = name.replace("<","&lt;").replace(">","&gt;")
-    img   = _cap_img(code)
-    kb    = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Пропустить (адм)",
-                             callback_data=f"capskip:{cid}:{uid}")
-    ]])
-    txt = (f"👋 <b>{sname}</b>, добро пожаловать!\n\n"
-           f"🔐 Введи <b>{_CAP_DIGITS} цифр</b> с картинки прямо в этот чат.\n"
-           f"⏰ У тебя <b>{_CAP_TIMEOUT} секунд</b>.\n"
-           f"❌ {_CAP_MAX_TRIES} ошибки — {'кик' if _CAP_KICK else 'мут'}.")
-    try:
-        if img:
-            from aiogram.types import BufferedInputFile as _BIF
-            sent = await bot.send_photo(cid, _BIF(img, "cap.png"),
-                                        caption=txt, parse_mode="HTML",
-                                        reply_markup=kb)
-        else:
-            sent = await bot.send_message(cid,
-                txt + f"\n\n🔢 Код: <code>{code}</code>",
-                parse_mode="HTML", reply_markup=kb)
-        msg_id = sent.message_id
-    except Exception as _e:
-        logging.error(f"[CAP] send: {_e}")
-        return
-    task = asyncio.create_task(_cap_timeout(cid, uid))
-    _cap[(cid, uid)] = {
-        "code": code, "msg_id": msg_id,
-        "task": task, "tries": 0, "name": sname,
-    }
-    logging.info(f"[CAP] start: {name}({uid}) chat={cid} code={code}")
-
-
-async def cap_check(message: Message) -> bool:
-    """Проверяет ответ на капчу. Возвращает True если обработано."""
-    if not message.from_user or not message.text:
-        return False
-    uid, cid = message.from_user.id, message.chat.id
-    e = _cap.get((cid, uid))
-    if not e:
-        return False
-
-    # Удаляем ответ пользователя
-    try: await message.delete()
-    except: pass
-
-    if message.text.strip() == e["code"]:
-        # ✅ ВЕРНО
-        _cap.pop((cid, uid))
-        e["task"].cancel()
-        try: await bot.delete_message(cid, e["msg_id"])
-        except: pass
-        ok = await bot.send_message(cid,
-            f"✅ <b>{e['name']}</b> прошёл проверку — добро пожаловать!",
-            parse_mode="HTML")
-        await asyncio.sleep(6)
-        try: await ok.delete()
-        except: pass
-        logging.info(f"[CAP] ok: {e['name']}({uid})")
-    else:
-        e["tries"] += 1
-        rem = _CAP_MAX_TRIES - e["tries"]
-        if e["tries"] >= _CAP_MAX_TRIES:
-            _cap.pop((cid, uid))
-            e["task"].cancel()
-            try: await bot.delete_message(cid, e["msg_id"])
-            except: pass
-            await _cap_punish(cid, uid)
-            fail = await bot.send_message(cid,
-                f"❌ <b>{e['name']}</b> не прошёл — "
-                f"{'кик' if _CAP_KICK else 'мут'}.", parse_mode="HTML")
-            await asyncio.sleep(8)
-            try: await fail.delete()
-            except: pass
-        else:
-            w = await bot.send_message(cid,
-                f"❌ <b>{e['name']}</b>, неверно! Осталось: <b>{rem}</b>",
-                parse_mode="HTML")
-            await asyncio.sleep(5)
-            try: await w.delete()
-            except: pass
-    return True
-
-
-@dp.callback_query(F.data.startswith("capskip:"))
-async def cap_skip(call: CallbackQuery):
-    try:
-        m  = await bot.get_chat_member(call.message.chat.id, call.from_user.id)
-        ok = m.status in ("administrator", "creator")
-    except: ok = False
-    if not ok:
-        await call.answer("❌ Только администраторы", show_alert=True); return
-    _, cid_s, uid_s = call.data.split(":")
-    cid, uid = int(cid_s), int(uid_s)
-    e = _cap.pop((cid, uid), None)
-    if not e:
-        await call.answer("Капча уже завершена"); return
-    e["task"].cancel()
-    try: await call.message.delete()
-    except: pass
-    await call.answer("✅ Пропущено")
-    n = await bot.send_message(cid,
-        f"✅ Капча для <b>{e['name']}</b> пропущена.", parse_mode="HTML")
-    await asyncio.sleep(8)
-    try: await n.delete()
-    except: pass
 
 
 async def main():
