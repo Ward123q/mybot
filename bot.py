@@ -3924,7 +3924,7 @@ async def autist_commands(message: Message):
                 "скрин","взрыв","корона","вызов","шпион","жребий","громко","молния","магнит","цель",
                 "напомни","закреп","голос","рост","тишина",
                 "температура","неделя","режим","лог","рестарт","сос",
-                "стикермут","гифмут","войсмут","всёмут","подарить","предложить","разлюбить","допрос","карантин","наблюдение","испытание","псих","детектор","жертва дня","герой дня","конкурс","присяга","рулетка"]:
+                "стикермут","гифмут","войсмут","всёмут","подарить","предложить","разлюбить"]:
         if rest.startswith(cmd):
             action = cmd; rest = rest[len(cmd):].strip(); break
     if not action: return
@@ -3970,22 +3970,6 @@ async def autist_commands(message: Message):
 
     if not target and action not in NO_TARGET_CMDS:
         await reply_auto_delete(message, "↩️ Ответь на сообщение или укажи @юзернейм / ID."); return
-
-    # ── Защита: нельзя применить к боту или самому себе ──
-    if target:
-        me = await bot.get_me()
-        if target.id == me.id:
-            await reply_auto_delete(message, "🤖 Нельзя применить к боту!"); return
-        if target.id == message.from_user.id and action in ("бан","мут","кик","захуесосить","варн"):
-            await reply_auto_delete(message, "😅 Нельзя применить к самому себе!"); return
-        admin_actions = {"бан","мут","кик","захуесосить","варн","снять варн","разварн",
-                         "размут","разбан","медиамут","всёмут","стикермут","гифмут","войсмут"}
-        if action in admin_actions:
-            try:
-                tm_check = await bot.get_chat_member(cid, target.id)
-                if tm_check.status in ("administrator","creator"):
-                    await reply_auto_delete(message, "🛡 Нельзя применить к администратору!"); return
-            except: pass
 
     duration_mins = None; duration_label = None; reason = "Нарушение правил"
     time_match = _re.match(r"^(\d+)\s*(д|ч|м)\s*", rest)
@@ -4990,114 +4974,6 @@ async def autist_commands(message: Message):
                         sent_count += 1
                     except: pass
             except: pass
-        elif action == "допрос":
-            import random as _rnd_d
-            questions = ["Где ты был в ночь с пятницы на понедельник?",
-                "Объясни почему не отвечал на сообщения 3 дня.",
-                "Признавайся — ты флудил в другом чате?",
-                "Кто твои сообщники в этом чате?",
-                "Зачем читаешь и не отвечаешь?"]
-            q = _rnd_d.choice(questions)
-            await reply_auto_delete(message,
-                f"🔦 <b>ДОПРОС</b>\n\n{tname}, вам вопрос:\n❓ <i>{q}</i>\n\nУ вас 30 секунд.",
-                parse_mode="HTML")
-        elif action == "карантин":
-            import random as _rnd_k
-            days = _rnd_k.randint(1,14)
-            diseases = ["чатовирус","мемофобия","флудит","оффтопикоз","спамопатия"]
-            await reply_auto_delete(message,
-                f"🏥 <b>КАРАНТИН</b>\n\n{tname} отправляется в карантин на <b>{days} дней</b>.\n"
-                f"Диагноз: <b>{_rnd_k.choice(diseases)}</b>", parse_mode="HTML")
-        elif action == "наблюдение":
-            await reply_auto_delete(message,
-                f"👁 <b>СЛЕЖКА</b>\n\n{tname} взят под наблюдение. Все действия записываются. 📹",
-                parse_mode="HTML")
-        elif action == "испытание":
-            import random as _rnd_i
-            trials = ["написать 100 сообщений без ошибок","не писать в чат 24 часа",
-                "привести нового участника","написать стих про чат","поставить 50 реакций"]
-            await reply_auto_delete(message,
-                f"⚔️ <b>ИСПЫТАНИЕ</b>\n\n{tname}: <i>{_rnd_i.choice(trials)}</i>\nСрок: 24 часа.",
-                parse_mode="HTML")
-        elif action == "псих":
-            import random as _rnd_p
-            diagnoses = ["синдром постоянного онлайна","мемозависимость 3 стадии",
-                "хронический оффтопик","острый флудит","навязчивая отправка войсов"]
-            await reply_auto_delete(message,
-                f"🧠 <b>ДИАГНОЗ</b>\n\n{tname}: <b>{_rnd_p.choice(diagnoses)}</b>\n"
-                f"Рекомендовано: покинуть чат на выходные.", parse_mode="HTML")
-        elif action == "детектор":
-            import random as _rnd_det
-            lies = _rnd_det.randint(0,100)
-            verdict = "ЛЖЕЦ 🤥" if lies>60 else ("ПОДОЗРИТЕЛЬНО 🤨" if lies>30 else "ЧЕСТНЫЙ ✅")
-            await reply_auto_delete(message,
-                f"🔬 <b>ДЕТЕКТОР ЛЖИ</b>\n\n{tname}\nУровень лжи: <b>{lies}%</b>\n"
-                f"Вердикт: <b>{verdict}</b>", parse_mode="HTML")
-        elif action == "жертва дня":
-            import random as _rnd_j
-            users_j = [u for u in chat_stats.get(cid,{}).keys()
-                       if u != (await bot.get_me()).id and u != message.from_user.id]
-            if not users_j:
-                await reply_auto_delete(message, "😔 Нет кандидатов"); return
-            vid = _rnd_j.choice(users_j)
-            try: vm = await bot.get_chat_member(cid,vid); vn = vm.user.mention_html()
-            except: vn = f"<code>{vid}</code>"
-            fates_j = ["должен угостить всех","обязан отвечать на все вопросы",
-                "сегодня дежурит по чату","пишет стих по требованию"]
-            await reply_auto_delete(message,
-                f"🎯 <b>ЖЕРТВА ДНЯ</b>\n\n{vn} — {_rnd_j.choice(fates_j)}! 😈",
-                parse_mode="HTML")
-        elif action == "герой дня":
-            import datetime as _dt_h
-            today = _dt_h.date.today().isoformat()
-            top_t = sorted([(u,user_activity.get(cid,{}).get(u,{}).get(today,0))
-                for u in user_activity.get(cid,{})], key=lambda x:x[1], reverse=True)
-            if not top_t or top_t[0][1]==0:
-                await reply_auto_delete(message,"😴 Сегодня все молчали"); return
-            hid,hmsgs = top_t[0]
-            try: hm = await bot.get_chat_member(cid,hid); hn = hm.user.mention_html()
-            except: hn = f"<code>{hid}</code>"
-            await reply_auto_delete(message,
-                f"🦸 <b>ГЕРОЙ ДНЯ</b>\n\n{hn} — <b>{hmsgs}</b> сообщений сегодня! 👏",
-                parse_mode="HTML")
-        elif action == "конкурс":
-            import random as _rnd_c
-            prizes_c = ["100 репутации","титул Победителя","право назначить жертву дня"]
-            tasks_c  = ["первым написать слово победа","угадать число от 1 до 10","написать стих про чат"]
-            await reply_auto_delete(message,
-                f"🏆 <b>КОНКУРС!</b>\n\nЗадание: <b>{_rnd_c.choice(tasks_c)}</b>\n"
-                f"Приз: <b>{_rnd_c.choice(prizes_c)}</b>\n\nНачали! ⏱", parse_mode="HTML")
-        elif action == "присяга":
-            await reply_auto_delete(message,
-                f"🫡 <b>ПРИСЯГА</b>\n\n{tname}, повторяй:\n\n"
-                f"<i>Я клянусь не флудить, не спамить, уважать правила. "
-                f"Если нарушу — приму бан без обид.</i>\n\nАминь. 🙏", parse_mode="HTML")
-        elif action == "рулетка":
-            import random as _rnd_rul
-            outcomes_r = [
-                (40, f"✅ {tname} повезло — ничего не случилось!"),
-                (25, f"⚡ {tname} получает предупреждение судьбы!"),
-                (20, f"🔇 {tname} замолкает на 5 минут по велению рулетки!"),
-                (10, f"🎁 {tname} получает +50 репутации!"),
-                (5,  f"💎 ДЖЕКПОТ! {tname} получает +200 репутации!"),
-            ]
-            chosen_r = _rnd_rul.choices(outcomes_r, weights=[o[0] for o in outcomes_r], k=1)[0]
-            if "замолкает" in chosen_r[1] and target:
-                try:
-                    await bot.restrict_chat_member(cid, target.id,
-                        ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=5))
-                except: pass
-            elif "репутации" in chosen_r[1] and target:
-                try:
-                    bonus_r = 200 if "ДЖЕКПОТ" in chosen_r[1] else 50
-                    conn_rul = db_connect()
-                    conn_rul.execute("INSERT INTO reputation (cid,uid,score) VALUES (?,?,?) "
-                        "ON CONFLICT(cid,uid) DO UPDATE SET score=score+?",
-                        (cid,target.id,bonus_r,bonus_r))
-                    conn_rul.commit(); conn_rul.close()
-                except: pass
-            await reply_auto_delete(message,
-                f"🎡 <b>РУЛЕТКА СУДЬБЫ</b>\n\n{chosen_r[1]}", parse_mode="HTML")
             await reply_auto_delete(message,
                 f"📝 Переслал последние ~<b>{sent_count}</b> записей из лога в личку",
                 parse_mode="HTML")
@@ -10732,6 +10608,355 @@ async def cmd_delnote_mod(message: Message, command: CommandObject):
     except:
         await reply_auto_delete(message, "❌ Ошибка")
     conn.close()
+
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🎙 ГОЛОСОВЫЕ КОМАНДЫ ЧЕРЕЗ WHISPER
+#  Только для администраторов из ADMIN_IDS
+#  Отправь войс боту в ЛС → транскрипция → выполнение команды
+# ══════════════════════════════════════════════════════════════════
+
+# Паттерны разбора команд (без ИИ, на ключевых словах)
+_VC_PATTERNS = [
+    (["забань", "забан", "бан ", " бан"],       "ban"),
+    (["замути", "мут ", " мут", "заглуши"],      "mute"),
+    (["сними мут", "размути", "убери мут"],       "unmute"),
+    (["варн", "предупреди", "выдай предупреждение"], "warn"),
+    (["разбань", "разбан", "убери бан"],          "unban"),
+    (["кик", "выгони", "исключи"],                "kick"),
+    (["заблокируй чат", "локдаун", "закрой чат"], "lockdown"),
+    (["разблокируй чат", "открой чат"],           "unlock"),
+    (["объяви", "объявление", "анонс"],           "announce"),
+    (["статус", "состояние", "как дела"],         "status"),
+    (["топ ", "статистика", "активные"],          "top"),
+]
+
+def _vc_parse(text: str) -> dict:
+    """Разбирает транскрипт в структурированную команду."""
+    import re
+    t = text.lower().strip()
+    result = {"action": None, "target": None, "arg": "", "raw": text}
+
+    # Определяем действие
+    for keywords, action in _VC_PATTERNS:
+        if any(kw in t for kw in keywords):
+            result["action"] = action
+            break
+    if not result["action"]:
+        return result
+
+    # Ищем цель: числовой ID или @username
+    id_m  = re.search(r"id[:\s]*(\d+)", t)
+    at_m  = re.search(r"@(\w+)", text)  # оригинальный регистр
+    num_m = re.search(r"\b(\d{5,12})\b", t)
+    if id_m:    result["target"] = id_m.group(1)
+    elif at_m:  result["target"] = "@" + at_m.group(1)
+    elif num_m: result["target"] = num_m.group(1)
+
+    # Время для мута
+    tm = re.search(r"на\s*(\d+)\s*(мин|минут|ч|час|д|день|дн)", t)
+    if tm:
+        n, u = int(tm.group(1)), tm.group(2)
+        if   "мин" in u: result["arg"] = f"{n}m"
+        elif "ч"   in u or "час" in u: result["arg"] = f"{n}h"
+        elif "д"   in u or "ден" in u or "дн" in u: result["arg"] = f"{n}d"
+    if not result["arg"] and result["action"] == "mute":
+        result["arg"] = "60m"  # дефолт 1 час
+
+    # Текст объявления
+    if result["action"] == "announce":
+        for kw in ["объяви", "объявление", "анонс"]:
+            idx = t.find(kw)
+            if idx >= 0:
+                after = text[idx + len(kw):].strip(" :–-")
+                if after: result["arg"] = after
+                break
+
+    return result
+
+
+async def _vc_transcribe(file_path: str) -> str | None:
+    """Отправляет аудио в Whisper API, возвращает транскрипт."""
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key:
+        return None
+    try:
+        import aiohttp as _ah
+        async with _ah.ClientSession() as sess:
+            with open(file_path, "rb") as f:
+                form = _ah.FormData()
+                form.add_field("model", "whisper-1")
+                form.add_field("language", "ru")
+                form.add_field("file", f,
+                               filename="voice.ogg",
+                               content_type="audio/ogg")
+                async with sess.post(
+                    "https://api.openai.com/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    data=form,
+                    timeout=_ah.ClientTimeout(total=30)
+                ) as r:
+                    if r.status == 200:
+                        d = await r.json()
+                        return d.get("text", "").strip()
+                    else:
+                        err = await r.text()
+                        logging.warning(f"[VOICE] Whisper {r.status}: {err[:100]}")
+                        return None
+    except Exception as e:
+        logging.error(f"[VOICE] transcribe: {e}")
+        return None
+
+
+async def _vc_resolve_target(target: str, cid: int) -> tuple[int | None, str]:
+    """Резолвит target (@username или ID) в (uid, имя)."""
+    if not target:
+        return None, "?"
+    try:
+        if target.startswith("@"):
+            m = await bot.get_chat_member(cid, target)
+        else:
+            m = await bot.get_chat_member(cid, int(target))
+        return m.user.id, m.user.full_name
+    except Exception as e:
+        logging.warning(f"[VOICE] resolve {target}: {e}")
+        return None, target
+
+
+async def _vc_execute(parsed: dict, admin_uid: int, admin_name: str) -> str:
+    """Выполняет распознанную команду. Возвращает текст результата."""
+    action = parsed["action"]
+    target = parsed["target"]
+    arg    = parsed["arg"]
+
+    # Берём первый известный чат для команд без cid
+    # (в ЛС нет cid — берём из known_chats)
+    chats = list(known_chats.keys())
+    if not chats:
+        return "❌ Бот не добавлен ни в один чат"
+
+    if action == "status":
+        total_msgs  = sum(sum(v.values()) for v in chat_stats.values())
+        total_bans  = sum(len(v) for v in ban_list.values())
+        online_now  = len([c for c in chats])
+        return (f"📊 <b>Статус бота</b>\n\n"
+                f"💬 Чатов: {len(chats)}\n"
+                f"✉️ Сообщений: {total_msgs:,}\n"
+                f"🔨 Банов: {total_bans}\n"
+                f"⏰ Uptime: активен")
+
+    if action == "top":
+        cid = chats[0]
+        top = sorted(chat_stats[cid].items(), key=lambda x: x[1], reverse=True)[:5]
+        if not top:
+            return "📊 Статистики пока нет"
+        lines = [f"🏆 <b>Топ чата {known_chats.get(cid, cid)}</b>\n"]
+        for i, (uid, cnt) in enumerate(top, 1):
+            lines.append(f"{i}. <code>{uid}</code> — {cnt} сообщений")
+        return "\n".join(lines)
+
+    if action in ("ban", "mute", "unmute", "warn", "unban", "kick"):
+        if not target:
+            return f"❌ Укажи цель: «{action} ID 123456789»"
+        # Ищем цель в каждом чате
+        executed = []
+        for cid in chats:
+            uid, name = await _vc_resolve_target(target, cid)
+            if not uid:
+                continue
+            try:
+                if action == "ban":
+                    await bot.ban_chat_member(cid, uid)
+                    ban_list[cid][uid] = {"name": name, "reason": "Голосовая команда", "by": admin_name}
+                    save_data()
+                    add_mod_history(cid, uid, "🔨 Бан", "голосовая команда", admin_name)
+                    executed.append(f"🔨 Забанен {name} в {known_chats.get(cid, cid)}")
+
+                elif action == "mute":
+                    mins = 60
+                    if arg.endswith("m"): mins = int(arg[:-1])
+                    elif arg.endswith("h"): mins = int(arg[:-1]) * 60
+                    elif arg.endswith("d"): mins = int(arg[:-1]) * 1440
+                    await bot.restrict_chat_member(cid, uid,
+                        ChatPermissions(can_send_messages=False),
+                        until_date=timedelta(minutes=mins))
+                    add_mod_history(cid, uid, f"🔇 Мут {mins}м", "голосовая команда", admin_name)
+                    executed.append(f"🔇 Замучен {name} на {mins}мин в {known_chats.get(cid, cid)}")
+
+                elif action == "unmute":
+                    await bot.restrict_chat_member(cid, uid,
+                        ChatPermissions(can_send_messages=True,
+                            can_send_media_messages=True, can_send_polls=True,
+                            can_send_other_messages=True, can_add_web_page_previews=True))
+                    executed.append(f"🔊 Размучен {name} в {known_chats.get(cid, cid)}")
+
+                elif action == "warn":
+                    warnings[cid][uid] += 1; save_data()
+                    add_mod_history(cid, uid, "⚡ Варн", "голосовая команда", admin_name)
+                    executed.append(f"⚡ Варн {name} ({warnings[cid][uid]}) в {known_chats.get(cid, cid)}")
+
+                elif action == "unban":
+                    await bot.unban_chat_member(cid, uid, only_if_banned=True)
+                    executed.append(f"🕊 Разбанен {name} в {known_chats.get(cid, cid)}")
+
+                elif action == "kick":
+                    await bot.ban_chat_member(cid, uid)
+                    await bot.unban_chat_member(cid, uid)
+                    add_mod_history(cid, uid, "👟 Кик", "голосовая команда", admin_name)
+                    executed.append(f"👟 Кикнут {name} из {known_chats.get(cid, cid)}")
+
+            except Exception as e:
+                executed.append(f"❌ {known_chats.get(cid, cid)}: {e}")
+
+        return "\n".join(executed) if executed else f"❌ Пользователь {target} не найден ни в одном чате"
+
+    if action == "lockdown":
+        locked = 0
+        for cid in chats:
+            try:
+                await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
+                await bot.send_message(cid,
+                    f"🔒 <b>Чат заблокирован</b> голосовой командой администратора.",
+                    parse_mode="HTML")
+                locked += 1
+            except: pass
+        return f"🔒 Локдаун применён к {locked} чатам"
+
+    if action == "unlock":
+        unlocked = 0
+        for cid in chats:
+            try:
+                await bot.set_chat_permissions(cid, ChatPermissions(
+                    can_send_messages=True, can_send_media_messages=True,
+                    can_send_polls=True, can_send_other_messages=True,
+                    can_add_web_page_previews=True))
+                unlocked += 1
+            except: pass
+        return f"🔓 Разблокировано {unlocked} чатов"
+
+    if action == "announce":
+        if not arg:
+            return "❌ Укажи текст объявления"
+        sent = 0
+        for cid in chats:
+            try:
+                await bot.send_message(cid,
+                    f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{arg}\n\n— {admin_name}",
+                    parse_mode="HTML")
+                sent += 1
+                await asyncio.sleep(0.05)
+            except: pass
+        return f"📢 Объявление отправлено в {sent} чатов"
+
+    return f"❓ Команда не распознана: {parsed['raw']}"
+
+
+@dp.message(F.voice, F.chat.type == "private")
+async def handle_voice_command(message: Message):
+    """Голосовые команды для администраторов в ЛС."""
+    uid = message.from_user.id
+    if uid not in ADMIN_IDS:
+        await message.answer("🚫 Голосовые команды только для администраторов.")
+        return
+
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key:
+        await message.answer(
+            "⚠️ <b>OPENAI_API_KEY не задан</b>\n\n"
+            "Добавь в переменные окружения Render:\n"
+            "<code>OPENAI_API_KEY=sk-...</code>",
+            parse_mode="HTML")
+        return
+
+    # Показываем что обрабатываем
+    processing = await message.answer("🎙 Распознаю команду...")
+
+    # Скачиваем файл
+    import tempfile, os as _os
+    voice = message.voice
+    try:
+        file = await bot.get_file(voice.file_id)
+        tmp  = tempfile.NamedTemporaryFile(suffix=".ogg", delete=False)
+        tmp_path = tmp.name
+        tmp.close()
+        await bot.download_file(file.file_path, destination=tmp_path)
+    except Exception as e:
+        await processing.edit_text(f"❌ Ошибка загрузки файла: {e}")
+        return
+
+    # Транскрипция
+    try:
+        transcript = await _vc_transcribe(tmp_path)
+    finally:
+        try: _os.unlink(tmp_path)
+        except: pass
+
+    if not transcript:
+        await processing.edit_text(
+            "❌ Не удалось распознать речь.\n"
+            "Говори чётко и близко к микрофону.")
+        return
+
+    # Парсим команду
+    parsed = _vc_parse(transcript)
+
+    if not parsed["action"]:
+        await processing.edit_text(
+            f"🎙 Распознано: <i>{transcript}</i>\n\n"
+            f"❓ Команда не распознана.\n\n"
+            f"<b>Доступные команды:</b>\n"
+            f"• забань / мут / варн / кик [ID]\n"
+            f"• размути / разбань [ID]\n"
+            f"• замути [ID] на 30 минут\n"
+            f"• заблокируй чат / разблокируй чат\n"
+            f"• объяви [текст]\n"
+            f"• статус / топ активных",
+            parse_mode="HTML")
+        return
+
+    # Выполняем
+    admin_name = message.from_user.full_name
+    result = await _vc_execute(parsed, uid, admin_name)
+
+    # Красивый ответ
+    action_icons = {
+        "ban": "🔨", "mute": "🔇", "unmute": "🔊",
+        "warn": "⚡", "unban": "🕊", "kick": "👟",
+        "lockdown": "🔒", "unlock": "🔓",
+        "announce": "📢", "status": "📊", "top": "🏆",
+    }
+    icon = action_icons.get(parsed["action"], "✅")
+
+    await processing.edit_text(
+        f"🎙 <b>Распознано:</b> <i>{transcript}</i>\n"
+        f"⚡ <b>Команда:</b> {icon} {parsed['action']}"
+        + (f" → {parsed['target']}" if parsed['target'] else "")
+        + (f" ({parsed['arg']})"    if parsed['arg']    else "")
+        + f"\n\n{result}",
+        parse_mode="HTML")
+
+    logging.info(f"[VOICE] {admin_name}({uid}): {transcript} → {parsed['action']}")
+
+
+@dp.message(Command("voicehelp"), F.chat.type == "private")
+async def cmd_voicehelp(message: Message):
+    """Справка по голосовым командам."""
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    await message.answer(
+        "🎙 <b>Голосовые команды</b>\n\n"
+        "Отправь мне войс-сообщение — я выполню команду.\n\n"
+        "<b>Примеры фраз:</b>\n"
+        "• «Забань пользователя 123456789»\n"
+        "• «Замути @username на 30 минут»\n"
+        "• «Выдай варн ID 987654321»\n"
+        "• «Разбань 123456»\n"
+        "• «Заблокируй чат»\n"
+        "• «Объяви завтра плановые работы»\n"
+        "• «Статус» / «Топ активных»\n\n"
+        "⚙️ Требуется: <code>OPENAI_API_KEY</code> в переменных окружения.",
+        parse_mode="HTML")
 
 
 async def main():
