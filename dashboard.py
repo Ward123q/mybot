@@ -1297,6 +1297,7 @@ def navbar(sess: dict | None = None, active: str = "") -> str:
         {link("msg_search",   "/dashboard/msg_search",   "🔍", "Поиск сообщений", "view_deleted")}
         {link("wiki",         "/dashboard/wiki",         "📚", "Wiki команды",     "view_overview")}
         {link("incidents",    "/dashboard/incidents",    "🚨", "Инциденты",        "view_overview")}
+        {link("economy",       "/dashboard/economy",       "💰", "Экономика",        "view_overview")}
         {link("command_center","/dashboard/command_center","🎮", "Command Center",  "view_overview")}
         {link("automations",  "/dashboard/automations",  "⚡", "Автоправила",      "view_overview")}
         {link("reports_cfg",  "/dashboard/reports_cfg",  "📊", "Авто-отчёты",      "view_overview")}
@@ -1671,7 +1672,7 @@ async def handle_overview(request: web.Request):
         color = "var(--danger)" if "Бан" in act else ("var(--warn)" if "Мут" in act or "Варн" in act else "var(--text2)")
         act_rows_html += f"""
         <tr>
-          <td style="color:var(--text2);font-size:11px;font-family:'Space Mono',monospace;">{dt}</td>
+          <td style="color:var(--text2);font-size:11px;font-family:monospace;">{dt}</td>
           <td style="color:{color};font-weight:600;">{act}</td>
           <td style="color:var(--text2);">{r.get('reason','—')[:30]}</td>
           <td>{by}</td>
@@ -4804,7 +4805,7 @@ WIKI_MARKDOWN_CSS = """
 .md-body ul, .md-body ol { margin:0 0 12px; padding-left:20px; }
 .md-body li { margin-bottom:4px; }
 .md-body blockquote { border-left:3px solid var(--accent); margin:12px 0; padding:8px 14px; background:var(--accent-glow); border-radius:0 8px 8px 0; color:var(--text2); }
-.md-body code { background:var(--bg3); padding:2px 6px; border-radius:4px; font-family:'Space Mono',monospace; font-size:12px; color:var(--accent); }
+.md-body code { background:var(--bg3); padding:2px 6px; border-radius:4px; font-family:monospace; font-size:12px; color:var(--accent); }
 .md-body pre  { background:var(--bg3); padding:14px; border-radius:10px; overflow-x:auto; margin:0 0 12px; }
 .md-body pre code { background:none; padding:0; color:var(--text3); }
 .md-body table { width:100%; border-collapse:collapse; margin:0 0 12px; font-size:13px; }
@@ -5096,7 +5097,7 @@ async def handle_wiki_edit(request: web.Request):
               <textarea class="form-control" name="body" id="wikiBody" rows="22"
                 placeholder="# Заголовок&#10;&#10;Текст страницы..."
                 oninput="updatePreview(this.value)"
-                style="font-family:'Space Mono',monospace;font-size:13px;resize:vertical;">{f_body}</textarea>
+                style="font-family:monospace;font-size:13px;resize:vertical;">{f_body}</textarea>
               <div style="font-size:11px;color:var(--text2);margin-top:4px;">
                 Поддерживается Markdown: **жирный**, *курсив*, `код`, ## заголовки, - списки, > цитаты, | таблицы
               </div>
@@ -6981,9 +6982,6 @@ import asyncio as _asyncio_bg
 _auto_reports_task = None
 
 def _start_background_tasks():
-    _owner_init_tables()
-    import asyncio as _aio
-    _aio.get_event_loop().create_task(_backup_loop()) if _aio.get_event_loop().is_running() else None
     """Вызывается из start_dashboard для запуска фоновых задач."""
     global _auto_reports_task
     try:
@@ -8944,7 +8942,7 @@ async def handle_owner_panel(request: web.Request):
     <div class="container">
       <div class="page-title">
         👑 Панель владельца
-        <span style="font-size:12px;color:var(--ylw);font-family:'Space Mono',monospace;
+        <span style="font-size:12px;color:var(--ylw);font-family:monospace;
           background:rgba(251,191,36,.1);padding:3px 10px;border-radius:20px;margin-left:8px;">
           РАНГ {OWNER_RANK} · ТОЛЬКО ДЛЯ ВАС
         </span>
@@ -8994,15 +8992,15 @@ async def handle_owner_panel(request: web.Request):
             <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
               <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;">
                 <span>Активных сессий дашборда</span>
-                <span style="font-family:'Space Mono',monospace;color:var(--acc);">{sessions_n}</span>
+                <span style="font-family:monospace;color:var(--acc);">{sessions_n}</span>
               </div>
               <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;">
                 <span>Пользователей онлайн</span>
-                <span style="font-family:'Space Mono',monospace;color:var(--acc);">{online_n}</span>
+                <span style="font-family:monospace;color:var(--acc);">{online_n}</span>
               </div>
               <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;">
                 <span>В глобальном бан-листе</span>
-                <span style="font-family:'Space Mono',monospace;color:var(--red);">{len(netban_list)}</span>
+                <span style="font-family:monospace;color:var(--red);">{len(netban_list)}</span>
               </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -9031,7 +9029,7 @@ async def handle_owner_panel(request: web.Request):
               <a href="/dashboard/settings" class="btn btn-ghost btn-sm">🔧 Настройки</a>
             </div>
             <div style="font-size:11px;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Токен дашборда</div>
-            <div style="font-family:'Space Mono',monospace;font-size:12px;
+            <div style="font-family:monospace;font-size:12px;
               background:var(--bg3);padding:8px 12px;border-radius:8px;
               display:flex;align-items:center;justify-content:space-between;">
               <span id="tok-val">••••••••••••••••</span>
@@ -9207,6 +9205,386 @@ async def handle_owner_panel(request: web.Request):
 
 handle_owner_panel = require_auth("view_overview")(handle_owner_panel)
 
+
+# ══════════════════════════════════════════════════════════════════
+#  💰 ДАШБОРД ЭКОНОМИКИ
+# ══════════════════════════════════════════════════════════════════
+async def handle_economy_dashboard(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    result_msg = ""
+    result_ok  = True
+
+    if request.method == "POST":
+        data   = await request.post()
+        action = data.get("action","")
+        uid_s  = sess.get("uid",0) if sess else 0
+
+        if action == "give_coins":
+            try:
+                target_uid = int(data.get("target_uid",0))
+                amount     = int(data.get("amount",0))
+                chat_id    = int(data.get("chat_id",0))
+                # Меняем через shared если возможно, иначе через БД
+                conn = db.get_conn()
+                conn.execute("""INSERT INTO reputation (cid,uid,score)
+                    VALUES (?,?,?) ON CONFLICT(cid,uid)
+                    DO UPDATE SET score=score+?""",
+                    (chat_id, target_uid, amount, amount))
+                conn.commit(); conn.close()
+                _log_admin_db(uid_s, "ECONOMY_GIVE",
+                              f"uid={target_uid} cid={chat_id} amount={amount}")
+                result_msg = f"✅ Выдано {amount:+d} реп. пользователю {target_uid}"
+                if _bot and amount != 0:
+                    try:
+                        action_txt = f"выдал +{amount}" if amount > 0 else f"снял {amount}"
+                        await _bot.send_message(target_uid,
+                            f"💰 Администратор {action_txt} репутации.",
+                            parse_mode="HTML")
+                    except: pass
+            except Exception as e:
+                result_msg = f"❌ {e}"; result_ok = False
+
+        elif action == "reset_economy":
+            try:
+                chat_id = int(data.get("reset_cid",0))
+                conn = db.get_conn()
+                conn.execute("DELETE FROM reputation WHERE cid=?", (chat_id,))
+                conn.commit(); conn.close()
+                _log_admin_db(uid_s, "ECONOMY_RESET", str(chat_id))
+                result_msg = f"✅ Экономика чата {chat_id} сброшена"
+            except Exception as e:
+                result_msg = f"❌ {e}"; result_ok = False
+
+        raise web.HTTPFound("/dashboard/economy")
+
+    # ── Данные ──────────────────────────────────────────
+    chats = []
+    try: chats = [dict(r) for r in await db.get_all_chats()]
+    except: pass
+    chat_id_filter = int(request.rel_url.query.get("cid", 0) or 0)
+    if not chat_id_filter and chats:
+        chat_id_filter = chats[0]["cid"]
+
+    # Топ богачей
+    top_rich = []
+    try:
+        conn = db.get_conn()
+        q = "SELECT cid,uid,score FROM reputation WHERE score>0"
+        if chat_id_filter:
+            q += f" AND cid={chat_id_filter}"
+        q += " ORDER BY score DESC LIMIT 10"
+        top_rich = [dict(r) for r in conn.execute(q).fetchall()]
+        conn.close()
+    except: pass
+
+    # История покупок
+    purchases_7  = []
+    purchases_30 = []
+    pop_items    = []
+    try:
+        conn = db.get_conn()
+        conn.execute("""CREATE TABLE IF NOT EXISTS shop_purchases
+            (id INTEGER PRIMARY KEY AUTOINCREMENT,
+             cid INTEGER, uid INTEGER, item_name TEXT, price INTEGER,
+             purchased_at TEXT DEFAULT (datetime('now')))""")
+        purchases_7 = [dict(r) for r in conn.execute(
+            "SELECT * FROM shop_purchases WHERE purchased_at >= datetime('now','-7 days')"
+            + (f" AND cid={chat_id_filter}" if chat_id_filter else "")
+            + " ORDER BY purchased_at DESC LIMIT 50").fetchall()]
+        purchases_30 = conn.execute(
+            "SELECT COUNT(*) FROM shop_purchases WHERE purchased_at >= datetime('now','-30 days')"
+            + (f" AND cid={chat_id_filter}" if chat_id_filter else "")).fetchone()[0]
+        pop_items = [dict(r) for r in conn.execute(
+            "SELECT item_name, COUNT(*) as cnt, SUM(price) as total_spent "
+            "FROM shop_purchases "
+            + (f"WHERE cid={chat_id_filter} " if chat_id_filter else "")
+            + "GROUP BY item_name ORDER BY cnt DESC LIMIT 10").fetchall()]
+        conn.close()
+    except: pass
+
+    # График движения монет (по дням за 30 дней)
+    chart_labels = []
+    chart_earned = []
+    chart_spent  = []
+    try:
+        conn = db.get_conn()
+        conn.execute("""CREATE TABLE IF NOT EXISTS rep_log
+            (uid INTEGER, cid INTEGER, delta INTEGER,
+             reason TEXT, created_at TEXT DEFAULT (datetime('now')))""")
+        for i in range(29, -1, -1):
+            import datetime as _dt
+            day = (_dt.datetime.now() - _dt.timedelta(days=i)).strftime("%Y-%m-%d")
+            chart_labels.append(day[5:])  # MM-DD
+            # Заработано (положительные)
+            earned = conn.execute(
+                "SELECT COALESCE(SUM(delta),0) FROM rep_log "
+                "WHERE delta>0 AND date(created_at)=?"
+                + (f" AND cid={chat_id_filter}" if chat_id_filter else ""),
+                (day,)).fetchone()[0] or 0
+            # Потрачено (покупки)
+            spent = conn.execute(
+                "SELECT COALESCE(SUM(price),0) FROM shop_purchases "
+                "WHERE date(purchased_at)=?"
+                + (f" AND cid={chat_id_filter}" if chat_id_filter else ""),
+                (day,)).fetchone()[0] or 0
+            chart_earned.append(earned)
+            chart_spent.append(spent)
+        conn.close()
+    except:
+        chart_labels = [f"День {i}" for i in range(1,31)]
+        chart_earned = [0]*30
+        chart_spent  = [0]*30
+
+    # Общая статистика
+    total_rep = 0
+    total_purchases = len(purchases_7)
+    try:
+        conn = db.get_conn()
+        total_rep = conn.execute(
+            "SELECT COALESCE(SUM(score),0) FROM reputation"
+            + (f" WHERE cid={chat_id_filter}" if chat_id_filter else "")).fetchone()[0] or 0
+        conn.close()
+    except: pass
+
+    # HTML
+    chat_opts = "".join(
+        f'<option value="{c["cid"]}" {"selected" if c["cid"]==chat_id_filter else ""}>'
+        f'{c.get("title","") or c["cid"]}</option>'
+        for c in chats)
+
+    result_html = ""
+    if result_msg:
+        col = "var(--acc)" if result_ok else "var(--red)"
+        result_html = (f'<div style="background:rgba(0,229,160,.08);border-left:3px solid {col};'
+                       f'padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:20px;">'
+                       f'{result_msg}</div>')
+
+    # Топ богачей HTML
+    rich_html = ""
+    medals = ["🥇","🥈","🥉"] + [""] * 20
+    for i, r in enumerate(top_rich):
+        rich_html += (
+            f'<tr><td style="font-size:15px;">{medals[i] or str(i+1)}</td>'
+            f'<td><code>{r["uid"]}</code></td>'
+            f'<td style="font-family:monospace;color:var(--acc);font-weight:700;">'
+            f'{r["score"]:+d}</td>'
+            f'<td><form method="POST" style="display:inline;gap:4px;display:flex;">'
+            f'<input type="hidden" name="action" value="give_coins">'
+            f'<input type="hidden" name="target_uid" value="{r["uid"]}">'
+            f'<input type="hidden" name="chat_id" value="{r["cid"]}">'
+            f'<input class="form-control" name="amount" type="number" value="100" '
+            f'style="width:80px;padding:4px 8px;font-size:11px;">'
+            f'<button class="btn btn-xs btn-success" type="submit">✅</button>'
+            f'</form></td></tr>'
+        )
+    if not rich_html:
+        rich_html = '<tr><td colspan="4" style="text-align:center;color:var(--t2);padding:20px;">Нет данных</td></tr>'
+
+    # Топ товаров HTML
+    items_html = ""
+    for item in pop_items:
+        pct = int(item["cnt"] / max(total_purchases, 1) * 100)
+        items_html += (
+            f'<tr><td style="font-weight:500;">{item["item_name"]}</td>'
+            f'<td style="font-family:monospace;">{item["cnt"]}</td>'
+            f'<td style="font-family:monospace;color:var(--red);">'
+            f'{item["total_spent"] or 0}</td>'
+            f'<td><div style="height:6px;background:var(--bg4);border-radius:3px;width:100px;">'
+            f'<div style="height:6px;width:{pct}%;background:var(--acc);border-radius:3px;"></div>'
+            f'</div></td></tr>'
+        )
+    if not items_html:
+        items_html = '<tr><td colspan="4" style="text-align:center;color:var(--t2);padding:20px;">Покупок нет</td></tr>'
+
+    # Последние покупки HTML
+    purch_html = ""
+    for p in purchases_7[:20]:
+        purch_html += (
+            f'<tr><td style="font-size:11px;color:var(--t2);">{str(p.get("purchased_at",""))[:16]}</td>'
+            f'<td><code>{p.get("uid","?")}</code></td>'
+            f'<td>{p.get("item_name","?")}</td>'
+            f'<td style="color:var(--red);font-family:monospace;">'
+            f'-{p.get("price",0)}</td></tr>'
+        )
+    if not purch_html:
+        purch_html = '<tr><td colspan="4" style="text-align:center;color:var(--t2);padding:20px;">Покупок нет</td></tr>'
+
+    import json as _json
+    chart_labels_j = _json.dumps(chart_labels)
+    chart_earned_j = _json.dumps(chart_earned)
+    chart_spent_j  = _json.dumps(chart_spent)
+
+    body = navbar(sess, "economy") + f"""
+    <div class="container">
+      <div class="page-title">💰 Экономика</div>
+
+      {result_html}
+
+      <!-- Фильтр чата -->
+      <div style="margin-bottom:20px;display:flex;gap:10px;align-items:center;">
+        <select class="form-control" style="max-width:280px;"
+          onchange="window.location='/dashboard/economy?cid='+this.value">
+          <option value="0">Все чаты</option>
+          {chat_opts}
+        </select>
+      </div>
+
+      <!-- Статы -->
+      <div class="cards" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="card" style="--c:var(--acc);">
+          <span class="card-icon">💰</span>
+          <div class="card-value">{total_rep:,}</div>
+          <div class="card-label">Всего репутации</div>
+        </div>
+        <div class="card" style="--c:var(--blue);">
+          <span class="card-icon">🛒</span>
+          <div class="card-value">{total_purchases}</div>
+          <div class="card-label">Покупок за 7 дней</div>
+        </div>
+        <div class="card" style="--c:var(--pur);">
+          <span class="card-icon">📦</span>
+          <div class="card-value">{purchases_30}</div>
+          <div class="card-label">Покупок за 30 дней</div>
+        </div>
+        <div class="card" style="--c:var(--ylw);">
+          <span class="card-icon">👑</span>
+          <div class="card-value">{len(top_rich)}</div>
+          <div class="card-label">Участников с реп.</div>
+        </div>
+      </div>
+
+      <!-- График -->
+      <div class="section" style="margin-bottom:16px;">
+        <div class="section-header">📈 Движение репутации (30 дней)</div>
+        <div style="padding:16px;height:220px;">
+          <canvas id="ecoChart"></canvas>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Топ богачей -->
+        <div class="section">
+          <div class="section-header">🏆 Топ-10 богачей</div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>#</th><th>ID</th><th>Репутация</th><th>Изменить</th></tr></thead>
+              <tbody>{rich_html}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Топ товаров -->
+        <div class="section">
+          <div class="section-header">🛍 Популярные товары</div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Товар</th><th>Продаж</th><th>Выручка</th><th>%</th></tr></thead>
+              <tbody>{items_html}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Управление экономикой -->
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-header">⚙️ Выдать / снять репутацию</div>
+          <div class="section-body">
+            <form method="POST">
+              <input type="hidden" name="action" value="give_coins">
+              <div class="form-group">
+                <label>Telegram ID пользователя</label>
+                <input class="form-control" name="target_uid" type="number" placeholder="123456789" required>
+              </div>
+              <div class="form-group">
+                <label>Чат</label>
+                <select class="form-control" name="chat_id">
+                  {chat_opts}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Количество (минус = снять)</label>
+                <input class="form-control" name="amount" type="number" value="100" placeholder="+100 или -50">
+              </div>
+              <button class="btn btn-primary" type="submit" style="width:100%;">💰 Применить</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">🗑 Сброс экономики чата</div>
+          <div class="section-body">
+            <p style="font-size:13px;color:var(--t2);margin-bottom:16px;">
+              Сбрасывает всю репутацию участников выбранного чата до нуля.
+              <strong style="color:var(--red);">Действие необратимо!</strong>
+            </p>
+            <form method="POST" onsubmit="return confirm('Сбросить экономику? Это удалит ВСЮ репутацию чата!')">
+              <input type="hidden" name="action" value="reset_economy">
+              <div class="form-group">
+                <label>Выбери чат</label>
+                <select class="form-control" name="reset_cid">
+                  {chat_opts}
+                </select>
+              </div>
+              <button class="btn btn-danger" type="submit" style="width:100%;">🗑 Сбросить экономику</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- История покупок -->
+      <div class="section">
+        <div class="section-header">📋 История покупок (последние 7 дней)</div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Дата</th><th>Пользователь</th><th>Товар</th><th>Цена</th></tr></thead>
+            <tbody>{purch_html}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    (function(){{
+      var ctx = document.getElementById('ecoChart').getContext('2d');
+      new Chart(ctx, {{
+        type: 'line',
+        data: {{
+          labels: {chart_labels_j},
+          datasets: [
+            {{
+              label: 'Заработано',
+              data: {chart_earned_j},
+              borderColor: '#00e5a0',
+              backgroundColor: 'rgba(0,229,160,.08)',
+              fill: true, tension: 0.4, pointRadius: 2,
+            }},
+            {{
+              label: 'Потрачено',
+              data: {chart_spent_j},
+              borderColor: '#f87171',
+              backgroundColor: 'rgba(248,113,113,.08)',
+              fill: true, tension: 0.4, pointRadius: 2,
+            }}
+          ]
+        }},
+        options: {{
+          responsive: true, maintainAspectRatio: false,
+          plugins: {{ legend: {{ labels: {{ color: '#7b8cad', font: {{ size: 11 }} }} }} }},
+          scales: {{
+            x: {{ ticks: {{ color: '#7b8cad', font: {{ size: 10 }}, maxTicksLimit: 10 }} }},
+            y: {{ ticks: {{ color: '#7b8cad', font: {{ size: 10 }} }} }}
+          }}
+        }}
+      }});
+    }})();
+    </script>
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+handle_economy_dashboard = require_auth("view_overview")(handle_economy_dashboard)
+
 async def start_dashboard():
     _init_admin_db()
     app = web.Application()
@@ -9329,11 +9707,23 @@ async def start_dashboard():
     app.router.add_get("/dashboard/command_center",    handle_command_center)
     app.router.add_post("/dashboard/command_center",   handle_command_center)
     # ── Owner Panel ───────────────────────────────────────
+    app.router.add_get("/dashboard/economy", handle_economy_dashboard)
+    app.router.add_post("/dashboard/economy", handle_economy_dashboard)
     app.router.add_get("/dashboard/owner",  handle_owner_panel)
     app.router.add_post("/dashboard/owner", handle_owner_panel)
 
     # Запускаем фоновые задачи
     _start_background_tasks()
+
+    # Инициализация таблиц owner features
+    try:
+        _owner_init_tables()
+    except Exception as _oe:
+        log.warning(f"owner_init: {_oe}")
+
+    # Запуск авто-бэкапа
+    import asyncio as _aio_bk
+    _aio_bk.get_event_loop().create_task(_backup_loop())
 
     port = int(os.getenv("PORT", 8080))
     runner = web.AppRunner(app)

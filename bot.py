@@ -1349,7 +1349,18 @@ class StatsMiddleware(BaseMiddleware):
                 if not await is_admin_by_id(cid, uid):
                     flooded = await self._check_flood(uid, cid, event.from_user.full_name)
                     if flooded:
-                        return  # не обрабатываем сообщение если флуд
+                        return
+            except: pass
+            # Антиспам v2 — расширенная проверка
+            try:
+                if event.text and not await is_admin_by_id(cid, uid):
+                    cfg_as = cs.get_settings(cid)
+                    if cfg_as.get("antispam_enabled", True):
+                        is_spam, reason = _is_spam_text(
+                            event.text, uid, cid)
+                        if is_spam:
+                            await _handle_spam_v2(event, reason)
+                            return
             except: pass
             # Трекинг для уведомлений
             try:
@@ -1607,6 +1618,14 @@ async def on_new_member(message: Message):
                 except: pass
             except: pass
             continue
+
+        # 🛡 Антирейд
+        try:
+            raid_active = await _check_raid(cid, member.id, member.full_name)
+            if raid_active:
+                continue
+        except Exception:
+            pass
 
         # Приветствие из настроек
         if chat_cfg.get("welcome_enabled", True):
@@ -6716,12 +6735,6 @@ async def cmd_start_ref(message: Message, command: CommandObject):
         else:
             chat_list = [(r["cid"], r["title"]) for r in chats]
         await tkt.cmd_ticket(message, bot, chat_list)
-        # Push-уведомление модераторам
-        try:
-            await dashboard.push_notify("new_ticket",
-                f"🎫 <b>Новый тикет</b>\n"
-                f"От: {message.from_user.full_name} (<code>{message.from_user.id}</code>)")
-        except Exception: pass
         return
 
     if not command.args or not command.args.startswith("ref_"): return
@@ -10615,6 +10628,611 @@ async def cmd_delnote_mod(message: Message, command: CommandObject):
         await reply_auto_delete(message, "❌ Ошибка")
     conn.close()
 
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🛡 АНТИРЕЙД ЗАЩИТА v2
+# ══════════════════════════════════════════════════════════════════
+_join_timestamps: dict = {}   # {cid: [timestamps]}
+_raid_mode:       dict = {}   # {cid: expire_ts}
+_raid_muted:      dict = {}   # {cid: [uid]} — замученные в рейде
+
+RAID_THRESHOLD   = 5     # вступлений за...
+RAID_WINDOW      = 60    # ...секунд
+RAID_MUTE_BACK   = 300   # мутим вступивших за последние N сек
+RAID_AUTO_OFF    = 600   # авто-снятие через N сек
+RAID_SLOWMODE    = 30    # slowmode при рейде
+
+async def _check_raid(cid: int, uid: int, name: str):
+    """Вызывается при каждом вступлении. Возвращает True если рейд активирован."""
+    now = time()
+    if cid not in _join_timestamps:
+        _join_timestamps[cid] = []
+    # Чистим старые
+    _join_timestamps[cid] = [t for t in _join_timestamps[cid] if now - t < RAID_WINDOW]
+    _join_timestamps[cid].append(now)
+
+    # Уже в рейд-режиме — просто мутим нового
+    if cid in _raid_mode and _raid_mode[cid] > now:
+        try:
+            await bot.restrict_chat_member(cid, uid,
+                ChatPermissions(can_send_messages=False))
+            _raid_muted.setdefault(cid, []).append(uid)
+        except: pass
+        return True
+
+    # Проверяем порог
+    if len(_join_timestamps[cid]) >= RAID_THRESHOLD:
+        await _activate_raid(cid)
+        return True
+    return False
+
+async def _activate_raid(cid: int):
+    """Активирует рейд-режим."""
+    now = time()
+    _raid_mode[cid] = now + RAID_AUTO_OFF
+    _raid_muted[cid] = []
+
+    # Мутим всех кто вступил за последние RAID_MUTE_BACK секунд
+    muted = 0
+    for uid_ts in _join_timestamps.get(cid, []):
+        pass  # timestamps без uid — только счётчик
+
+    # Включаем slowmode
+    try:
+        bot_token = os.getenv("BOT_TOKEN","")
+        import aiohttp as _ah
+        async with _ah.ClientSession() as _s:
+            await _s.post(
+                f"https://api.telegram.org/bot{bot_token}/setChatSlowModeDelay",
+                json={"chat_id": cid, "slow_mode_delay": RAID_SLOWMODE}
+            )
+    except: pass
+
+    # Уведомление в чат
+    try:
+        warn_msg = await bot.send_message(cid,
+            f"🚨 <b>АНТИРЕЙД АКТИВИРОВАН</b>\n\n"
+            f"Обнаружена массовая атака — зафиксировано {len(_join_timestamps.get(cid,[]))} "
+            f"вступлений за {RAID_WINDOW} секунд.\n\n"
+            f"🔒 Slowmode {RAID_SLOWMODE}с включён\n"
+            f"⏰ Режим снимется автоматически через {RAID_AUTO_OFF//60} мин.",
+            parse_mode="HTML")
+    except: pass
+
+    # Push модераторам
+    try:
+        import dashboard as _db
+        await _db.push_notify("new_alert",
+            f"🚨 <b>РЕЙД!</b> Чат <code>{cid}</code>\n"
+            f"Вступлений: {len(_join_timestamps.get(cid,[]))} за {RAID_WINDOW}с\n"
+            f"Антирейд активирован автоматически")
+    except: pass
+
+    add_mod_history(cid, 0, "🚨 Антирейд", f"{len(_join_timestamps.get(cid,[]))} вступлений за {RAID_WINDOW}с", "AutoMod")
+
+    # Авто-снятие
+    async def _raid_off_task():
+        await asyncio.sleep(RAID_AUTO_OFF)
+        if cid in _raid_mode:
+            del _raid_mode[cid]
+            try:
+                bot_token2 = os.getenv("BOT_TOKEN","")
+                import aiohttp as _ah2
+                async with _ah2.ClientSession() as _s2:
+                    await _s2.post(
+                        f"https://api.telegram.org/bot{bot_token2}/setChatSlowModeDelay",
+                        json={"chat_id": cid, "slow_mode_delay": 0}
+                    )
+            except: pass
+            try:
+                n = await bot.send_message(cid,
+                    "✅ <b>Антирейд снят</b> — режим вернулся в норму.",
+                    parse_mode="HTML")
+                await asyncio.sleep(30)
+                try: await n.delete()
+                except: pass
+            except: pass
+    asyncio.create_task(_raid_off_task())
+
+@dp.message(Command("raid"))
+async def cmd_raid(message: Message):
+    """Ручное управление рейд-режимом /raid on|off."""
+    if not await check_admin(message): return
+    cid  = message.chat.id
+    args = message.text.split()
+    mode = args[1].lower() if len(args) > 1 else ""
+    now  = time()
+
+    if mode == "on":
+        await _activate_raid(cid)
+        await reply_auto_delete(message, "🚨 Антирейд включён вручную")
+    elif mode == "off":
+        _raid_mode.pop(cid, None)
+        # Снимаем slowmode
+        try:
+            bt = os.getenv("BOT_TOKEN","")
+            import aiohttp as _ah3
+            async with _ah3.ClientSession() as _s3:
+                await _s3.post(
+                    f"https://api.telegram.org/bot{bt}/setChatSlowModeDelay",
+                    json={"chat_id": cid, "slow_mode_delay": 0}
+                )
+        except: pass
+        await reply_auto_delete(message, "✅ Антирейд отключён")
+    else:
+        status = "🚨 АКТИВЕН" if (cid in _raid_mode and _raid_mode[cid] > now) else "✅ Спокойно"
+        joins  = len([t for t in _join_timestamps.get(cid,[]) if now - t < RAID_WINDOW])
+        await reply_auto_delete(message,
+            f"🛡 <b>Антирейд</b>\n"
+            f"Статус: {status}\n"
+            f"Вступлений за {RAID_WINDOW}с: {joins}/{RAID_THRESHOLD}\n\n"
+            f"Управление: /raid on | /raid off",
+            parse_mode="HTML")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🛡 АНТИСПАМ V2 — расширенный
+# ══════════════════════════════════════════════════════════════════
+_spam_patterns: dict = {}   # {cid: {uid: {text_hash: count}}}
+_repeat_tracker: dict = {}  # {cid: {uid: [texts]}}
+_link_warn: dict = {}        # {cid: {uid: count}}
+
+def _is_spam_text(text: str, uid: int, cid: int) -> tuple[bool, str]:
+    """Расширенная проверка на спам. Возвращает (is_spam, reason)."""
+    if not text:
+        return False, ""
+
+    text_lower = text.lower().strip()
+
+    # 1. Повтор одного сообщения 3+ раза подряд
+    if cid not in _repeat_tracker: _repeat_tracker[cid] = {}
+    if uid not in _repeat_tracker[cid]: _repeat_tracker[cid][uid] = []
+    _repeat_tracker[cid][uid] = _repeat_tracker[cid][uid][-9:]  # последние 10
+    _repeat_tracker[cid][uid].append(text_lower[:100])
+    last3 = _repeat_tracker[cid][uid][-3:]
+    if len(last3) >= 3 and len(set(last3)) == 1:
+        return True, "повтор сообщения"
+
+    # 2. Слишком много заглавных (CAPS LOCK)
+    if len(text) > 10:
+        caps_ratio = sum(1 for c in text if c.isupper()) / max(len(text), 1)
+        cfg = cs.get_settings(cid)
+        caps_threshold = cfg.get("caps_percent", 70) / 100
+        if caps_ratio > caps_threshold and cfg.get("anticaps_enabled", False):
+            return True, f"CAPS ({int(caps_ratio*100)}%)"
+
+    # 3. Множество эмодзи (5+ подряд)
+    import re as _re
+    emoji_count = len(_re.findall(
+        r'[\U0001F300-\U0001F9FF\U00002600-\U000027FF]', text))
+    if emoji_count >= 8:
+        return True, f"спам эмодзи ({emoji_count} шт.)"
+
+    # 4. Ссылка + подозрительный текст
+    has_link = any(x in text_lower for x in ['http://', 'https://', 't.me/', '.com/', '.ru/'])
+    if has_link:
+        cfg = cs.get_settings(cid)
+        if cfg.get("antilink_enabled", False):
+            suspicious = any(x in text_lower for x in
+                ['заработ', 'крипт', 'invest', 'casino', 'bet', 'free', 'click', 'earn'])
+            if suspicious:
+                return True, "подозрительная ссылка"
+
+    # 5. Дубль сообщения от разных сторон (одинаковый текст от 3+ юзеров за 30 сек)
+    text_hash = hash(text_lower[:50])
+    now_ts = time()
+    if cid not in _spam_patterns: _spam_patterns[cid] = {}
+    if text_hash not in _spam_patterns[cid]:
+        _spam_patterns[cid][text_hash] = []
+    _spam_patterns[cid][text_hash] = [
+        (u, t) for u, t in _spam_patterns[cid][text_hash] if now_ts - t < 30
+    ]
+    _spam_patterns[cid][text_hash].append((uid, now_ts))
+    if len(set(u for u, _ in _spam_patterns[cid][text_hash])) >= 3:
+        return True, "координированный спам"
+
+    return False, ""
+
+async def _handle_spam_v2(message: Message, reason: str):
+    """Обрабатывает обнаруженный спам."""
+    cid  = message.chat.id
+    uid  = message.from_user.id
+    name = message.from_user.full_name
+    cfg  = cs.get_settings(cid)
+
+    try: await message.delete()
+    except: pass
+
+    action = cfg.get("flood_action", "warn")
+    if action == "mute":
+        mins = cfg.get("mute_duration", 10)
+        try:
+            await bot.restrict_chat_member(cid, uid,
+                ChatPermissions(can_send_messages=False),
+                until_date=timedelta(minutes=mins))
+        except: pass
+        try:
+            w = await bot.send_message(cid,
+                f"🔇 <a href='tg://user?id={uid}'>{name}</a> замучен на {mins}мин "
+                f"за спам ({reason})", parse_mode="HTML")
+            await asyncio.sleep(8); await w.delete()
+        except: pass
+    elif action == "warn":
+        warnings[cid][uid] = warnings[cid].get(uid, 0) + 1
+        save_data()
+        try:
+            w = await bot.send_message(cid,
+                f"⚡ <a href='tg://user?id={uid}'>{name}</a> получил варн за спам "
+                f"({reason}) — {warnings[cid][uid]}/{cfg.get('max_warns', 3)}",
+                parse_mode="HTML")
+            await asyncio.sleep(8); await w.delete()
+        except: pass
+    elif action == "kick":
+        try:
+            await bot.ban_chat_member(cid, uid)
+            await bot.unban_chat_member(cid, uid)
+            w = await bot.send_message(cid,
+                f"👟 <a href='tg://user?id={uid}'>{name}</a> кикнут за спам ({reason})",
+                parse_mode="HTML")
+            await asyncio.sleep(8); await w.delete()
+        except: pass
+    add_mod_history(cid, uid, f"🤖 Антиспам v2", reason, "AutoMod")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🛍 МАГАЗИН ЗА МОНЕТЫ v2 — расширенный каталог
+# ══════════════════════════════════════════════════════════════════
+# Таблица покупок для дашборда
+def _shop_log_purchase(cid: int, uid: int, item_name: str, price: int):
+    """Логирует покупку в SQLite."""
+    try:
+        conn = db_connect()
+        conn.execute("""CREATE TABLE IF NOT EXISTS shop_purchases
+            (id INTEGER PRIMARY KEY AUTOINCREMENT,
+             cid INTEGER, uid INTEGER, item_name TEXT, price INTEGER,
+             purchased_at TEXT DEFAULT (datetime('now')))""")
+        conn.execute("INSERT INTO shop_purchases (cid,uid,item_name,price) VALUES (?,?,?,?)",
+                     (cid, uid, item_name, price))
+        conn.commit(); conn.close()
+    except: pass
+
+# Расширенные товары (добавляем к SHOP_ITEMS бонусные категории)
+SHOP_ITEMS_V2 = {
+    # XP Бустеры
+    "xp_boost_1h": {"name": "⚡ XP x2 (1 час)",   "price": 200,  "type": "boost",  "duration": 3600},
+    "xp_boost_1d": {"name": "⚡ XP x2 (1 день)",  "price": 1000, "type": "boost",  "duration": 86400},
+    # Защита
+    "shield_warn":  {"name": "🛡 Защита от варна", "price": 500,  "type": "shield", "uses": 1},
+    "shield_mute":  {"name": "🛡 Защита от мута",  "price": 300,  "type": "shield", "uses": 1},
+    # Кастомные
+    "custom_color": {"name": "🎨 Цвет имени",      "price": 2000, "type": "custom"},
+    "anon_mode":    {"name": "🕵️ Аноним режим",    "price": 150,  "type": "perk",   "duration": 86400},
+    # Лотерея
+    "lottery_1":    {"name": "🎰 Лотерейный билет","price": 50,   "type": "lottery"},
+    "lottery_5":    {"name": "🎰 5 лотерейных билетов","price": 200,"type": "lottery"},
+}
+
+# Активные бусты: {cid: {uid: {boost_type: expire_ts}}}
+_active_boosts: dict = {}
+# Активные щиты: {cid: {uid: [shield_type]}}
+_active_shields: dict = {}
+
+def _has_boost(cid: int, uid: int, boost: str) -> bool:
+    now_t = time()
+    return (_active_boosts.get(cid, {}).get(uid, {}).get(boost, 0) > now_t)
+
+def _has_shield(cid: int, uid: int, shield: str) -> bool:
+    return shield in _active_shields.get(cid, {}).get(uid, [])
+
+def _use_shield(cid: int, uid: int, shield: str):
+    if cid in _active_shields and uid in _active_shields[cid]:
+        try: _active_shields[cid][uid].remove(shield)
+        except: pass
+
+@dp.message(Command("shopv2"))
+async def cmd_shop_v2(message: Message):
+    uid = message.from_user.id; cid = message.chat.id
+    rep = reputation[cid].get(uid, 0)
+    kb_rows = []
+    for item_id, item in list(SHOP_ITEMS_V2.items())[:8]:
+        can_afford = "✅" if rep >= item["price"] else "💸"
+        kb_rows.append([InlineKeyboardButton(
+            text=f"{can_afford} {item['name']} — {item['price']}⭐",
+            callback_data=f"shopv2:buy:{item_id}:{uid}:{cid}"
+        )])
+    kb_rows.append([InlineKeyboardButton(text="💰 Мой баланс", callback_data=f"shopv2:bal:{uid}:{cid}")])
+    await message.answer(
+        f"🏪 <b>Магазин v2</b>\n\n"
+        f"💰 Репутация: <b>{rep:+d}</b>\n"
+        f"Покупай бусты, защиту и привилегии!",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_rows))
+
+@dp.callback_query(F.data.startswith("shopv2:"))
+async def cb_shop_v2(call: CallbackQuery):
+    parts = call.data.split(":")
+    action = parts[1]
+    uid = call.from_user.id; cid = call.message.chat.id
+
+    if action == "bal":
+        rep = reputation[cid].get(uid, 0)
+        boosts_txt = ""
+        for bt, exp in _active_boosts.get(cid, {}).get(uid, {}).items():
+            if exp > time():
+                mins_left = int((exp - time()) / 60)
+                boosts_txt += f"\n  ⚡ {bt}: {mins_left} мин."
+        await call.answer(
+            f"💰 Баланс: {rep:+d} реп.{boosts_txt if boosts_txt else ' Бустов нет'}",
+            show_alert=True)
+        return
+
+    if action == "buy":
+        item_id = parts[2]
+        item = SHOP_ITEMS_V2.get(item_id)
+        if not item:
+            await call.answer("❌ Товар не найден"); return
+        rep = reputation[cid].get(uid, 0)
+        if rep < item["price"]:
+            await call.answer(f"💸 Нужно {item['price']} реп., у тебя {rep}", show_alert=True); return
+
+        # Списываем
+        reputation[cid][uid] = rep - item["price"]
+        save_data()
+        _shop_log_purchase(cid, uid, item["name"], item["price"])
+
+        # Применяем эффект
+        itype = item.get("type","")
+        if itype == "boost":
+            if cid not in _active_boosts: _active_boosts[cid] = {}
+            if uid not in _active_boosts[cid]: _active_boosts[cid][uid] = {}
+            _active_boosts[cid][uid]["xp_x2"] = time() + item.get("duration", 3600)
+            await call.answer(f"⚡ XP x2 активирован!", show_alert=True)
+        elif itype == "shield":
+            if cid not in _active_shields: _active_shields[cid] = {}
+            if uid not in _active_shields[cid]: _active_shields[cid][uid] = []
+            _active_shields[cid][uid].append(item_id)
+            await call.answer(f"🛡 Щит активирован!", show_alert=True)
+        elif itype == "lottery":
+            import random as _rnd
+            tickets = 5 if "5" in item_id else 1
+            won = 0
+            for _ in range(tickets):
+                if _rnd.random() < 0.3:  # 30% шанс
+                    prize = _rnd.randint(50, 500)
+                    reputation[cid][uid] = reputation[cid].get(uid, 0) + prize
+                    won += prize
+            save_data()
+            if won:
+                await call.answer(f"🎰 Повезло! Выиграл {won} реп.!", show_alert=True)
+            else:
+                await call.answer("🎰 Не повезло в этот раз...", show_alert=True)
+        else:
+            await call.answer(f"✅ {item['name']} куплено!", show_alert=True)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🎰 КАЗИНО И МИНИ-ИГРЫ
+# ══════════════════════════════════════════════════════════════════
+_game_cooldown: dict = {}   # {cid_uid: timestamp}
+GAME_COOLDOWN = 30  # секунд
+_jackpot: dict = {}  # {cid: накопленный джекпот}
+
+def _can_play(cid: int, uid: int) -> bool:
+    key = f"{cid}_{uid}"
+    return time() - _game_cooldown.get(key, 0) >= GAME_COOLDOWN
+
+def _set_cooldown(cid: int, uid: int):
+    _game_cooldown[f"{cid}_{uid}"] = time()
+
+@dp.message(Command("slots"))
+async def cmd_slots(message: Message):
+    """Игровой автомат."""
+    uid = message.from_user.id; cid = message.chat.id
+    if not cs.get_settings(cid).get("games_enabled", True):
+        await reply_auto_delete(message, "❌ Игры отключены"); return
+    if not _can_play(cid, uid):
+        secs = int(GAME_COOLDOWN - (time() - _game_cooldown.get(f"{cid}_{uid}", 0)))
+        await reply_auto_delete(message, f"⏳ Подожди {secs} сек."); return
+
+    args  = message.text.split()
+    try:   bet = max(10, min(int(args[1]), 500)) if len(args) > 1 else 50
+    except: bet = 50
+
+    rep = reputation[cid].get(uid, 0)
+    if rep < bet:
+        await reply_auto_delete(message, f"💸 Нужно {bet} реп., у тебя {rep}"); return
+
+    # Крутим слоты
+    import random as _rnd
+    emojis = ["🍒","🍋","🍊","🔔","⭐","💎","7️⃣"]
+    weights = [30, 25, 20, 12, 8, 4, 1]
+    s = _rnd.choices(emojis, weights=weights, k=3)
+
+    # Считаем выигрыш
+    if s[0] == s[1] == s[2]:
+        if s[0] == "7️⃣":
+            # ДЖЕКПОТ
+            jackpot_prize = _jackpot.get(cid, 0) + bet * 10
+            win = jackpot_prize
+            _jackpot[cid] = 0
+            result_txt = f"🎊 <b>ДЖЕКПОТ!!!</b> +{win} реп.!"
+        elif s[0] == "💎":
+            win = bet * 8
+            result_txt = f"💎 <b>Три бриллианта!</b> +{win} реп.!"
+        elif s[0] == "⭐":
+            win = bet * 5
+            result_txt = f"⭐ <b>Три звезды!</b> +{win} реп.!"
+        else:
+            win = bet * 3
+            result_txt = f"✨ <b>Три в ряд!</b> +{win} реп.!"
+    elif s[0] == s[1] or s[1] == s[2] or s[0] == s[2]:
+        win = int(bet * 1.5)
+        result_txt = f"👍 <b>Два одинаковых!</b> +{win} реп."
+    else:
+        win = 0
+        # 10% от ставки в джекпот
+        _jackpot[cid] = _jackpot.get(cid, 0) + int(bet * 0.1)
+        result_txt = f"😔 Не повезло. Джекпот теперь {_jackpot.get(cid,0)} реп."
+
+    reputation[cid][uid] = rep - bet + win
+    save_data()
+    _set_cooldown(cid, uid)
+    _shop_log_purchase(cid, uid, f"Слоты (ставка {bet})", -win + bet)
+
+    await reply_auto_delete(message,
+        f"🎰 | {' '.join(s)} |\n\n"
+        f"{result_txt}\n"
+        f"💰 Баланс: {reputation[cid][uid]:+d} реп.",
+        parse_mode="HTML")
+
+@dp.message(Command("roulette"))
+async def cmd_roulette(message: Message):
+    """Рулетка красное/чёрное."""
+    uid = message.from_user.id; cid = message.chat.id
+    if not cs.get_settings(cid).get("games_enabled", True): return
+    if not _can_play(cid, uid):
+        secs = int(GAME_COOLDOWN - (time() - _game_cooldown.get(f"{cid}_{uid}", 0)))
+        await reply_auto_delete(message, f"⏳ {secs} сек."); return
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🔴 Красное (x2)", callback_data=f"rlt:red:{uid}:{cid}:50"),
+        InlineKeyboardButton(text="⚫ Чёрное (x2)",  callback_data=f"rlt:blk:{uid}:{cid}:50"),
+        InlineKeyboardButton(text="🟢 Зеро (x14)",  callback_data=f"rlt:grn:{uid}:{cid}:50"),
+    ]])
+    rep = reputation[cid].get(uid, 0)
+    await message.answer(
+        f"🎡 <b>Рулетка</b>\nСтавка: 50 реп. | Баланс: {rep:+d}\n\nВыбери цвет:",
+        parse_mode="HTML", reply_markup=kb)
+
+@dp.callback_query(F.data.startswith("rlt:"))
+async def cb_roulette(call: CallbackQuery):
+    parts  = call.data.split(":")
+    choice = parts[1]   # red/blk/grn
+    uid    = int(parts[2])
+    cid    = int(parts[3])
+    bet    = int(parts[4])
+
+    if call.from_user.id != uid:
+        await call.answer("Это не твоя рулетка!"); return
+
+    rep = reputation[cid].get(uid, 0)
+    if rep < bet:
+        await call.answer(f"💸 Нужно {bet} реп.", show_alert=True); return
+
+    import random as _rnd2
+    spin = _rnd2.randint(0, 36)
+    if spin == 0:     color = "grn"
+    elif spin % 2:    color = "red"
+    else:             color = "blk"
+
+    color_emoji = {"red":"🔴","blk":"⚫","grn":"🟢"}
+    mult = {"red":2,"blk":2,"grn":14}
+
+    if choice == color:
+        win = bet * mult[color]
+        reputation[cid][uid] = rep - bet + win
+        txt = f"✅ Выпало {color_emoji[color]} ({spin}) — выиграл {win} реп.!"
+    else:
+        reputation[cid][uid] = rep - bet
+        txt = f"❌ Выпало {color_emoji[color]} ({spin}) — проиграл {bet} реп."
+
+    save_data()
+    _set_cooldown(cid, uid)
+    await call.message.edit_text(
+        f"🎡 <b>Рулетка</b>\n{txt}\n💰 Баланс: {reputation[cid][uid]:+d}",
+        parse_mode="HTML")
+
+@dp.message(Command("dice"))
+async def cmd_dice(message: Message):
+    """Угадай сумму кубиков."""
+    uid = message.from_user.id; cid = message.chat.id
+    if not cs.get_settings(cid).get("games_enabled", True): return
+    if not _can_play(cid, uid):
+        secs = int(GAME_COOLDOWN - (time() - _game_cooldown.get(f"{cid}_{uid}", 0)))
+        await reply_auto_delete(message, f"⏳ {secs} сек."); return
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"{i}", callback_data=f"dice:guess:{uid}:{cid}:{i}")
+         for i in range(2, 7)],
+        [InlineKeyboardButton(text=f"{i}", callback_data=f"dice:guess:{uid}:{cid}:{i}")
+         for i in range(7, 13)],
+    ])
+    rep = reputation[cid].get(uid, 0)
+    await message.answer(
+        f"🎲 <b>Кубики</b> (ставка 50 реп.)\nБаланс: {rep:+d}\n\nУгадай сумму двух кубиков (2-12):",
+        parse_mode="HTML", reply_markup=kb)
+
+@dp.callback_query(F.data.startswith("dice:"))
+async def cb_dice(call: CallbackQuery):
+    parts  = call.data.split(":")
+    uid    = int(parts[2])
+    cid    = int(parts[3])
+    guess  = int(parts[4])
+    bet    = 50
+
+    if call.from_user.id != uid:
+        await call.answer("Это не твои кубики!"); return
+
+    rep = reputation[cid].get(uid, 0)
+    if rep < bet:
+        await call.answer(f"💸 Нужно {bet} реп.", show_alert=True); return
+
+    import random as _rnd3
+    d1, d2 = _rnd3.randint(1,6), _rnd3.randint(1,6)
+    total  = d1 + d2
+
+    if guess == total:
+        # Множитель зависит от вероятности
+        mults = {2:12,3:6,4:4,5:3,6:2,7:2,8:2,9:3,10:4,11:6,12:12}
+        win = bet * mults.get(total, 2)
+        reputation[cid][uid] = rep - bet + win
+        txt = f"✅ {d1}+{d2}={total} — угадал! +{win} реп.!"
+    else:
+        reputation[cid][uid] = rep - bet
+        txt = f"❌ {d1}+{d2}={total}, ты угадал {guess}. -{bet} реп."
+
+    save_data()
+    _set_cooldown(cid, uid)
+    await call.message.edit_text(
+        f"🎲 <b>Кубики</b>\n{txt}\n💰 Баланс: {reputation[cid][uid]:+d}",
+        parse_mode="HTML")
+
+
+# ══════════════════════════════════════════════════════════════════
+#  🏆 РЕФЕРАЛЬНАЯ СИСТЕМА
+# ══════════════════════════════════════════════════════════════════
+REF_BONUS_INVITER = 100  # монет тому кто пригласил
+REF_BONUS_NEW     = 50   # монет новому участнику
+
+@dp.message(Command("ref"))
+async def cmd_ref(message: Message):
+    """Реферальная ссылка."""
+    uid = message.from_user.id; cid = message.chat.id
+    try:
+        me = await bot.get_me()
+        ref_url = f"https://t.me/{me.username}?start=ref_{uid}"
+
+        # Статистика рефералов
+        conn = db_connect()
+        conn.execute("""CREATE TABLE IF NOT EXISTS referrals
+            (uid INTEGER, ref_by INTEGER, cid INTEGER,
+             joined_at TEXT DEFAULT (datetime('now')),
+             PRIMARY KEY(uid, cid))""")
+        ref_count = conn.execute(
+            "SELECT COUNT(*) FROM referrals WHERE ref_by=? AND cid=?",
+            (uid, cid)).fetchone()[0]
+        conn.close()
+
+        await reply_auto_delete(message,
+            f"🔗 <b>Твоя реферальная ссылка</b>\n\n"
+            f"<code>{ref_url}</code>\n\n"
+            f"👥 Приглашено: <b>{ref_count}</b> чел.\n"
+            f"💰 За каждого: +{REF_BONUS_INVITER} реп. тебе, +{REF_BONUS_NEW} реп. другу\n\n"
+            f"Поделись ссылкой — зарабатывай репутацию!",
+            parse_mode="HTML")
+    except Exception as e:
+        await reply_auto_delete(message, f"❌ {e}")
 
 async def main():
     import time as _tstart
