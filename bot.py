@@ -2629,51 +2629,6 @@ async def cb_game(call: CallbackQuery):
         await call.answer(); return
     await call.answer()
 
-@dp.message(Command("start"))
-async def cmd_start(message: Message):
-    name = message.from_user.first_name
-    bot_info = await bot.get_me()
-    bot_username = bot_info.username
-
-    # В группе — отправляем кнопку перейти в ЛС
-    if message.chat.type in ("group", "supergroup"):
-        await message.answer(
-            f"👋 Привет, <b>{name}</b>!\n\n"
-            f"🎫 Чтобы открыть тикет или получить помощь — "
-            f"нажми кнопку ниже и напиши мне в личку.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(
-                    text="💬 Открыть бота",
-                    url=f"https://t.me/{bot_username}?start=ticket"
-                )
-            ]])
-        )
-        return
-
-    # В ЛС — полное меню
-    await message.answer(
-        f"━━━━━━━━━━━━━━━\n"
-        f"⚡ <b>CHAT GUARD</b>\n"
-        f"━━━━━━━━━━━━━━━\n\n"
-        f"👋 Привет, <b>{name}</b>!\n\n"
-        f"Я умный бот-модератор с кучей функций:\n\n"
-        f"🛡 Модерация и защита чата\n"
-        f"⭐ Репутация и уровни\n"
-        f"🎮 Игры и развлечения\n"
-        f"💰 Экономика и магазин\n"
-        f"🤝 Кланы и социалка\n"
-        f"🎫 Система тикетов\n\n"
-        f"Используй кнопки ниже или напиши /help",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❓ Команды и помощь",    callback_data="start:help")],
-            [InlineKeyboardButton(text="📖 Политика бота",       url="https://telegra.ph/politika-bota-03-15")],
-            [InlineKeyboardButton(text="🎫 Написать в поддержку", callback_data="start:ticket")],
-        ])
-    )
-
-
 @dp.callback_query(F.data == "start:ticket")
 async def cb_start_ticket(call: CallbackQuery):
     chats = await db.get_all_chats()
@@ -3188,13 +3143,6 @@ async def cmd_announce(message: Message, command: CommandObject):
     except: pass
     await answer_auto_delete(
         f"📢 <b>ОБЪЯВЛЕНИЕ</b>\n\n{command.args}\n\n— {message.from_user.mention_html()}", parse_mode="HTML")
-
-@dp.message(Command("pin"))
-async def cmd_pin(message: Message):
-    if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "↩️ Ответь на сообщение."); return
-    await bot.pin_chat_message(message.chat.id, message.reply_to_message.message_id)
-    await reply_auto_delete(message, "📌 Закреплено!")
 
 @dp.message(Command("unpin"))
 async def cmd_unpin(message: Message):
@@ -3953,7 +3901,16 @@ async def autist_commands(message: Message):
     NO_TARGET_CMDS = {"статус", "хаос", "скрин", "взрыв", "шпион", "жребий", "громко",
                       "антиспам", "зеркало", "локдаун", "анонс", "лотерея",
                       "тишина", "история", "топ нарушителей",
-                      "температура", "неделя", "рестарт", "сос", "лог"}
+                      "температура", "неделя", "рестарт", "сос", "лог",
+                      # 🎲 Ирис-команды — выбирают рандомного юзера
+                      "пидорас","гей","красавчик","умник","дурак","богатый","бедный",
+                      "победитель","неудачник","король","лох","чемпион","легенда","токсик",
+                      "няша","краш","маньяк","детектив","злодей","герой","криптан",
+                      "рофлер","скучный","активный","матерщинник","сквернослов","грубиян",
+                      "хулиган","невинный","чистоуст","банщик","цензор","матбот","ругатель",
+                      "гандон","мудак","долбоёб","шлюха","петух","чмо","урод",
+                      "дебил","идиот","придурок","тупица","лузер","задрот","нытик",
+                      "предатель","стукач","жлоб","жадина","трус","псих"}
 
     # ── Поиск цели: реплай или @юзернейм или ID ──
     import re as _re
@@ -11122,40 +11079,262 @@ async def cmd_voicehelp(message: Message):
         parse_mode="HTML")
 
 
+# ══════════════════════════════════════════════════════════
+#  🔧 СИСТЕМА ТЕХНИЧЕСКИХ РАБОТ
+# ══════════════════════════════════════════════════════════
+
+TECHWORK_TEXTS = [
+    (
+        "⚙️ <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🔧 Бот временно уходит на техобслуживание\n"
+        "⏱ Чат будет закрыт на время работ\n\n"
+        "😴 Можно поспать пока мы чиним\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🚀 Скоро вернёмся с обновлениями!"
+    ),
+    (
+        "🛠 <b>ТЕХ. РАБОТЫ В ПРОЦЕССЕ</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "👨‍💻 Наши технари уже всё чинят\n"
+        "☕ Выпейте кофе пока ждёте\n\n"
+        "⏳ Это займёт совсем немного времени\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💫 Возвращаемся скоро!"
+    ),
+    (
+        "🔩 <b>ПЛАНОВОЕ ОБСЛУЖИВАНИЕ</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🤖 Бот уходит подзарядиться\n"
+        "⚡ Заряжаем батарейки и чиним баги\n\n"
+        "🎮 Пока есть время — отдыхайте!\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🔋 Скоро вернёмся на 100%!"
+    ),
+]
+
+TECHWORK_END_TEXTS = [
+    (
+        "✅ <b>ТЕХНИЧЕСКИЕ РАБОТЫ ЗАВЕРШЕНЫ</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🚀 Бот снова в строю!\n"
+        "⚡ Всё работает быстрее и лучше\n\n"
+        "🎉 Спасибо за ожидание!\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💬 Чат снова открыт — добро пожаловать!"
+    ),
+    (
+        "🎊 <b>МЫ ВЕРНУЛИСЬ!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "✨ Технические работы завершены\n"
+        "🛠 Всё починено и улучшено\n\n"
+        "🔥 Готовы к работе!\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "😎 Погнали!"
+    ),
+]
+
+techwork_active = False  # флаг активных тех.работ
+
+@dp.message(Command("techwork"))
+async def cmd_techwork(message: Message):
+    """Включить/выключить режим тех.работ в текущем чате"""
+    if message.from_user.id != OWNER_ID: return
+    global techwork_active
+
+    cid = message.chat.id
+    args = message.text.split()[1:] if message.text else []
+    duration_text = f"\n⏱ Примерное время: <b>{' '.join(args)}</b>" if args else ""
+
+    if techwork_active:
+        # Завершаем
+        techwork_active = False
+        end_text = random.choice(TECHWORK_END_TEXTS)
+        try:
+            await bot.set_chat_permissions(cid, ChatPermissions(
+                can_send_messages=True, can_send_media_messages=True,
+                can_send_polls=True, can_send_other_messages=True,
+                can_add_web_page_previews=True, can_invite_users=True))
+            await bot.send_message(cid, end_text, parse_mode="HTML")
+        except Exception as e:
+            await reply_auto_delete(message, f"❌ Ошибка: {e}"); return
+        await log_action(f"✅ <b>ТЕХ.РАБОТЫ ЗАВЕРШЕНЫ</b>\n💬 {message.chat.title}\n👑 {message.from_user.full_name}")
+    else:
+        # Запускаем
+        techwork_active = True
+        text = random.choice(TECHWORK_TEXTS) + duration_text
+        try:
+            await bot.send_message(cid, text, parse_mode="HTML")
+            await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
+        except Exception as e:
+            await reply_auto_delete(message, f"❌ Ошибка: {e}"); return
+        await reply_auto_delete(message,
+            "🔧 Тех.работы запущены!\n💡 Завершить: /techwork", parse_mode="HTML")
+        await log_action(f"🔧 <b>ТЕХ.РАБОТЫ</b>\n💬 {message.chat.title}\n👑 {message.from_user.full_name}")
+
+@dp.message(Command("techstatus"))
+async def cmd_techstatus(message: Message):
+    """Статус тех.работ"""
+    if message.from_user.id != OWNER_ID: return
+    if techwork_active:
+        await reply_auto_delete(message,
+            "🔧 <b>Тех.работы активны</b>\n"
+            f"🔒 Закрыто чатов: {len(known_chats)}\n\n"
+            "Для завершения: /techwork",
+            parse_mode="HTML")
+    else:
+        await reply_auto_delete(message,
+            "✅ <b>Тех.работы не активны</b>\n"
+            "Все чаты работают в штатном режиме",
+            parse_mode="HTML")
+
+
+# ══════════════════════════════════════════════════════════
+#  💌 АНОНИМНЫЙ КОМПЛИМЕНТ ДНЯ
+# ══════════════════════════════════════════════════════════
+
+COMPLIMENTS = [
+    "✨ Ты реально крутой человек — даже если сам этого не замечаешь!",
+    "💫 С тобой в чате гораздо интереснее. Серьёзно!",
+    "🌟 Ты один из тех кто делает этот чат живым!",
+    "🔥 Харизма зашкаливает. Так держать!",
+    "💎 Редкий человек — умный, интересный и не нудный!",
+    "🦁 Ты сильнее чем думаешь. Продолжай в том же духе!",
+    "🌈 Когда ты пишешь — чат сразу оживает!",
+    "⚡ Энергия от тебя передаётся всем вокруг!",
+    "🎯 Ты точно знаешь что говоришь. Уважение!",
+    "🏆 Если бы был конкурс на лучшего участника — ты бы выиграл!",
+    "🌺 Приятно иметь таких людей в чате. Спасибо что ты здесь!",
+    "💪 Ты вдохновляешь других даже не зная об этом!",
+    "🎭 С тобой никогда не скучно — это ценность!",
+    "🚀 Ты точно добьёшься всего чего хочешь!",
+    "🌙 Даже когда молчишь — твоё присутствие ощущается!",
+    "😎 Ты просто огонь. Без лишних слов.",
+    "🎵 Ты как хорошая музыка — поднимаешь настроение!",
+    "🦋 Удача точно на твоей стороне сегодня!",
+    "💝 Кто-то в этом чате думает о тебе хорошо. И не один!",
+    "🌊 Ты как волна — захватываешь всё вокруг своей энергией!",
+]
+
+compliment_last: dict = {}  # {cid: timestamp} — кулдаун
+
+@dp.message(Command("compliment"))
+async def cmd_compliment(message: Message):
+    """Отправить анонимный комплимент случайному участнику"""
+    cid = message.chat.id
+    import time as _tc
+
+    # Кулдаун 30 минут на чат
+    last = compliment_last.get(cid, 0)
+    if _tc.time() - last < 1800:
+        remaining = int((1800 - (_tc.time() - last)) / 60)
+        await reply_auto_delete(message,
+            f"💌 Следующий комплимент через <b>{remaining} мин</b>",
+            parse_mode="HTML"); return
+
+    # Берём случайного участника (не того кто написал)
+    members = [u for u in chat_stats[cid].keys() if u != message.from_user.id]
+    if not members:
+        await reply_auto_delete(message, "😅 Некому отправить — в чате нет других участников"); return
+
+    chosen_uid = random.choice(members)
+    try:
+        tm = await bot.get_chat_member(cid, chosen_uid)
+        chosen_name = tm.user.full_name
+    except:
+        chosen_name = f"участник"
+
+    compliment = random.choice(COMPLIMENTS)
+    compliment_last[cid] = _tc.time()
+
+    await message.answer(
+        f"💌 <b>Анонимный комплимент</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🎯 Для: <b>{chosen_name}</b>\n\n"
+        f"{compliment}\n\n"
+        f"<i>💝 Отправлено анонимно</i>",
+        parse_mode="HTML")
+
+@dp.message(Command("selfcompliment"))
+async def cmd_self_compliment(message: Message):
+    """Получить комплимент себе"""
+    compliment = random.choice(COMPLIMENTS)
+    await reply_auto_delete(message,
+        f"💌 <b>Комплимент для тебя</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{compliment}",
+        parse_mode="HTML")
+
+# Фоновая задача — авто-комплимент каждый день в 12:00
+compliment_auto_chats: set = set()
+
+@dp.message(Command("autocompliment"))
+async def cmd_auto_compliment(message: Message):
+    """Вкл/выкл авто-комплимент каждый день"""
+    if not await require_admin(message): return
+    cid = message.chat.id
+    if cid in compliment_auto_chats:
+        compliment_auto_chats.discard(cid)
+        await reply_auto_delete(message, "💌 Авто-комплимент выключен")
+    else:
+        compliment_auto_chats.add(cid)
+        await reply_auto_delete(message,
+            "💌 <b>Авто-комплимент включён!</b>\n"
+            "Каждый день в 12:00 бот будет делать комплимент случайному участнику 💝",
+            parse_mode="HTML")
+
+async def compliment_daily_loop():
+    """Каждый день в 12:00 отправляет комплимент"""
+    while True:
+        from datetime import datetime
+        now = datetime.now()
+        if now.hour == 12 and now.minute < 5:
+            for cid in list(compliment_auto_chats):
+                members = list(chat_stats[cid].keys())
+                if not members: continue
+                try:
+                    chosen_uid = random.choice(members)
+                    tm = await bot.get_chat_member(cid, chosen_uid)
+                    chosen_name = tm.user.full_name
+                    compliment = random.choice(COMPLIMENTS)
+                    await bot.send_message(cid,
+                        f"💌 <b>Комплимент дня</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        f"🎯 Для: <b>{chosen_name}</b>\n\n"
+                        f"{compliment}\n\n"
+                        f"<i>💝 Каждый день один из вас получает комплимент!</i>",
+                        parse_mode="HTML")
+                    await asyncio.sleep(0.2)
+                except: pass
+        await asyncio.sleep(300)
+
+# ══════════════════════════════════════════════════════════
+#  🚀 ЗАПУСК БОТА
+# ══════════════════════════════════════════════════════════
+
 async def main():
     import time as _tstart
     global bot_start_time
     bot_start_time = _tstart.time()
 
-    # ── Shared state ──────────────────────────────────────
-    shared.init(bot, ADMIN_IDS, OWNER_ID, LOG_CHANNEL_ID)
-
-    # ── Chat settings ─────────────────────────────────────
-    cs.init_tables()
-    cs.set_bot(bot)
-    asyncio.create_task(cs.schedule_loop())
-
-    # ── PostgreSQL ────────────────────────────────────────
-    await db.init_db()
-
-    # ── Старая инициализация (оставляем для совместимости) ─
+    # ── Инициализация БД ─────────────────────────────────
     db_init()
     db_friends_init()
+    migrate_json_to_sqlite()
     load_data()
+    await db.init_db()
 
-    # ── Dashboard ─────────────────────────────────────────
+    # ── Модули ───────────────────────────────────────────
+    shared.init(bot, ADMIN_IDS, OWNER_ID, LOG_CHANNEL_ID)
+    cs.init_tables()
+    cs.set_bot(bot)
     dashboard.set_bot(bot, ADMIN_IDS)
-    await dashboard.start_dashboard()
-
-    # ── Tickets bot reference ──────────────────────────────
     tkt.set_bot(bot)
-
-    # ── Features ──────────────────────────────────────────
     await features.init(bot, dp, ADMIN_IDS, OWNER_ID)
-
-    # ── Notifications ─────────────────────────────────────
     await notif.init(bot, dp)
 
+    # ── Фоновые задачи ───────────────────────────────────
+    asyncio.create_task(cs.schedule_loop())
     asyncio.create_task(birthday_checker())
     asyncio.create_task(send_weekly_stats())
     asyncio.create_task(warn_expiry_checker())
@@ -11167,8 +11346,15 @@ async def main():
     asyncio.create_task(smart_notify_loop())
     asyncio.create_task(auto_backup_loop())
     asyncio.create_task(daily_idea_loop())
-    if not BOT_TOKEN: raise ValueError("BOT_TOKEN не задан в переменных окружения!")
-    print("✅ Бот запущен!")
+    asyncio.create_task(compliment_daily_loop())
+
+    # ── Веб дашборд ──────────────────────────────────────
+    await dashboard.start_dashboard()
+
+    if not BOT_TOKEN:
+        raise ValueError("BOT_TOKEN не задан в переменных окружения!")
+    print("✅ CHAT GUARD запущен!")
+    await log_action("🚀 <b>CHAT GUARD запущен!</b>")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
