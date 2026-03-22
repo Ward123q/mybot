@@ -6828,30 +6828,239 @@ async def cmd_ref(message: Message):
 
 @dp.message(Command("start"))
 async def cmd_start_ref(message: Message, command: CommandObject):
-    # /start ticket — открываем тикет сразу
+    uid = message.from_user.id
+    name = message.from_user.first_name
+    cid  = message.chat.id
+
+    # ── /start ticket — открыть тикет сразу ──────────────
     if command.args == "ticket" and message.chat.type == "private":
         chats = await db.get_all_chats()
         if not chats:
-            chat_list = [(cid, title) for cid, title in known_chats.items()]
+            chat_list = [(c, t) for c, t in known_chats.items()]
         else:
             chat_list = [(r["cid"], r["title"]) for r in chats]
         await tkt.cmd_ticket(message, bot, chat_list)
         return
 
-    if not command.args or not command.args.startswith("ref_"): return
-    inviter_id = command.args.replace("ref_", "").strip()
-    uid = str(message.from_user.id)
-    if uid == inviter_id: return
-    if uid in referral_used: return
-    referral_used[uid] = inviter_id
-    referrals[inviter_id].add(uid)
-    cid = message.chat.id
-    reputation[cid][int(inviter_id)] = reputation[cid].get(int(inviter_id), 0) + 30
-    save_data()
-    try:
-        await bot.send_message(int(inviter_id),
-            f"🎉 {message.from_user.full_name} зашёл по твоей ссылке!\n+30 репы тебе!")
-    except: pass
+    # ── /start ref_XXX — реферальная система ─────────────
+    if command.args and command.args.startswith("ref_"):
+        inviter_id = command.args.replace("ref_", "").strip()
+        uid_str = str(uid)
+        if uid_str != inviter_id and uid_str not in referral_used:
+            referral_used[uid_str] = inviter_id
+            referrals[inviter_id].add(uid_str)
+            reputation[cid][int(inviter_id)] = reputation[cid].get(int(inviter_id), 0) + 30
+            save_data()
+            try:
+                await bot.send_message(int(inviter_id),
+                    f"🎉 <b>{message.from_user.full_name}</b> зашёл по твоей ссылке!\n"
+                    f"⭐ <b>+30 репы</b> тебе!", parse_mode="HTML")
+            except: pass
+
+    # ── В группе — кнопка перейти в ЛС ───────────────────
+    if message.chat.type in ("group", "supergroup"):
+        bot_info = await bot.get_me()
+        await message.answer(
+            f"👋 <b>Привет, {name}!</b>\n\n"
+            f"🛡 Я <b>CHAT GUARD</b> — твой умный бот-модератор.\n\n"
+            f"📩 Напиши мне в личку чтобы открыть тикет\n"
+            f"или получить помощь!",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text="💬 Написать боту",
+                    url=f"https://t.me/{bot_info.username}?start=hello"
+                )
+            ]])
+        )
+        return
+
+    # ── В ЛС — красивое главное меню ─────────────────────
+    import time as _ts
+    uptime = int(_ts.time() - bot_start_time)
+    h, m = uptime // 3600, (uptime % 3600) // 60
+
+    # Статы пользователя
+    user_xp    = xp_data[cid].get(uid, 0) if cid in xp_data else 0
+    user_warns = sum(warnings[c].get(uid, 0) for c in warnings)
+    user_lvl   = get_level(user_xp) if user_xp else 0
+    _, lvl_title = get_level_title(user_lvl)
+
+    await message.answer(
+        f"╔══════════════════════════╗\n"
+        f"║    🛡  <b>CHAT GUARD</b>    ║\n"
+        f"╚══════════════════════════╝\n\n"
+        f"👋 Привет, <b>{name}</b>!\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏅 Уровень: <b>{user_lvl}</b> — {lvl_title}\n"
+        f"⭐ XP: <b>{user_xp}</b>\n"
+        f"⚡ Варнов: <b>{user_warns}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🤖 Я умный бот-модератор с кучей функций:\n\n"
+        f"🛡 <b>Модерация</b> — варны, муты, баны\n"
+        f"⭐ <b>XP и уровни</b> — 500 уровней\n"
+        f"👥 <b>Социалка</b> — друзья, отношения\n"
+        f"🎮 <b>Развлечения</b> — 55+ аутист-команд\n"
+        f"🎫 <b>Тикеты</b> — поддержка через ЛС\n"
+        f"🌐 <b>Дашборд</b> — веб-панель\n\n"
+        f"⏱ Аптайм: <b>{h}ч {m}м</b>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📋 Команды",         callback_data="start:help"),
+             InlineKeyboardButton(text="👤 Мой профиль",     callback_data="start:profile")],
+            [InlineKeyboardButton(text="🎫 Открыть тикет",   callback_data="start:ticket"),
+             InlineKeyboardButton(text="📜 Правила",          callback_data="start:rules")],
+            [InlineKeyboardButton(text="👥 Мои друзья",       callback_data="start:friends"),
+             InlineKeyboardButton(text="💌 Комплимент",        callback_data="start:compliment")],
+            [InlineKeyboardButton(text="🌐 Дашборд",
+             url=f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME','mybot.onrender.com')}/")],
+        ])
+    )
+
+@dp.callback_query(F.data.startswith("start:"))
+async def cb_start_menu(call: CallbackQuery):
+    action = call.data.split(":")[1]
+    uid = call.from_user.id
+    name = call.from_user.first_name
+
+    if action == "help":
+        await call.message.edit_text(
+            f"📋 <b>Основные команды</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👤 <b>Профиль</b>\n"
+            f"▸ /profile — мой профиль\n"
+            f"▸ /setbio — установить био\n"
+            f"▸ /setmood — настроение\n\n"
+            f"👥 <b>Социалка</b>\n"
+            f"▸ /addfriend — добавить друга\n"
+            f"▸ /propose — предложить отношения\n"
+            f"▸ /gift 🌹 — подарить\n\n"
+            f"🛠 <b>Утилиты</b>\n"
+            f"▸ /music — поиск трека\n"
+            f"▸ /imagine — генерация картинки\n"
+            f"▸ /tr — перевод\n"
+            f"▸ /idea — тема для обсуждения\n\n"
+            f"🎫 <b>Поддержка</b>\n"
+            f"▸ /ticket — открыть тикет\n"
+            f"▸ /appeal — апелляция\n\n"
+            f"💡 В чате доступно ещё /help",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")
+            ]])
+        )
+
+    elif action == "profile":
+        cid = call.message.chat.id
+        user_xp = xp_data[cid].get(uid, 0) if cid in xp_data else 0
+        user_lvl = get_level(user_xp)
+        _, lvl_title = get_level_title(user_lvl)
+        conn = db_connect()
+        p = conn.execute("SELECT mood, bio FROM user_profiles WHERE uid=?", (uid,)).fetchone()
+        friends = conn.execute("SELECT COUNT(*) as c FROM friends WHERE uid=?", (uid,)).fetchone()["c"]
+        conn.close()
+        mood = p["mood"] if p and p["mood"] else "😐 Нормально"
+        bio  = p["bio"]  if p and p["bio"]  else "Не указано"
+        await call.message.edit_text(
+            f"👤 <b>Профиль — {name}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🆔 ID: <code>{uid}</code>\n"
+            f"🏅 Уровень: <b>{user_lvl}</b> — {lvl_title}\n"
+            f"⭐ XP: <b>{user_xp}</b>\n"
+            f"{mood}\n"
+            f"📝 Био: {bio}\n"
+            f"👥 Друзей: <b>{friends}</b>\n",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")
+            ]])
+        )
+
+    elif action == "ticket":
+        chats = await db.get_all_chats()
+        chat_list = [(r["cid"], r["title"]) for r in chats] if chats else list(known_chats.items())
+        await call.message.delete()
+        await tkt.cmd_ticket(call.message, bot, chat_list)
+
+    elif action == "rules":
+        await call.message.edit_text(
+            f"📄 <b>Правила чата</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🔞 Контент 18+ — варн → бан\n"
+            f"🥴 Наркотики — бан без предупреждений\n"
+            f"📢 Реклама — мут / бан\n"
+            f"🛡 Оскорбление администрации — варн → бан\n"
+            f"🚫 Спам и флуд — мут\n\n"
+            f"🔒 <b>Конфиденциальность</b>\n"
+            f"▸ Бот не хранит личные данные\n"
+            f"▸ Анонимность соблюдается\n"
+            f"▸ Данные только для модерации\n\n"
+            f"<i>Соблюдай правила — чат будет комфортным 🤝</i>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")
+            ]])
+        )
+
+    elif action == "friends":
+        conn = db_connect()
+        rows = conn.execute("SELECT friend_name FROM friends WHERE uid=? LIMIT 10", (uid,)).fetchall()
+        reqs = conn.execute("SELECT COUNT(*) as c FROM friend_requests WHERE to_uid=?", (uid,)).fetchone()["c"]
+        conn.close()
+        if not rows:
+            text = f"👥 <b>Друзья</b>\n\nДрузей нет пока 😔\nДобавь через /addfriend в чате!"
+        else:
+            text = f"👥 <b>Друзья ({len(rows)})</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            text += "\n".join(f"▸ {r['friend_name']}" for r in rows)
+        if reqs:
+            text += f"\n\n📨 Запросов в ожидании: <b>{reqs}</b>"
+        await call.message.edit_text(text, parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")
+            ]]))
+
+    elif action == "compliment":
+        import random as _r
+        comp = _r.choice(COMPLIMENTS)
+        await call.answer(f"💌 {comp}", show_alert=True)
+
+    elif action == "back":
+        import time as _ts2
+        uptime = int(_ts2.time() - bot_start_time)
+        h, m = uptime // 3600, (uptime % 3600) // 60
+        cid2 = call.message.chat.id
+        user_xp2 = xp_data[cid2].get(uid, 0) if cid2 in xp_data else 0
+        user_lvl2 = get_level(user_xp2)
+        _, lvl_title2 = get_level_title(user_lvl2)
+        await call.message.edit_text(
+            f"╔══════════════════════════╗\n"
+            f"║    🛡  <b>CHAT GUARD</b>    ║\n"
+            f"╚══════════════════════════╝\n\n"
+            f"👋 Привет, <b>{name}</b>!\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏅 Уровень: <b>{user_lvl2}</b> — {lvl_title2}\n"
+            f"⭐ XP: <b>{user_xp2}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🤖 Я умный бот-модератор с кучей функций:\n\n"
+            f"🛡 <b>Модерация</b> — варны, муты, баны\n"
+            f"⭐ <b>XP и уровни</b> — 500 уровней\n"
+            f"👥 <b>Социалка</b> — друзья, отношения\n"
+            f"🎮 <b>Развлечения</b> — 55+ аутист-команд\n"
+            f"🎫 <b>Тикеты</b> — поддержка через ЛС\n\n"
+            f"⏱ Аптайм: <b>{h}ч {m}м</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📋 Команды",       callback_data="start:help"),
+                 InlineKeyboardButton(text="👤 Мой профиль",   callback_data="start:profile")],
+                [InlineKeyboardButton(text="🎫 Открыть тикет", callback_data="start:ticket"),
+                 InlineKeyboardButton(text="📜 Правила",        callback_data="start:rules")],
+                [InlineKeyboardButton(text="👥 Мои друзья",     callback_data="start:friends"),
+                 InlineKeyboardButton(text="💌 Комплимент",      callback_data="start:compliment")],
+                [InlineKeyboardButton(text="🌐 Дашборд",
+                 url=f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME','mybot.onrender.com')}/")],
+            ])
+        )
+    await call.answer()
 
 # ══════════════════════════════════════════════════════
 #  🌈 ЦВЕТНЫЕ ТИТУЛЫ / АВАТАРКА
