@@ -11518,7 +11518,587 @@ async def compliment_daily_loop():
         await asyncio.sleep(300)
 
 # ══════════════════════════════════════════════════════════
+#  📋 УМНЫЕ ШАБЛОНЫ ВАРНОВ
+# ══════════════════════════════════════════════════════════
+
+WARN_TEMPLATES = {
+    "mat":      ("🤬 Мат в чате",           "⚠️"),
+    "reklama":  ("📢 Реклама/спам",          "📵"),
+    "18plus":   ("🔞 Контент 18+",           "🔞"),
+    "flood":    ("🌊 Флуд/оффтоп",           "💬"),
+    "insult":   ("😤 Оскорбление участника", "👊"),
+    "admin":    ("🛡 Оскорбление админа",    "⚔️"),
+    "drugs":    ("💊 Наркотики",             "🚫"),
+    "scam":     ("💸 Мошенничество",         "🕵️"),
+    "link":     ("🔗 Запрещённые ссылки",    "🔗"),
+    "other":    ("📝 Другая причина",        "📌"),
+}
+
+def kb_warn_templates(tid: int) -> InlineKeyboardMarkup:
+    """Красивая клавиатура шаблонов варнов"""
+    rows = []
+    items = list(WARN_TEMPLATES.items())
+    for i in range(0, len(items), 2):
+        row = []
+        for key, (label, emoji) in items[i:i+2]:
+            row.append(InlineKeyboardButton(
+                text=f"{emoji} {label.split()[0]}",
+                callback_data=f"warntp:{tid}:{key}"
+            ))
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:select:{tid}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+@dp.message(Command("warnmenu"))
+async def cmd_warnmenu(message: Message):
+    """Меню шаблонов варнов"""
+    if not await require_admin(message): return
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "↩️ Реплайни на сообщение нарушителя"); return
+    tid = message.reply_to_message.from_user.id
+    tname = message.reply_to_message.from_user.full_name
+    await reply_auto_delete(message,
+        f"📋 <b>Шаблоны варнов</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Нарушитель: <b>{tname}</b>\n\n"
+        f"Выбери причину:",
+        parse_mode="HTML",
+        reply_markup=kb_warn_templates(tid))
+
+@dp.callback_query(F.data.startswith("warntp:"))
+async def cb_warn_template(call: CallbackQuery):
+    if not await is_admin_by_id(call.message.chat.id, call.from_user.id):
+        await call.answer("🚫 Только для администраторов!", show_alert=True); return
+    _, tid_str, key = call.data.split(":")
+    tid = int(tid_str)
+    cid = call.message.chat.id
+    label, emoji = WARN_TEMPLATES.get(key, ("Нарушение", "⚠️"))
+    if await is_admin_by_id(cid, tid):
+        await call.answer("🚫 Нельзя варнить администратора!", show_alert=True); return
+    try:
+        tm = await bot.get_chat_member(cid, tid)
+        tname = tm.user.full_name
+    except: tname = f"ID{tid}"
+    warnings[cid][tid] = warnings[cid].get(tid, 0) + 1
+    warn_count = warnings[cid][tid]
+    db_set_int("warnings", cid, tid, "count", warn_count)
+    journal_add(cid, call.from_user.id, call.from_user.full_name, f"Варн: {label}", tid, tname)
+    if warn_count >= MAX_WARNINGS:
+        try:
+            await bot.ban_chat_member(cid, tid)
+            await call.message.edit_text(
+                f"🔨 <b>{tname}</b> забанен!\n"
+                f"📌 Причина: {label}\n"
+                f"⚡ Варнов было: {warn_count}/{MAX_WARNINGS}",
+                parse_mode="HTML")
+        except: pass
+        await call.answer(f"🔨 {tname} забанен за {label}")
+    else:
+        await call.message.edit_text(
+            f"{emoji} <b>Варн выдан!</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 {tname}\n"
+            f"📌 Причина: {label}\n"
+            f"⚡ Варнов: <b>{warn_count}/{MAX_WARNINGS}</b>",
+            parse_mode="HTML")
+        await call.answer(f"{emoji} Варн: {label}")
+    await log_action(
+        f"{emoji} <b>ВАРН (шаблон)</b>\n"
+        f"👤 {tname} (<code>{tid}</code>)\n"
+        f"📌 {label}\n"
+        f"⚡ {warn_count}/{MAX_WARNINGS}\n"
+        f"👮 {call.from_user.full_name}")
+
+# ══════════════════════════════════════════════════════════
+#  🗂 БАЗА НАРУШИТЕЛЕЙ
+# ══════════════════════════════════════════════════════════
+
+def db_violators_init():
+    conn = db_connect()
+    conn.execute("""CREATE TABLE IF NOT EXISTS violators (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER, uid INTEGER, name TEXT,
+        action TEXT, reason TEXT, mod_name TEXT,
+        ts REAL)""")
+    conn.commit(); conn.close()
+
+def violator_add(cid: int, uid: int, name: str, action: str, reason: str, mod_name: str):
+    import time as _tv
+    conn = db_connect()
+    conn.execute(
+        "INSERT INTO violators (cid,uid,name,action,reason,mod_name,ts) VALUES (?,?,?,?,?,?,?)",
+        (cid, uid, name, action, reason, mod_name, _tv.time()))
+    conn.commit(); conn.close()
+
+def violator_get(cid: int, uid: int) -> list:
+    conn = db_connect()
+    rows = conn.execute(
+        "SELECT * FROM violators WHERE cid=? AND uid=? ORDER BY ts DESC LIMIT 20",
+        (cid, uid)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def violator_search(cid: int, query: str) -> list:
+    conn = db_connect()
+    rows = conn.execute(
+        "SELECT DISTINCT uid, name, COUNT(*) as cnt FROM violators "
+        "WHERE cid=? AND (name LIKE ? OR uid LIKE ?) GROUP BY uid ORDER BY cnt DESC LIMIT 10",
+        (cid, f"%{query}%", f"%{query}%")).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@dp.message(Command("violators"))
+async def cmd_violators(message: Message):
+    """База нарушителей чата"""
+    if not await require_admin(message): return
+    cid = message.chat.id
+    args = message.text.split(None, 1)[1:] if message.text else []
+
+    if message.reply_to_message:
+        # Досье конкретного юзера
+        target = message.reply_to_message.from_user
+        records = violator_get(cid, target.id)
+        if not records:
+            await reply_auto_delete(message,
+                f"✅ <b>{target.full_name}</b> — нарушений не найдено!",
+                parse_mode="HTML"); return
+        from datetime import datetime
+        lines = [
+            f"🗂 <b>Досье: {target.full_name}</b>\n"
+            f"🆔 ID: <code>{target.id}</code>\n"
+            f"📊 Всего нарушений: <b>{len(records)}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        ]
+        for r in records[:10]:
+            dt = datetime.fromtimestamp(r["ts"]).strftime("%d.%m.%Y %H:%M")
+            lines.append(f"▸ <b>{r['action']}</b> — {r['reason']}\n"
+                        f"  👮 {r['mod_name']} | 🕐 {dt}")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+    elif args:
+        # Поиск по имени или ID
+        query = args[0]
+        results = violator_search(cid, query)
+        if not results:
+            await reply_auto_delete(message, f"🔍 По запросу <b>{query}</b> ничего не найдено", parse_mode="HTML"); return
+        lines = [f"🔍 <b>Поиск: {query}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+        for r in results:
+            lines.append(f"👤 <b>{r['name']}</b> (<code>{r['uid']}</code>) — {r['cnt']} нарушений")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+    else:
+        # Топ нарушителей чата
+        conn = db_connect()
+        rows = conn.execute(
+            "SELECT uid, name, COUNT(*) as cnt FROM violators WHERE cid=? "
+            "GROUP BY uid ORDER BY cnt DESC LIMIT 10", (cid,)).fetchall()
+        conn.close()
+        if not rows:
+            await reply_auto_delete(message, "🗂 База нарушителей пуста — чат чистый! ✅"); return
+        lines = ["🗂 <b>Топ нарушителей чата</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+        medals = ["🥇", "🥈", "🥉"] + ["▸"] * 10
+        for i, r in enumerate(rows):
+            lines.append(f"{medals[i]} <b>{r['name']}</b> — {r['cnt']} нарушений")
+        lines.append(f"\n💡 /violators (реплай) — досье юзера\n💡 /violators имя — поиск")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+# ══════════════════════════════════════════════════════════
+#  ⚡ ГОРЯЧИЕ КОМАНДЫ /q1 /q2 /q3
+# ══════════════════════════════════════════════════════════
+# Каждый мод настраивает свои горячие команды
+# Хранится: {uid: {1: "текст", 2: "текст", 3: "текст"}}
+
+def db_hotkeys_init():
+    conn = db_connect()
+    conn.execute("""CREATE TABLE IF NOT EXISTS hotkeys (
+        uid INTEGER, slot INTEGER, text TEXT,
+        PRIMARY KEY (uid, slot))""")
+    conn.commit(); conn.close()
+
+def hotkey_set(uid: int, slot: int, text: str):
+    conn = db_connect()
+    conn.execute("INSERT OR REPLACE INTO hotkeys VALUES (?,?,?)", (uid, slot, text))
+    conn.commit(); conn.close()
+
+def hotkey_get(uid: int, slot: int) -> str | None:
+    conn = db_connect()
+    row = conn.execute("SELECT text FROM hotkeys WHERE uid=? AND slot=?", (uid, slot)).fetchone()
+    conn.close()
+    return row["text"] if row else None
+
+def hotkey_get_all(uid: int) -> dict:
+    conn = db_connect()
+    rows = conn.execute("SELECT slot, text FROM hotkeys WHERE uid=?", (uid,)).fetchall()
+    conn.close()
+    return {r["slot"]: r["text"] for r in rows}
+
+@dp.message(Command("setq"))
+async def cmd_setq(message: Message):
+    """Установить горячую команду: /setq 1 текст"""
+    if not await require_admin(message): return
+    args = message.text.split(None, 2)[1:] if message.text else []
+    if len(args) < 2:
+        hk = hotkey_get_all(message.from_user.id)
+        lines = ["⚡ <b>Мои горячие команды</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+        for slot in [1, 2, 3]:
+            text = hk.get(slot, "не задана")
+            lines.append(f"▸ /q{slot} — {text[:50] if text != 'не задана' else '❌ не задана'}")
+        lines.append("\n📝 <b>Как настроить:</b>\n<code>/setq 1 твой текст</code>")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML"); return
+    try:
+        slot = int(args[0])
+        if slot not in (1, 2, 3):
+            await reply_auto_delete(message, "⚠️ Слот должен быть 1, 2 или 3"); return
+    except:
+        await reply_auto_delete(message, "⚠️ Укажи номер слота: /setq 1 текст"); return
+    text = args[1]
+    hotkey_set(message.from_user.id, slot, text)
+    await reply_auto_delete(message,
+        f"✅ <b>Горячая команда /q{slot} сохранена!</b>\n\n"
+        f"📝 Текст: {text[:100]}",
+        parse_mode="HTML")
+
+async def _send_hotkey(message: Message, slot: int):
+    """Общая логика для /q1 /q2 /q3"""
+    if not await require_admin(message): return
+    text = hotkey_get(message.from_user.id, slot)
+    if not text:
+        await reply_auto_delete(message,
+            f"❌ <b>/q{slot} не настроена</b>\n"
+            f"Установи через: <code>/setq {slot} твой текст</code>",
+            parse_mode="HTML"); return
+    if message.reply_to_message:
+        await message.reply_to_message.reply(text, parse_mode="HTML")
+    else:
+        await message.answer(text, parse_mode="HTML")
+    try: await message.delete()
+    except: pass
+
+@dp.message(Command("q1"))
+async def cmd_q1(message: Message): await _send_hotkey(message, 1)
+
+@dp.message(Command("q2"))
+async def cmd_q2(message: Message): await _send_hotkey(message, 2)
+
+@dp.message(Command("q3"))
+async def cmd_q3(message: Message): await _send_hotkey(message, 3)
+
+# ══════════════════════════════════════════════════════════
 #  🚀 ЗАПУСК БОТА
+# ══════════════════════════════════════════════════════════
+# (секция выше)
+
+# ══════════════════════════════════════════════════════════
+#  🎮 НОВЫЕ ОСНОВНЫЕ КОМАНДЫ
+# ══════════════════════════════════════════════════════════
+
+@dp.message(Command("coinflip"))
+async def cmd_coinflip(message: Message):
+    result = random.choice(["👑 Орёл!", "🪙 Решка!"])
+    sides  = ["Орёл" if "Орёл" in result else "Решка"]
+    gif    = "🎲" if random.random() > 0.5 else "🪙"
+    await reply_auto_delete(message,
+        f"🪙 <b>Подбрасываю монетку...</b>\n\n"
+        f"{gif} Результат: <b>{result}</b>",
+        parse_mode="HTML")
+
+@dp.message(Command("dice"))
+async def cmd_dice(message: Message):
+    args = message.text.split()[1:] if message.text else []
+    try:
+        sides = max(2, min(100, int(args[0]))) if args else 6
+    except: sides = 6
+    result = random.randint(1, sides)
+    bar = "█" * int(result / sides * 10) + "░" * (10 - int(result / sides * 10))
+    await reply_auto_delete(message,
+        f"🎲 <b>Бросаю кубик D{sides}...</b>\n\n"
+        f"[{bar}]\n\n"
+        f"Выпало: <b>{result}</b> из {sides}",
+        parse_mode="HTML")
+
+@dp.message(Command("rate"))
+async def cmd_rate(message: Message):
+    text = message.text.replace("/rate", "").strip() if message.text else ""
+    if not text and message.reply_to_message:
+        text = message.reply_to_message.text or "это"
+    if not text: text = "это"
+    score = random.randint(0, 10)
+    bar   = "⭐" * score + "☆" * (10 - score)
+    comments = {
+        (0,2):  "💀 Полный провал",
+        (3,4):  "😬 Так себе",
+        (5,6):  "😐 Сойдёт",
+        (7,8):  "👍 Неплохо!",
+        (9,9):  "🔥 Очень хорошо!",
+        (10,10):"💎 ИДЕАЛЬНО!",
+    }
+    comment = next(v for (lo,hi),v in comments.items() if lo <= score <= hi)
+    await reply_auto_delete(message,
+        f"⭐ <b>Оценка</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📌 {text[:80]}\n\n"
+        f"{bar}\n"
+        f"<b>{score}/10</b> — {comment}",
+        parse_mode="HTML")
+
+@dp.message(Command("ship"))
+async def cmd_ship(message: Message):
+    args = message.text.split()[1:] if message.text else []
+    if message.reply_to_message and not args:
+        name1 = message.from_user.first_name
+        name2 = message.reply_to_message.from_user.first_name
+    elif len(args) >= 2:
+        name1, name2 = args[0], args[1]
+    else:
+        await reply_auto_delete(message,
+            "💕 Использование:\n<code>/ship Имя1 Имя2</code> или реплай на юзера",
+            parse_mode="HTML"); return
+    pct = random.randint(0, 100)
+    hearts = int(pct / 10)
+    bar = "❤️" * hearts + "🤍" * (10 - hearts)
+    if pct < 20:   comment = "💔 Шансов нет..."
+    elif pct < 40: comment = "😕 Маловато"
+    elif pct < 60: comment = "🤔 Может быть..."
+    elif pct < 80: comment = "😍 Хорошие шансы!"
+    elif pct < 95: comment = "🔥 Огонь!"
+    else:          comment = "💞 ИДЕАЛЬНАЯ ПАРА!"
+    ship_name = name1[:len(name1)//2] + name2[len(name2)//2:]
+    await reply_auto_delete(message,
+        f"💕 <b>Совместимость</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👤 {name1} + {name2}\n"
+        f"💑 Шипнейм: <b>{ship_name}</b>\n\n"
+        f"{bar}\n"
+        f"<b>{pct}%</b> — {comment}",
+        parse_mode="HTML")
+
+ZODIAC_SIGNS = {
+    "♈ Овен":     ["Сегодня звёзды на твоей стороне! Действуй решительно.",
+                   "Не торопись с важными решениями — подожди завтра."],
+    "♉ Телец":    ["Финансовый день обещает быть удачным. Следи за деньгами.",
+                   "Отличный день для общения с близкими людьми."],
+    "♊ Близнецы": ["Твоя коммуникабельность сегодня на пике — используй это!",
+                   "Избегай конфликтов — планеты не благоволят ссорам."],
+    "♋ Рак":      ["День интроверта — побудь наедине с собой.",
+                   "Интуиция подскажет правильный путь. Доверяй себе."],
+    "♌ Лев":      ["Ты в центре внимания сегодня. Сияй!",
+                   "Твоя энергия заряжает всех вокруг. Используй это!"],
+    "♍ Дева":     ["Детали важны — проверь всё дважды.",
+                   "Отличный день для планирования и организации."],
+    "♎ Весы":     ["Гармония во всём — твоё кредо сегодня.",
+                   "Найди баланс между работой и отдыхом."],
+    "♏ Скорпион": ["Твоя проницательность сегодня поразительна.",
+                   "Тайны раскроются сами по себе — жди."],
+    "♐ Стрелец":  ["Приключения ждут! Не бойся новых горизонтов.",
+                   "Оптимизм — твоё оружие сегодня."],
+    "♑ Козерог":  ["Упорный труд принесёт плоды уже сегодня.",
+                   "Карьерный день — покажи себя с лучшей стороны."],
+    "♒ Водолей":  ["Нестандартные идеи — твой козырь сегодня.",
+                   "Дружба важнее всего — уделяй время близким."],
+    "♓ Рыбы":     ["Творческий день — вдохновение разлито в воздухе.",
+                   "Слушай своё сердце, а не разум."],
+}
+
+@dp.message(Command("zodiac"))
+async def cmd_zodiac(message: Message):
+    signs = list(ZODIAC_SIGNS.keys())
+    sign  = random.choice(signs)
+    pred  = random.choice(ZODIAC_SIGNS[sign])
+    lucky_num = random.randint(1, 99)
+    lucky_col = random.choice(["🔴 Красный","🔵 Синий","🟢 Зелёный","🟡 Жёлтый",
+                                "🟣 Фиолетовый","🟠 Оранжевый","⚪ Белый","⚫ Чёрный"])
+    await reply_auto_delete(message,
+        f"🔮 <b>Гороскоп дня</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"✨ Знак дня: <b>{sign}</b>\n\n"
+        f"📜 {pred}\n\n"
+        f"🍀 Счастливое число: <b>{lucky_num}</b>\n"
+        f"🎨 Счастливый цвет: {lucky_col}",
+        parse_mode="HTML")
+
+FORTUNES = [
+    # 🌟 Позитивные
+    "🌟 Удача улыбнётся тебе в самый неожиданный момент",
+    "💰 Деньги придут откуда не ждёшь — будь готов",
+    "❤️ Любовь стучится в твою дверь — открой её",
+    "⚡ Большие перемены уже на горизонте",
+    "🎯 Твоя цель ближе чем ты думаешь",
+    "🌈 После трудностей наступит светлая полоса",
+    "🤝 Новая встреча изменит твою жизнь",
+    "🔑 Ключ к успеху уже в твоих руках",
+    "🌙 Ночью придёт ответ на твой главный вопрос",
+    "🦋 Маленькое решение изменит всё",
+    "💎 Твоя ценность выше чем ты сам думаешь",
+    "🚀 2026 год — твой год. Серьёзно.",
+    "🏆 Победа близко — не сдавайся на последнем шаге",
+    "🌺 Скоро произойдёт что-то о чём ты давно мечтал",
+    "💫 Вселенная уже готовит тебе подарок",
+
+    # 😂 Юмористические
+    "☕ Твоё предсказание: выпей кофе и всё станет понятнее",
+    "🛌 Звёзды говорят — ложись спать пораньше",
+    "📱 Удали несколько приложений — жизнь улучшится",
+    "🍕 Сегодня точно стоит заказать пиццу",
+    "🤡 Кто-то в этом чате думает что он умнее всех. Это не ты.",
+    "💀 Твоя продуктивность сегодня: 404 Not Found",
+    "🗑 Выброси что-нибудь ненужное — освободи место для нового",
+    "😴 Усталость — это не слабость, это сигнал. Ложись спать.",
+    "🐢 Медленно но верно — черепаха уже обгоняет тебя",
+    "📺 Ты снова смотришь что-то вместо того чтоб делать важное",
+
+    # ⚠️ Тревожные
+    "⚠️ Осторожно — кто-то завидует твоему успеху",
+    "🎲 Рискни — сегодня удача на твоей стороне",
+    "📚 Знание которое ты ищешь — уже внутри тебя",
+    "🌊 Плыви против течения — там и есть успех",
+    "👁 Кто-то следит за тобой... и восхищается",
+    "🕵️ Не всё то золото что блестит — проверь дважды",
+    "🐍 Среди близких есть тот кто говорит одно а думает другое",
+
+    # 📅 Тема 2026
+    "🤖 В 2026 ИИ захватит мир — но тебя пощадит",
+    "📈 Крипта снова вырастет — ты же не продал?",
+    "🌍 Климат меняется — но твои проблемы остаются прежними",
+    "🎮 В 2026 выйдет игра которая сломает тебе жизнь",
+    "📱 Следующий iPhone будет стоить как твоя почка",
+    "🚗 Электрокары везде — но зарядок всё равно нет",
+    "🎵 Тот трек который ты слушаешь уже 100 раз — слушай дальше",
+    "🌐 Интернет станет ещё медленнее в самый нужный момент",
+    "💸 Цены вырастут — зарплата нет. Классика.",
+    "🎄 До Нового года ещё далеко — живи настоящим",
+    "🤳 Твоя следующая фотка наберёт много лайков",
+    "📊 Дашборд твоей жизни показывает рост — продолжай",
+    "⚡ Энергия Меркурия ретроградного влияет на твой WiFi",
+    "🎭 2026 год подкинет сюжет круче любого сериала",
+    "🔮 Будущее туманно — но твой чай уже остыл. Выпей.",
+]
+
+@dp.message(Command("fortune"))
+async def cmd_fortune(message: Message):
+    fortune = random.choice(FORTUNES)
+    num = random.randint(1, 9999)
+    await reply_auto_delete(message,
+        f"🔮 <b>Предсказание судьбы</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"✨ {fortune}\n\n"
+        f"🎱 Счастливое число дня: <b>{num}</b>",
+        parse_mode="HTML")
+
+@dp.message(Command("calc"))
+async def cmd_calc(message: Message):
+    expr = message.text.replace("/calc", "").strip() if message.text else ""
+    if not expr:
+        await reply_auto_delete(message,
+            "🧮 Использование: <code>/calc 2+2*2</code>", parse_mode="HTML"); return
+    try:
+        # Безопасный eval — только числа и операторы
+        import re as _re
+        safe = _re.sub(r'[^0-9+\-*/().% ]', '', expr)
+        if not safe:
+            await reply_auto_delete(message, "⚠️ Недопустимые символы"); return
+        result = eval(safe, {"__builtins__": {}})
+        await reply_auto_delete(message,
+            f"🧮 <b>Калькулятор</b>\n\n"
+            f"📌 <code>{safe}</code>\n"
+            f"= <b>{result}</b>",
+            parse_mode="HTML")
+    except ZeroDivisionError:
+        await reply_auto_delete(message, "❌ Делить на ноль нельзя!")
+    except Exception:
+        await reply_auto_delete(message, "❌ Неверное выражение")
+
+@dp.message(Command("password"))
+async def cmd_password(message: Message):
+    import string as _str, secrets as _sec
+    args = message.text.split()[1:] if message.text else []
+    try:    length = max(4, min(64, int(args[0]))) if args else 16
+    except: length = 16
+    chars  = _str.ascii_letters + _str.digits + "!@#$%^&*"
+    passwd = ''.join(_sec.choice(chars) for _ in range(length))
+    strength = "💪 Сильный" if length >= 12 else "😐 Средний" if length >= 8 else "😟 Слабый"
+    await reply_auto_delete(message,
+        f"🔐 <b>Сгенерированный пароль</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"<code>{passwd}</code>\n\n"
+        f"📏 Длина: {length} символов\n"
+        f"💪 Надёжность: {strength}\n\n"
+        f"<i>⚠️ Сохрани в надёжном месте!</i>",
+        parse_mode="HTML")
+
+@dp.message(Command("qr"))
+async def cmd_qr(message: Message):
+    text = message.text.replace("/qr", "").strip() if message.text else ""
+    if not text:
+        await reply_auto_delete(message,
+            "📲 Использование: <code>/qr текст или ссылка</code>", parse_mode="HTML"); return
+    import urllib.parse
+    encoded = urllib.parse.quote(text)
+    qr_url  = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={encoded}"
+    try:
+        async with aiohttp.ClientSession() as sess:
+            async with sess.get(qr_url) as resp:
+                if resp.status == 200:
+                    import io
+                    buf = io.BytesIO(await resp.read())
+                    buf.name = "qr.png"
+                    await message.answer_photo(buf,
+                        caption=f"📲 <b>QR-код</b>\n📌 {text[:80]}",
+                        parse_mode="HTML")
+                    try: await message.delete()
+                    except: pass
+                else:
+                    await reply_auto_delete(message, "❌ Не удалось создать QR-код")
+    except Exception as e:
+        await reply_auto_delete(message, f"❌ Ошибка: {e}")
+
+@dp.message(Command("ask"))
+async def cmd_ask(message: Message):
+    question = message.text.replace("/ask", "").strip() if message.text else ""
+    answers = [
+        "✅ Определённо да!", "✅ Скорее всего да", "✅ Всё указывает на это",
+        "🤔 Не уверен...", "🤔 Спроси позже", "🤔 Сложно сказать",
+        "❌ Очень сомнительно", "❌ Скорее нет", "❌ Определённо нет!",
+        "🔮 Звёзды молчат", "💫 Судьба решит сама", "⚡ Даже не думай об этом",
+    ]
+    answer = random.choice(answers)
+    q_text = f"\n❓ {question}" if question else ""
+    await reply_auto_delete(message,
+        f"🎱 <b>Вопрос к вселенной</b>{q_text}\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{answer}",
+        parse_mode="HTML")
+
+@dp.message(Command("mock"))
+async def cmd_mock(message: Message):
+    text = message.text.replace("/mock", "").strip() if message.text else ""
+    if not text and message.reply_to_message:
+        text = message.reply_to_message.text or ""
+    if not text:
+        await reply_auto_delete(message, "🤪 Использование: /mock текст"); return
+    mocked = "".join(c.upper() if i % 2 else c.lower() for i, c in enumerate(text))
+    await reply_auto_delete(message, f"🤪 {mocked}")
+
+@dp.message(Command("reverse"))
+async def cmd_reverse(message: Message):
+    text = message.text.replace("/reverse", "").strip() if message.text else ""
+    if not text and message.reply_to_message:
+        text = message.reply_to_message.text or ""
+    if not text:
+        await reply_auto_delete(message, "🔄 Использование: /reverse текст"); return
+    await reply_auto_delete(message, f"🔄 {text[::-1]}")
+
+@dp.message(Command("count"))
+async def cmd_count(message: Message):
+    text = message.text.replace("/count", "").strip() if message.text else ""
+    if not text and message.reply_to_message:
+        text = message.reply_to_message.text or ""
+    if not text:
+        await reply_auto_delete(message, "📊 Использование: /count текст"); return
+    words   = len(text.split())
+    chars   = len(text)
+    no_sp   = len(text.replace(" ", ""))
+    lines   = text.count("\n") + 1
+    await reply_auto_delete(message,
+        f"📊 <b>Статистика текста</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📝 Символов: <b>{chars}</b>\n"
+        f"📝 Без пробелов: <b>{no_sp}</b>\n"
+        f"💬 Слов: <b>{words}</b>\n"
+        f"↩️ Строк: <b>{lines}</b>",
+        parse_mode="HTML")
 # ══════════════════════════════════════════════════════════
 
 async def main():
@@ -11529,6 +12109,8 @@ async def main():
     # ── Инициализация БД ─────────────────────────────────
     db_init()
     db_friends_init()
+    db_violators_init()
+    db_hotkeys_init()
     migrate_json_to_sqlite()
     load_data()
     await db.init_db()
