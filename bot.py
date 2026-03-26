@@ -6,7 +6,7 @@ import sqlite3
 import time as _tstart
 import time as _time_module
 import aiohttp
-from datetime import timedelta
+from datetime import datetime, timedelta
 from collections import defaultdict
 from time import time
 from aiogram import Bot, Dispatcher, F
@@ -1212,7 +1212,7 @@ class PendingInputMiddleware(BaseMiddleware):
                     if mins:
                         await bot.restrict_chat_member(chat_id, target_id,
                             permissions=ChatPermissions(can_send_messages=False),
-                            until_date=timedelta(minutes=mins))
+                            until_date=datetime.now() + timedelta(minutes=mins))
                         await event.answer(random.choice(MUTE_MESSAGES).format(
                             name=f"<b>{target_name}</b>", time=label), parse_mode="HTML")
                     else: await event.reply("⚠️ Примеры: 10, 30m, 2h, 1d")
@@ -1293,7 +1293,7 @@ class StatsMiddleware(BaseMiddleware):
                         await bot.restrict_chat_member(
                             cid, uid,
                             permissions=ChatPermissions(can_send_messages=False),
-                            until_date=timedelta(minutes=mins)
+                            until_date=datetime.now() + timedelta(minutes=mins)
                         )
                         await bot.send_message(
                             cid,
@@ -1516,7 +1516,7 @@ class AntiMatMiddleware(BaseMiddleware):
                     if mins:
                         await bot.restrict_chat_member(chat_id, target_id,
                             permissions=ChatPermissions(can_send_messages=False),
-                            until_date=timedelta(minutes=mins))
+                            until_date=datetime.now() + timedelta(minutes=mins))
                         await event.answer(random.choice(MUTE_MESSAGES).format(
                             name=f"<b>{target_name}</b>", time=label), parse_mode="HTML")
                     else: await event.reply("⚠️ Примеры: 10, 30m, 2h, 1d")
@@ -1639,7 +1639,7 @@ async def on_new_member(message: Message):
                 await bot.restrict_chat_member(
                     cid, member.id,
                     permissions=ChatPermissions(can_send_messages=False),
-                    until_date=timedelta(hours=hours)
+                    until_date=datetime.now() + timedelta(hours=hours)
                 )
             except: pass
 
@@ -2315,7 +2315,7 @@ async def cb_mute(call: CallbackQuery):
     mins  = int(tval)
     label = f"{mins} мин." if mins < 60 else (f"{mins//60} ч." if mins < 1440 else f"{mins//1440} дн.")
     await bot.restrict_chat_member(cid, tid,
-        permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
+        permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(minutes=mins))
     await call.message.edit_text(
         random.choice(MUTE_MESSAGES).format(name=f"<b>{tname}</b>", time=label), parse_mode="HTML")
     await log_action(f"╔═══════════════════╗\n🔇  <b>МУТ</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
@@ -2359,7 +2359,7 @@ async def cb_ban(call: CallbackQuery):
         asyncio.create_task(auto_delete(call.message))
         await call.answer(); return
     if reason == "tempban24":
-        await bot.ban_chat_member(cid, tid, until_date=timedelta(hours=24))
+        await bot.ban_chat_member(cid, tid, until_date=datetime.now() + timedelta(hours=24))
         await call.message.edit_text(f"⏰ <b>{tname}</b> забанен на <b>24 часа</b>.", parse_mode="HTML")
         asyncio.create_task(auto_delete(call.message))
         await log_action(f"╔═══════════════════╗\n⏰  <b>БАН 24ч</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n⏱ <b>Время:</b> 24 часа\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
@@ -2493,7 +2493,7 @@ async def cb_members(call: CallbackQuery):
     elif action == "warn24":
         if tid != 0:
             await bot.restrict_chat_member(cid, tid,
-                permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(hours=24))
+                permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(hours=24))
             await call.message.edit_text(
                 f"📵 <b>{tname}</b> — мут на <b>24 часа</b> за рекламу.", parse_mode="HTML")
             asyncio.create_task(schedule_delete(call.message))
@@ -2756,6 +2756,48 @@ async def cmd_help(message: Message):
         "│ /clan_join ТЕГ — вступить\n"
         "│ /clan_leave — покинуть\n"
         "└─────────────────────────\n\n"
+        "💡 <i>Бот: CHAT GUARD | /panel — панель управления</i>\"\n"
+
+        "📊 <b>СТАТИСТИКА</b>\n"
+        "┌─────────────────────────\n"
+        "│ /me — моя карточка в чате\n"
+        "│ /top — топ чата по XP\n"
+        "│ /stats — статистика чата\n"
+        "│ /daily — ежедневный бонус XP\n"
+        "│ /profile — полный профиль\n"
+        "└─────────────────────────\n\n"
+
+        "🎮 <b>РАЗВЛЕЧЕНИЯ</b>\n"
+        "┌─────────────────────────\n"
+        "│ /coinflip — подбросить монетку\n"
+        "│ /dice [N] — бросить кубик\n"
+        "│ /rate текст — оценить от 0 до 10\n"
+        "│ /ship — совместимость двух юзеров\n"
+        "│ /zodiac — гороскоп дня\n"
+        "│ /fortune — предсказание судьбы\n"
+        "│ /ask вопрос — ответ вселенной\n"
+        "└─────────────────────────\n\n"
+
+        "🛠 <b>УТИЛИТЫ</b>\n"
+        "┌─────────────────────────\n"
+        "│ /calc выражение — калькулятор\n"
+        "│ /password [длина] — генератор паролей\n"
+        "│ /qr текст — создать QR-код\n"
+        "│ /mock текст — СтИлЬ МоКиНгА\n"
+        "│ /reverse текст — текст наоборот\n"
+        "│ /count текст — подсчёт символов\n"
+        "│ /tr [язык] — перевести <i>(реплай)</i>\n"
+        "│ /music название — найти трек\n"
+        "│ /imagine описание — генерация картинки\n"
+        "│ /idea — тема для обсуждения\n"
+        "└─────────────────────────\n\n"
+
+        "🔒 <b>ПРИВАТНОСТЬ</b>\n"
+        "┌─────────────────────────\n"
+        "│ /privacy — политика конфиденциальности\n"
+        "│ /deleteme — удалить свои данные\n"
+        "└─────────────────────────\n\n"
+
         "💡 <i>Бот: CHAT GUARD | /panel — панель управления</i>"
     )
 
@@ -2816,6 +2858,21 @@ async def cmd_help(message: Message):
         "│ /heatmap — активность по часам\n"
         "│ /vip @user — VIP статус\n"
         "│ /plugins — модули бота\n"
+        "└─────────────────────────\n\n"
+        "📋 <b>ШАБЛОНЫ И ГОРЯЧИЕ КОМАНДЫ</b>\n"
+        "┌─────────────────────────\n"
+        "│ /warnmenu — шаблоны варнов кнопками <i>(реплай)</i>\n"
+        "│ /violators — топ нарушителей чата\n"
+        "│ /violators <i>(реплай)</i> — досье юзера\n"
+        "│ /violators имя — поиск по имени\n"
+        "│ /setq 1 текст — настроить горячую команду\n"
+        "│ /q1 /q2 /q3 — отправить горячую команду\n"
+        "└─────────────────────────\n\n"
+        "🔧 <b>ТЕХРАБОТЫ</b>\n"
+        "┌─────────────────────────\n"
+        "│ /techwork — запустить/завершить тех.работы\n"
+        "│ /techwork 30 мин — с указанием времени\n"
+        "│ /techstatus — статус тех.работ\n"
         "└─────────────────────────"
     )
 
@@ -2868,6 +2925,17 @@ async def cmd_help(message: Message):
         "│ /tasks — все задачи\n"
         "│ /setshift 9 21 — назначить смену\n"
         "│ /createqr [XP] — создать КюАр-код\n"
+        "└─────────────────────────\n\n"
+        "🌐 <b>АВТО-КОМПЛИМЕНТ</b>\n"
+        "┌─────────────────────────\n"
+        "│ /compliment — анон. комплимент рандому\n"
+        "│ /selfcompliment — комплимент себе\n"
+        "│ /autocompliment — авто в 12:00 вкл/выкл\n"
+        "└─────────────────────────\n\n"
+        "💡 <b>ИДЕЯ ДНЯ</b>\n"
+        "┌─────────────────────────\n"
+        "│ /dailyidea — авто-тема в 9:00 вкл/выкл\n"
+        "│ /idea — тема прямо сейчас\n"
         "└─────────────────────────"
     )
 
@@ -3018,7 +3086,7 @@ async def cmd_mute(message: Message, command: CommandObject):
     if not mins: mins = 60; label = "1 ч."
     cid = message.chat.id
     await bot.restrict_chat_member(cid, target.id,
-        permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
+        permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(minutes=mins))
     # 📸 Скриншот нарушения
     if message.reply_to_message.text:
         await log_violation_screenshot(
@@ -3310,7 +3378,7 @@ async def cmd_warn24(message: Message):
     if await is_admin_by_id(message.chat.id, target.id):
         await reply_auto_delete(message, "🚫 Нельзя замутить администратора!"); return
     await bot.restrict_chat_member(message.chat.id, target.id,
-        permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(hours=24))
+        permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(hours=24))
     await reply_auto_delete(message, f"📵 {target.mention_html()} замучен на <b>24 часа</b> за рекламу.", parse_mode="HTML")
     await log_action(f"╔═══════════════════╗\n📵  <b>МУТ 24ч</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n⏱ <b>Время:</b> 24 часа\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
@@ -3961,7 +4029,7 @@ async def autist_commands(message: Message):
     try:
         if action == "бан":
             if duration_mins:
-                await bot.ban_chat_member(cid, target.id, until_date=timedelta(minutes=duration_mins))
+                await bot.ban_chat_member(cid, target.id, until_date=datetime.now() + timedelta(minutes=duration_mins))
                 await reply_auto_delete(message, f"🔨 {tname} забанен на <b>{duration_label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
             else:
                 await bot.ban_chat_member(cid, target.id)
@@ -3982,7 +4050,7 @@ async def autist_commands(message: Message):
         elif action == "мут":
             mins = duration_mins or 60; label = duration_label or "1 ч."
             await bot.restrict_chat_member(cid, target.id,
-                permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
+                permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(minutes=mins))
             await reply_auto_delete(message, f"🔇 {tname} замучен на <b>{label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
             add_mod_history(cid, target.id, f"🔇 Мут {label}", reason, message.from_user.full_name)
             await log_action(f"╔═══════════════════╗\n🔇  <b>МУТ</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
@@ -4114,7 +4182,7 @@ async def autist_commands(message: Message):
         elif action == "похитить":
             mins = duration_mins or 5
             await bot.restrict_chat_member(cid, target.id,
-                permissions=ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=mins))
+                permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(minutes=mins))
             await reply_auto_delete(message, 
                 f"👽 {tname} похищен пришельцами на <b>{mins} мин</b>!\n🛸 Вернётся через {mins} минут...",
                 parse_mode="HTML")
@@ -4500,7 +4568,7 @@ async def autist_commands(message: Message):
                 warnings[cid][victim] += 1; save_data()
                 await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 Жертва: {vname}\n⚡ Получил варн!", parse_mode="HTML")
             elif roll == "мут":
-                await bot.restrict_chat_member(cid, victim, ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=5))
+                await bot.restrict_chat_member(cid, victim, ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(minutes=5))
                 await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 Жертва: {vname}\n🔇 Замучен на 5 мин!", parse_mode="HTML")
             elif roll == "разварн":
                 if warnings[cid][victim] > 0: warnings[cid][victim] -= 1; save_data()
@@ -4725,7 +4793,7 @@ async def autist_commands(message: Message):
         elif action == "заморозка":
             await bot.restrict_chat_member(cid, target.id,
                 permissions=ChatPermissions(can_send_messages=False),
-                until_date=timedelta(hours=24))
+                until_date=datetime.now() + timedelta(hours=24))
             save_data()
             await reply_auto_delete(message,
                 f"🧊 <b>ЗАМОРОЗКА</b>\n\n"
@@ -6192,7 +6260,7 @@ async def cb_report_category(call: CallbackQuery):
     if len(unique_reporters) >= 3:
         try:
             await bot.restrict_chat_member(cid, target_id,
-                ChatPermissions(can_send_messages=False), until_date=timedelta(minutes=10))
+                ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(minutes=10))
             auto_action += "\n🔇 <b>Авто-мут 10 мин</b> (3+ жалобы)"
         except: pass
     report_entry = {
@@ -6305,7 +6373,7 @@ async def cb_report_action_v2(call: CallbackQuery):
         if action == "warn":
             warnings[cid][target_id] += 1; result = "⚡ Варн"
         elif action == "mute":
-            await bot.restrict_chat_member(cid, target_id, ChatPermissions(can_send_messages=False), until_date=timedelta(hours=1))
+            await bot.restrict_chat_member(cid, target_id, ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(hours=1))
             result = "🔇 Мут 1ч"
         elif action == "ban":
             await bot.ban_chat_member(cid, target_id); result = "🔨 Бан"
@@ -8969,7 +9037,7 @@ async def on_new_member_quarantine(message: Message):
             try:
                 await bot.restrict_chat_member(cid, user.id,
                     permissions=ChatPermissions(can_send_messages=False),
-                    until_date=timedelta(hours=24))
+                    until_date=datetime.now() + timedelta(hours=24))
                 await message.answer(
                     f"🔬 {user.mention_html()} на карантине 24ч — не может писать",
                     parse_mode="HTML")
@@ -11109,7 +11177,7 @@ async def _vc_execute(parsed: dict, admin_uid: int, admin_name: str) -> str:
                     elif arg.endswith("d"): mins = int(arg[:-1]) * 1440
                     await bot.restrict_chat_member(cid, uid,
                         ChatPermissions(can_send_messages=False),
-                        until_date=timedelta(minutes=mins))
+                        until_date=datetime.now() + timedelta(minutes=mins))
                     add_mod_history(cid, uid, f"🔇 Мут {mins}м", "голосовая команда", admin_name)
                     executed.append(f"🔇 Замучен {name} на {mins}мин в {known_chats.get(cid, cid)}")
 
@@ -11792,7 +11860,189 @@ async def cmd_q3(message: Message): await _send_hotkey(message, 3)
 #  🎮 НОВЫЕ ОСНОВНЫЕ КОМАНДЫ
 # ══════════════════════════════════════════════════════════
 
-@dp.message(Command("coinflip"))
+@dp.message(Command("privacy"))
+async def cmd_privacy(message: Message):
+    await reply_auto_delete(message,
+        "🔒 <b>Политика конфиденциальности CHAT GUARD</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📊 <b>Что мы собираем:</b>\n"
+        "▸ Telegram ID и имя — для идентификации\n"
+        "▸ Счётчик сообщений — для XP и уровней\n"
+        "▸ История варнов/банов — для модерации\n"
+        "▸ Данные профиля — только те что ты указал\n\n"
+        "❌ <b>Что НЕ собираем:</b>\n"
+        "▸ Содержимое личных сообщений\n"
+        "▸ Медиафайлы и голосовые\n"
+        "▸ Геолокацию и контакты\n"
+        "▸ Платёжные данные\n\n"
+        "🔐 <b>Защита данных:</b>\n"
+        "▸ Зашифрованная SQLite база\n"
+        "▸ Автобэкап каждые 6 часов\n"
+        "▸ Данные не продаются третьим лицам\n\n"
+        "🗑 <b>Удаление данных:</b>\n"
+        "▸ Напиши /deleteme — удалим всё\n\n"
+        "📄 Полная версия: PRIVACY_POLICY.md в репозитории",
+        parse_mode="HTML")
+
+@dp.message(Command("deleteme"))
+async def cmd_deleteme(message: Message):
+    uid = message.from_user.id
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Да, удалить", callback_data=f"deleteme:confirm:{uid}"),
+        InlineKeyboardButton(text="❌ Отмена",      callback_data=f"deleteme:cancel:{uid}"),
+    ]])
+    await reply_auto_delete(message,
+        "🗑 <b>Удаление данных</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Будут удалены:\n"
+        "▸ Профиль (био, настроение)\n"
+        "▸ XP, уровень, стрик\n"
+        "▸ Список друзей\n"
+        "▸ Анонимные сообщения\n\n"
+        "❗ История нарушений останется для безопасности чата\n\n"
+        "Уверен?",
+        parse_mode="HTML", reply_markup=kb)
+
+@dp.callback_query(F.data.startswith("deleteme:"))
+async def cb_deleteme(call: CallbackQuery):
+    parts = call.data.split(":")
+    action, uid = parts[1], int(parts[2])
+    if call.from_user.id != uid:
+        await call.answer("🚫 Это не твои данные!", show_alert=True); return
+    if action == "cancel":
+        await call.message.edit_text("✅ Отменено — данные сохранены")
+        return
+    try:
+        conn = db_connect()
+        conn.execute("DELETE FROM user_profiles WHERE uid=?", (uid,))
+        conn.execute("DELETE FROM friends WHERE uid=? OR friend_id=?", (uid, uid))
+        conn.execute("DELETE FROM relationships WHERE uid1=? OR uid2=?", (uid, uid))
+        conn.execute("DELETE FROM subscriptions WHERE subscriber=? OR target=?", (uid, uid))
+        conn.execute("DELETE FROM anon_messages WHERE from_uid=? OR to_uid=?", (uid, uid))
+        conn.execute("DELETE FROM birthdays WHERE uid=?", (uid,))
+        conn.commit(); conn.close()
+        # Очищаем RAM
+        for cid in list(xp_data.keys()):
+            xp_data[cid].pop(uid, None)
+            streaks[cid].pop(uid, None)
+        await call.message.edit_text(
+            "✅ <b>Данные удалены!</b>\n\n"
+            "Твой профиль, друзья и история активности очищены.\n"
+            "История нарушений сохранена для безопасности чата.",
+            parse_mode="HTML")
+        await log_action(f"🗑 <b>DELETEME</b>\n👤 {call.from_user.full_name} (<code>{uid}</code>)")
+    except Exception as e:
+        await call.message.edit_text(f"❌ Ошибка: {e}")
+    await call.answer()
+
+# ── Новые команды для обычных пользователей ───────────────
+
+@dp.message(Command("me"))
+async def cmd_me(message: Message):
+    """Краткая карточка себя"""
+    uid = message.from_user.id
+    cid = message.chat.id
+    conn = db_connect()
+    p = conn.execute("SELECT mood, bio FROM user_profiles WHERE uid=?", (uid,)).fetchone()
+    friends = conn.execute("SELECT COUNT(*) as c FROM friends WHERE uid=?", (uid,)).fetchone()["c"]
+    rel = conn.execute("SELECT rel_type, uid2 FROM relationships WHERE uid1=?", (uid,)).fetchone()
+    conn.close()
+    xp    = xp_data[cid].get(uid, 0)
+    lvl   = get_level(xp)
+    emoji_lvl, title_lvl = get_level_title(lvl)
+    warns = warnings[cid].get(uid, 0)
+    msgs  = chat_stats[cid].get(uid, 0)
+    mood  = p["mood"] if p and p["mood"] else "😐"
+    bio   = p["bio"]  if p and p["bio"]  else "не указано"
+    rel_text = ""
+    if rel:
+        try:
+            tm = await bot.get_chat_member(cid, rel["uid2"])
+            rel_text = f"\n❤️ Отношения: {tm.user.full_name}"
+        except: pass
+    await reply_auto_delete(message,
+        f"{emoji_lvl} <b>{message.from_user.full_name}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{mood}  •  {bio}\n"
+        f"🏅 Ур. {lvl} — {title_lvl}\n"
+        f"⭐ XP: {xp}  •  💬 Сообщ: {msgs}\n"
+        f"⚡ Варнов: {warns}/{MAX_WARNINGS}\n"
+        f"👥 Друзей: {friends}"
+        f"{rel_text}",
+        parse_mode="HTML")
+
+@dp.message(Command("top"))
+async def cmd_top(message: Message):
+    """Топ чата по XP"""
+    cid = message.chat.id
+    conn = db_connect()
+    rows = conn.execute(
+        "SELECT uid, xp FROM xp_data WHERE cid=? ORDER BY xp DESC LIMIT 10", (cid,)
+    ).fetchall()
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message, "📊 Пока нет данных — пиши больше!"); return
+    medals = ["🥇","🥈","🥉"] + ["▸"]*10
+    lines = ["🏆 <b>Топ чата по XP</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
+    for i, r in enumerate(rows):
+        try:
+            tm = await bot.get_chat_member(cid, r["uid"])
+            name = tm.user.full_name
+        except: name = f"ID{r['uid']}"
+        lvl = get_level(r["xp"])
+        lines.append(f"{medals[i]} <b>{name}</b> — {r['xp']} XP (ур.{lvl})")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+@dp.message(Command("stats"))
+async def cmd_stats(message: Message):
+    """Статистика чата"""
+    cid = message.chat.id
+    total_msgs  = sum(chat_stats[cid].values())
+    total_warns = sum(warnings[cid].values())
+    total_users = len(chat_stats[cid])
+    bans_count  = len(ban_list.get(cid, set()))
+    conn = db_connect()
+    reports_cnt = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
+    conn.close()
+    await reply_auto_delete(message,
+        f"📊 <b>Статистика чата</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💬 Сообщений: <b>{total_msgs}</b>\n"
+        f"👥 Активных: <b>{total_users}</b>\n"
+        f"⚡ Варнов: <b>{total_warns}</b>\n"
+        f"🔨 Банов: <b>{bans_count}</b>\n"
+        f"🚨 Репортов: <b>{reports_cnt}</b>",
+        parse_mode="HTML")
+
+@dp.message(Command("daily"))
+async def cmd_daily(message: Message):
+    """Ежедневный бонус XP"""
+    uid = message.from_user.id
+    cid = message.chat.id
+    import time as _td
+    conn = db_connect()
+    row = conn.execute(
+        "SELECT ts FROM rep_transfer_cooldown WHERE key=?",
+        (f"daily_{uid}_{cid}",)).fetchone()
+    now = _td.time()
+    if row and now - row["ts"] < 86400:
+        remaining = int((86400 - (now - row["ts"])) / 3600)
+        conn.close()
+        await reply_auto_delete(message,
+            f"⏰ Следующий бонус через <b>{remaining}ч</b>",
+            parse_mode="HTML"); return
+    bonus = random.randint(20, 100)
+    xp_data[cid][uid] = xp_data[cid].get(uid, 0) + bonus
+    db_set_int("xp_data", cid, uid, "xp", xp_data[cid][uid])
+    conn.execute("INSERT OR REPLACE INTO rep_transfer_cooldown VALUES (?,?)",
+                 (f"daily_{uid}_{cid}", now))
+    conn.commit(); conn.close()
+    await reply_auto_delete(message,
+        f"🎁 <b>Ежедневный бонус!</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⭐ +{bonus} XP получено!\n"
+        f"💰 Итого XP: <b>{xp_data[cid][uid]}</b>\n\n"
+        f"⏰ Следующий бонус через 24ч",
+        parse_mode="HTML")
 async def cmd_coinflip(message: Message):
     result = random.choice(["👑 Орёл!", "🪙 Решка!"])
     sides  = ["Орёл" if "Орёл" in result else "Решка"]
