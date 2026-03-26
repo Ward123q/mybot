@@ -878,7 +878,6 @@ async def reply_auto_delete(message: Message, text: str, **kwargs) -> Message:
 
 def add_mod_history(cid: int, uid: int, action: str, reason: str, by_name: str):
     """Записывает действие модератора в историю — память + SQLite"""
-    from datetime import datetime
     mod_history[cid][uid].append({
         "action": action,
         "reason": reason,
@@ -955,7 +954,6 @@ def schedule_unmute(cid: int, uid: int, mins: int, uname: str):
 async def log_violation_screenshot(cid: int, uid: int, uname: str, msg_text: str,
                                     action: str, reason: str, by_name: str, chat_title: str):
     """Сохраняет текст сообщения-нарушения в лог"""
-    from datetime import datetime
     preview = msg_text[:300] + ("…" if len(msg_text) > 300 else "")
     await log_action(
         f"╔═══════════════════╗\n"
@@ -1376,7 +1374,6 @@ class StatsMiddleware(BaseMiddleware):
             try:
                 await cs.on_message(cid)
             except: pass
-            from datetime import datetime, timedelta
             import time as _time
             now_dt = datetime.now()
             today  = now_dt.strftime("%d.%m.%Y")
@@ -1444,7 +1441,6 @@ class StatsMiddleware(BaseMiddleware):
                 last_seen[cid][uid] = _tc.time()
                 user_activity[cid][uid][today] += 1
                 # Расширенная статистика
-                from datetime import datetime
                 hour = datetime.now().hour
                 hourly_stats[cid][uid][hour] += 1
                 daily_stats[cid][uid][datetime.now().strftime("%d.%m.%Y")] += 1
@@ -1903,7 +1899,6 @@ async def cb_panel(call: CallbackQuery):
                 ]))
 
         elif action == "stats":
-            from datetime import datetime
             today = datetime.now().strftime("%d.%m.%Y")
             today_msgs = sum(daily_stats[cid][u].get(today, 0) for u in daily_stats[cid])
             top = sorted(chat_stats[cid].items(), key=lambda x: x[1], reverse=True)[:3]
@@ -2078,7 +2073,6 @@ async def cb_panelset(call: CallbackQuery):
     elif action == "deletedlog":
         logs = surveillance_log_get(cid)
         if not logs: await call.answer("Лог пуст", show_alert=True); return
-        from datetime import datetime
         lines2 = ["👁 Удалённые:\n"]
         for r2 in logs[:5]:
             dt = datetime.fromtimestamp(r2["ts"]).strftime("%d.%m %H:%M")
@@ -2099,7 +2093,6 @@ async def cb_panelset(call: CallbackQuery):
         conn = db_connect()
         rows = conn.execute("SELECT * FROM mod_shifts WHERE cid=?", (cid,)).fetchall()
         conn.close()
-        from datetime import datetime
         now_h = datetime.now().hour
         if not rows: await call.answer("Смен нет. /setshift", show_alert=True); return
         text = "\n".join(f"{'🟢' if r['start_hour']<=now_h<r['end_hour'] else '⚫'} {r['mod_name']} {r['start_hour']}–{r['end_hour']}ч" for r in rows)
@@ -2228,7 +2221,6 @@ async def cb_owner_panel(call: CallbackQuery):
         rows2 = conn.execute("SELECT action,target_name,ts FROM events_calendar WHERE cid=? ORDER BY ts DESC LIMIT 10",(cid,)).fetchall()
         conn.close()
         if not rows2: await call.answer("📅 Календарь пуст", show_alert=True); return
-        from datetime import datetime
         text = "📅 События:\n" + "\n".join(
             f"{datetime.fromtimestamp(r2['ts']).strftime('%d.%m %H:%M')} {r2['action']} → {r2['target_name']}"
             for r2 in rows2)
@@ -2239,7 +2231,6 @@ async def cb_owner_panel(call: CallbackQuery):
         rows2 = conn.execute("SELECT * FROM mod_tasks WHERE done=0 ORDER BY deadline LIMIT 8").fetchall()
         conn.close()
         if not rows2: await call.answer("✅ Задач нет", show_alert=True); return
-        from datetime import datetime
         text = "🎯 Задачи:\n" + "\n".join(
             f"#{r2['id']} {r2['mod_name']}: {r2['task'][:30]}" for r2 in rows2)
         await call.answer(text, show_alert=True)
@@ -3055,7 +3046,6 @@ async def cmd_ban(message: Message, command: CommandObject):
     await reply_auto_delete(message, reply, parse_mode="HTML")
     await log_action(f"╔═══════════════════╗\n🔨  <b>БАН</b>\n╚═══════════════════╝\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     add_mod_history(cid, target.id, "🔨 Бан", reason, message.from_user.full_name)
-    from datetime import datetime
     ban_list[cid][target.id] = {
         "name": target.full_name, "reason": reason,
         "by": message.from_user.full_name,
@@ -3443,7 +3433,6 @@ async def cmd_birthday(message: Message, command: CommandObject):
 
 async def birthday_checker():
     while True:
-        from datetime import datetime
         today = datetime.now()
         for uid, data in list(birthdays.items()):
             if data["day"] == today.day and data["month"] == today.month:
@@ -3565,7 +3554,6 @@ async def cmd_tempban(message: Message, command: CommandObject):
     if days < 1 or days > 365:
         await reply_auto_delete(message, "⚠️ Срок от 1 до 365 дней."); return
     cid = message.chat.id
-    from datetime import datetime
     # ЛС до бана
     await dm_warn_user(target.id, target.full_name, reason,
                        message.chat.title, f"🔇 Временный бан на {days} дн.", message.from_user.full_name)
@@ -3599,7 +3587,6 @@ async def cmd_banlist(message: Message):
     bans = ban_list[cid]
     if not bans:
         await reply_auto_delete(message, "👥 Список забаненных пуст."); return
-    from datetime import datetime
     lines = [f"👥 <b>Забаненные участники ({len(bans)}):</b>\n"]
     for uid, info in list(bans.items()):
         until = ""
@@ -3626,7 +3613,6 @@ async def cmd_modexport(message: Message, command: CommandObject):
     if message.reply_to_message:
         target_uid = message.reply_to_message.from_user.id
 
-    from datetime import datetime
     import io
     lines = [f"=== ИСТОРИЯ МОДЕРАЦИЙ | {message.chat.title} ===",
              f"Экспорт: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"]
@@ -4387,7 +4373,6 @@ async def autist_commands(message: Message):
             texts = IRIS_TEXTS.get(action, [f"🎯 {action.capitalize()} дня — {chosen_mention}!"])
             await reply_auto_delete(message, random.choice(texts), parse_mode="HTML")
         elif action == "статус":
-            from datetime import datetime
             today = datetime.now().strftime("%d.%m.%Y")
             w_today = sum(1 for uid in warnings[cid] for _ in range(warnings[cid][uid]))
             b_today = len(ban_list[cid])
@@ -4627,7 +4612,6 @@ async def autist_commands(message: Message):
         elif action == "скрин":
             if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
-            from datetime import datetime
             total_msgs = sum(chat_stats[cid].values())
             total_warns = sum(warnings[cid].values())
             total_bans = len(ban_list[cid])
@@ -4687,7 +4671,6 @@ async def autist_commands(message: Message):
         elif action == "шпион":
             if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
-            from datetime import datetime, timedelta
             hour_ago = datetime.now() - timedelta(hours=1)
             top_hour = sorted(chat_stats[cid].items(), key=lambda x: x[1], reverse=True)[:5]
             lines = ["🕵️ <b>Активность за последний час:</b>\n"]
@@ -4723,7 +4706,6 @@ async def autist_commands(message: Message):
         elif action == "молния":
             if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
-            from datetime import datetime
             today_str = datetime.now().strftime("%d.%m.%Y")
             deleted = 0
             for i in range(message.message_id, max(message.message_id - 300, 0), -1):
@@ -4776,7 +4758,6 @@ async def autist_commands(message: Message):
 
         elif action == "последний":
             import time as _tl
-            from datetime import datetime
             ts = last_seen[cid].get(target.id, 0)
             if ts:
                 dt = datetime.fromtimestamp(ts).strftime("%d.%m.%Y %H:%M")
@@ -5443,7 +5424,6 @@ async def cmd_decline(message: Message):
     await reply_auto_delete(message, f"🏳 {message.from_user.mention_html()} отказался от дуэли!", parse_mode="HTML")
 
 async def cmd_streak(message: Message):
-    from datetime import datetime
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     uid = user.id; cid = message.chat.id
     streak = streaks[cid][uid]
@@ -5574,7 +5554,6 @@ daily_claimed = {}
 
 async def cmd_daily(message: Message):
     uid = message.from_user.id; cid = message.chat.id
-    from datetime import datetime
     today = datetime.now().strftime("%d.%m.%Y")
     key = (cid, uid)
     if daily_claimed.get(key) == today:
@@ -6439,7 +6418,6 @@ async def cmd_report_stats(message: Message):
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
 async def cmd_chatstats(message: Message):
     cid = message.chat.id
-    from datetime import datetime
     from collections import Counter
     hour_totals = Counter()
     for uid_hours in hourly_stats[cid].values():
@@ -6488,7 +6466,6 @@ async def cmd_chatstats(message: Message):
 async def cmd_mystats(message: Message):
     uid = message.from_user.id
     cid = message.chat.id
-    from datetime import datetime
     total = chat_stats[cid].get(uid, 0)
     today = datetime.now().strftime("%d.%m.%Y")
     today_count = daily_stats[cid][uid].get(today, 0)
@@ -6524,7 +6501,6 @@ async def cmd_mystats(message: Message):
 
 async def cmd_topactive(message: Message):
     cid = message.chat.id
-    from datetime import datetime
     today = datetime.now().strftime("%d.%m.%Y")
     today_scores = [
         (uid, days.get(today, 0))
@@ -6618,7 +6594,6 @@ ROLES_LIST = [
 async def cmd_role(message: Message):
     uid = message.from_user.id
     cid = message.chat.id
-    from datetime import datetime
     today = datetime.now().strftime("%d.%m.%Y")
     key = f"{cid}_{uid}_{today}"
     if key in role_of_day:
@@ -7324,7 +7299,6 @@ async def cmd_artifact_roll(message: Message):
 async def cmd_lottery(message: Message):
     cid = message.chat.id
     uid = message.from_user.id
-    from datetime import datetime
     today = datetime.now().strftime("%d.%m.%Y")
     tickets = lottery_tickets[cid]
     participants = len(tickets)
@@ -7360,7 +7334,6 @@ async def cmd_lottery_buy(message: Message):
 async def run_lottery():
     """Запускается каждый день в 23:00"""
     while True:
-        from datetime import datetime
         now = datetime.now()
         # Ждём до 23:00
         target = now.replace(hour=23, minute=0, second=0, microsecond=0)
@@ -7455,7 +7428,6 @@ async def cmd_stock_withdraw(message: Message):
 async def run_stock():
     """Биржа — выплаты каждый день в 20:00"""
     while True:
-        from datetime import datetime
         now = datetime.now()
         target = now.replace(hour=20, minute=0, second=0, microsecond=0)
         if now >= target:
@@ -7491,7 +7463,6 @@ async def cmd_quote_save(message: Message):
     text = message.reply_to_message.text
     if len(text) > 300:
         await reply_auto_delete(message, "❌ Цитата слишком длинная (макс 300 символов)"); return
-    from datetime import datetime
     quotes_data[cid].append({
         "text": text,
         "author": author.full_name if author else "Аноним",
@@ -7534,7 +7505,6 @@ async def cmd_quotes(message: Message):
 # ══════════════════════════════════════════════════════
 async def cmd_journal(message: Message, command: CommandObject):
     uid = str(message.from_user.id)
-    from datetime import datetime
     if command.args:
         text = command.args.strip()
         if len(text) < 3:
@@ -8005,7 +7975,6 @@ async def cmd_usernote(message: Message, command: CommandObject):
         for i, n in enumerate(notes_list, 1):
             lines.append(f"{i}. {n['text']} <i>({n['date']} — {n['by']})</i>")
         await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML"); return
-    from datetime import datetime
     if uid not in user_notes[cid]:
         user_notes[cid][uid] = []
     user_notes[cid][uid].append({
@@ -8041,7 +8010,6 @@ async def cb_usernotes(call: CallbackQuery):
 async def cmd_modreport(message: Message):
     if not await require_admin(message): return
     cid = message.chat.id
-    from datetime import datetime, timedelta
     week_ago = datetime.now() - timedelta(days=7)
     history = mod_history.get(cid, [])
     recent = [h for h in history if True]  # берём все последние
@@ -8117,7 +8085,6 @@ async def cb_report_action(call: CallbackQuery):
             warnings[cid][target_id] += 1
             result = f"⚡ Варн выдан (ID{target_id})"
         elif action == "mute":
-            from datetime import datetime, timedelta
             until = datetime.now() + timedelta(minutes=60)
             from aiogram.types import ChatPermissions
             await bot.restrict_chat_member(cid, target_id, ChatPermissions(can_send_messages=False), until_date=until)
@@ -8272,7 +8239,6 @@ async def cmd_sbros_slash(message: Message):
 @dp.message(Command("status", "modstatus"))
 async def cmd_modstatus_slash(message: Message):
     if not await require_admin(message): return
-    from datetime import datetime
     cid = message.chat.id; today = datetime.now().strftime("%d.%m.%Y")
     w_today = sum(warnings[cid].values())
     b_today = len(ban_list[cid])
@@ -8700,7 +8666,6 @@ async def cb_mypanel(call: CallbackQuery):
             reply_markup=kb_report_action_v2(cid, report_queue[cid].index(r), r["target"]))
     elif action == "stats":
         cid = int(val)
-        from datetime import datetime
         today = datetime.now().strftime("%d.%m.%Y")
         today_msgs = sum(daily_stats[cid][uid].get(today, 0) for uid in daily_stats[cid])
         await call.answer(
@@ -8887,7 +8852,6 @@ async def cmd_backup(message: Message):
     json_bytes = json.dumps(backup_data, ensure_ascii=False, indent=2).encode("utf-8")
     buf = io.BytesIO(json_bytes)
     buf.name = "backup.json"
-    from datetime import datetime
     fname = f"backup_{datetime.now().strftime('%d%m%Y_%H%M')}.json"
     buf.name = fname
     await bot.send_document(OWNER_ID, buf,
@@ -9263,7 +9227,6 @@ async def cmd_my_journal(message: Message):
     conn.close()
     if not rows:
         await reply_auto_delete(message, "📋 Твой журнал пуст"); return
-    from datetime import datetime
     lines = [f"📋 <b>Твой журнал действий</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
     for r in rows:
         dt = datetime.fromtimestamp(r["ts"]).strftime("%d.%m %H:%M")
@@ -9305,7 +9268,6 @@ async def cmd_shifts(message: Message):
     conn.close()
     if not rows:
         await reply_auto_delete(message, "⏰ Смены не назначены"); return
-    from datetime import datetime
     now_h = datetime.now().hour
     lines = [f"⏰ <b>Расписание смен</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
     for r in rows:
@@ -9357,7 +9319,6 @@ async def cmd_task(message: Message):
         (cid, target.id, target.full_name, task_text, deadline, message.from_user.full_name))
     task_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.commit(); conn.close()
-    from datetime import datetime
     dl_str = datetime.fromtimestamp(deadline).strftime("%d.%m %H:%M")
     # Уведомить мода в ЛС
     try:
@@ -9408,7 +9369,6 @@ async def cmd_tasks(message: Message):
     conn.close()
     if not rows:
         await reply_auto_delete(message, "✅ Активных задач нет!"); return
-    from datetime import datetime
     import time as _tsk
     lines = [f"🎯 <b>Активные задачи</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
     for r in rows:
@@ -9526,7 +9486,6 @@ async def cmd_pin_manager(message: Message):
             "📌 <b>Закреп-менеджер</b>\n\nЗакреплённых нет.\n"
             "Реплайни на сообщение + /pin заголовок — добавить",
             parse_mode="HTML"); return
-    from datetime import datetime
     lines = ["📌 <b>Закреп-менеджер</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
     kb_rows = []
     for r in rows:
@@ -9680,7 +9639,6 @@ async def cmd_calendar(message: Message):
     conn.close()
     if not rows:
         await reply_auto_delete(message, "📅 Календарь пуст"); return
-    from datetime import datetime
     lines = ["📅 <b>Календарь событий</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
     for r in rows:
         dt = datetime.fromtimestamp(r["ts"]).strftime("%d.%m %H:%M")
@@ -9797,7 +9755,6 @@ async def smart_notify_loop():
     while True:
         try:
             now = _tsn.time()
-            from datetime import datetime
 
             # 1. Просроченные задачи
             conn = db_connect()
@@ -10078,7 +10035,6 @@ async def cmd_deleted_log(message: Message):
     logs = surveillance_log_get(cid)
     if not logs:
         await reply_auto_delete(message, "👁 Удалённых сообщений не зафиксировано"); return
-    from datetime import datetime
     lines = [f"👁 <b>Удалённые сообщения</b> ({len(logs)} шт.)\n━━━━━━━━━━━━━━━━━━━━━━\n"]
     for r in logs:
         dt = datetime.fromtimestamp(r["ts"]).strftime("%d.%m %H:%M")
@@ -10746,7 +10702,6 @@ async def cmd_perms(message: Message):
 async def daily_idea_loop():
     """Каждый день в 9:00 отправляет идею дня"""
     while True:
-        from datetime import datetime
         now = datetime.now()
         if now.hour == 9 and now.minute < 5:
             idea = random.choice(DAILY_IDEAS)
@@ -10836,7 +10791,6 @@ async def cmd_botupdate(message: Message, command: CommandObject):
         return
 
     # Формируем красивое сообщение об обновлении
-    from datetime import datetime
     update_text = (
         f"━━━━━━━━━━━━━━━\n"
         f"🔔 <b>ОБНОВЛЕНИЕ БОТА</b>\n"
@@ -11563,7 +11517,6 @@ async def cmd_auto_compliment(message: Message):
 async def compliment_daily_loop():
     """Каждый день в 12:00 отправляет комплимент"""
     while True:
-        from datetime import datetime
         now = datetime.now()
         if now.hour == 12 and now.minute < 5:
             for cid in list(compliment_auto_chats):
@@ -11730,7 +11683,6 @@ async def cmd_violators(message: Message):
             await reply_auto_delete(message,
                 f"✅ <b>{target.full_name}</b> — нарушений не найдено!",
                 parse_mode="HTML"); return
-        from datetime import datetime
         lines = [
             f"🗂 <b>Досье: {target.full_name}</b>\n"
             f"🆔 ID: <code>{target.id}</code>\n"
