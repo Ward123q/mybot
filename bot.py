@@ -5091,7 +5091,7 @@ async def autist_commands(message: Message):
         elif action == "неделя":
             if message.from_user.id not in ADMIN_IDS:
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
-            from datetime import datetime, timedelta as _td
+            _td = timedelta
             lines = [f"📊 <b>Итоги недели — {message.chat.title}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"]
             # Топ активных за 7 дней
             week_dates = [(datetime.now() - _td(days=i)).strftime("%d.%m.%Y") for i in range(7)]
