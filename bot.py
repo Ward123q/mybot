@@ -12350,5 +12350,546 @@ async def main():
     await log_action("🚀 <b>CHAT GUARD запущен!</b>")
     await dp.start_polling(bot)
 
+
+# ══════════════════════════════════════════════════════════
+#  👑 ПАНЕЛЬ НАСТРОЕК ВЛАДЕЛЬЦА — /ownersettings
+#  Полное управление ботом через Telegram (инлайн-кнопки)
+# ══════════════════════════════════════════════════════════
+
+# ── Хранилище настроек владельца ──────────────────────────
+def _owner_settings_get() -> dict:
+    conn = db_connect()
+    conn.execute("""CREATE TABLE IF NOT EXISTS owner_settings
+        (key TEXT PRIMARY KEY, value TEXT)""")
+    rows = conn.execute("SELECT key, value FROM owner_settings").fetchall()
+    conn.close()
+    defaults = {
+        # XP / Уровни
+        "xp_per_msg_min":     "1",
+        "xp_per_msg_max":     "15",
+        "xp_weekend_double":  "1",
+        "xp_cooldown_secs":   "60",
+        "level_up_announce":  "1",
+        # Модерация
+        "max_warns":          "3",
+        "warn_expiry_days":   "30",
+        "auto_ban_on_warns":  "1",
+        "default_mute_mins":  "60",
+        "antimat":            "0",
+        "anti_nsfw":          "1",
+        "auto_kick_bots":     "1",
+        # Экономика
+        "daily_xp_min":       "20",
+        "daily_xp_max":       "100",
+        "lottery_ticket_cost":"20",
+        "lottery_prize_mult": "20",
+        "rep_cooldown_hours": "1",
+        "stock_min_mult":     "-50",
+        "stock_max_mult":     "100",
+        # Рейтинг
+        "top_size":           "10",
+        "rating_reset_days":  "0",
+        "show_xp_in_top":     "1",
+        "show_rep_in_top":    "1",
+        # Анончат
+        "anon_enabled":       "1",
+        "anon_cooldown_secs": "30",
+        "anon_reveal_admins": "1",
+        # Прочее
+        "welcome_enabled":    "1",
+        "newspaper_enabled":  "1",
+        "events_enabled":     "1",
+        "compliment_enabled": "1",
+        "bot_name":           "CHAT GUARD",
+    }
+    for row in rows:
+        defaults[row["key"]] = row["value"]
+    return defaults
+
+
+def _owner_settings_set(key: str, value: str):
+    conn = db_connect()
+    conn.execute("""CREATE TABLE IF NOT EXISTS owner_settings
+        (key TEXT PRIMARY KEY, value TEXT)""")
+    conn.execute("INSERT OR REPLACE INTO owner_settings (key, value) VALUES (?,?)",
+                 (key, str(value)))
+    conn.commit()
+    conn.close()
+
+
+def _bool_icon(val) -> str:
+    return "✅" if str(val) == "1" else "❌"
+
+
+# ── Главное меню настроек ──────────────────────────────────
+def kb_owner_settings_main() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⭐ XP и Уровни",        callback_data="os:menu:xp"),
+         InlineKeyboardButton(text="🏆 Рейтинг/Топы",       callback_data="os:menu:rating")],
+        [InlineKeyboardButton(text="🛡 Модерация",           callback_data="os:menu:mod"),
+         InlineKeyboardButton(text="💰 Экономика",           callback_data="os:menu:eco")],
+        [InlineKeyboardButton(text="💌 Анонимки",            callback_data="os:menu:anon"),
+         InlineKeyboardButton(text="🎮 Функции",             callback_data="os:menu:features")],
+        [InlineKeyboardButton(text="📊 Текущие настройки",   callback_data="os:view:all"),
+         InlineKeyboardButton(text="🔄 Сброс к дефолту",    callback_data="os:reset:confirm")],
+        [InlineKeyboardButton(text="✖️ Закрыть",             callback_data="os:close")],
+    ])
+
+
+# ── Меню XP ────────────────────────────────────────────────
+def kb_os_xp(s: dict) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"📈 XP за сообщение: {s['xp_per_msg_min']}–{s['xp_per_msg_max']}",
+            callback_data="os:edit:xp_range")],
+        [InlineKeyboardButton(
+            text=f"⏱ Кулдаун XP: {s['xp_cooldown_secs']}с",
+            callback_data="os:edit:xp_cooldown_secs")],
+        [InlineKeyboardButton(
+            text=f"🗓 Двойной XP в выходные: {_bool_icon(s['xp_weekend_double'])}",
+            callback_data="os:toggle:xp_weekend_double")],
+        [InlineKeyboardButton(
+            text=f"📢 Анонс повышения уровня: {_bool_icon(s['level_up_announce'])}",
+            callback_data="os:toggle:level_up_announce")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="os:menu:main")],
+    ])
+
+
+# ── Меню Рейтинг ───────────────────────────────────────────
+def kb_os_rating(s: dict) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"📊 Размер топа: {s['top_size']} мест",
+            callback_data="os:edit:top_size")],
+        [InlineKeyboardButton(
+            text=f"⭐ XP в топе: {_bool_icon(s['show_xp_in_top'])}",
+            callback_data="os:toggle:show_xp_in_top"),
+         InlineKeyboardButton(
+            text=f"🌟 Репа в топе: {_bool_icon(s['show_rep_in_top'])}",
+            callback_data="os:toggle:show_rep_in_top")],
+        [InlineKeyboardButton(
+            text=f"🔄 Сброс рейтинга каждые {s['rating_reset_days']} дн (0=выкл)",
+            callback_data="os:edit:rating_reset_days")],
+        [InlineKeyboardButton(text="🗑 Сбросить XP всех",  callback_data="os:action:reset_xp"),
+         InlineKeyboardButton(text="🗑 Сбросить репу всех", callback_data="os:action:reset_rep")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="os:menu:main")],
+    ])
+
+
+# ── Меню Модерация ─────────────────────────────────────────
+def kb_os_mod(s: dict) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"⚡ Макс варнов: {s['max_warns']}",
+            callback_data="os:edit:max_warns")],
+        [InlineKeyboardButton(
+            text=f"⏳ Варн сгорает через: {s['warn_expiry_days']} дн",
+            callback_data="os:edit:warn_expiry_days")],
+        [InlineKeyboardButton(
+            text=f"🔇 Мут по умолчанию: {s['default_mute_mins']} мин",
+            callback_data="os:edit:default_mute_mins")],
+        [InlineKeyboardButton(
+            text=f"🔨 Автобан при {s['max_warns']} варнах: {_bool_icon(s['auto_ban_on_warns'])}",
+            callback_data="os:toggle:auto_ban_on_warns")],
+        [InlineKeyboardButton(
+            text=f"🧼 Антимат: {_bool_icon(s['antimat'])}",
+            callback_data="os:toggle:antimat"),
+         InlineKeyboardButton(
+            text=f"🔞 Анти-NSFW: {_bool_icon(s['anti_nsfw'])}",
+            callback_data="os:toggle:anti_nsfw")],
+        [InlineKeyboardButton(
+            text=f"🤖 Автокик ботов: {_bool_icon(s['auto_kick_bots'])}",
+            callback_data="os:toggle:auto_kick_bots")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="os:menu:main")],
+    ])
+
+
+# ── Меню Экономика ─────────────────────────────────────────
+def kb_os_eco(s: dict) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"🎁 Дейли бонус: {s['daily_xp_min']}–{s['daily_xp_max']} XP",
+            callback_data="os:edit:daily_range")],
+        [InlineKeyboardButton(
+            text=f"🎰 Билет лотереи: {s['lottery_ticket_cost']} репы",
+            callback_data="os:edit:lottery_ticket_cost")],
+        [InlineKeyboardButton(
+            text=f"💸 Множитель приза лотереи: x{s['lottery_prize_mult']}",
+            callback_data="os:edit:lottery_prize_mult")],
+        [InlineKeyboardButton(
+            text=f"⏱ Кулдаун репы: {s['rep_cooldown_hours']} ч",
+            callback_data="os:edit:rep_cooldown_hours")],
+        [InlineKeyboardButton(
+            text=f"📉 Биржа мин: {s['stock_min_mult']}% / макс: +{s['stock_max_mult']}%",
+            callback_data="os:edit:stock_range")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="os:menu:main")],
+    ])
+
+
+# ── Меню Анонимки ──────────────────────────────────────────
+def kb_os_anon(s: dict) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"💌 Анонимки включены: {_bool_icon(s['anon_enabled'])}",
+            callback_data="os:toggle:anon_enabled")],
+        [InlineKeyboardButton(
+            text=f"⏱ Кулдаун анонимки: {s['anon_cooldown_secs']} сек",
+            callback_data="os:edit:anon_cooldown_secs")],
+        [InlineKeyboardButton(
+            text=f"🕵️ Раскрытие автора для модов: {_bool_icon(s['anon_reveal_admins'])}",
+            callback_data="os:toggle:anon_reveal_admins")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="os:menu:main")],
+    ])
+
+
+# ── Меню Функции ───────────────────────────────────────────
+def kb_os_features(s: dict) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"👋 Welcome-экран: {_bool_icon(s['welcome_enabled'])}",
+            callback_data="os:toggle:welcome_enabled")],
+        [InlineKeyboardButton(
+            text=f"🗞 Газета чата: {_bool_icon(s['newspaper_enabled'])}",
+            callback_data="os:toggle:newspaper_enabled")],
+        [InlineKeyboardButton(
+            text=f"🎪 Ивенты (XP буст): {_bool_icon(s['events_enabled'])}",
+            callback_data="os:toggle:events_enabled")],
+        [InlineKeyboardButton(
+            text=f"💌 Авто-комплименты: {_bool_icon(s['compliment_enabled'])}",
+            callback_data="os:toggle:compliment_enabled")],
+        [InlineKeyboardButton(
+            text=f"🤖 Имя бота: {s['bot_name']}",
+            callback_data="os:edit:bot_name")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="os:menu:main")],
+    ])
+
+
+# ── Команда /ownersettings ──────────────────────────────────
+@dp.message(Command("ownersettings", "settings"))
+async def cmd_owner_settings(message: Message):
+    if message.from_user.id != OWNER_ID:
+        await reply_auto_delete(message, "🚫 Только для владельца!")
+        return
+    s = _owner_settings_get()
+    await message.answer(
+        f"👑 <b>НАСТРОЙКИ ВЛАДЕЛЬЦА</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🤖 Бот: <b>{s['bot_name']}</b>\n"
+        f"💬 Чатов: <b>{len(known_chats)}</b>\n"
+        f"⭐ XP за сообщение: <b>{s['xp_per_msg_min']}–{s['xp_per_msg_max']}</b>\n"
+        f"⚡ Макс варнов: <b>{s['max_warns']}</b>\n"
+        f"🎰 Лотерея: <b>{s['lottery_ticket_cost']} репы/билет</b>\n\n"
+        f"Выбери раздел для настройки:",
+        parse_mode="HTML",
+        reply_markup=kb_owner_settings_main()
+    )
+
+
+# ── Callback handler для всех настроек ─────────────────────
+# Хранилище ожидания ввода
+_os_pending: dict = {}  # {uid: {key, menu}}
+
+@dp.callback_query(F.data.startswith("os:"))
+async def cb_owner_settings(call: CallbackQuery):
+    if call.from_user.id != OWNER_ID:
+        await call.answer("🚫 Только для владельца!", show_alert=True)
+        return
+
+    parts  = call.data.split(":", 2)
+    action = parts[1]
+    param  = parts[2] if len(parts) > 2 else ""
+    s      = _owner_settings_get()
+
+    # ── Навигация по меню ──────────────────────────────────
+    if action == "close":
+        await call.message.delete()
+        await call.answer()
+        return
+
+    elif action == "menu":
+        if param == "main":
+            await call.message.edit_text(
+                f"👑 <b>НАСТРОЙКИ ВЛАДЕЛЬЦА</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"🤖 Бот: <b>{s['bot_name']}</b>\n"
+                f"💬 Чатов: <b>{len(known_chats)}</b>\n\n"
+                f"Выбери раздел:",
+                parse_mode="HTML",
+                reply_markup=kb_owner_settings_main()
+            )
+        elif param == "xp":
+            await call.message.edit_text(
+                "⭐ <b>Настройки XP и Уровней</b>\n━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML", reply_markup=kb_os_xp(s))
+        elif param == "rating":
+            await call.message.edit_text(
+                "🏆 <b>Настройки Рейтинга</b>\n━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML", reply_markup=kb_os_rating(s))
+        elif param == "mod":
+            await call.message.edit_text(
+                "🛡 <b>Настройки Модерации</b>\n━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML", reply_markup=kb_os_mod(s))
+        elif param == "eco":
+            await call.message.edit_text(
+                "💰 <b>Настройки Экономики</b>\n━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML", reply_markup=kb_os_eco(s))
+        elif param == "anon":
+            await call.message.edit_text(
+                "💌 <b>Настройки Анонимок</b>\n━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML", reply_markup=kb_os_anon(s))
+        elif param == "features":
+            await call.message.edit_text(
+                "🎮 <b>Настройки Функций</b>\n━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML", reply_markup=kb_os_features(s))
+
+    # ── Переключатель вкл/выкл ────────────────────────────
+    elif action == "toggle":
+        cur = s.get(param, "0")
+        new = "0" if cur == "1" else "1"
+        _owner_settings_set(param, new)
+
+        # Применяем сразу если нужно
+        if param == "antimat":
+            global ANTI_MAT_ENABLED
+            ANTI_MAT_ENABLED = new == "1"
+        elif param == "auto_kick_bots":
+            global AUTO_KICK_BOTS
+            AUTO_KICK_BOTS = new == "1"
+        elif param == "max_warns":
+            pass  # применяется через get
+
+        await call.answer(f"{'✅ Включено' if new == '1' else '❌ Выключено'}")
+        # Обновляем нужное меню
+        s = _owner_settings_get()
+        menus = {
+            "xp_weekend_double":   ("xp",       "⭐ <b>Настройки XP и Уровней</b>"),
+            "level_up_announce":   ("xp",       "⭐ <b>Настройки XP и Уровней</b>"),
+            "auto_ban_on_warns":   ("mod",      "🛡 <b>Настройки Модерации</b>"),
+            "antimat":             ("mod",      "🛡 <b>Настройки Модерации</b>"),
+            "anti_nsfw":           ("mod",      "🛡 <b>Настройки Модерации</b>"),
+            "auto_kick_bots":      ("mod",      "🛡 <b>Настройки Модерации</b>"),
+            "anon_enabled":        ("anon",     "💌 <b>Настройки Анонимок</b>"),
+            "anon_reveal_admins":  ("anon",     "💌 <b>Настройки Анонимок</b>"),
+            "welcome_enabled":     ("features", "🎮 <b>Настройки Функций</b>"),
+            "newspaper_enabled":   ("features", "🎮 <b>Настройки Функций</b>"),
+            "events_enabled":      ("features", "🎮 <b>Настройки Функций</b>"),
+            "compliment_enabled":  ("features", "🎮 <b>Настройки Функций</b>"),
+            "show_xp_in_top":      ("rating",   "🏆 <b>Настройки Рейтинга</b>"),
+            "show_rep_in_top":     ("rating",   "🏆 <b>Настройки Рейтинга</b>"),
+        }
+        menu_key, menu_title = menus.get(param, ("main", ""))
+        kb_map = {
+            "xp": kb_os_xp, "mod": kb_os_mod, "eco": kb_os_eco,
+            "anon": kb_os_anon, "features": kb_os_features, "rating": kb_os_rating,
+        }
+        if menu_key in kb_map:
+            try:
+                await call.message.edit_text(
+                    f"{menu_title}\n━━━━━━━━━━━━━━━━━━━━━━",
+                    parse_mode="HTML",
+                    reply_markup=kb_map[menu_key](s)
+                )
+            except: pass
+
+    # ── Редактирование числовых значений ──────────────────
+    elif action == "edit":
+        edit_prompts = {
+            "xp_range":           "📈 Введи диапазон XP за сообщение\nФормат: <code>МИН МАКс</code>\nПример: <code>3 12</code>",
+            "xp_cooldown_secs":   "⏱ Введи кулдаун XP в секундах\nПример: <code>60</code>",
+            "top_size":           "📊 Введи размер топа (1–50)\nПример: <code>10</code>",
+            "rating_reset_days":  "🔄 Сброс рейтинга каждые N дней (0 = выкл)\nПример: <code>30</code>",
+            "max_warns":          "⚡ Введи максимум варнов до бана\nПример: <code>3</code>",
+            "warn_expiry_days":   "⏳ Варн сгорает через N дней (0 = никогда)\nПример: <code>30</code>",
+            "default_mute_mins":  "🔇 Мут по умолчанию в минутах\nПример: <code>60</code>",
+            "daily_range":        "🎁 Диапазон дейли XP\nФормат: <code>МИН МАКС</code>\nПример: <code>20 100</code>",
+            "lottery_ticket_cost":"🎰 Цена билета лотереи в репе\nПример: <code>20</code>",
+            "lottery_prize_mult": "💸 Множитель приза: репа × N за каждого участника\nПример: <code>20</code>",
+            "rep_cooldown_hours": "⏱ Кулдаун репутации в часах\nПример: <code>1</code>",
+            "stock_range":        "📉 Диапазон биржи в %\nФормат: <code>МИН МАКС</code>\nПример: <code>-50 100</code>",
+            "anon_cooldown_secs": "⏱ Кулдаун анонимки в секундах\nПример: <code>30</code>",
+            "bot_name":           "🤖 Введи новое имя бота\nПример: <code>CHAT GUARD PRO</code>",
+        }
+        prompt = edit_prompts.get(param, f"Введи новое значение для <code>{param}</code>:")
+        _os_pending[call.from_user.id] = {"key": param, "msg_id": call.message.message_id}
+        await call.message.edit_text(
+            f"✏️ <b>Редактирование</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\n{prompt}\n\n"
+            f"Текущее: <b>{s.get(param, '—')}</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="❌ Отмена", callback_data="os:menu:main")
+            ]])
+        )
+        await call.answer()
+        return
+
+    # ── Действия ───────────────────────────────────────────
+    elif action == "action":
+        if param == "reset_xp":
+            await call.message.edit_text(
+                "⚠️ <b>Сброс XP ВСЕХ участников</b>\n\nВсе XP и уровни будут обнулены!\nУверен?",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="💥 ДА, СБРОСИТЬ", callback_data="os:confirm:reset_xp"),
+                    InlineKeyboardButton(text="❌ Отмена",        callback_data="os:menu:rating"),
+                ]])
+            )
+        elif param == "reset_rep":
+            await call.message.edit_text(
+                "⚠️ <b>Сброс репутации ВСЕХ участников</b>\n\nВся репутация будет обнулена!\nУверен?",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="💥 ДА, СБРОСИТЬ", callback_data="os:confirm:reset_rep"),
+                    InlineKeyboardButton(text="❌ Отмена",        callback_data="os:menu:rating"),
+                ]])
+            )
+
+    # ── Подтверждения опасных действий ────────────────────
+    elif action == "confirm":
+        if param == "reset_xp":
+            conn = db_connect()
+            conn.execute("DELETE FROM xp_data")
+            conn.execute("DELETE FROM levels")
+            conn.commit()
+            conn.close()
+            xp_data.clear()
+            levels.clear()
+            await call.answer("✅ XP и уровни всех участников сброшены!", show_alert=True)
+            s = _owner_settings_get()
+            await call.message.edit_text(
+                "🏆 <b>Настройки Рейтинга</b>\n━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML", reply_markup=kb_os_rating(s))
+
+        elif param == "reset_rep":
+            conn = db_connect()
+            conn.execute("DELETE FROM reputation")
+            conn.commit()
+            conn.close()
+            reputation.clear()
+            await call.answer("✅ Репутация всех участников сброшена!", show_alert=True)
+            s = _owner_settings_get()
+            await call.message.edit_text(
+                "🏆 <b>Настройки Рейтинга</b>\n━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode="HTML", reply_markup=kb_os_rating(s))
+
+    # ── Просмотр всех настроек ────────────────────────────
+    elif action == "view":
+        lines = [
+            "📋 <b>ВСЕ ТЕКУЩИЕ НАСТРОЙКИ</b>\n━━━━━━━━━━━━━━━━━━━━━━\n",
+            "⭐ <b>XP</b>",
+            f"  Диапазон: {s['xp_per_msg_min']}–{s['xp_per_msg_max']}",
+            f"  Кулдаун: {s['xp_cooldown_secs']}с",
+            f"  Двойной в выходные: {_bool_icon(s['xp_weekend_double'])}",
+            f"  Анонс уровня: {_bool_icon(s['level_up_announce'])}",
+            "",
+            "🛡 <b>Модерация</b>",
+            f"  Макс варнов: {s['max_warns']}",
+            f"  Варн сгорает: {s['warn_expiry_days']} дн",
+            f"  Мут по умолчанию: {s['default_mute_mins']} мин",
+            f"  Автобан: {_bool_icon(s['auto_ban_on_warns'])}",
+            f"  Антимат: {_bool_icon(s['antimat'])}",
+            f"  Анти-NSFW: {_bool_icon(s['anti_nsfw'])}",
+            "",
+            "💰 <b>Экономика</b>",
+            f"  Дейли XP: {s['daily_xp_min']}–{s['daily_xp_max']}",
+            f"  Лотерея: {s['lottery_ticket_cost']} репы/билет",
+            f"  Биржа: {s['stock_min_mult']}% – +{s['stock_max_mult']}%",
+            "",
+            "💌 <b>Анонимки</b>",
+            f"  Включены: {_bool_icon(s['anon_enabled'])}",
+            f"  Кулдаун: {s['anon_cooldown_secs']}с",
+        ]
+        try:
+            await call.message.edit_text(
+                "\n".join(lines),
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ Назад", callback_data="os:menu:main")
+                ]])
+            )
+        except: pass
+
+    # ── Сброс настроек ─────────────────────────────────────
+    elif action == "reset":
+        if param == "confirm":
+            await call.message.edit_text(
+                "⚠️ <b>Сброс ВСЕХ настроек к дефолту</b>\n\nУверен?",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="💥 ДА", callback_data="os:reset:do"),
+                    InlineKeyboardButton(text="❌ Отмена", callback_data="os:menu:main"),
+                ]])
+            )
+        elif param == "do":
+            conn = db_connect()
+            conn.execute("DELETE FROM owner_settings")
+            conn.commit()
+            conn.close()
+            await call.answer("✅ Настройки сброшены к дефолту!", show_alert=True)
+            s = _owner_settings_get()
+            await call.message.edit_text(
+                "👑 <b>НАСТРОЙКИ ВЛАДЕЛЬЦА</b>\n━━━━━━━━━━━━━━━━━━━━━━\n\nНастройки сброшены!\nВыбери раздел:",
+                parse_mode="HTML", reply_markup=kb_owner_settings_main()
+            )
+
+    await call.answer()
+
+
+# ── Обработчик ввода значений (текстовые сообщения) ────────
+@dp.message(F.chat.type == "private")
+async def handle_os_input(message: Message):
+    uid = message.from_user.id
+    if uid != OWNER_ID or uid not in _os_pending:
+        return
+
+    state = _os_pending.pop(uid)
+    key   = state["key"]
+    text  = (message.text or "").strip()
+
+    try:
+        # Диапазоны (два числа через пробел)
+        if key == "xp_range":
+            parts = text.split()
+            mn, mx = int(parts[0]), int(parts[1])
+            _owner_settings_set("xp_per_msg_min", str(max(1, mn)))
+            _owner_settings_set("xp_per_msg_max", str(max(mn, mx)))
+        elif key == "daily_range":
+            parts = text.split()
+            mn, mx = int(parts[0]), int(parts[1])
+            _owner_settings_set("daily_xp_min", str(max(1, mn)))
+            _owner_settings_set("daily_xp_max", str(max(mn, mx)))
+        elif key == "stock_range":
+            parts = text.split()
+            mn, mx = int(parts[0]), int(parts[1])
+            _owner_settings_set("stock_min_mult", str(mn))
+            _owner_settings_set("stock_max_mult", str(max(0, mx)))
+        elif key == "bot_name":
+            _owner_settings_set("bot_name", text[:50])
+        else:
+            val = int(text)
+            if key == "max_warns":
+                val = max(1, min(10, val))
+            elif key == "top_size":
+                val = max(1, min(50, val))
+            _owner_settings_set(key, str(val))
+
+        # Применяем сразу если нужно
+        s = _owner_settings_get()
+        if key == "max_warns":
+            global MAX_WARNINGS
+            MAX_WARNINGS = int(s["max_warns"])
+
+        await message.answer(
+            f"✅ <b>Сохранено!</b>\n\n<code>{key}</code> = <b>{text}</b>",
+            parse_mode="HTML",
+            reply_markup=kb_owner_settings_main()
+        )
+    except Exception as e:
+        await message.answer(
+            f"❌ Неверный формат. Попробуй снова.\n<code>{e}</code>",
+            parse_mode="HTML",
+            reply_markup=kb_owner_settings_main()
+        )
+
+
 if __name__ == "__main__":
     asyncio.run(main())
