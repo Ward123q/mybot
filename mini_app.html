@@ -3,173 +3,160 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Dashboard Mini</title>
+<title>Chat Guard</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root {
-  --bg:    var(--tg-theme-bg-color, #1a1a2e);
-  --bg2:   var(--tg-theme-secondary-bg-color, #16213e);
-  --text:  var(--tg-theme-text-color, #eaeaea);
-  --text2: var(--tg-theme-hint-color, #8a8a9a);
-  --acc:   var(--tg-theme-button-color, #6366f1);
-  --acct:  var(--tg-theme-button-text-color, #fff);
-  --link:  var(--tg-theme-link-color, #6366f1);
-  --danger:#ef4444; --warn:#f59e0b; --ok:#22c55e;
-  --bdr:rgba(255,255,255,.08); --r:12px;
-  --sbot:env(safe-area-inset-bottom,16px);
+  --bg0: #0d0f14; --bg1: #111318; --bg2: #16181f; --bg3: #1c1f28; --bg4: #222630;
+  --br: rgba(255,255,255,.07); --br2: rgba(255,255,255,.12);
+  --t1: #e8eaf0; --t2: #7c8299; --t3: #3d4259;
+  --acc: #5865f2; --acc2: #4752c4; --acc-g: rgba(88,101,242,.15);
+  --green: #23a55a; --green-g: rgba(35,165,90,.15);
+  --red: #f23f42; --red-g: rgba(242,63,66,.15);
+  --ylw: #f0b132; --ylw-g: rgba(240,177,50,.15);
+  --r: 10px; --sbot: env(safe-area-inset-bottom, 16px);
 }
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;background:var(--bg);color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  font-size:15px;overflow:hidden;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:15px;overflow:hidden;}
 #app{display:flex;flex-direction:column;height:100vh;height:100dvh;}
-#cnt{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
-  padding-bottom:calc(64px + var(--sbot));}
-#tabs{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);
-  border-top:1px solid var(--bdr);display:flex;justify-content:space-around;
-  align-items:center;padding:8px 0 calc(8px + var(--sbot));z-index:100;}
-.tab{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--text2);
-  font-size:10px;padding:4px 12px;border-radius:8px;cursor:pointer;
-  transition:color .15s;border:none;background:none;}
-.ti{font-size:22px;line-height:1;}
+#cnt{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:calc(64px + var(--sbot));}
+#cnt::-webkit-scrollbar{width:3px;}#cnt::-webkit-scrollbar-track{background:transparent;}#cnt::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:10px;}
+.hdr{display:flex;align-items:center;gap:10px;padding:16px 16px 12px;border-bottom:1px solid var(--br);}
+.hdr-logo{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#fff;flex-shrink:0;background:var(--acc);}
+.hdr-title{font-size:15px;font-weight:700;flex:1;letter-spacing:.3px;}
+.hdr-badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:var(--green-g);color:var(--green);border:1px solid rgba(35,165,90,.2);}
+#tabs{position:fixed;bottom:0;left:0;right:0;background:var(--bg1);border-top:1px solid var(--br);display:flex;justify-content:space-around;align-items:center;padding:6px 0 calc(6px + var(--sbot));z-index:100;}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--t3);font-size:10px;font-weight:600;padding:5px 16px;border-radius:8px;cursor:pointer;transition:color .15s;border:none;background:none;letter-spacing:.3px;}
 .tab.active{color:var(--acc);}
-.page{display:none;padding:16px;}
-.page.active{display:block;}
-.ph{display:flex;align-items:center;gap:10px;margin-bottom:20px;
-  padding-bottom:12px;border-bottom:1px solid var(--bdr);}
-.ph h1{font-size:18px;font-weight:600;flex:1;}
-.bdg{font-size:11px;padding:3px 8px;border-radius:20px;
-  background:rgba(99,102,241,.2);color:var(--acc);}
-.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;}
-.sc{background:var(--bg2);border-radius:var(--r);padding:16px;
-  border:1px solid var(--bdr);position:relative;overflow:hidden;}
-.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c,var(--acc));}
-.sv{font-size:26px;font-weight:700;line-height:1;}
-.sl{font-size:12px;color:var(--text2);margin-top:4px;}
-.sec{background:var(--bg2);border-radius:var(--r);border:1px solid var(--bdr);
-  margin-bottom:16px;overflow:hidden;}
-.sct{font-size:12px;font-weight:600;color:var(--text2);padding:12px 16px;
-  border-bottom:1px solid var(--bdr);text-transform:uppercase;letter-spacing:.06em;}
-.itm{display:flex;align-items:center;gap:12px;padding:12px 16px;
-  border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .1s;}
-.itm:last-child{border-bottom:none;}
-.itm:active{background:rgba(255,255,255,.04);}
-.ii{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;
-  justify-content:center;font-size:18px;flex-shrink:0;}
-.ib{flex:1;min-width:0;}
-.it{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.is{font-size:12px;color:var(--text2);margin-top:2px;}
-.pill{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500;}
-.pr{background:rgba(239,68,68,.15);color:var(--danger);}
-.pa{background:rgba(245,158,11,.15);color:var(--warn);}
-.pg{background:rgba(34,197,94,.15);color:var(--ok);}
-.pb{background:rgba(99,102,241,.15);color:var(--acc);}
-.fld{margin-bottom:14px;}
-.fld label{display:block;font-size:12px;color:var(--text2);margin-bottom:6px;
-  text-transform:uppercase;letter-spacing:.06em;}
-.fld input,.fld select{width:100%;padding:12px 14px;background:var(--bg2);
-  border:1px solid var(--bdr);border-radius:var(--r);color:var(--text);
-  font-size:15px;font-family:inherit;-webkit-appearance:none;appearance:none;}
+.ti{font-size:20px;line-height:1;}
+.page{display:none;padding:16px;}.page.active{display:block;}
+#ptr{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:12px;transition:height .2s;gap:6px;}#ptr.vis{height:40px;}
+.sec{background:var(--bg2);border:1px solid var(--br);border-radius:var(--r);margin-bottom:12px;overflow:hidden;}
+.sec-hdr{font-size:11px;font-weight:700;color:var(--t2);padding:10px 14px 8px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--br);display:flex;align-items:center;gap:6px;}
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.sc{background:var(--bg2);border:1px solid var(--br);border-radius:var(--r);padding:14px 14px 12px;position:relative;overflow:hidden;}
+.sc::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c,var(--acc));}
+.sc-icon{font-size:18px;margin-bottom:8px;display:block;}
+.sc-val{font-size:24px;font-weight:800;line-height:1;}
+.sc-lbl{font-size:11px;color:var(--t2);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+.itm{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--br);transition:background .1s;}
+.itm:last-child{border-bottom:none;}.itm:active{background:rgba(255,255,255,.03);}
+.ii{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.ib{flex:1;min-width:0;}.it{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.is{font-size:12px;color:var(--t2);margin-top:2px;}
+.di{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--br);}.di:last-child{border-bottom:none;}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0;box-shadow:0 0 6px rgba(35,165,90,.5);}
+.pill{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;}
+.pr{background:var(--red-g);color:var(--red);border:1px solid rgba(242,63,66,.2);}
+.pa{background:var(--ylw-g);color:var(--ylw);border:1px solid rgba(240,177,50,.2);}
+.pg{background:var(--green-g);color:var(--green);border:1px solid rgba(35,165,90,.2);}
+.pb{background:var(--acc-g);color:var(--acc);border:1px solid rgba(88,101,242,.2);}
+.ab{background:var(--red-g);border:1px solid rgba(242,63,66,.25);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;display:none;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--red);}
+.fld{margin-bottom:12px;}.fld label{display:block;font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.8px;}
+.fld input,.fld select{width:100%;padding:11px 13px;background:var(--bg3);border:1px solid var(--br2);border-radius:var(--r);color:var(--t1);font-size:14px;font-family:inherit;-webkit-appearance:none;appearance:none;transition:border-color .15s;}
 .fld input:focus,.fld select:focus{outline:none;border-color:var(--acc);}
-.btn{width:100%;padding:14px;border-radius:var(--r);font-size:15px;font-weight:600;
-  border:none;cursor:pointer;font-family:inherit;transition:opacity .15s;}
-.btn:active{opacity:.8;}
-.btp{background:var(--acc);color:var(--acct);}
-.btd{background:var(--danger);color:#fff;}
-.btw{background:var(--warn);color:#fff;}
-.btg{background:var(--bg2);border:1px solid var(--bdr);color:var(--text);}
-.brow{display:flex;gap:10px;margin-bottom:10px;}
-.brow .btn{flex:1;padding:12px 8px;font-size:13px;}
-.ab{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);
-  border-radius:var(--r);padding:12px 16px;margin-bottom:16px;
-  display:flex;align-items:center;gap:10px;font-size:13px;}
-#toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);
-  background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;
-  padding:10px 20px;font-size:14px;z-index:999;opacity:0;
-  transition:opacity .25s;white-space:nowrap;pointer-events:none;}
-#toast.show{opacity:1;}
-.ld{display:flex;align-items:center;justify-content:center;
-  padding:40px;color:var(--text2);flex-direction:column;gap:12px;}
-.sp{width:28px;height:28px;border:2px solid var(--bdr);border-top-color:var(--acc);
-  border-radius:50%;animation:spin .7s linear infinite;}
+.fld-pad{padding:14px;}
+.btn{width:100%;padding:13px;border-radius:var(--r);font-size:14px;font-weight:700;border:none;cursor:pointer;font-family:inherit;transition:opacity .15s,transform .1s;letter-spacing:.2px;}
+.btn:active{opacity:.8;transform:scale(.98);}
+.btp{background:var(--acc);color:#fff;}.btd{background:var(--red-g);color:var(--red);border:1px solid rgba(242,63,66,.25);}
+.btw{background:var(--ylw-g);color:var(--ylw);border:1px solid rgba(240,177,50,.25);}
+.btg{background:var(--bg3);color:var(--t1);border:1px solid var(--br2);}
+.brow{display:flex;gap:8px;margin-bottom:8px;}.brow .btn{flex:1;padding:11px 6px;font-size:13px;}
+.ld{display:flex;align-items:center;justify-content:center;padding:36px;color:var(--t2);flex-direction:column;gap:10px;}
+.sp{width:24px;height:24px;border:2px solid var(--br2);border-top-color:var(--acc);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
-.mt{text-align:center;padding:40px 20px;color:var(--text2);}
-.mi{font-size:40px;margin-bottom:12px;display:block;}
-#ptr{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;
-  color:var(--text2);font-size:13px;transition:height .2s;}
-#ptr.vis{height:44px;}
-.di{display:flex;align-items:center;gap:10px;padding:10px 16px;
-  border-bottom:1px solid var(--bdr);}
-.di:last-child{border-bottom:none;}
-.dd{width:8px;height:8px;border-radius:50%;background:var(--ok);flex-shrink:0;}
+.mt{text-align:center;padding:32px 20px;color:var(--t2);}.mi{font-size:36px;margin-bottom:10px;display:block;}
+.prof-avatar{width:60px;height:60px;border-radius:50%;background:var(--acc-g);border:2px solid rgba(88,101,242,.3);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 10px;}
+.prof-name{font-size:17px;font-weight:700;text-align:center;}
+.prof-rank{font-size:12px;font-weight:600;padding:3px 12px;border-radius:20px;background:var(--acc-g);color:var(--acc);border:1px solid rgba(88,101,242,.2);display:inline-block;margin-top:6px;}
+.prof-head{padding:20px;text-align:center;border-bottom:1px solid var(--br);}
+#toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--bg4);border:1px solid var(--br2);border-radius:20px;padding:9px 18px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .2s;white-space:nowrap;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.5);}
+#toast.show{opacity:1;}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="ptr">↓ Потяни чтобы обновить</div>
   <div id="cnt">
-
     <!-- ОБЗОР -->
     <div class="page active" id="page-overview">
-      <div class="ph"><h1>📊 Обзор</h1><span class="bdg" id="hdr-online">...</span></div>
-      <div class="ab" id="ab" style="display:none;">🚨 <span id="ab-txt"></span></div>
-      <div class="sgrid">
-        <div class="sc" style="--c:#6366f1;"><div style="font-size:22px;margin-bottom:6px;">👥</div><div class="sv" id="s0">—</div><div class="sl">Онлайн</div></div>
-        <div class="sc" style="--c:#f59e0b;"><div style="font-size:22px;margin-bottom:6px;">🚨</div><div class="sv" id="s1">—</div><div class="sl">Алертов</div></div>
-        <div class="sc" style="--c:#22c55e;"><div style="font-size:22px;margin-bottom:6px;">🎫</div><div class="sv" id="s2">—</div><div class="sl">Тикетов</div></div>
-        <div class="sc" style="--c:#ef4444;"><div style="font-size:22px;margin-bottom:6px;">🔨</div><div class="sv" id="s3">—</div><div class="sl">Банов</div></div>
+      <div class="hdr">
+        <div class="hdr-logo">⚔</div>
+        <span class="hdr-title">Chat Guard</span>
+        <span class="hdr-badge" id="hdr-online">● —</span>
       </div>
-      <div class="sec"><div class="sct">🟢 На дежурстве</div><div id="duty"><div class="ld"><div class="sp"></div></div></div></div>
-      <div class="sec"><div class="sct">⚡ Последние события</div><div id="evts"><div class="ld"><div class="sp"></div></div></div></div>
+      <div style="height:14px;"></div>
+      <div class="ab" id="ab">🚨 <span id="ab-txt"></span></div>
+      <div class="sgrid">
+        <div class="sc" style="--c:#5865f2;"><span class="sc-icon">👥</span><div class="sc-val" id="s0">—</div><div class="sc-lbl">Онлайн</div></div>
+        <div class="sc" style="--c:#f0b132;"><span class="sc-icon">🚨</span><div class="sc-val" id="s1">—</div><div class="sc-lbl">Алертов</div></div>
+        <div class="sc" style="--c:#23a55a;"><span class="sc-icon">🎫</span><div class="sc-val" id="s2">—</div><div class="sc-lbl">Тикеты</div></div>
+        <div class="sc" style="--c:#f23f42;"><span class="sc-icon">🔨</span><div class="sc-val" id="s3">—</div><div class="sc-lbl">Банов</div></div>
+      </div>
+      <div class="sec"><div class="sec-hdr">🟢 На дежурстве</div><div id="duty"><div class="ld"><div class="sp"></div></div></div></div>
+      <div class="sec"><div class="sec-hdr">⚡ Последние события</div><div id="evts"><div class="ld"><div class="sp"></div></div></div></div>
     </div>
-
     <!-- ТИКЕТЫ -->
     <div class="page" id="page-tickets">
-      <div class="ph"><h1>🎫 Тикеты</h1><span class="bdg" id="tc">...</span></div>
-      <div style="display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;">
-        <button class="btn btp" style="padding:8px 16px;font-size:12px;white-space:nowrap;" onclick="filterT('open')" id="tf-open">🟡 Открытые</button>
-        <button class="btn btg" style="padding:8px 16px;font-size:12px;white-space:nowrap;" onclick="filterT('in_progress')" id="tf-prog">🔵 В работе</button>
-        <button class="btn btg" style="padding:8px 16px;font-size:12px;white-space:nowrap;" onclick="filterT('closed')" id="tf-closed">✅ Закрытые</button>
+      <div class="hdr">
+        <div class="hdr-logo" style="background:var(--ylw);">🎫</div>
+        <span class="hdr-title">Тикеты</span>
+        <span class="hdr-badge" id="tc" style="background:var(--ylw-g);color:var(--ylw);border-color:rgba(240,177,50,.2);">—</span>
+      </div>
+      <div style="height:14px;"></div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px;">
+        <button class="pill pb" style="white-space:nowrap;padding:6px 14px;cursor:pointer;border:none;font-size:12px;font-weight:700;" onclick="filterT('open')" id="tf-open">Открытые</button>
+        <button class="pill" style="white-space:nowrap;padding:6px 14px;cursor:pointer;background:var(--bg3);border:1px solid var(--br2);color:var(--t2);font-size:12px;font-weight:700;border-radius:20px;" onclick="filterT('in_progress')" id="tf-prog">В работе</button>
+        <button class="pill" style="white-space:nowrap;padding:6px 14px;cursor:pointer;background:var(--bg3);border:1px solid var(--br2);color:var(--t2);font-size:12px;font-weight:700;border-radius:20px;" onclick="filterT('closed')" id="tf-closed">Закрытые</button>
       </div>
       <div class="sec"><div id="tlist"><div class="ld"><div class="sp"></div></div></div></div>
     </div>
-
     <!-- ДЕЙСТВИЯ -->
     <div class="page" id="page-actions">
-      <div class="ph"><h1>⚡ Действия</h1></div>
-      <div class="sec" style="margin-bottom:16px;"><div class="sct">👤 Пользователь</div>
-        <div style="padding:16px;">
+      <div class="hdr">
+        <div class="hdr-logo" style="background:var(--red);">⚡</div>
+        <span class="hdr-title">Действия</span>
+      </div>
+      <div style="height:14px;"></div>
+      <div class="sec" style="margin-bottom:12px;">
+        <div class="sec-hdr">👤 Пользователь</div>
+        <div class="fld-pad">
           <div class="fld"><label>Telegram ID</label><input type="number" id="uid" placeholder="123456789" inputmode="numeric"></div>
-          <div class="fld"><label>Чат</label><select id="cid"><option value="">— чат —</option></select></div>
+          <div class="fld" style="margin-bottom:0;"><label>Чат</label><select id="cid"><option value="">— выбрать чат —</option></select></div>
         </div>
       </div>
-      <div class="sec" style="margin-bottom:16px;"><div class="sct">🔨 Действия</div>
-        <div style="padding:16px;">
-          <div class="brow"><button class="btn btd" onclick="act('ban')">🔨 Бан</button><button class="btn btg" onclick="act('unban')">🕊 Разбан</button></div>
+      <div class="sec" style="margin-bottom:12px;">
+        <div class="sec-hdr">🔨 Модерация</div>
+        <div class="fld-pad">
+          <div class="brow"><button class="btn btd" onclick="act('ban')">🔨 Бан</button><button class="btn btg" onclick="act('unban')">🕊️ Разбан</button></div>
           <div class="brow"><button class="btn btw" onclick="actMute()">🔇 Мут</button><button class="btn btg" onclick="act('unmute')">🔊 Размут</button></div>
-          <div class="brow"><button class="btn btg" onclick="act('kick')">👟 Кик</button><button class="btn btg" onclick="act('warn')">⚡ Варн</button></div>
+          <div class="brow" style="margin-bottom:0;"><button class="btn btg" onclick="act('kick')">👟 Кик</button><button class="btn btw" onclick="act('warn')">⚠️ Варн</button></div>
         </div>
       </div>
-      <div class="sec" style="margin-bottom:16px;"><div class="sct">📨 Сообщение</div>
-        <div style="padding:16px;">
+      <div class="sec" style="margin-bottom:12px;">
+        <div class="sec-hdr">📨 Сообщение в чат</div>
+        <div class="fld-pad">
           <div class="fld"><label>Текст</label><input type="text" id="msg" placeholder="Введи сообщение..."></div>
           <button class="btn btp" onclick="doSend()">Отправить</button>
         </div>
       </div>
-      <div class="sec"><div class="sct">🔒 Чат</div>
-        <div style="padding:16px;">
-          <div class="brow"><button class="btn btd" onclick="chatAct('lock')">🔒 Локдаун</button><button class="btn btg" onclick="chatAct('unlock')">🔓 Открыть</button></div>
+      <div class="sec">
+        <div class="sec-hdr">🔒 Управление чатом</div>
+        <div class="fld-pad">
+          <div class="brow" style="margin-bottom:0;"><button class="btn btd" onclick="chatAct('lock')">🔒 Локдаун</button><button class="btn btg" onclick="chatAct('unlock')">🔓 Открыть</button></div>
         </div>
       </div>
     </div>
-
     <!-- ПРОФИЛЬ -->
     <div class="page" id="page-profile">
-      <div class="ph"><h1>👤 Профиль</h1></div>
+      <div class="hdr">
+        <div class="hdr-logo" style="background:var(--green);">👤</div>
+        <span class="hdr-title">Профиль</span>
+      </div>
+      <div style="height:14px;"></div>
       <div id="prof"><div class="ld"><div class="sp"></div></div></div>
     </div>
   </div>
-
   <nav id="tabs">
     <button class="tab active" onclick="go('overview',this)"><span class="ti">📊</span><span>Обзор</span></button>
     <button class="tab" onclick="go('tickets',this)"><span class="ti">🎫</span><span>Тикеты</span></button>
@@ -181,35 +168,44 @@ html,body{height:100%;background:var(--bg);color:var(--text);
 <script>
 const tg=window.Telegram.WebApp;
 tg.ready();tg.expand();
-if(tg.themeParams.bg_color) tg.setHeaderColor(tg.themeParams.bg_color);
+tg.setBackgroundColor('#0d0f14');
+if(tg.setHeaderColor)tg.setHeaderColor('#0d0f14');
 
 const BASE='';
 let tok='',tf='open';
+
+function e(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+let _tt;
+function toast(msg,type){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.background=type==='d'?'rgba(242,63,66,.9)':'';
+  el.style.color=type==='d'?'#fff':'';
+  el.classList.add('show');clearTimeout(_tt);
+  _tt=setTimeout(()=>el.classList.remove('show'),2500);
+}
 
 async function auth(){
   const id=tg.initData;
   if(!id){toast('❌ Открой через Telegram','d');return false;}
   try{
-    const r=await fetch(BASE+'/api/mini/auth',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({initData:id})});
+    const r=await fetch(BASE+'/api/mini/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:id})});
     const d=await r.json();
     if(d.ok){tok=d.token;return true;}
     toast('❌ '+(d.error||'Нет доступа'),'d');
-    tg.showAlert('Нет доступа: '+(d.error||''));
-    return false;
-  }catch(e){toast('❌ Ошибка авторизации','d');return false;}
+    tg.showAlert('Нет доступа: '+(d.error||''));return false;
+  }catch(err){toast('❌ Ошибка авторизации','d');return false;}
 }
 
 async function api(path,opts={}){
-  opts.headers=opts.headers||{};
-  opts.headers['X-Mini-Token']=tok;
+  opts.headers=opts.headers||{};opts.headers['X-Mini-Token']=tok;
   if(opts.body&&!opts.headers['Content-Type'])opts.headers['Content-Type']='application/json';
   try{
     const r=await fetch(BASE+path,opts);
     if(r.status===401){toast('❌ Сессия истекла','d');return null;}
     return r.json();
-  }catch(e){toast('❌ Сеть','d');return null;}
+  }catch(err){toast('❌ Сеть','d');return null;}
 }
 
 function go(name,el){
@@ -218,10 +214,8 @@ function go(name,el){
   document.getElementById('page-'+name).classList.add('active');
   if(el)el.classList.add('active');
   document.getElementById('cnt').scrollTop=0;
-  if(name==='overview')loadOv();
-  if(name==='tickets') loadT();
-  if(name==='actions') loadChats();
-  if(name==='profile') loadProf();
+  if(name==='overview')loadOv();if(name==='tickets')loadT();
+  if(name==='actions')loadChats();if(name==='profile')loadProf();
   tg.HapticFeedback.impactOccurred('light');
 }
 
@@ -232,177 +226,117 @@ async function loadOv(){
   document.getElementById('s2').textContent=d.tickets_open??'—';
   document.getElementById('s3').textContent=d.bans??'—';
   document.getElementById('hdr-online').textContent='● '+(d.online||0)+' онлайн';
-  if(d.alerts>0){
-    document.getElementById('ab').style.display='flex';
-    document.getElementById('ab-txt').textContent=d.alerts+' алертов';
-  }
+  const ab=document.getElementById('ab');
+  if(d.alerts>0){ab.style.display='flex';document.getElementById('ab-txt').textContent=d.alerts+' активных алертов';}
+  else ab.style.display='none';
   const duty=document.getElementById('duty');
   if(d.duty&&d.duty.length){
-    duty.innerHTML=d.duty.map(m=>`<div class="di"><div class="dd"></div>
-      <div style="flex:1;font-size:14px;font-weight:500;">${e(m.name)}</div>
-      <div style="font-size:11px;color:var(--text2);">${e(m.rank_name||'')}</div></div>`).join('');
+    duty.innerHTML=d.duty.map(m=>`<div class="di"><div class="dot"></div><div style="flex:1;font-size:14px;font-weight:500;">${e(m.name)}</div><div style="font-size:11px;color:var(--t2);font-weight:600;">${e(m.rank_name||'')}</div></div>`).join('');
   }else duty.innerHTML='<div class="mt"><span class="mi">😴</span>Никто не дежурит</div>';
   const evts=document.getElementById('evts');
   if(d.events&&d.events.length){
-    evts.innerHTML=d.events.map(ev=>`<div class="itm">
-      <div class="ii" style="background:rgba(99,102,241,.12);">${ev.icon||'⚡'}</div>
-      <div class="ib"><div class="it">${e(ev.text)}</div>
-      <div class="is">${e(ev.time||'')}</div></div></div>`).join('');
-  }else evts.innerHTML='<div class="mt"><span class="mi">✨</span>Тихо</div>';
+    evts.innerHTML=d.events.map(ev=>`<div class="itm"><div class="ii" style="background:var(--acc-g);">${ev.icon||'⚡'}</div><div class="ib"><div class="it">${e(ev.text)}</div><div class="is">${e(ev.time||'')}</div></div></div>`).join('');
+  }else evts.innerHTML='<div class="mt"><span class="mi">🌙</span>Событий нет</div>';
 }
 
 async function loadT(){
-  const el=document.getElementById('tlist');
-  el.innerHTML='<div class="ld"><div class="sp"></div></div>';
   const d=await api('/api/mini/tickets?status='+tf);if(!d)return;
-  document.getElementById('tc').textContent=(d.tickets||[]).length;
-  if(!d.tickets||!d.tickets.length){
-    el.innerHTML='<div class="mt"><span class="mi">🎉</span>Нет тикетов</div>';return;
-  }
-  const sm={open:['🟡','pa'],in_progress:['🔵','pb'],closed:['✅','pg'],rejected:['❌','pr']};
-  el.innerHTML=d.tickets.map(t=>{
-    const[ic,cl]=sm[t.status]||['⚪',''];
-    return`<div class="itm" onclick="openT(${t.id})">
-      <div class="ii" style="background:rgba(99,102,241,.12);">🎫</div>
-      <div class="ib"><div class="it">#${t.id} ${e(t.subject||(t.message||'').slice(0,40)||'—')}</div>
-      <div class="is">${e(t.username||t.user_id||'—')} · ${e((t.created_at||'').slice(0,16))}</div></div>
-      <span class="pill ${cl}">${ic}</span></div>`;
+  const list=document.getElementById('tlist');
+  const cnt=d.tickets||[];
+  document.getElementById('tc').textContent=cnt.length;
+  if(!cnt.length){list.innerHTML='<div class="mt"><span class="mi">✅</span>Тикетов нет</div>';return;}
+  list.innerHTML=cnt.map(t=>{
+    const cls=t.status==='open'?'pr':t.status==='in_progress'?'pa':'pg';
+    const lbl=t.status==='open'?'Открыт':t.status==='in_progress'?'В работе':'Закрыт';
+    return `<div class="itm"><div class="ii" style="background:var(--acc-g);">🎫</div><div class="ib"><div class="it">#${t.id} ${e(t.subject||'—')}</div><div class="is">${e(t.user_name||'')} · ${e((t.created_at||'').slice(0,16))}</div></div><span class="pill ${cls}">${lbl}</span></div>`;
   }).join('');
 }
 
 function filterT(s){
   tf=s;
   ['open','prog','closed'].forEach(k=>{
-    const el=document.getElementById('tf-'+k);
-    if(el){el.className='btn '+(k==={open:'open',in_progress:'prog',closed:'closed'}[s]?'btp':'btg');
-    el.style.cssText='padding:8px 16px;font-size:12px;white-space:nowrap;';}
+    const el=document.getElementById('tf-'+k);el.className='pill';
+    el.style.cssText='white-space:nowrap;padding:6px 14px;cursor:pointer;background:var(--bg3);border:1px solid var(--br2);color:var(--t2);font-size:12px;font-weight:700;border-radius:20px;';
   });
+  const active=document.getElementById('tf-'+(s==='in_progress'?'prog':s));
+  if(active){active.className='pill pb';active.style.cssText='white-space:nowrap;padding:6px 14px;cursor:pointer;border:none;font-size:12px;font-weight:700;';}
   loadT();
-}
-
-async function openT(id){
-  tg.HapticFeedback.impactOccurred('light');
-  const d=await api('/api/mini/ticket/'+id);
-  if(!d||!d.ticket)return;
-  const t=d.ticket;
-  tg.showPopup({title:'Тикет #'+t.id,
-    message:'От: '+(t.username||t.user_id)+'\n\n'+(t.message||'').slice(0,200),
-    buttons:[{id:'close',type:'destructive',text:'✅ Закрыть'},{id:'cancel',type:'cancel',text:'Назад'}]
-  },async(b)=>{
-    if(b!=='close')return;
-    const r=await api('/api/mini/ticket/'+id+'/close',{method:'POST'});
-    if(r?.ok){toast('✅ Тикет закрыт');loadT();}else toast('❌ Ошибка','d');
-  });
 }
 
 async function loadChats(){
   const d=await api('/api/mini/chats');if(!d)return;
-  const sel=document.getElementById('cid');
-  sel.innerHTML='<option value="">— чат —</option>'+
-    (d.chats||[]).map(c=>`<option value="${c.cid}">${e(c.title||c.cid)}</option>`).join('');
+  const sel=document.getElementById('cid');const cur=sel.value;
+  sel.innerHTML='<option value="">— выбрать чат —</option>';
+  (d.chats||[]).forEach(c=>{const o=document.createElement('option');o.value=c.cid;o.textContent=c.title;sel.appendChild(o);});
+  if(cur)sel.value=cur;
 }
 
 async function act(action){
-  const uid=document.getElementById('uid').value.trim();
-  const cid=document.getElementById('cid').value;
-  if(!uid){tg.showAlert('Введи ID');return;}
-  if(!cid&&action!=='warn'){tg.showAlert('Выбери чат');return;}
-  const labels={ban:'Забанить',unban:'Разбанить',kick:'Кикнуть',
-    unmute:'Размутить',warn:'Выдать варн'};
-  tg.showConfirm((labels[action]||action)+' '+uid+'?',async ok=>{
-    if(!ok)return;
-    tg.HapticFeedback.notificationOccurred('warning');
-    const r=await api('/api/mini/action',{method:'POST',
-      body:JSON.stringify({action,user_id:+uid,chat_id:+cid})});
-    if(r?.ok){toast('✅ '+(r.msg||'Готово'));tg.HapticFeedback.notificationOccurred('success');}
-    else{toast('❌ '+(r?.msg||'Ошибка'),'d');tg.HapticFeedback.notificationOccurred('error');}
-  });
+  const uid=document.getElementById('uid').value;const cid=document.getElementById('cid').value;
+  if(!uid){tg.showAlert('Введи Telegram ID');return;}if(!cid){tg.showAlert('Выбери чат');return;}
+  const r=await api('/api/mini/action',{method:'POST',body:JSON.stringify({action,user_id:+uid,chat_id:+cid})});
+  if(r?.ok){toast('✅ '+r.msg);tg.HapticFeedback.notificationOccurred('success');}
+  else{toast('❌ '+(r?.msg||'Ошибка'),'d');tg.HapticFeedback.notificationOccurred('error');}
 }
 
 async function actMute(){
-  const uid=document.getElementById('uid').value.trim();
-  const cid=document.getElementById('cid').value;
-  if(!uid){tg.showAlert('Введи ID');return;}
-  if(!cid){tg.showAlert('Выбери чат');return;}
-  tg.showPopup({title:'Мут',message:'Длительность:',
-    buttons:[{id:'30',type:'default',text:'30 мин'},{id:'60',type:'default',text:'1 час'},
-      {id:'1440',type:'default',text:'24 часа'},{id:'cancel',type:'cancel',text:'Отмена'}]
+  const uid=document.getElementById('uid').value;const cid=document.getElementById('cid').value;
+  if(!uid){tg.showAlert('Введи Telegram ID');return;}if(!cid){tg.showAlert('Выбери чат');return;}
+  tg.showPopup({title:'Мут',message:'Выбери длительность:',
+    buttons:[{id:'30',type:'default',text:'30 мин'},{id:'60',type:'default',text:'1 час'},{id:'1440',type:'default',text:'24 часа'},{id:'cancel',type:'cancel',text:'Отмена'}]
   },async b=>{
     if(b==='cancel'||!b)return;
-    const r=await api('/api/mini/action',{method:'POST',
-      body:JSON.stringify({action:'mute',user_id:+uid,chat_id:+cid,arg:b})});
-    if(r?.ok){toast('✅ '+r.msg);tg.HapticFeedback.notificationOccurred('success');}
-    else toast('❌ '+(r?.msg||'Ошибка'),'d');
+    const r=await api('/api/mini/action',{method:'POST',body:JSON.stringify({action:'mute',user_id:+uid,chat_id:+cid,arg:b})});
+    if(r?.ok){toast('✅ '+r.msg);tg.HapticFeedback.notificationOccurred('success');}else toast('❌ '+(r?.msg||'Ошибка'),'d');
   });
 }
 
 async function doSend(){
-  const msg=document.getElementById('msg').value.trim();
-  const cid=document.getElementById('cid').value;
-  if(!msg){tg.showAlert('Введи текст');return;}
-  if(!cid){tg.showAlert('Выбери чат');return;}
-  const r=await api('/api/mini/action',{method:'POST',
-    body:JSON.stringify({action:'send_message',chat_id:+cid,arg:msg})});
-  if(r?.ok){toast('✅ Отправлено');document.getElementById('msg').value='';
-    tg.HapticFeedback.notificationOccurred('success');}
+  const msg=document.getElementById('msg').value.trim();const cid=document.getElementById('cid').value;
+  if(!msg){tg.showAlert('Введи текст');return;}if(!cid){tg.showAlert('Выбери чат');return;}
+  const r=await api('/api/mini/action',{method:'POST',body:JSON.stringify({action:'send_message',chat_id:+cid,arg:msg})});
+  if(r?.ok){toast('✅ Отправлено');document.getElementById('msg').value='';tg.HapticFeedback.notificationOccurred('success');}
   else toast('❌ '+(r?.msg||'Ошибка'),'d');
 }
 
 async function chatAct(action){
-  const cid=document.getElementById('cid').value;
-  if(!cid){tg.showAlert('Выбери чат');return;}
+  const cid=document.getElementById('cid').value;if(!cid){tg.showAlert('Выбери чат');return;}
   tg.showConfirm(action==='lock'?'Заблокировать чат?':'Разблокировать чат?',async ok=>{
     if(!ok)return;
-    const r=await api('/api/mini/action',{method:'POST',
-      body:JSON.stringify({action,chat_id:+cid})});
+    const r=await api('/api/mini/action',{method:'POST',body:JSON.stringify({action,chat_id:+cid})});
     if(r?.ok)toast('✅ '+r.msg);else toast('❌ '+(r?.msg||'Ошибка'),'d');
   });
 }
 
 async function loadProf(){
-  const el=document.getElementById('prof');
-  const d=await api('/api/mini/me');
+  const el=document.getElementById('prof');const d=await api('/api/mini/me');
   if(!d||!d.admin){el.innerHTML='<div class="mt"><span class="mi">👤</span>Профиль не найден</div>';return;}
   const a=d.admin,st=d.stats||{};
   el.innerHTML=`
-    <div class="sec" style="margin-bottom:16px;">
-      <div style="padding:20px;text-align:center;">
-        <div style="width:64px;height:64px;border-radius:50%;background:rgba(99,102,241,.2);
-          display:flex;align-items:center;justify-content:center;font-size:28px;
-          margin:0 auto 12px;">👤</div>
-        <div style="font-size:18px;font-weight:600;">${e(a.name)}</div>
-        <div style="font-size:13px;color:var(--text2);margin-top:4px;">${e(a.rank_name||'Модератор')}</div>
+    <div class="sec" style="margin-bottom:12px;">
+      <div class="prof-head">
+        <div class="prof-avatar">👤</div>
+        <div class="prof-name">${e(a.name)}</div>
+        <div><span class="prof-rank">${e(a.rank_name||'Модератор')}</span></div>
       </div>
     </div>
-    <div class="sec" style="margin-bottom:16px;"><div class="sct">📊 Статистика</div>
-      <div class="sgrid" style="padding:16px;margin-bottom:0;">
-        <div class="sc" style="--c:#ef4444;"><div style="font-size:20px;margin-bottom:4px;">🔨</div><div class="sv">${st.bans||0}</div><div class="sl">Банов</div></div>
-        <div class="sc" style="--c:#f59e0b;"><div style="font-size:20px;margin-bottom:4px;">⚡</div><div class="sv">${st.warns||0}</div><div class="sl">Варнов</div></div>
-        <div class="sc" style="--c:#8b5cf6;"><div style="font-size:20px;margin-bottom:4px;">🔇</div><div class="sv">${st.mutes||0}</div><div class="sl">Мутов</div></div>
-        <div class="sc" style="--c:#3b82f6;"><div style="font-size:20px;margin-bottom:4px;">🎫</div><div class="sv">${st.tickets||0}</div><div class="sl">Тикетов</div></div>
+    <div class="sec" style="margin-bottom:12px;">
+      <div class="sec-hdr">📊 Статистика</div>
+      <div class="sgrid" style="padding:12px;margin-bottom:0;">
+        <div class="sc" style="--c:var(--red);"><span class="sc-icon">🔨</span><div class="sc-val">${st.bans||0}</div><div class="sc-lbl">Банов</div></div>
+        <div class="sc" style="--c:var(--ylw);"><span class="sc-icon">⚠️</span><div class="sc-val">${st.warns||0}</div><div class="sc-lbl">Варнов</div></div>
+        <div class="sc" style="--c:var(--acc);"><span class="sc-icon">🔇</span><div class="sc-val">${st.mutes||0}</div><div class="sc-lbl">Мутов</div></div>
+        <div class="sc" style="--c:var(--green);"><span class="sc-icon">🎫</span><div class="sc-val">${st.tickets||0}</div><div class="sc-lbl">Тикетов</div></div>
       </div>
     </div>
-    <div class="sec"><div class="sct">⏰ Последние действия</div>
-      ${(d.recent||[]).length?d.recent.map(r=>`<div class="itm">
-        <div class="ib"><div class="it">${e(r.action||'—')}</div>
-        <div class="is">${e((r.created_at||'').slice(0,16))}</div></div></div>`).join('')
+    <div class="sec">
+      <div class="sec-hdr">⏰ Последние действия</div>
+      ${(d.recent||[]).length
+        ?d.recent.map(r=>`<div class="itm"><div class="ii" style="background:var(--acc-g);">📋</div><div class="ib"><div class="it">${e(r.action||'—')}</div><div class="is">${e((r.created_at||'').slice(0,16))}</div></div></div>`).join('')
         :'<div class="mt" style="padding:20px;">Нет действий</div>'}
     </div>`;
 }
 
-function e(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-let _tt;
-function toast(msg,type){
-  const el=document.getElementById('toast');
-  el.textContent=msg;
-  el.style.background=type==='d'?'rgba(239,68,68,.9)':'var(--bg2)';
-  el.style.color=type==='d'?'#fff':'var(--text)';
-  el.classList.add('show');
-  clearTimeout(_tt);
-  _tt=setTimeout(()=>el.classList.remove('show'),2500);
-}
-
-// Pull to refresh
 let ps=0,pp=false;
 const cnt=document.getElementById('cnt'),ptr=document.getElementById('ptr');
 cnt.addEventListener('touchstart',ev=>{if(cnt.scrollTop===0){ps=ev.touches[0].clientY;pp=true;}},{passive:true});
@@ -417,9 +351,7 @@ cnt.addEventListener('touchend',()=>{
 (async()=>{
   const ok=await auth();if(!ok)return;
   loadOv();
-  setInterval(()=>{
-    if(document.querySelector('.page.active')?.id==='page-overview')loadOv();
-  },30000);
+  setInterval(()=>{if(document.querySelector('.page.active')?.id==='page-overview')loadOv();},30000);
 })();
 </script>
 </body>

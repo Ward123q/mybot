@@ -455,19 +455,21 @@ HTML_BASE = """<!DOCTYPE html>
     --t3:   #4a5568;
 
     /* Акценты */
-    --acc:  #00e5a0;
-    --acc2: #00c880;
-    --acc-g:rgba(0,229,160,.12);
-    --acc-s:rgba(0,229,160,.05);
+    --acc:  #5865f2;
+    --acc2: #4752c4;
+    --acc-g:rgba(88,101,242,.15);
+    --acc-s:rgba(88,101,242,.06);
     --blue: #3b82f6;
     --blue-g:rgba(59,130,246,.12);
     --pur:  #a78bfa;
     --pur-g:rgba(167,139,250,.12);
-    --red:  #f87171;
-    --red-g:rgba(248,113,113,.12);
-    --ylw:  #fbbf24;
-    --ylw-g:rgba(251,191,36,.12);
+    --red:  #f23f42;
+    --red-g:rgba(242,63,66,.15);
+    --ylw:  #f0b132;
+    --ylw-g:rgba(240,177,50,.15);
     --cyan: #22d3ee;
+    --green:#23a55a;
+    --green-g:rgba(35,165,90,.15);
 
     /* Размеры */
     --sw:   240px;
@@ -493,7 +495,7 @@ HTML_BASE = """<!DOCTYPE html>
     overflow-x: hidden;
     /* Сетка-фон */
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,229,160,.06) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(88,101,242,.06) 0%, transparent 60%),
       linear-gradient(rgba(255,255,255,.015) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255,255,255,.015) 1px, transparent 1px);
     background-size: 100% 100%, 40px 40px, 40px 40px;
@@ -505,11 +507,11 @@ HTML_BASE = """<!DOCTYPE html>
       linear-gradient(90deg, rgba(0,0,0,.02) 1px, transparent 1px);
     background-size: 100% 100%, 40px 40px, 40px 40px;
   }
-  ::selection { background: rgba(0,229,160,.25); color: #fff; }
+  ::selection { background: rgba(88,101,242,.35); color: #fff; }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: var(--bg1); }
   ::-webkit-scrollbar-thumb { background: var(--bg5); border-radius: 10px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--acc); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--acc2); }
 
   /* ── SIDEBAR ─────────────────────────── */
   .sidebar {
@@ -531,7 +533,7 @@ HTML_BASE = """<!DOCTYPE html>
     top: 0; right: 0; bottom: 0;
     width: 1px;
     background: linear-gradient(180deg,
-      transparent 0%, var(--acc) 30%, var(--blue) 70%, transparent 100%);
+      transparent 0%, var(--acc) 30%, var(--pur) 70%, transparent 100%);
     opacity: .3;
   }
   .sidebar-brand {
@@ -543,7 +545,7 @@ HTML_BASE = """<!DOCTYPE html>
   }
   .sidebar-brand .logo {
     width: 36px; height: 36px;
-    background: linear-gradient(135deg, var(--acc), var(--blue));
+    background: linear-gradient(135deg, var(--acc), var(--pur));
     border-radius: var(--r);
     display: flex; align-items: center; justify-content: center;
     font-size: 16px; font-weight: 900; color: #000;
@@ -694,7 +696,7 @@ HTML_BASE = """<!DOCTYPE html>
   .card::before {
     content: ''; position: absolute;
     top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, var(--acc), var(--blue));
+    background: linear-gradient(90deg, var(--acc), var(--pur));
     opacity: 0; transition: opacity .2s;
   }
   .card:hover { border-color: var(--br2); transform: translateY(-2px); box-shadow: var(--sh1); }
@@ -744,10 +746,10 @@ HTML_BASE = """<!DOCTYPE html>
   .btn:hover { transform: translateY(-1px); opacity: .9; }
   .btn:active { transform: translateY(0) scale(.98); }
   .btn-primary  {
-    background: var(--acc); color: #000; border-color: var(--acc);
-    box-shadow: 0 0 16px rgba(0,229,160,.2);
+    background: var(--acc); color: #fff; border-color: var(--acc);
+    box-shadow: 0 0 16px rgba(88,101,242,.25);
   }
-  .btn-primary:hover { box-shadow: 0 0 24px rgba(0,229,160,.35); }
+  .btn-primary:hover { box-shadow: 0 0 24px rgba(88,101,242,.4); }
   .btn-danger   { background: var(--red-g); color: var(--red); border-color: rgba(248,113,113,.25); }
   .btn-success  { background: var(--acc-g); color: var(--acc); border-color: rgba(0,229,160,.2); }
   .btn-warn     { background: var(--ylw-g); color: var(--ylw); border-color: rgba(251,191,36,.2); }
@@ -920,7 +922,7 @@ HTML_BASE = """<!DOCTYPE html>
   }
   .progress-fill {
     height: 100%; border-radius: 6px;
-    background: linear-gradient(90deg, var(--acc), var(--blue));
+    background: linear-gradient(90deg, var(--acc), var(--pur));
     transition: width .5s cubic-bezier(.4,0,.2,1);
     box-shadow: 0 0 8px rgba(0,229,160,.4);
   }
