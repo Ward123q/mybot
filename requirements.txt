@@ -1,4 +1,1 @@
-aiogram==3.7.0
-aiohttp
-python-dotenv
-Pillow
+aiogram==3.10.0
