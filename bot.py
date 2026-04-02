@@ -30,7 +30,6 @@ import features
 import notifications as notif
 import shared
 import chat_settings as cs
-import theme
 
 DB_FILE_MAIN = "skinvault.db"
 
@@ -659,20 +658,20 @@ RULES_TEXT = (
 )
 
 MUTE_MESSAGES = [
-    "🔇 <b>Ограничение</b>\n\n{name} лишён права голоса на <b>{time}</b>.\n<i>Соблюдайте правила сообщества.</i>",
-    "🔇 <b>Ограничение</b>\n\nПользователь {name} замолчан на <b>{time}</b>.\n<i>Обращайтесь к правилам чата.</i>",
+    "╔══════════════════╗\n║   🔇  МУТ ВЫДАН   ║\n╚══════════════════╝\n\n👤 Цель: {name}\n⏱ Время: <b>{time}</b>\n──────────────────\n<i>Соблюдайте правила сообщества.</i>",
+    "╔══════════════════╗\n║   🔇  ТИШИНА      ║\n╚══════════════════╝\n\n👤 Цель: {name}\n⏱ Срок: <b>{time}</b>\n──────────────────\n<i>Нарушение правил чата.</i>",
 ]
 BAN_MESSAGES = [
-    "🔨 <b>Блокировка</b>\n\n{name} заблокирован.\n📋 <b>Причина:</b> {reason}",
-    "🔨 <b>Блокировка</b>\n\nПользователь {name} удалён из чата.\n📋 <b>Причина:</b> {reason}",
+    "╔══════════════════╗\n║   🔨  БАН ВЫДАН   ║\n╚══════════════════╝\n\n👤 Цель: {name}\n📋 Причина: <b>{reason}</b>\n──────────────────\n<i>Пользователь удалён из чата.</i>",
+    "╔══════════════════╗\n║  🔨  БЛОКИРОВКА   ║\n╚══════════════════╝\n\n👤 Нарушитель: {name}\n📋 Причина: <b>{reason}</b>\n──────────────────\n<i>До свидания.</i>",
 ]
 WARN_MESSAGES = [
-    "⚠️ <b>Предупреждение {count}/{max}</b>\n\n{name}, зафиксировано нарушение.\n📋 <b>Причина:</b> {reason}\n\n<i>При достижении лимита последует блокировка.</i>",
-    "⚠️ <b>Предупреждение {count}/{max}</b>\n\nПользователь {name} получает предупреждение.\n📋 <b>Причина:</b> {reason}",
+    "╔══════════════════╗\n║  ⚠️  ПРЕДУПРЕЖДЕНИЕ ║\n╚══════════════════╝\n\n👤 Нарушитель: {name}\n📋 Причина: <b>{reason}</b>\n⚡ Варнов: <b>{count}/{max}</b>\n──────────────────\n<i>При достижении лимита — бан.</i>",
+    "╔══════════════════╗\n║  ⚠️  ВАРН ВЫДАН    ║\n╚══════════════════╝\n\n👤 Цель: {name}\n📋 Причина: <b>{reason}</b>\n⚡ Счёт: <b>{count}/{max}</b>\n──────────────────\n<i>Следи за поведением.</i>",
 ]
 AUTOBAN_MESSAGES = [
-    "🔨 <b>Автоматическая блокировка</b>\n\n{name} достиг лимита предупреждений ({max}/{max}).\n<i>Пользователь заблокирован автоматически.</i>",
-    "🔨 <b>Блокировка</b>\n\n{name} — исчерпан лимит предупреждений ({max}).\n<i>Заблокирован системой автоматически.</i>",
+    "╔══════════════════╗\n║  🤖  АВТОБАН      ║\n╚══════════════════╝\n\n👤 Нарушитель: {name}\n⚡ Варнов: <b>{max}/{max}</b>\n──────────────────\n<i>Лимит предупреждений исчерпан.\nЗаблокирован автоматически.</i>",
+    "╔══════════════════╗\n║  🔨  СИСТЕМА      ║\n╚══════════════════╝\n\n👤 Цель: {name}\n⚡ Лимит: <b>{max} варна</b>\n──────────────────\n<i>Автоматическая блокировка активирована.</i>",
 ]
 RANDOM_BAN_REASONS = [
     "слишком умный", "подозрение в адекватности", "нарушение закона бутерброда",
@@ -999,181 +998,181 @@ async def get_weather(city: str) -> str:
         return "⛈ Ошибка при получении погоды."
 
 def kb_back(tid: int) -> list:
-    return [InlineKeyboardButton(text=theme.BTN_BACK, callback_data=f"panel:back:{tid}")]
+    return [InlineKeyboardButton(text="‹ Назад", callback_data=f"panel:back:{tid}")]
 
 def kb_main_menu(tid: int = 0) -> InlineKeyboardMarkup:
     """Главное меню панели для администраторов"""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_MM_USER,         callback_data=f"panel:select:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MM_REPORTS,          callback_data=f"panel:reports:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MM_MEMBERS,        callback_data=f"panel:members:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MM_BANLIST,     callback_data=f"members:banlist:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MM_SETTINGS,        callback_data=f"panel:chatsettings:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MM_MOD,        callback_data=f"panel:modtools:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MM_STATS,       callback_data=f"panel:stats:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MM_ROLES,             callback_data=f"panel:roles:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MM_QUICK,   callback_data=f"panel:quickreplies:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MM_PINS,     callback_data=f"panel:pins:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MM_WELCOME,          callback_data=f"panel:welcome:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MM_PLUGINS,          callback_data=f"panel:plugins:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MM_TICKETS,           callback_data=f"panel:tickets:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MM_WEBAPP,         web_app=WebAppInfo(url="https://mybot-1s9l.onrender.com/mini"))],
-        [InlineKeyboardButton(text=theme.BTN_CLOSE,          callback_data="panel:close:0")],
+        [InlineKeyboardButton(text="👤  Участник",         callback_data=f"panel:select:{tid}"),
+         InlineKeyboardButton(text="🚨  Репорты",          callback_data=f"panel:reports:{tid}")],
+        [InlineKeyboardButton(text="👥  Участники",        callback_data=f"panel:members:{tid}"),
+         InlineKeyboardButton(text="🚫  Список банов",     callback_data=f"members:banlist:{tid}")],
+        [InlineKeyboardButton(text="⚙️  Настройки",        callback_data=f"panel:chatsettings:{tid}"),
+         InlineKeyboardButton(text="🛡️  Модерация",        callback_data=f"panel:modtools:{tid}")],
+        [InlineKeyboardButton(text="📊  Статистика",       callback_data=f"panel:stats:{tid}"),
+         InlineKeyboardButton(text="🎖️  Роли",             callback_data=f"panel:roles:{tid}")],
+        [InlineKeyboardButton(text="⚡  Быстрые ответы",   callback_data=f"panel:quickreplies:{tid}"),
+         InlineKeyboardButton(text="📌  Закреплённые",     callback_data=f"panel:pins:{tid}")],
+        [InlineKeyboardButton(text="👋  Welcome",          callback_data=f"panel:welcome:{tid}"),
+         InlineKeyboardButton(text="🧩  Плагины",          callback_data=f"panel:plugins:{tid}")],
+        [InlineKeyboardButton(text="🎫  Тикеты",           callback_data=f"panel:tickets:{tid}"),
+         InlineKeyboardButton(text="📱  Open App",         web_app=WebAppInfo(url="https://mybot-1s9l.onrender.com/mini"))],
+        [InlineKeyboardButton(text="✕  Закрыть",          callback_data="panel:close:0")],
     ])
 
 def kb_user_panel(tid: int) -> InlineKeyboardMarkup:
     """Панель действий над участником"""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_UP_MUTE,               callback_data=f"panel:mute:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_UP_UNMUTE,             callback_data=f"panel:unmute:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_UP_WARN,              callback_data=f"panel:warn:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_UP_UNWARN,         callback_data=f"panel:unwarn:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_UP_BAN,                callback_data=f"panel:ban:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_UP_UNBAN,             callback_data=f"panel:unban:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_UP_SILENT,          callback_data=f"panel:silentban:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_UP_TEMP24,        callback_data=f"ban:{tid}:tempban24")],
-        [InlineKeyboardButton(text=theme.BTN_UP_STICKER,          callback_data=f"panel:stickermute:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_UP_GIF,             callback_data=f"panel:gifmute:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_UP_VOICE,            callback_data=f"panel:voicemute:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_UP_ALLMED,             callback_data=f"panel:allmedmute:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_UP_INFO,         callback_data=f"panel:info:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_UP_HISTORY,             callback_data=f"panel:modhistory:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_UP_NOTES,            callback_data=f"panel:usernotes:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_UP_VIP,                callback_data=f"panel:vip:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_UP_FUN,            callback_data=f"panel:fun:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_BACK,               callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="🔇  Мут",               callback_data=f"panel:mute:{tid}"),
+         InlineKeyboardButton(text="🔊  Размут",             callback_data=f"panel:unmute:{tid}")],
+        [InlineKeyboardButton(text="⚠️  Варн",              callback_data=f"panel:warn:{tid}"),
+         InlineKeyboardButton(text="✅  Снять варн",         callback_data=f"panel:unwarn:{tid}")],
+        [InlineKeyboardButton(text="🔨  Бан",                callback_data=f"panel:ban:{tid}"),
+         InlineKeyboardButton(text="🕊️  Разбан",             callback_data=f"panel:unban:{tid}")],
+        [InlineKeyboardButton(text="👻  Тихий бан",          callback_data=f"panel:silentban:{tid}"),
+         InlineKeyboardButton(text="⏳  Темпбан 24ч",        callback_data=f"ban:{tid}:tempban24")],
+        [InlineKeyboardButton(text="🙅  Стикермут",          callback_data=f"panel:stickermute:{tid}"),
+         InlineKeyboardButton(text="🎬  Гифмут",             callback_data=f"panel:gifmute:{tid}")],
+        [InlineKeyboardButton(text="🎙️  Войсмут",            callback_data=f"panel:voicemute:{tid}"),
+         InlineKeyboardButton(text="🚫  Всёмут",             callback_data=f"panel:allmedmute:{tid}")],
+        [InlineKeyboardButton(text="ℹ️  Информация",         callback_data=f"panel:info:{tid}"),
+         InlineKeyboardButton(text="📋  История",             callback_data=f"panel:modhistory:{tid}")],
+        [InlineKeyboardButton(text="📝  Заметки",            callback_data=f"panel:usernotes:{tid}"),
+         InlineKeyboardButton(text="💎  VIP",                callback_data=f"panel:vip:{tid}")],
+        [InlineKeyboardButton(text="🎭  Приколы",            callback_data=f"panel:fun:{tid}"),
+         InlineKeyboardButton(text="‹ Назад",               callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_owner_panel() -> InlineKeyboardMarkup:
     """Панель владельца — только для OWNER_ID"""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_OW_CHATS,          callback_data="owner:chats:0"),
-         InlineKeyboardButton(text=theme.BTN_OW_STATUS,       callback_data="owner:status:0")],
-        [InlineKeyboardButton(text=theme.BTN_OW_SOS,           callback_data="owner:sosall:0"),
-         InlineKeyboardButton(text=theme.BTN_OW_SOSOFF,   callback_data="owner:sosoff:0")],
-        [InlineKeyboardButton(text=theme.BTN_OW_BROADCAST,          callback_data="owner:broadcast:0"),
-         InlineKeyboardButton(text=theme.BTN_OW_BLACKLIST,     callback_data="owner:blacklist:0")],
-        [InlineKeyboardButton(text=theme.BTN_OW_BACKUP,             callback_data="owner:backup:0"),
-         InlineKeyboardButton(text=theme.BTN_OW_AUDIT,        callback_data="owner:audit:0")],
-        [InlineKeyboardButton(text=theme.BTN_OW_PLUGINS,    callback_data="owner:plugins:0"),
-         InlineKeyboardButton(text=theme.BTN_OW_CAL,         callback_data="owner:calendar:0")],
-        [InlineKeyboardButton(text=theme.BTN_OW_TASKS,      callback_data="owner:tasks:0"),
-         InlineKeyboardButton(text=theme.BTN_OW_MODTOP,     callback_data="owner:modrating:0")],
-        [InlineKeyboardButton(text=theme.BTN_OW_EVAC,         callback_data="owner:evacuation:0"),
-         InlineKeyboardButton(text=theme.BTN_OW_QUAR,          callback_data="owner:quarantine:0")],
-        [InlineKeyboardButton(text=theme.BTN_OW_CLEAN,          callback_data="owner:cleanup:0"),
-         InlineKeyboardButton(text=theme.BTN_OW_LINK,      callback_data="owner:linkchats:0")],
-        [InlineKeyboardButton(text=theme.BTN_CLOSE,           callback_data="panel:close:0")],
+        [InlineKeyboardButton(text="🌍  Все чаты",          callback_data="owner:chats:0"),
+         InlineKeyboardButton(text="📡  Статус бота",       callback_data="owner:status:0")],
+        [InlineKeyboardButton(text="🆘  SOS ALL",           callback_data="owner:sosall:0"),
+         InlineKeyboardButton(text="🔓  Разлокдаун всех",   callback_data="owner:sosoff:0")],
+        [InlineKeyboardButton(text="📢  Бродкаст",          callback_data="owner:broadcast:0"),
+         InlineKeyboardButton(text="🚷  Чёрный список",     callback_data="owner:blacklist:0")],
+        [InlineKeyboardButton(text="💾  Бэкап",             callback_data="owner:backup:0"),
+         InlineKeyboardButton(text="🔎  Аудит чата",        callback_data="owner:audit:0")],
+        [InlineKeyboardButton(text="🧩  Плагины глобал",    callback_data="owner:plugins:0"),
+         InlineKeyboardButton(text="📅  Календарь",         callback_data="owner:calendar:0")],
+        [InlineKeyboardButton(text="🎯  Задачи модов",      callback_data="owner:tasks:0"),
+         InlineKeyboardButton(text="🏆  Рейтинг модов",     callback_data="owner:modrating:0")],
+        [InlineKeyboardButton(text="🚁  Эвакуация",         callback_data="owner:evacuation:0"),
+         InlineKeyboardButton(text="🔬  Карантин",          callback_data="owner:quarantine:0")],
+        [InlineKeyboardButton(text="🧹  Зачистка",          callback_data="owner:cleanup:0"),
+         InlineKeyboardButton(text="🔗  Связать чаты",      callback_data="owner:linkchats:0")],
+        [InlineKeyboardButton(text="✕  Закрыть",           callback_data="panel:close:0")],
     ])
 
 def kb_mute(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_M_5,     callback_data=f"mute:{tid}:5"),
-         InlineKeyboardButton(text=theme.BTN_M_15,    callback_data=f"mute:{tid}:15"),
-         InlineKeyboardButton(text=theme.BTN_M_30,    callback_data=f"mute:{tid}:30")],
-        [InlineKeyboardButton(text=theme.BTN_M_60,     callback_data=f"mute:{tid}:60"),
-         InlineKeyboardButton(text=theme.BTN_M_180,    callback_data=f"mute:{tid}:180"),
-         InlineKeyboardButton(text=theme.BTN_M_720,  callback_data=f"mute:{tid}:720")],
-        [InlineKeyboardButton(text=theme.BTN_M_1440,    callback_data=f"mute:{tid}:1440"),
-         InlineKeyboardButton(text=theme.BTN_M_10080,    callback_data=f"mute:{tid}:10080"),
-         InlineKeyboardButton(text=theme.BTN_M_CUSTOM,   callback_data=f"mute:{tid}:custom")],
+        [InlineKeyboardButton(text="5 мин",     callback_data=f"mute:{tid}:5"),
+         InlineKeyboardButton(text="15 мин",    callback_data=f"mute:{tid}:15"),
+         InlineKeyboardButton(text="30 мин",    callback_data=f"mute:{tid}:30")],
+        [InlineKeyboardButton(text="1 час",     callback_data=f"mute:{tid}:60"),
+         InlineKeyboardButton(text="3 часа",    callback_data=f"mute:{tid}:180"),
+         InlineKeyboardButton(text="12 часов",  callback_data=f"mute:{tid}:720")],
+        [InlineKeyboardButton(text="1 день",    callback_data=f"mute:{tid}:1440"),
+         InlineKeyboardButton(text="7 дней",    callback_data=f"mute:{tid}:10080"),
+         InlineKeyboardButton(text="✎  Своё",   callback_data=f"mute:{tid}:custom")],
         kb_back(tid),
     ])
 
 def kb_warn(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_W_MAT,            callback_data=f"warn:{tid}:Мат в чате"),
-         InlineKeyboardButton(text=theme.BTN_W_SPAM,            callback_data=f"warn:{tid}:Спам")],
-        [InlineKeyboardButton(text=theme.BTN_W_INSULT,     callback_data=f"warn:{tid}:Оскорбление"),
-         InlineKeyboardButton(text=theme.BTN_W_FLOOD,            callback_data=f"warn:{tid}:Флуд")],
-        [InlineKeyboardButton(text=theme.BTN_W_AD,         callback_data=f"warn:{tid}:Реклама"),
-         InlineKeyboardButton(text=theme.BTN_W_18,     callback_data=f"warn:{tid}:Контент 18+")],
-        [InlineKeyboardButton(text=theme.BTN_W_PROV,      callback_data=f"warn:{tid}:Провокация"),
-         InlineKeyboardButton(text=theme.BTN_W_CUSTOM,    callback_data=f"warn:{tid}:custom")],
+        [InlineKeyboardButton(text="🤬  Мат",            callback_data=f"warn:{tid}:Мат в чате"),
+         InlineKeyboardButton(text="📨  Спам",            callback_data=f"warn:{tid}:Спам")],
+        [InlineKeyboardButton(text="💢  Оскорбление",     callback_data=f"warn:{tid}:Оскорбление"),
+         InlineKeyboardButton(text="🌊  Флуд",            callback_data=f"warn:{tid}:Флуд")],
+        [InlineKeyboardButton(text="📣  Реклама",         callback_data=f"warn:{tid}:Реклама"),
+         InlineKeyboardButton(text="🔞  Контент 18+",     callback_data=f"warn:{tid}:Контент 18+")],
+        [InlineKeyboardButton(text="⚡  Провокация",      callback_data=f"warn:{tid}:Провокация"),
+         InlineKeyboardButton(text="✎  Своя причина",    callback_data=f"warn:{tid}:custom")],
         kb_back(tid),
     ])
 
 def kb_ban(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_B_RULES,  callback_data=f"ban:{tid}:Грубые нарушения правил"),
-         InlineKeyboardButton(text=theme.BTN_B_SPAM,    callback_data=f"ban:{tid}:Спам и реклама")],
-        [InlineKeyboardButton(text=theme.BTN_B_18,       callback_data=f"ban:{tid}:Контент 18+"),
-         InlineKeyboardButton(text=theme.BTN_B_BOT,    callback_data=f"ban:{tid}:Бот или накрутка")],
-        [InlineKeyboardButton(text=theme.BTN_B_24,       callback_data=f"ban:{tid}:tempban24"),
-         InlineKeyboardButton(text=theme.BTN_B_7D,        callback_data=f"ban:{tid}:tempban168")],
-        [InlineKeyboardButton(text=theme.BTN_B_CUSTOM,      callback_data=f"ban:{tid}:custom")],
+        [InlineKeyboardButton(text="🔥  Грубые нарушения",  callback_data=f"ban:{tid}:Грубые нарушения правил"),
+         InlineKeyboardButton(text="📣  Спам / реклама",    callback_data=f"ban:{tid}:Спам и реклама")],
+        [InlineKeyboardButton(text="🔞  Контент 18+",       callback_data=f"ban:{tid}:Контент 18+"),
+         InlineKeyboardButton(text="🤖  Бот / накрутка",    callback_data=f"ban:{tid}:Бот или накрутка")],
+        [InlineKeyboardButton(text="⏱  Бан 24 часа",       callback_data=f"ban:{tid}:tempban24"),
+         InlineKeyboardButton(text="⏱  Бан 7 дней",        callback_data=f"ban:{tid}:tempban168")],
+        [InlineKeyboardButton(text="✎  Своя причина",      callback_data=f"ban:{tid}:custom")],
         kb_back(tid),
     ])
 
 def kb_fun(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_F_RBAN,     callback_data=f"fun:rban:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_F_PRED,      callback_data=f"fun:predict:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_F_HORO,          callback_data=f"fun:horoscope:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_F_COMPL,         callback_data=f"fun:compliment:{tid}")],
+        [InlineKeyboardButton(text="🎲 Шуточный бан",     callback_data=f"fun:rban:{tid}"),
+         InlineKeyboardButton(text="🔮 Предсказание",      callback_data=f"fun:predict:{tid}")],
+        [InlineKeyboardButton(text="🌌 Гороскоп",          callback_data=f"fun:horoscope:{tid}"),
+         InlineKeyboardButton(text="🌸 Комплимент",         callback_data=f"fun:compliment:{tid}")],
         kb_back(tid),
     ])
 
 def kb_messages(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_MSG_PIN,          callback_data=f"msg:pin:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MSG_UNPIN,          callback_data=f"msg:unpin:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MSG_DEL,            callback_data=f"msg:del:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MSG_C10,        callback_data=f"msg:clear10:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MSG_C20,        callback_data=f"msg:clear20:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MSG_C50,        callback_data=f"msg:clear50:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MSG_ANN,         callback_data=f"msg:announce:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MSG_POLL,        callback_data=f"msg:poll:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_BACK,               callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="📌  Закрепить",          callback_data=f"msg:pin:{tid}"),
+         InlineKeyboardButton(text="📍  Открепить",          callback_data=f"msg:unpin:{tid}")],
+        [InlineKeyboardButton(text="🗑️  Удалить",            callback_data=f"msg:del:{tid}"),
+         InlineKeyboardButton(text="🧹  Очистить 10",        callback_data=f"msg:clear10:{tid}")],
+        [InlineKeyboardButton(text="🧹  Очистить 20",        callback_data=f"msg:clear20:{tid}"),
+         InlineKeyboardButton(text="🧹  Очистить 50",        callback_data=f"msg:clear50:{tid}")],
+        [InlineKeyboardButton(text="📢  Объявление",         callback_data=f"msg:announce:{tid}"),
+         InlineKeyboardButton(text="📊  Голосование",        callback_data=f"msg:poll:{tid}")],
+        [InlineKeyboardButton(text="‹ Назад",               callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_members(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_MEM_ADM,     callback_data=f"members:adminlist:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MEM_TOP,     callback_data=f"members:top:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MEM_XP,             callback_data=f"members:topxp:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MEM_MVP,            callback_data=f"members:mvpstats:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MEM_MUTE24,    callback_data=f"members:warn24:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MEM_WARNI,    callback_data=f"members:warninfo:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_MEM_BANS,       callback_data=f"members:banlist:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_MEM_MODREP,   callback_data=f"members:modreport:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_BACK,               callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="👮  Список админов",     callback_data=f"members:adminlist:{tid}"),
+         InlineKeyboardButton(text="🏆  Топ активности",     callback_data=f"members:top:{tid}")],
+        [InlineKeyboardButton(text="📈  Топ XP",             callback_data=f"members:topxp:{tid}"),
+         InlineKeyboardButton(text="🥇  Топ МВП",            callback_data=f"members:mvpstats:{tid}")],
+        [InlineKeyboardButton(text="🔇  Мут 24ч реклама",    callback_data=f"members:warn24:{tid}"),
+         InlineKeyboardButton(text="⚠️  Варны участника",    callback_data=f"members:warninfo:{tid}")],
+        [InlineKeyboardButton(text="🚫  Список банов",       callback_data=f"members:banlist:{tid}"),
+         InlineKeyboardButton(text="📋  Отчёт модератора",   callback_data=f"members:modreport:{tid}")],
+        [InlineKeyboardButton(text="‹ Назад",               callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_chat(tid: int) -> InlineKeyboardMarkup:
     ms = "✅" if ANTI_MAT_ENABLED else "❌"
     ks = "✅" if AUTO_KICK_BOTS   else "❌"
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_CH_LOCK,   callback_data=f"chat:lock:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_CH_UNLOCK,  callback_data=f"chat:unlock:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_CH_S10,        callback_data=f"chat:slow:10:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_CH_S30,        callback_data=f"chat:slow:30:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_CH_S60,        callback_data=f"chat:slow:60:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_CH_S0,       callback_data=f"chat:slow:0:{tid}")],
+        [InlineKeyboardButton(text="🔒 Заблокировать чат",   callback_data=f"chat:lock:{tid}"),
+         InlineKeyboardButton(text="🔓 Разблокировать чат",  callback_data=f"chat:unlock:{tid}")],
+        [InlineKeyboardButton(text="🐢 Slowmode 10с",        callback_data=f"chat:slow:10:{tid}"),
+         InlineKeyboardButton(text="🐢 Slowmode 30с",        callback_data=f"chat:slow:30:{tid}")],
+        [InlineKeyboardButton(text="🐢 Slowmode 60с",        callback_data=f"chat:slow:60:{tid}"),
+         InlineKeyboardButton(text="🐇 Выкл slowmode",       callback_data=f"chat:slow:0:{tid}")],
         [InlineKeyboardButton(text=f"🧼 Антимат {ms}",       callback_data=f"chat:antimat:{tid}"),
          InlineKeyboardButton(text=f"🤖 Автокик {ks}",       callback_data=f"chat:autokick:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_CH_RULES,         callback_data=f"chat:rules:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_CH_BOTSTATS,      callback_data=f"chat:botstats:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_CH_TOUR1,         callback_data=f"chat:tournament_start:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_CH_TOUR2,          callback_data=f"chat:tournament_stop:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_BACK,               callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="📜 Правила чата",         callback_data=f"chat:rules:{tid}"),
+         InlineKeyboardButton(text="📈 Статистика бота",      callback_data=f"chat:botstats:{tid}")],
+        [InlineKeyboardButton(text="🎪 Турнир старт",         callback_data=f"chat:tournament_start:{tid}"),
+         InlineKeyboardButton(text="🏁 Турнир стоп",          callback_data=f"chat:tournament_stop:{tid}")],
+        [InlineKeyboardButton(text="🔙 Назад",               callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_games(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=theme.BTN_G_DICE,           callback_data=f"game:roll:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_G_COIN,            callback_data=f"game:flip:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_G_8BALL,   callback_data=f"game:8ball:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_G_TRIVIA,          callback_data=f"game:trivia:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_G_RPS_K,       callback_data=f"game:rps_k:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_G_RPS_N,      callback_data=f"game:rps_n:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_G_RPS_B,       callback_data=f"game:rps_b:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_G_GUESS,        callback_data=f"game:guess:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_G_W_MOW,    callback_data=f"game:weather_Москва:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_G_W_CITY,          callback_data=f"game:weather_custom:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_G_CD5,       callback_data=f"game:countdown5:{tid}"),
-         InlineKeyboardButton(text=theme.BTN_G_CD10,      callback_data=f"game:countdown10:{tid}")],
-        [InlineKeyboardButton(text=theme.BTN_BACK,              callback_data=f"panel:mainmenu:0")],
+        [InlineKeyboardButton(text="🎲 Кубик d6",           callback_data=f"game:roll:{tid}"),
+         InlineKeyboardButton(text="🪙 Монетка",            callback_data=f"game:flip:{tid}")],
+        [InlineKeyboardButton(text="🎱 Шар предсказаний",   callback_data=f"game:8ball:{tid}"),
+         InlineKeyboardButton(text="🧩 Викторина",          callback_data=f"game:trivia:{tid}")],
+        [InlineKeyboardButton(text="✊ КНБ — Камень",       callback_data=f"game:rps_k:{tid}"),
+         InlineKeyboardButton(text="✌️ КНБ — Ножницы",      callback_data=f"game:rps_n:{tid}")],
+        [InlineKeyboardButton(text="🖐 КНБ — Бумага",       callback_data=f"game:rps_b:{tid}"),
+         InlineKeyboardButton(text="🎯 Угадай число",        callback_data=f"game:guess:{tid}")],
+        [InlineKeyboardButton(text="🌤 Погода — Москва",    callback_data=f"game:weather_Москва:{tid}"),
+         InlineKeyboardButton(text="🌍 Свой город",          callback_data=f"game:weather_custom:{tid}")],
+        [InlineKeyboardButton(text="⏱ Отсчёт 5 сек",       callback_data=f"game:countdown5:{tid}"),
+         InlineKeyboardButton(text="⏱ Отсчёт 10 сек",      callback_data=f"game:countdown10:{tid}")],
+        [InlineKeyboardButton(text="🔙 Назад",              callback_data=f"panel:mainmenu:0")],
     ])
 
 message_cache = {}
@@ -1662,25 +1661,20 @@ async def cb_panel(call: CallbackQuery):
         elif action == "mainmenu":
             total_msgs  = sum(chat_stats[cid].values())
             total_warns = sum(warnings[cid].values())
-            open_reps   = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
             await call.message.edit_text(
-                theme.main_menu_text(
-                    call.message.chat.title or "чат",
-                    total_msgs,
-                    total_warns,
-                    ANTI_MAT_ENABLED,
-                    AUTO_KICK_BOTS,
-                    len(chat_stats[cid]),
-                    open_reps,
-                ),
+                f"⚙️ <b>Панель управления</b>\n\n"
+                f"💬 Чат: <b>{call.message.chat.title}</b>\n"
+                f"📨 Сообщений: <b>{total_msgs}</b>\n"
+                f"⚡ Варнов: <b>{total_warns}</b>\n"
+                f"🧼 Антимат: <b>{'✅ вкл' if ANTI_MAT_ENABLED else '❌ выкл'}</b>\n"
+                f"🤖 Автокик: <b>{'✅ вкл' if AUTO_KICK_BOTS else '❌ выкл'}</b>\n\nВыбери раздел:",
                 parse_mode="HTML", reply_markup=kb_main_menu())
         elif action == "select":
             await call.message.edit_text(
-                f"{theme.section_title('👤', 'Участник')}\n\n"
-                "Открой панель реплаем:\n"
+                "👤 <b>Управление участником</b>\n\nОткрой панель реплаем:\n"
                 "<code>/panel</code> → ответь на сообщение участника",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=theme.BTN_BACK, callback_data="panel:mainmenu:0")]]))
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
         elif action == "back":
             if tid != 0:
                 warns = warnings[cid].get(tid, 0); rep = reputation[cid].get(tid, 0)
@@ -1832,6 +1826,21 @@ async def cb_panel(call: CallbackQuery):
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text="◀️ Назад", callback_data="panel:mainmenu:0")
                 ]]))
+
+        # ── Новые разделы панели ──────────────────────────────
+        elif action == "mainmenu":
+            total_msgs  = sum(chat_stats[cid].values())
+            total_warns = sum(warnings[cid].values())
+            open_reps   = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
+            await call.message.edit_text(
+                f"✨ <b>CHAT GUARD</b> — Панель администратора\n"
+                f"💬 <b>{call.message.chat.title}</b>\n"
+                f"👥 Активных: <b>{len(chat_stats[cid])}</b>\n"
+                f"📨 Сообщений: <b>{total_msgs}</b>\n"
+                f"⚡ Варнов: <b>{total_warns}</b>\n"
+                f"🚨 Репортов: <b>{open_reps}</b>\n"
+                f"",
+                parse_mode="HTML", reply_markup=kb_main_menu())
 
         elif action == "chatsettings":
             await call.message.edit_text(
@@ -3017,7 +3026,7 @@ async def cmd_unban(message: Message):
     await bot.unban_chat_member(message.chat.id, target.id, only_if_banned=True)
     add_mod_history(message.chat.id, target.id, "🕊 Разбан", "—", message.from_user.full_name)
     ban_list[message.chat.id].pop(target.id, None); save_data()
-    await reply_auto_delete(message, f"✅ Блокировка снята: {target.mention_html()}.", parse_mode="HTML")
+    await reply_auto_delete(message, f"╔══════════════════╗\n║  🕊  РАЗ БАН      ║\n╚══════════════════╝\n\n👤 Цель: {target.mention_html()}\n──────────────────\n<i>Блокировка снята.</i>", parse_mode="HTML")
     await log_action(f"🕊️ <b>Разбан</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
 @dp.message(Command("mute"))
@@ -3060,7 +3069,7 @@ async def cmd_unmute(message: Message):
         permissions=ChatPermissions(can_send_messages=True, can_send_media_messages=True,
             can_send_polls=True, can_send_other_messages=True, can_add_web_page_previews=True))
     add_mod_history(message.chat.id, target.id, "🔊 Размут", "—", message.from_user.full_name)
-    await reply_auto_delete(message, f"✅ Ограничение снято: {target.mention_html()}.", parse_mode="HTML")
+    await reply_auto_delete(message, f"╔══════════════════╗\n║  🔊  РАЗМУТ       ║\n╚══════════════════╝\n\n👤 Цель: {target.mention_html()}\n──────────────────\n<i>Голос восстановлен.</i>", parse_mode="HTML")
     await log_action(f"🔊 <b>Размут</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
 @dp.message(Command("warn"))
@@ -3118,7 +3127,7 @@ async def cmd_unwarn(message: Message):
     if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1; save_data()
     add_mod_history(cid, target.id, "🌿 Снят варн", "—", message.from_user.full_name)
     await reply_auto_delete(message, 
-        f"✅ Предупреждение снято: {target.mention_html()}. Остаток: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>",
+        f"╔══════════════════╗\n║  🌿  ВАРН СНЯТ    ║\n╚══════════════════╝\n\n👤 Цель: {target.mention_html()}\n⚡ Остаток: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>\n──────────────────\n<i>Предупреждение аннулировано.</i>",
         parse_mode="HTML")
 
 @dp.message(Command("del"))
@@ -3168,7 +3177,7 @@ async def cmd_unpin(message: Message):
 async def cmd_lock(message: Message):
     if not await require_admin(message): return
     await bot.set_chat_permissions(message.chat.id, ChatPermissions(can_send_messages=False))
-    await reply_auto_delete(message, "🔒 Чат <b>заблокирован</b>.", parse_mode="HTML")
+    await reply_auto_delete(message, "╔══════════════════╗\n║  🔒  ЧАТ ЗАКРЫТ  ║\n╚══════════════════╝\n\n<i>Отправка сообщений запрещена.</i>", parse_mode="HTML")
     await log_action(f"👤 <b>Кто:</b> {message.from_user.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
 @dp.message(Command("unlock"))
@@ -3177,7 +3186,7 @@ async def cmd_unlock(message: Message):
     await bot.set_chat_permissions(message.chat.id, ChatPermissions(
         can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
         can_send_other_messages=True, can_add_web_page_previews=True, can_invite_users=True))
-    await reply_auto_delete(message, "🔓 Чат <b>разблокирован</b>.", parse_mode="HTML")
+    await reply_auto_delete(message, "╔══════════════════╗\n║  🔓  ЧАТ ОТКРЫТ  ║\n╚══════════════════╝\n\n<i>Отправка сообщений разрешена.</i>", parse_mode="HTML")
     await log_action(f"👤 <b>Кто:</b> {message.from_user.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
 @dp.message(Command("slowmode"))
@@ -3190,10 +3199,10 @@ async def cmd_slowmode(message: Message, command: CommandObject):
     try:
         await bot.set_chat_slow_mode_delay(message.chat.id, delay)
         if delay == 0:
-            await reply_auto_delete(message, "✅ Режим замедления отключён.", parse_mode="HTML")
+            await reply_auto_delete(message, "╔══════════════════╗\n║  🐢  СЛОУМОД      ║\n╚══════════════════╝\n\n<i>Режим замедления отключён.</i>", parse_mode="HTML")
         else:
             label = f"{delay} сек." if delay < 60 else f"{delay//60} мин. {delay%60} сек." if delay%60 else f"{delay//60} мин."
-            await reply_auto_delete(message, f"🐢 Режим замедления установлен: <b>{label}</b>", parse_mode="HTML")
+            await reply_auto_delete(message, f"╔══════════════════╗\n║  🐢  СЛОУМОД      ║\n╚══════════════════╝\n\n⏱ Задержка: <b>{label}</b>\n──────────────────\n<i>Режим замедления активирован.</i>", parse_mode="HTML")
     except Exception as e:
         await reply_auto_delete(message, f"⚠️ Не удалось установить slowmode: <code>{e}</code>", parse_mode="HTML")
 
@@ -3340,7 +3349,7 @@ async def cmd_rban(message: Message):
 async def cmd_adminlist(message: Message):
     if not await require_admin(message): return
     admins = await bot.get_chat_administrators(message.chat.id)
-    lines  = ["👮 <b>Администраторы чата:</b>\n"]
+    lines  = ["╔══════════════════╗\n║  👮  АДМИНИСТРАТОРЫ ║\n╚══════════════════╝\n"]
     for adm in admins:
         if adm.user.is_bot: continue
         icon  = "👑" if adm.status == "creator" else "🛡"
@@ -3451,13 +3460,16 @@ async def cmd_info(message: Message):
             "restricted":"🔇 Ограничен","kicked":"🔨 Забанен","left":"🚶 Вышел"}
     afk  = f"\n😴 AFK: {afk_users[user.id]}" if user.id in afk_users else ""
     await reply_auto_delete(message, 
-        f"🔍 <b>Инфо:</b>\n{user.mention_html()}{afk}\n"
+        f"╔══════════════════╗\n║  🔍  ДОСЬЕ        ║\n╚══════════════════╝\n\n"
+        f"👤 {user.mention_html()}{afk}\n"
         f"🔗 {'@'+user.username if user.username else 'нет'}\n"
         f"🪪 <code>{user.id}</code>\n"
         f"📌 {smap.get(member.status, member.status)}\n"
+        f"──────────────────\n"
         f"⚡ Варнов: <b>{warnings[message.chat.id].get(user.id,0)}/{MAX_WARNINGS}</b>\n"
         f"🌟 Репутация: <b>{reputation[message.chat.id].get(user.id,0):+d}</b>\n"
-        f"💬 Сообщений: <b>{chat_stats[message.chat.id].get(user.id,0)}</b>",
+        f"💬 Сообщений: <b>{chat_stats[message.chat.id].get(user.id,0)}</b>\n"
+        f"──────────────────",
         parse_mode="HTML")
 
 @dp.message(Command("warnings"))
@@ -3465,7 +3477,7 @@ async def cmd_warnings(message: Message):
     if not message.reply_to_message: await reply_auto_delete(message, "⚠️ Ответьте на сообщение нарушителя."); return
     target = message.reply_to_message.from_user
     await reply_auto_delete(message, 
-        f"⚡ {target.mention_html()} — варнов: <b>{warnings[message.chat.id].get(target.id,0)}/{MAX_WARNINGS}</b>",
+        f"╔══════════════════╗\n║  ⚡  ПРЕДУПРЕЖДЕНИЯ ║\n╚══════════════════╝\n\n👤 Цель: {target.mention_html()}\n⚡ Варнов: <b>{warnings[message.chat.id].get(target.id,0)}/{MAX_WARNINGS}</b>\n──────────────────",
         parse_mode="HTML")
 
 @dp.message(Command("modhistory"))
@@ -3527,9 +3539,12 @@ async def cmd_tempban(message: Message, command: CommandObject):
     if old: old.cancel()
     tempban_timers[key] = asyncio.create_task(tempban_unban(cid, target.id, target.full_name, days))
     await reply_auto_delete(message,
-        f"🔇 <b>{target.mention_html()}</b> временно забанен на <b>{days} дн.</b>\n"
+        f"╔══════════════════╗\n║  🔇  ТЕМПБАН      ║\n╚══════════════════╝\n\n"
+        f"👤 Цель: {target.mention_html()}\n"
+        f"⏱ Срок: <b>{days} дн.</b>\n"
         f"📝 Причина: {reason}\n"
-        f"🔓 Разбан: автоматически через {days} дн.", parse_mode="HTML")
+        f"──────────────────\n"
+        f"<i>🔓 Автоматический разбан через {days} дн.</i>", parse_mode="HTML")
     await log_action(
         f"🔇 <b>Темпбан</b>\nКто: {message.from_user.mention_html()}\n"
         f"Кого: {target.mention_html()}\nСрок: {days} дн.\nПричина: {reason}\nЧат: {message.chat.title}")
@@ -3541,7 +3556,7 @@ async def cmd_banlist(message: Message):
     bans = ban_list[cid]
     if not bans:
         await reply_auto_delete(message, "👥 Список забаненных пуст."); return
-    lines = [f"👥 <b>Забаненные участники ({len(bans)}):</b>\n"]
+    lines = [f"╔══════════════════╗\n║  🔨  БАН-ЛИСТ     ║\n╚══════════════════╝\n\n<b>Всего забанено: {len(bans)}</b>\n"]
     for uid, info in list(bans.items()):
         until = ""
         if info.get("temp") and info.get("until"):
@@ -3681,7 +3696,7 @@ async def cmd_rep(message: Message):
     target = message.reply_to_message.from_user
     score  = reputation[message.chat.id].get(target.id, 0)
     await reply_auto_delete(message, 
-        f"{'🌟' if score>=0 else '💀'} Репутация {target.mention_html()}: <b>{score:+d}</b>",
+        f"╔══════════════════╗\n║  {'🌟' if score>=0 else '💀'}  РЕПУТАЦИЯ    ║\n╚══════════════════╝\n\n👤 {target.mention_html()}\n📈 Счёт: <b>{score:+d}</b>\n──────────────────",
         parse_mode="HTML")
 
 @dp.message(F.text.in_({"+1", "+", "👍"}))
@@ -3696,7 +3711,7 @@ async def rep_plus(message: Message):
     reputation[message.chat.id][target.id] += 1
     save_data()
     await reply_auto_delete(message, 
-        f"⬆️ {target.mention_html()} +1 к репутации! Теперь: <b>{reputation[message.chat.id][target.id]:+d}</b>",
+        f"╔══════════════════╗\n║  ⬆️  РЕПУТАЦИЯ +1  ║\n╚══════════════════╝\n\n👤 {target.mention_html()}\n📈 Итого: <b>{reputation[message.chat.id][target.id]:+d}</b>\n──────────────────",
         parse_mode="HTML")
 
 @dp.message(F.text.in_({"-1", "👎"}))
@@ -3711,7 +3726,7 @@ async def rep_minus(message: Message):
     reputation[message.chat.id][target.id] -= 1
     save_data()
     await reply_auto_delete(message, 
-        f"⬇️ {target.mention_html()} -1 к репутации! Теперь: <b>{reputation[message.chat.id][target.id]:+d}</b>",
+        f"╔══════════════════╗\n║  ⬇️  РЕПУТАЦИЯ -1  ║\n╚══════════════════╝\n\n👤 {target.mention_html()}\n📉 Итого: <b>{reputation[message.chat.id][target.id]:+d}</b>\n──────────────────",
         parse_mode="HTML")
 
 async def cmd_rank(message: Message):
@@ -3725,9 +3740,7 @@ async def cmd_rank(message: Message):
         "⚔️ Ветеран" if lvl >= 5 else "🌱 Активный" if lvl >= 3 else
         "🔰 Участник" if lvl >= 1 else "🐣 Новичок")
     await reply_auto_delete(message, 
-        f"📊 <b>Уровень {user.mention_html()}</b>\n\n"
-        f"🏅 Титул: <b>{title}</b>\n⚡ Уровень: <b>{lvl}</b>\n"
-        f"✨ Опыт: <b>{xp_current}/100</b>\n[{bar}]", parse_mode="HTML")
+        f"╔══════════════════╗\n║  📊  ПРОФИЛЬ      ║\n╚══════════════════╝\n\n👤 {user.mention_html()}\n🏅 Титул: <b>{title}</b>\n⚡ Уровень: <b>{lvl}</b>\n✨ Опыт: <b>{xp_current}/100</b>\n[{bar}]\n──────────────────", parse_mode="HTML")
 
 @dp.message(Command("top"))
 async def cmd_top(message: Message):
@@ -3735,7 +3748,7 @@ async def cmd_top(message: Message):
     if not stats: await reply_auto_delete(message, "📊 Статистика пока пуста!"); return
     sorted_u = sorted(stats.items(), key=lambda x: x[1], reverse=True)[:10]
     medals   = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
-    lines    = ["🏆 <b>Топ активных участников:</b>\n"]
+    lines    = ["╔══════════════════╗\n║  🏆  ТОП ЧАТА     ║\n╚══════════════════╝\n"]
     for i, (uid, count) in enumerate(sorted_u):
         try: m = await bot.get_chat_member(message.chat.id, uid); uname = m.user.full_name
         except: uname = f"ID {uid}"
@@ -3745,53 +3758,55 @@ async def cmd_top(message: Message):
 async def cmd_roll(message: Message, command: CommandObject):
     try: sides = max(2, min(int(command.args or 6), 10000))
     except: sides = 6
-    await reply_auto_delete(message, f"🎲 Бросаю d{sides}... выпало: <b>{random.randint(1,sides)}</b>!", parse_mode="HTML")
+    result = random.randint(1, sides)
+    await reply_auto_delete(message, f"╔══════════════════╗\n║  🎲  БРОСОК       ║\n╚══════════════════╝\n\nd{sides} → <b>{result}</b>\n──────────────────", parse_mode="HTML")
 
 async def cmd_flip(message: Message):
-    await reply_auto_delete(message, random.choice(["🦅 Орёл!", "🪙 Решка!"]))
+    result = random.choice(["🦅 Орёл", "🪙 Решка"])
+    await reply_auto_delete(message, f"╔══════════════════╗\n║  🪙  МОНЕТКА      ║\n╚══════════════════╝\n\nРезультат: <b>{result}</b>\n──────────────────", parse_mode="HTML")
 
 async def cmd_8ball(message: Message, command: CommandObject):
     if not command.args: await reply_auto_delete(message, "❓ /8ball [вопрос]"); return
     await reply_auto_delete(message, 
-        f"🎱 <b>Вопрос:</b> {command.args}\n\n<b>Ответ:</b> {random.choice(BALL_ANSWERS)}", parse_mode="HTML")
+        f"╔══════════════════╗\n║  🎱  ШАР СУДЬБЫ   ║\n╚══════════════════╝\n\n❓ {command.args}\n──────────────────\n{random.choice(BALL_ANSWERS)}", parse_mode="HTML")
 
 @dp.message(Command("rate"))
 async def cmd_rate(message: Message, command: CommandObject):
     if not command.args: await reply_auto_delete(message, "⚠️ /rate [что]"); return
     score = random.randint(0, 10)
     await reply_auto_delete(message, 
-        f"⭐ <b>{command.args}</b>\n{'🌟'*score+'☆'*(10-score)}\nОценка: <b>{score}/10</b>", parse_mode="HTML")
+        f"╔══════════════════╗\n║  ⭐  ОЦЕНКА       ║\n╚══════════════════╝\n\n📌 {command.args}\n{'🌟'*score+'☆'*(10-score)}\n<b>{score}/10</b>\n──────────────────", parse_mode="HTML")
 
 @dp.message(Command("iq"))
 async def cmd_iq(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     iq   = random.randint(1, 200)
     c    = "🥔 Картошка умнее." if iq<70 else ("🐒 Обезьяна лучше." if iq<100 else ("😐 Сойдёт." if iq<130 else ("🧠 Умный!" if iq<160 else "🤖 Настоящий гений!")))
-    await reply_auto_delete(message, f"🧠 IQ {user.mention_html()}: <b>{iq}</b>\n{c}", parse_mode="HTML")
+    await reply_auto_delete(message, f"╔══════════════════╗\n║  🧠  IQ ТЕСТ      ║\n╚══════════════════╝\n\n👤 {user.mention_html()}\n📊 IQ: <b>{iq}</b>\n──────────────────\n{c}", parse_mode="HTML")
 
 @dp.message(Command("gay"))
 async def cmd_gay(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     p    = random.randint(0, 100)
     await reply_auto_delete(message, 
-        f"🌈 {user.mention_html()}\n{'🟣'*(p//10)+'⬜'*(10-p//10)}\n<b>{p}%</b> — это шутка 😄",
+        f"╔══════════════════╗\n║  🌈  РАДАР        ║\n╚══════════════════╝\n\n👤 {user.mention_html()}\n{'🟣'*(p//10)+'⬜'*(10-p//10)} <b>{p}%</b>\n──────────────────\n<i>это шутка 😄</i>",
         parse_mode="HTML")
 
 @dp.message(Command("truth"))
 async def cmd_truth(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     await reply_auto_delete(message, 
-        f"🤔 <b>Вопрос для {user.mention_html()}:</b>\n\n{random.choice(TRUTH_QUESTIONS)}", parse_mode="HTML")
+        f"╔══════════════════╗\n║  🤔  ПРАВДА       ║\n╚══════════════════╝\n\n👤 {user.mention_html()}\n──────────────────\n{random.choice(TRUTH_QUESTIONS)}", parse_mode="HTML")
 
 @dp.message(Command("dare"))
 async def cmd_dare(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     await reply_auto_delete(message, 
-        f"😈 <b>Задание для {user.mention_html()}:</b>\n\n{random.choice(DARE_CHALLENGES)}", parse_mode="HTML")
+        f"╔══════════════════╗\n║  😈  ДЕЙСТВИЕ     ║\n╚══════════════════╝\n\n👤 {user.mention_html()}\n──────────────────\n{random.choice(DARE_CHALLENGES)}", parse_mode="HTML")
 
 @dp.message(Command("wyr"))
 async def cmd_wyr(message: Message):
-    await reply_auto_delete(message, f"🎯 <b>Выбор без выбора:</b>\n\n{random.choice(WOULD_YOU_RATHER)}", parse_mode="HTML")
+    await reply_auto_delete(message, f"╔══════════════════╗\n║  🎯  ЧТО ВЫБЕРЕШЬ ║\n╚══════════════════╝\n\n{random.choice(WOULD_YOU_RATHER)}\n──────────────────", parse_mode="HTML")
 
 async def cmd_rps(message: Message, command: CommandObject):
     choices = {"к":"✊ Камень","н":"✌️ Ножницы","б":"🖐 Бумага"}
@@ -3800,26 +3815,26 @@ async def cmd_rps(message: Message, command: CommandObject):
         await reply_auto_delete(message, "✊ /rps к — камень, /rps н — ножницы, /rps б — бумага"); return
     p = command.args.lower(); b = random.choice(list(choices.keys()))
     res = "🤝 Ничья!" if p==b else ("🎉 Ты выиграл!" if wins[p]==b else "😈 Я выиграл!")
-    await reply_auto_delete(message, f"Ты: {choices[p]}\nЯ: {choices[b]}\n\n{res}")
+    await reply_auto_delete(message, f"╔══════════════════╗\n║  ✊  КНБ          ║\n╚══════════════════╝\n\n👤 Ты: {choices[p]}\n🤖 Я: {choices[b]}\n──────────────────\n{res}")
 
 async def cmd_choose(message: Message, command: CommandObject):
     if not command.args or "|" not in command.args:
         await reply_auto_delete(message, "⚠️ /choose вар1|вар2|вар3"); return
     options = [o.strip() for o in command.args.split("|") if o.strip()]
     if len(options) < 2: await reply_auto_delete(message, "⚠️ Минимум 2 варианта."); return
-    await reply_auto_delete(message, f"🎯 Выбираю... ✅ <b>{random.choice(options)}</b>!", parse_mode="HTML")
+    await reply_auto_delete(message, f"╔══════════════════╗\n║  🎯  ВЫБОР        ║\n╚══════════════════╝\n\n✅ <b>{random.choice(options)}</b>\n──────────────────", parse_mode="HTML")
 
 @dp.message(Command("horoscope"))
 async def cmd_horoscope(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     sign, text = random.choice(list(HOROSCOPES.items()))
-    await reply_auto_delete(message, f"{sign} <b>Гороскоп для {user.mention_html()}:</b>\n\n{text}", parse_mode="HTML")
+    await reply_auto_delete(message, f"╔══════════════════╗\n║  🔮  ГОРОСКОП     ║\n╚══════════════════╝\n\n{sign} {user.mention_html()}\n──────────────────\n{text}", parse_mode="HTML")
 
 @dp.message(Command("predict"))
 async def cmd_predict(message: Message):
     user = message.reply_to_message.from_user if message.reply_to_message else message.from_user
     await reply_auto_delete(message, 
-        f"🔮 <b>Предсказание для {user.mention_html()}:</b>\n\n{random.choice(PREDICTIONS)}", parse_mode="HTML")
+        f"╔══════════════════╗\n║  🔮  ПРЕДСКАЗАНИЕ ║\n╚══════════════════╝\n\n👤 {user.mention_html()}\n──────────────────\n{random.choice(PREDICTIONS)}", parse_mode="HTML")
 
 @dp.message(Command("совместимость"))
 async def cmd_compatibility(message: Message):
@@ -3835,7 +3850,7 @@ async def cmd_compatibility(message: Message):
     elif percent >= 20: verdict = "😬 Сложно, но возможно..."
     else:               verdict = "💔 Катастрофа! Держитесь подальше!"
     await reply_auto_delete(message, 
-        f"💘 <b>Совместимость:</b>\n\n👤 {user1.mention_html()}\n{bar}\n👤 {user2.mention_html()}\n\n<b>{percent}%</b> — {verdict}",
+        f"╔══════════════════╗\n║  💘  СОВМЕСТИМОСТЬ ║\n╚══════════════════╝\n\n👤 {user1.mention_html()}\n{bar}\n👤 {user2.mention_html()}\n──────────────────\n<b>{percent}%</b> — {verdict}",
         parse_mode="HTML")
 
 @dp.message(Command("botstats"))
@@ -3844,9 +3859,12 @@ async def cmd_botstats(message: Message):
     total_msgs  = sum(sum(v.values()) for v in chat_stats.values())
     total_warns = sum(sum(v.values()) for v in warnings.values())
     await reply_auto_delete(message, 
-        f"📈 <b>Статистика бота</b>\n\n💬 Сообщений: <b>{total_msgs}</b>\n"
-        f"⚡ Варнов: <b>{total_warns}</b>\n😴 AFK: <b>{len(afk_users)}</b>\n"
+        f"╔══════════════════╗\n║  📈  СТАТИСТИКА   ║\n╚══════════════════╝\n\n"
+        f"💬 Сообщений: <b>{total_msgs}</b>\n"
+        f"⚡ Варнов: <b>{total_warns}</b>\n"
+        f"😴 AFK: <b>{len(afk_users)}</b>\n"
         f"🌐 Чатов: <b>{len(chat_stats)}</b>\n"
+        f"──────────────────\n"
         f"🧼 Антимат: <b>{'вкл' if ANTI_MAT_ENABLED else 'выкл'}</b>\n"
         f"🤖 Автокик: <b>{'вкл' if AUTO_KICK_BOTS else 'выкл'}</b>", parse_mode="HTML")
 
@@ -11777,12 +11795,13 @@ async def cmd_stats(message: Message):
     reports_cnt = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
     conn.close()
     await reply_auto_delete(message,
-        f"📊 <b>Статистика чата</b>\n"
+        f"╔══════════════════╗\n║  📊  СТАТИСТИКА   ║\n╚══════════════════╝\n\n"
         f"💬 Сообщений: <b>{total_msgs}</b>\n"
         f"👥 Активных: <b>{total_users}</b>\n"
         f"⚡ Варнов: <b>{total_warns}</b>\n"
         f"🔨 Банов: <b>{bans_count}</b>\n"
-        f"🚨 Репортов: <b>{reports_cnt}</b>",
+        f"🚨 Репортов: <b>{reports_cnt}</b>\n"
+        f"──────────────────",
         parse_mode="HTML")
 
 @dp.message(Command("daily"))
@@ -11809,10 +11828,11 @@ async def cmd_daily(message: Message):
                  (f"daily_{uid}_{cid}", now))
     conn.commit(); conn.close()
     await reply_auto_delete(message,
-        f"🎁 <b>Ежедневный бонус!</b>\n"
-        f"⭐ +{bonus} XP получено!\n"
-        f"💰 Итого XP: <b>{xp_data[cid][uid]}</b>\n\n"
-        f"⏰ Следующий бонус через 24ч",
+        f"╔══════════════════╗\n║  🎁  ДЕЙЛИ БОНУС  ║\n╚══════════════════╝\n\n"
+        f"⭐ +{bonus} XP\n"
+        f"💰 Итого XP: <b>{xp_data[cid][uid]}</b>\n"
+        f"──────────────────\n"
+        f"<i>⏰ Следующий бонус через 24ч</i>",
         parse_mode="HTML")
 async def cmd_coinflip(message: Message):
     result = random.choice(["👑 Орёл!", "🪙 Решка!"])
@@ -11855,10 +11875,11 @@ async def cmd_rate(message: Message):
     }
     comment = next(v for (lo,hi),v in comments.items() if lo <= score <= hi)
     await reply_auto_delete(message,
-        f"⭐ <b>Оценка</b>\n\n"
-        f"📌 {text[:80]}\n\n"
+        f"╔══════════════════╗\n║  ⭐  ОЦЕНКА       ║\n╚══════════════════╝\n\n"
+        f"📌 {text[:80]}\n"
         f"{bar}\n"
-        f"<b>{score}/10</b> — {comment}",
+        f"<b>{score}/10</b> — {comment}\n"
+        f"──────────────────",
         parse_mode="HTML")
 
 @dp.message(Command("ship"))
@@ -11884,9 +11905,10 @@ async def cmd_ship(message: Message):
     else:          comment = "💞 ИДЕАЛЬНАЯ ПАРА!"
     ship_name = name1[:len(name1)//2] + name2[len(name2)//2:]
     await reply_auto_delete(message,
-        f"💕 <b>Совместимость</b>\n\n"
+        f"╔══════════════════╗\n║  💕  ШИП          ║\n╚══════════════════╝\n\n"
         f"👤 {name1} + {name2}\n"
-        f"💑 Шипнейм: <b>{ship_name}</b>\n\n"
+        f"💑 Шипнейм: <b>{ship_name}</b>\n"
+        f"──────────────────\n"
         f"{bar}\n"
         f"<b>{pct}%</b> — {comment}",
         parse_mode="HTML")
@@ -11996,9 +12018,10 @@ async def cmd_fortune(message: Message):
     fortune = random.choice(FORTUNES)
     num = random.randint(1, 9999)
     await reply_auto_delete(message,
-        f"🔮 <b>Предсказание судьбы</b>\n\n"
-        f"✨ {fortune}\n\n"
-        f"🎱 Счастливое число дня: <b>{num}</b>",
+        f"╔══════════════════╗\n║  🔮  СУДЬБА       ║\n╚══════════════════╝\n\n"
+        f"✨ {fortune}\n"
+        f"──────────────────\n"
+        f"🎱 Счастливое число: <b>{num}</b>",
         parse_mode="HTML")
 
 @dp.message(Command("calc"))
@@ -12015,9 +12038,10 @@ async def cmd_calc(message: Message):
             await reply_auto_delete(message, "⚠️ Недопустимые символы"); return
         result = eval(safe, {"__builtins__": {}})
         await reply_auto_delete(message,
-            f"🧮 <b>Калькулятор</b>\n\n"
+            f"╔══════════════════╗\n║  🧮  КАЛЬКУЛЯТОР  ║\n╚══════════════════╝\n\n"
             f"📌 <code>{safe}</code>\n"
-            f"= <b>{result}</b>",
+            f"= <b>{result}</b>\n"
+            f"──────────────────",
             parse_mode="HTML")
     except ZeroDivisionError:
         await reply_auto_delete(message, "❌ Делить на ноль нельзя!")
@@ -12034,10 +12058,11 @@ async def cmd_password(message: Message):
     passwd = ''.join(_sec.choice(chars) for _ in range(length))
     strength = "💪 Сильный" if length >= 12 else "😐 Средний" if length >= 8 else "😟 Слабый"
     await reply_auto_delete(message,
-        f"🔐 <b>Сгенерированный пароль</b>\n\n"
-        f"<code>{passwd}</code>\n\n"
+        f"╔══════════════════╗\n║  🔐  ПАРОЛЬ       ║\n╚══════════════════╝\n\n"
+        f"<code>{passwd}</code>\n"
+        f"──────────────────\n"
         f"📏 Длина: {length} символов\n"
-        f"💪 Надёжность: {strength}\n\n"
+        f"💪 Надёжность: {strength}\n"
         f"<i>⚠️ Сохрани в надёжном месте!</i>",
         parse_mode="HTML")
 
@@ -12079,7 +12104,9 @@ async def cmd_ask(message: Message):
     answer = random.choice(answers)
     q_text = f"\n❓ {question}" if question else ""
     await reply_auto_delete(message,
-        f"🎱 <b>Вопрос к вселенной</b>{q_text}\n\n"
+        f"╔══════════════════╗\n║  🎱  ВСЕЛЕННАЯ    ║\n╚══════════════════╝\n"
+        f"{q_text}\n"
+        f"──────────────────\n"
         f"{answer}",
         parse_mode="HTML")
 
