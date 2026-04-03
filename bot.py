@@ -2661,244 +2661,205 @@ async def cmd_rules(message: Message):
 
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
-    is_adm = await check_admin(message)
+    is_adm  = await check_admin(message)
     is_owner = message.from_user.id == OWNER_ID
 
+    # ── ПОЛЬЗОВАТЕЛЬ ──────────────────────────────────────
     text_user = (
-        "🛡 <b>CHAT GUARD</b> — Справка\n"
-        "<i>Система управления и модерации</i>\n\n"
-        "<b>Профиль</b>\n"
-        "\n"
-        "/myprofile — мой профиль\n"
-        "/setbio текст — установить био\n"
-        "/setmood — настроение\n"
-        "\n\n"
-        "<b>Социальные функции</b>\n"
-        "\n"
-        "· /addfriend — добавить в друзья <i>(реплай)</i>\n"
-        "· /friends — список друзей\n"
-        "· /unfriend — удалить из друзей <i>(реплай)</i>\n"
-        "· /propose — предложить отношения <i>(реплай)</i>\n"
-        "· /breakup — завершить отношения\n"
-        "· /gift 🌹 — подарить <i>(реплай)</i>\n"
-        "· /anonmsg текст — анонимное сообщение <i>(реплай)</i>\n"
-        "· /follow — подписаться <i>(реплай)</i>\n"
-        "· /followers — мои подписки\n"
-        "\n\n"
-        "<b>Развлечения</b>\n"
-        "\n"
-        "· аутист поженить — поженить <i>(реплай)</i>\n"
-        "· аутист казнить — казнить юзера <i>(реплай)</i>\n"
-        "· аутист диагноз — поставить диагноз <i>(реплай)</i>\n"
-        "· аутист профессия — назначить <i>(реплай)</i>\n"
-        "· аутист обозвать — обозвать <i>(реплай)</i>\n"
-        "· аутист дуэль — дуэль <i>(реплай)</i>\n"
-        "· аутист похитить — похитить <i>(реплай)</i>\n"
-        "· аутист экзамен — задать вопрос <i>(реплай)</i>\n"
-        "· аутист подарить 🌹 — подарить <i>(реплай)</i>\n"
-        "· аутист предложить — отношения <i>(реплай)</i>\n"
-        "· аутист разлюбить — расстаться <i>(реплай)</i>\n"
-        "\n\n"
-        "<b>Утилиты</b>\n"
-        "\n"
-        "· /tr [язык] — перевести <i>(реплай)</i>\n"
-        "· /music название — найти трек\n"
-        "· /imagine описание — сгенерировать картинку\n"
-        "· /idea — тема для обсуждения\n"
-        "· /rules — правила чата\n"
-        "· /afk [текст] — статус отсутствия\n"
-        "· /remind 30m текст — напомнить\n"
-        "· /scanqr КОД — активировать КюАр-код\n"
-        "\n\n"
-        "<b>Жалобы и апелляции</b>\n"
-        "\n"
-        "· /report — пожаловаться <i>(реплай)</i>\n"
-        "· /appeal причина — апелляция (в ЛС боту)\n"
-        "\n\n"
-        "<b>Кланы</b>\n"
-        "\n"
-        "· /clan — мой клан\n"
-        "· /clan_create ТЕГ Название — создать\n"
-        "· /clan_join ТЕГ — вступить\n"
-        "· /clan_leave — покинуть\n"
-        "\n\n"
-        "💡 <i>Бот: CHAT GUARD | /panel — панель управления</i>\"\n"
+        "╔══════════════════════╗\n"
+        "║   🛡  CHAT GUARD     ║\n"
+        "╚══════════════════════╝\n\n"
 
-        "<b>Статистика</b>\n"
-        "\n"
-        "· /me — моя карточка в чате\n"
-        "· /top — топ чата по XP\n"
-        "· /stats — статистика чата\n"
-        "· /daily — ежедневный бонус XP\n"
-        "· /profile — полный профиль\n"
-        "\n\n"
+        "👤 <b>Профиль</b>\n"
+        "├ /me — моя карточка\n"
+        "├ /myprofile — полный профиль\n"
+        "├ /setbio текст — установить био\n"
+        "├ /setmood — настроение\n"
+        "├ /rank — мой уровень и XP\n"
+        "├ /top — топ чата по активности\n"
+        "├ /stats — статистика чата\n"
+        "└ /daily — ежедневный бонус XP\n\n"
 
-        "<b>Развлечения</b>\n"
-        "\n"
-        "· /coinflip — подбросить монетку\n"
-        "· /dice [N] — бросить кубик\n"
-        "· /rate текст — оценить от 0 до 10\n"
-        "· /ship — совместимость двух юзеров\n"
-        "· /zodiac — гороскоп дня\n"
-        "· /fortune — предсказание судьбы\n"
-        "· /ask вопрос — ответ вселенной\n"
-        "\n\n"
+        "👥 <b>Социальное</b>\n"
+        "├ /addfriend — добавить друга <i>(реплай)</i>\n"
+        "├ /friends — список друзей\n"
+        "├ /unfriend — удалить из друзей <i>(реплай)</i>\n"
+        "├ /propose — предложить отношения <i>(реплай)</i>\n"
+        "├ /breakup — завершить отношения\n"
+        "├ /anonmsg текст — анонимное сообщение <i>(реплай)</i>\n"
+        "├ /follow — подписаться <i>(реплай)</i>\n"
+        "└ /followers — мои подписчики\n\n"
 
-        "<b>Утилиты</b>\n"
-        "\n"
-        "· /calc выражение — калькулятор\n"
-        "· /password [длина] — генератор паролей\n"
-        "· /qr текст — создать QR-код\n"
-        "· /mock текст — СтИлЬ МоКиНгА\n"
-        "· /reverse текст — текст наоборот\n"
-        "· /count текст — подсчёт символов\n"
-        "· /tr [язык] — перевести <i>(реплай)</i>\n"
-        "· /music название — найти трек\n"
-        "· /imagine описание — генерация картинки\n"
-        "· /idea — тема для обсуждения\n"
-        "\n\n"
+        "🎮 <b>Игры и развлечения</b>\n"
+        "├ /roll [N] — бросить кубик\n"
+        "├ /flip — монетка орёл/решка\n"
+        "├ /rps к/н/б — камень ножницы бумага\n"
+        "├ /ship — совместимость <i>(реплай или /ship Имя1 Имя2)</i>\n"
+        "├ /rate текст — оценить от 0 до 10\n"
+        "├ /8ball вопрос — магический шар\n"
+        "├ /choose вар1|вар2|вар3 — выбор\n"
+        "├ /truth — правда или действие (вопрос)\n"
+        "├ /dare — правда или действие (задание)\n"
+        "├ /wyr — что бы ты выбрал?\n"
+        "├ /iq — проверка IQ <i>(реплай или себе)</i>\n"
+        "├ /совместимость — совместимость <i>(реплай)</i>\n"
+        "└ /coinflip — подбросить монетку\n\n"
 
-        "<b>Приватность</b>\n"
-        "\n"
-        "· /privacy — политика конфиденциальности\n"
-        "· /deleteme — удалить свои данные\n"
-        "\n\n"
+        "🔮 <b>Гадания и судьба</b>\n"
+        "├ /horoscope — случайный гороскоп\n"
+        "├ /zodiac — гороскоп по знаку зодиака\n"
+        "├ /predict — предсказание <i>(реплай или себе)</i>\n"
+        "├ /fortune — предсказание судьбы\n"
+        "└ /ask вопрос — ответ вселенной\n\n"
 
-        "💡 <i>Бот: CHAT GUARD | /panel — панель управления</i>"
+        "🛠 <b>Утилиты</b>\n"
+        "├ /calc выражение — калькулятор\n"
+        "├ /password [длина] — генератор паролей\n"
+        "├ /qr текст — создать QR-код\n"
+        "├ /mock текст — СтИлЬ МоКиНгА\n"
+        "├ /reverse текст — текст задом наперёд\n"
+        "├ /count текст — подсчёт символов\n"
+        "├ /tr [язык] — перевести <i>(реплай)</i>\n"
+        "├ /music название — найти трек\n"
+        "├ /imagine описание — сгенерировать картинку\n"
+        "├ /weather город — погода\n"
+        "├ /afk [текст] — статус отсутствия\n"
+        "├ /remind 30m текст — напоминание\n"
+        "└ /rules — правила чата\n\n"
+
+        "🏰 <b>Кланы</b>\n"
+        "├ /clan — информация о клане\n"
+        "├ /clan_create ТЕГ Название — создать клан\n"
+        "├ /clan_join ТЕГ — вступить в клан\n"
+        "└ /clan_leave — покинуть клан\n\n"
+
+        "📨 <b>Жалобы и апелляции</b>\n"
+        "├ /report — пожаловаться <i>(реплай)</i>\n"
+        "└ /appeal причина — апелляция на бан\n\n"
+
+        "🔒 <b>Приватность</b>\n"
+        "├ /privacy — политика конфиденциальности\n"
+        "└ /deleteme — удалить свои данные\n\n"
+
+        "──────────────────────\n"
+        "💡 <i>Команды «аутист»: аутист поженить / казнить / диагноз / профессия / обозвать / дуэль / похитить / подарить 🌹</i>"
     )
 
+    # ── АДМИНИСТРАТОР ─────────────────────────────────────
     text_admin = (
-        "\n\n<b>──── Для администраторов ────</b>\n\n"
-        "<b>Модерация</b>\n"
-        "\n"
-        "· /warn · /unwarn — варн / снять\n"
-        "· /ban · /unban — бан / разбан\n"
-        "· /mute · /unmute — мут / размут\n"
-        "· /tempban @user 1ч — временный бан\n"
-        "· /banlist · /warnmenu — списки\n"
-        "· /panel — панель управления\n"
         "\n\n"
-        "<b>Голосовые команды</b>\n"
-        "\n"
-        "· аутист варн/разварн/мут/размут/бан/разбан\n"
-        "· аутист стикермут/гифмут/войсмут/всёмут @user [время]\n"
-        "· аутист медиамут/заморозка/только чтение @user\n"
-        "· аутист инфо/варны/поиск/история/причина @user\n"
-        "· аутист чистка @user 30м — удалить сообщения\n"
-        "\n\n"
-        "<b>Управление чатом</b>\n"
-        "\n"
-        "· /del · /clear N — удалить сообщения\n"
-        "· /pin заголовок · /pinmanager — закреп\n"
-        "· /lock · /unlock · /slowmode N\n"
-        "· /announce текст · /poll\n"
-        "· /antimat · /autokick · /autorules\n"
-        "· /surveillance · /deletedlog — наблюдение\n"
-        "· /setwelcome · /welcomeon · /welcomeoff\n"
-        "· /lang — язык бота 🇷🇺🇬🇧🇺🇦\n"
-        "\n\n"
-        "<b>Роли и команда</b>\n"
-        "\n"
-        "· /roles — список ролей\n"
-        "· /myjournal — моя история действий\n"
-        "· /shifts — расписание смен\n"
-        "· /modrating — рейтинг активности\n"
-        "· /tasks · /donetask ID — задачи\n"
-        "· /modchat — чат модераторов\n"
-        "\n\n"
-        "<b>Быстрые ответы</b>\n"
-        "\n"
-        "· /addreply ключ текст — добавить шаблон\n"
-        "· /replies — список шаблонов\n"
-        "· !ключ — отправить шаблон в чат\n"
-        "\n\n"
-        "<b>Репорты</b>\n"
-        "\n"
-        "· /report · /blockreport · /reportarchive\n"
-        "· /reportstats — статистика репортов\n"
-        "\n\n"
-        "<b>Аналитика</b>\n"
-        "\n"
-        "· /heatmap — активность по часам\n"
-        "· /vip @user — VIP статус\n"
-        "· /plugins — модули бота\n"
-        "\n\n"
-        "<b>Шаблоны</b>\n"
-        "\n"
-        "· /warnmenu — шаблоны варнов кнопками <i>(реплай)</i>\n"
-        "· /violators — топ нарушителей чата\n"
-        "· /violators <i>(реплай)</i> — досье юзера\n"
-        "· /violators имя — поиск по имени\n"
-        "· /setq 1 текст — настроить горячую команду\n"
-        "· /q1 /q2 /q3 — отправить горячую команду\n"
-        "\n\n"
-        "<b>Технические работы</b>\n"
-        "\n"
-        "· /techwork — запустить/завершить тех.работы\n"
-        "· /techwork 30 мин — с указанием времени\n"
-        "· /techstatus — статус тех.работ\n"
-        "└─────────────────────────"
+        "╔══════════════════════╗\n"
+        "║   👮  АДМИНИСТРАТОР  ║\n"
+        "╚══════════════════════╝\n\n"
+
+        "⚖️ <b>Модерация</b>\n"
+        "├ /warn · /unwarn — варн / снять <i>(реплай)</i>\n"
+        "├ /ban · /unban — бан / разбан <i>(реплай)</i>\n"
+        "├ /mute · /unmute — мут / размут <i>(реплай)</i>\n"
+        "├ /tempban 3 причина — временный бан <i>(реплай)</i>\n"
+        "├ /banid ID причина — бан по ID\n"
+        "├ /muteid ID 60m — мут по ID\n"
+        "├ /kick — кик <i>(реплай)</i>\n"
+        "├ /warn24 — предупреждение с автоснятием <i>(реплай)</i>\n"
+        "└ /warnmenu — шаблоны варнов <i>(реплай)</i>\n\n"
+
+        "📋 <b>Информация</b>\n"
+        "├ /info — досье пользователя <i>(реплай)</i>\n"
+        "├ /warnings — варны <i>(реплай)</i>\n"
+        "├ /modhistory — история нарушений <i>(реплай)</i>\n"
+        "├ /banlist — список банов\n"
+        "├ /adminlist — список администраторов\n"
+        "├ /modlog [N] — журнал модерации\n"
+        "├ /modtop — рейтинг модераторов\n"
+        "└ /violators — топ нарушителей\n\n"
+
+        "🚨 <b>Алерты и инциденты</b>\n"
+        "├ /alerts — текущие алерты\n"
+        "├ /alertsclear — очистить алерты\n"
+        "└ /incidents — критические инциденты\n\n"
+
+        "📨 <b>Апелляции</b>\n"
+        "├ /appeals — список ожидающих апелляций\n"
+        "├ /appealapprove ID — одобрить апелляцию\n"
+        "└ /appealdeny ID причина — отклонить\n\n"
+
+        "⚙️ <b>Управление чатом</b>\n"
+        "├ /chatsettings — настройки чата (инлайн-меню)\n"
+        "├ /lock · /unlock — закрыть / открыть чат\n"
+        "├ /slowmode N — режим замедления\n"
+        "├ /del — удалить сообщение <i>(реплай)</i>\n"
+        "├ /clear N — удалить N последних\n"
+        "├ /pin заголовок — закрепить <i>(реплай)</i>\n"
+        "├ /pinmanager — менеджер закреплённых\n"
+        "├ /announce текст — объявление\n"
+        "├ /poll вопрос|вар1|вар2 — голосование\n"
+        "├ /antimat вкл/выкл — фильтр мата\n"
+        "├ /autokick — автокик ботов\n"
+        "├ /setwelcome — настроить приветствие\n"
+        "├ /welcomeon · /welcomeoff — вкл/выкл\n"
+        "├ /surveillance — режим наблюдения\n"
+        "└ /deletedlog — лог удалённых сообщений\n\n"
+
+        "📊 <b>Аналитика</b>\n"
+        "├ /botstats — общая статистика бота\n"
+        "├ /heatmap — тепловая карта активности\n"
+        "├ /calendar — события чата\n"
+        "└ /vip @user — выдать VIP статус <i>(реплай)</i>\n\n"
+
+        "⚡ <b>Быстрые инструменты</b>\n"
+        "├ /addreply ключ текст — шаблон ответа\n"
+        "├ /replies — список шаблонов\n"
+        "├ !ключ — отправить шаблон\n"
+        "├ /setq 1 текст — горячая команда\n"
+        "├ /q1 /q2 /q3 — отправить горячую команду\n"
+        "├ /note set/get/del — заметки чата\n"
+        "└ /modexport — экспорт истории модерации\n\n"
+
+        "🔧 <b>Тех. работы</b>\n"
+        "├ /techwork [время] — запустить тех. работы\n"
+        "└ /techstatus — статус тех. работ"
     )
 
+    # ── ВЛАДЕЛЕЦ ──────────────────────────────────────────
     text_owner = (
-        "\n\n<b>──── Только для владельца ────</b>\n\n"
-        "<b>Экстренные команды</b>\n"
-        "\n"
-        "· аутист ядерка/молния/взрыв/хаос\n"
-        "· аутист локдаун / локдаун выкл\n"
-        "· аутист тишина 10м\n"
-        "· аутист клоун/смерть/маска/магнит/цель/зеркало\n"
         "\n\n"
-        "<b>Управление</b>\n"
-        "\n"
-        "· аутист корона/анонс/вызов/громко/закреп/голос\n"
-        "· аутист температура/неделя/сос/рестарт\n"
-        "· аутист слежка/шпион/скрин/рост\n"
-        "\n\n"
-        "<b>Мульти-чат</b>\n"
-        "\n"
-        "· /mypanel — панель всех чатов (в ЛС)\n"
-        "· /broadcast2 текст — во все чаты\n"
-        "· /sosall · /sosoff — локдаун всех\n"
-        "· /linkchats — связать чаты\n"
-        "\n\n"
-        "<b>Экстренные меры</b>\n"
-        "\n"
-        "· /evacuation — кик новых за 1ч\n"
-        "· /quarantine — автомут новых 24ч\n"
-        "· /cleanup — удалить неактивных\n"
-        "\n\n"
-        "<b>Безопасность</b>\n"
-        "\n"
-        "· /blacklist · /unblacklist — чёрный список\n"
-        "· /giverole · /takerole — роли модов\n"
-        "· /audit · /resetchat · /clonechat\n"
-        "· /setperm команда роль — права доступа\n"
-        "\n\n"
-        "<b>База данных</b>\n"
-        "\n"
-        "· /backupnow — бэкап прямо сейчас\n"
-        "· /restoredb — восстановить <i>(реплай на .db)</i>\n"
-        "· /calendar — события по датам\n"
-        "\n\n"
-        "<b>Управление модераторами</b>\n"
-        "\n"
-        "· /task текст [часы] — поставить задачу\n"
-        "· /tasks — все задачи\n"
-        "· /setshift 9 21 — назначить смену\n"
-        "· /createqr [XP] — создать КюАр-код\n"
-        "\n\n"
-        "<b>Авто-комплимент</b>\n"
-        "\n"
-        "· /compliment — анон. комплимент рандому\n"
-        "· /selfcompliment — комплимент себе\n"
-        "· /autocompliment — авто в 12:00 вкл/выкл\n"
-        "\n\n"
-        "<b>Идея дня</b>\n"
-        "\n"
-        "· /dailyidea — авто-тема в 9:00 вкл/выкл\n"
-        "· /idea — тема прямо сейчас\n"
-        "└─────────────────────────"
+        "╔══════════════════════╗\n"
+        "║   👑  ВЛАДЕЛЕЦ       ║\n"
+        "╚══════════════════════╝\n\n"
+
+        "📢 <b>Рассылка</b>\n"
+        "└ /broadcast текст — рассылка во все чаты\n\n"
+
+        "🚨 <b>Экстренные меры</b>\n"
+        "├ /evacuation — кик новых участников за 1ч\n"
+        "├ /quarantine — автомут новых на 24ч\n"
+        "└ /cleanup — удалить неактивных\n\n"
+
+        "🛡 <b>Безопасность</b>\n"
+        "├ /blacklist ID — глобальный чёрный список\n"
+        "├ /unblacklist ID — убрать из ЧС\n"
+        "├ /giverole @user роль — выдать роль мода\n"
+        "├ /takerole @user — забрать роль\n"
+        "└ /setperm команда роль — права доступа\n\n"
+
+        "💾 <b>База данных</b>\n"
+        "├ /backupnow — создать бэкап прямо сейчас\n"
+        "└ /restoredb — восстановить <i>(реплай на .db файл)</i>\n\n"
+
+        "👮 <b>Управление модераторами</b>\n"
+        "├ /task текст [часы] — поставить задачу\n"
+        "├ /tasks — все задачи\n"
+        "├ /setshift 9 21 — назначить смену\n"
+        "└ /createqr [XP] — создать QR-код\n\n"
+
+        "🎭 <b>Команды «аутист» (владелец)</b>\n"
+        "├ аутист ядерка / молния / взрыв / хаос\n"
+        "├ аутист локдаун / локдаун выкл\n"
+        "├ аутист тишина 10м\n"
+        "└ аутист корона / анонс / сос / рестарт\n\n"
+
+        "──────────────────────\n"
+        "⚙️ <i>/panel — панель управления | /ownersettings — настройки бота</i>"
     )
 
     if is_owner:
@@ -2908,7 +2869,8 @@ async def cmd_help(message: Message):
             try: await bot.send_message(OWNER_ID, chunk, parse_mode="HTML")
             except: pass
         await reply_auto_delete(message,
-            "📬 <b>Справка отправлена в личные сообщения.</b>", parse_mode="HTML")
+            "╔══════════════════╗\n║  📬  СПРАВКА      ║\n╚══════════════════╝\n\n"
+            "<i>Полная справка отправлена в личные сообщения.</i>", parse_mode="HTML")
     elif is_adm:
         full = text_user + text_admin
         chunks = [full[i:i+4000] for i in range(0, len(full), 4000)]
@@ -2916,12 +2878,14 @@ async def cmd_help(message: Message):
             try: await bot.send_message(message.from_user.id, chunk, parse_mode="HTML")
             except: pass
         await reply_auto_delete(message,
-            "📬 <b>Справка отправлена в личные сообщения.</b>", parse_mode="HTML")
+            "╔══════════════════╗\n║  📬  СПРАВКА      ║\n╚══════════════════╝\n\n"
+            "<i>Справка отправлена в личные сообщения.</i>", parse_mode="HTML")
     else:
         await reply_auto_delete(message, text_user, parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="Политика бота", url="https://telegra.ph/politika-bota-03-15")],
-                [InlineKeyboardButton(text="Открыть тикет", callback_data="tkt:new")],
+                [InlineKeyboardButton(text="📜 Политика бота", url="https://telegra.ph/politika-bota-03-15")],
+                [InlineKeyboardButton(text="🎫 Открыть тикет", callback_data="tkt:new")],
+                [InlineKeyboardButton(text="📨 Подать апелляцию", callback_data="appeal:new")],
             ])
         )
 
@@ -12147,6 +12111,538 @@ async def cmd_count(message: Message):
         f"💬 Слов: <b>{words}</b>\n"
         f"↩️ Строк: <b>{lines}</b>",
         parse_mode="HTML")
+# ══════════════════════════════════════════════════════════
+#  БАН / МУТ ПО ID (без реплая)
+# ══════════════════════════════════════════════════════════
+
+@dp.message(Command("banid"))
+async def cmd_banid(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    if not command.args:
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  🔨  БАН ПО ID    ║\n╚══════════════════╝\n\n"
+            "⚠️ Использование:\n<code>/banid 123456789 причина</code>", parse_mode="HTML"); return
+    parts = command.args.split(None, 1)
+    try: uid = int(parts[0])
+    except ValueError:
+        await reply_auto_delete(message, "⚠️ Укажи корректный Telegram ID"); return
+    reason = parts[1] if len(parts) > 1 else "Нарушение правил"
+    cid = message.chat.id
+    try:
+        await bot.ban_chat_member(cid, uid)
+        ban_list[cid][uid] = {
+            "name": f"ID {uid}", "reason": reason,
+            "by": message.from_user.full_name,
+            "time": datetime.now().strftime("%d.%m.%Y %H:%M"), "temp": False
+        }
+        save_data()
+        add_mod_history(cid, uid, "🔨 Бан по ID", reason, message.from_user.full_name)
+        await reply_auto_delete(message,
+            f"╔══════════════════╗\n║  🔨  БАН ПО ID    ║\n╚══════════════════╝\n\n"
+            f"🪪 ID: <code>{uid}</code>\n📋 Причина: <b>{reason}</b>\n──────────────────\n"
+            f"<i>Пользователь заблокирован.</i>", parse_mode="HTML")
+        await log_action(f"🔨 <b>Бан по ID</b>\n👤 Кто: {message.from_user.mention_html()}\n🪪 ID: <code>{uid}</code>\n📋 Причина: {reason}\n💬 Чат: {message.chat.title}")
+    except Exception as e:
+        await reply_auto_delete(message, f"❌ Ошибка: <code>{e}</code>", parse_mode="HTML")
+
+
+@dp.message(Command("muteid"))
+async def cmd_muteid(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    if not command.args:
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  🔇  МУТ ПО ID    ║\n╚══════════════════╝\n\n"
+            "⚠️ Использование:\n<code>/muteid 123456789 60m причина</code>", parse_mode="HTML"); return
+    parts = command.args.split(None, 2)
+    try: uid = int(parts[0])
+    except ValueError:
+        await reply_auto_delete(message, "⚠️ Укажи корректный Telegram ID"); return
+    mins, label = parse_duration(parts[1]) if len(parts) > 1 else (60, "1 ч.")
+    if not mins: mins, label = 60, "1 ч."
+    reason = parts[2] if len(parts) > 2 else "Нарушение правил"
+    cid = message.chat.id
+    try:
+        await bot.restrict_chat_member(cid, uid,
+            permissions=ChatPermissions(can_send_messages=False),
+            until_date=datetime.now() + timedelta(minutes=mins))
+        add_mod_history(cid, uid, f"🔇 Мут {label}", reason, message.from_user.full_name)
+        await reply_auto_delete(message,
+            f"╔══════════════════╗\n║  🔇  МУТ ПО ID    ║\n╚══════════════════╝\n\n"
+            f"🪪 ID: <code>{uid}</code>\n⏱ Время: <b>{label}</b>\n📋 Причина: <b>{reason}</b>\n──────────────────",
+            parse_mode="HTML")
+        await log_action(f"🔇 <b>Мут по ID</b>\n👤 Кто: {message.from_user.mention_html()}\n🪪 ID: <code>{uid}</code>\n⏱ {label}\n📋 {reason}\n💬 Чат: {message.chat.title}")
+        schedule_unmute(cid, uid, mins, f"ID {uid}")
+    except Exception as e:
+        await reply_auto_delete(message, f"❌ Ошибка: <code>{e}</code>", parse_mode="HTML")
+
+
+# ══════════════════════════════════════════════════════════
+#  РАССЫЛКА /broadcast
+# ══════════════════════════════════════════════════════════
+
+@dp.message(Command("broadcast"))
+async def cmd_broadcast(message: Message, command: CommandObject):
+    if message.from_user.id != OWNER_ID:
+        await reply_auto_delete(message, "⛔ Только для владельца."); return
+    if not command.args:
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  📢  РАССЫЛКА     ║\n╚══════════════════╝\n\n"
+            "Использование:\n<code>/broadcast текст сообщения</code>\n\n"
+            "<i>Отправит во все известные чаты.</i>", parse_mode="HTML"); return
+    text = command.args
+    conn = db_connect()
+    chats = [row[0] for row in conn.execute("SELECT cid FROM known_chats").fetchall()]
+    conn.close()
+    sent = failed = 0
+    status_msg = await message.answer(f"⏳ Рассылка в {len(chats)} чатов...", parse_mode="HTML")
+    for cid in chats:
+        try:
+            await bot.send_message(cid,
+                f"╔══════════════════╗\n║  📢  ОБЪЯВЛЕНИЕ   ║\n╚══════════════════╝\n\n{text}\n──────────────────",
+                parse_mode="HTML")
+            sent += 1
+            await asyncio.sleep(0.05)
+        except:
+            failed += 1
+    try:
+        await status_msg.edit_text(
+            f"╔══════════════════╗\n║  📢  РАССЫЛКА     ║\n╚══════════════════╝\n\n"
+            f"✅ Отправлено: <b>{sent}</b>\n❌ Ошибок: <b>{failed}</b>", parse_mode="HTML")
+    except: pass
+    await log_action(f"📢 <b>Рассылка</b>\n👤 {message.from_user.mention_html()}\n📨 Отправлено: {sent}/{len(chats)}\n📝 {text[:100]}")
+
+
+# ══════════════════════════════════════════════════════════
+#  ЖУРНАЛ МОДЕРАЦИИ /modlog
+# ══════════════════════════════════════════════════════════
+
+@dp.message(Command("modlog"))
+async def cmd_modlog(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    limit = 20
+    try: limit = max(5, min(int(command.args), 50)) if command.args else 20
+    except: pass
+    conn = db_connect()
+    try:
+        rows = conn.execute(
+            "SELECT action, reason, by_name, target_name, created_at FROM mod_history "
+            "WHERE cid=? ORDER BY created_at DESC LIMIT ?", (cid, limit)
+        ).fetchall()
+    except:
+        rows = []
+    conn.close()
+    if not rows:
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  📋  MODLOG       ║\n╚══════════════════╝\n\n"
+            "<i>История пуста.</i>", parse_mode="HTML"); return
+    lines = [f"╔══════════════════╗\n║  📋  ЖУРНАЛ МОД   ║\n╚══════════════════╝\n\n<b>Последние {limit} действий:</b>\n"]
+    for r in rows:
+        ts = str(r["created_at"] if "created_at" in r.keys() else "—")[:16]
+        lines.append(
+            f"──────────────────\n"
+            f"🕐 {ts}\n"
+            f"⚡ {r['action']}\n"
+            f"👤 {r['target_name'] if 'target_name' in r.keys() else '—'}\n"
+            f"📋 {(r['reason'] or '—')[:50]}\n"
+            f"👮 {r['by_name'] if 'by_name' in r.keys() else '—'}"
+        )
+    text = "\n".join(lines)
+    if len(text) > 4000: text = text[:4000] + "\n\n<i>...обрезано</i>"
+    await reply_auto_delete(message, text, parse_mode="HTML")
+
+
+# ══════════════════════════════════════════════════════════
+#  АЛЕРТЫ /alerts
+# ══════════════════════════════════════════════════════════
+
+@dp.message(Command("alerts"))
+async def cmd_alerts(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    alerts_list = shared.alerts
+    if not alerts_list:
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  🚨  АЛЕРТЫ       ║\n╚══════════════════╝\n\n"
+            "✅ <i>Алертов нет.</i>", parse_mode="HTML"); return
+    limit = 10
+    lines = [f"╔══════════════════╗\n║  🚨  АЛЕРТЫ       ║\n╚══════════════════╝\n\n<b>Последние {min(limit, len(alerts_list))}:</b>\n"]
+    level_icon = {"danger": "🔴", "warn": "🟡", "info": "🔵"}
+    for a in alerts_list[:limit]:
+        icon = level_icon.get(a.get("level", "info"), "⚪")
+        lines.append(
+            f"──────────────────\n"
+            f"{icon} <b>{a.get('title', '—')}</b>\n"
+            f"📝 {a.get('desc', '—')[:80]}\n"
+            f"🕐 {a.get('time', '—')}"
+        )
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+@dp.message(Command("alertsclear"))
+async def cmd_alerts_clear(message: Message):
+    if not await require_admin(message): return
+    shared.alerts.clear()
+    await reply_auto_delete(message,
+        "╔══════════════════╗\n║  🚨  АЛЕРТЫ       ║\n╚══════════════════╝\n\n"
+        "✅ <i>Все алерты очищены.</i>", parse_mode="HTML")
+
+
+# ══════════════════════════════════════════════════════════
+#  АПЕЛЛЯЦИИ /appeals
+# ══════════════════════════════════════════════════════════
+
+@dp.message(Command("appeal"))
+async def cmd_appeal(message: Message, command: CommandObject):
+    """Пользователь подаёт апелляцию на бан"""
+    uid = message.from_user.id
+    if not command.args:
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  📨  АПЕЛЛЯЦИЯ    ║\n╚══════════════════╝\n\n"
+            "Использование:\n<code>/appeal причина разбана</code>", parse_mode="HTML"); return
+    conn = db_connect()
+    try:
+        existing = conn.execute("SELECT data FROM appeals_db WHERE uid=?", (uid,)).fetchone()
+        import json as _json
+        if existing:
+            data = _json.loads(existing["data"])
+            if data.get("status") == "pending":
+                conn.close()
+                await reply_auto_delete(message,
+                    "╔══════════════════╗\n║  📨  АПЕЛЛЯЦИЯ    ║\n╚══════════════════╝\n\n"
+                    "⏳ <i>У тебя уже есть активная апелляция. Ожидай решения.</i>", parse_mode="HTML"); return
+        appeal_data = {
+            "uid": uid, "name": message.from_user.full_name,
+            "text": command.args, "status": "pending",
+            "cid": message.chat.id, "ts": _time_module.time()
+        }
+        conn.execute("INSERT OR REPLACE INTO appeals_db VALUES (?, ?)",
+                     (uid, _json.dumps(appeal_data)))
+        conn.commit()
+    finally:
+        conn.close()
+    await reply_auto_delete(message,
+        f"╔══════════════════╗\n║  📨  АПЕЛЛЯЦИЯ    ║\n╚══════════════════╝\n\n"
+        f"✅ Апелляция подана!\n──────────────────\n"
+        f"📝 {command.args[:200]}\n──────────────────\n"
+        f"<i>Администраторы рассмотрят твой запрос.</i>", parse_mode="HTML")
+    for admin_id in ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id,
+                f"╔══════════════════╗\n║  📨  АПЕЛЛЯЦИЯ    ║\n╚══════════════════╝\n\n"
+                f"👤 {message.from_user.mention_html()}\n"
+                f"🪪 ID: <code>{uid}</code>\n"
+                f"📝 {command.args[:300]}\n──────────────────\n"
+                f"<i>Используй /appeals для просмотра всех апелляций.</i>",
+                parse_mode="HTML")
+        except: pass
+
+
+@dp.message(Command("appeals"))
+async def cmd_appeals_list(message: Message):
+    if not await require_admin(message): return
+    conn = db_connect()
+    import json as _json
+    rows = conn.execute("SELECT uid, data FROM appeals_db").fetchall()
+    conn.close()
+    pending = []
+    for row in rows:
+        try:
+            d = _json.loads(row["data"])
+            if d.get("status") == "pending":
+                pending.append(d)
+        except: pass
+    if not pending:
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  📨  АПЕЛЛЯЦИИ    ║\n╚══════════════════╝\n\n"
+            "✅ <i>Активных апелляций нет.</i>", parse_mode="HTML"); return
+    lines = [f"╔══════════════════╗\n║  📨  АПЕЛЛЯЦИИ    ║\n╚══════════════════╝\n\n<b>Ожидают решения: {len(pending)}</b>\n"]
+    for d in pending[:10]:
+        lines.append(
+            f"──────────────────\n"
+            f"👤 {d.get('name','—')} (<code>{d.get('uid','—')}</code>)\n"
+            f"📝 {str(d.get('text','—'))[:100]}\n"
+            f"✅ /appealapprove {d.get('uid')}  ❌ /appealdeny {d.get('uid')}"
+        )
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+@dp.message(Command("appealapprove"))
+async def cmd_appeal_approve(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    if not command.args:
+        await reply_auto_delete(message, "⚠️ /appealapprove [user_id]"); return
+    try: uid = int(command.args.split()[0])
+    except: await reply_auto_delete(message, "⚠️ Укажи корректный ID"); return
+    conn = db_connect()
+    import json as _json
+    row = conn.execute("SELECT data FROM appeals_db WHERE uid=?", (uid,)).fetchone()
+    if not row:
+        conn.close()
+        await reply_auto_delete(message, "❌ Апелляция не найдена."); return
+    d = _json.loads(row["data"])
+    d["status"] = "approved"
+    conn.execute("INSERT OR REPLACE INTO appeals_db VALUES (?,?)", (uid, _json.dumps(d)))
+    conn.commit(); conn.close()
+    cid = d.get("cid", message.chat.id)
+    try:
+        await bot.unban_chat_member(cid, uid, only_if_banned=True)
+        ban_list[cid].pop(uid, None); save_data()
+    except: pass
+    try:
+        await bot.send_message(uid,
+            "╔══════════════════╗\n║  ✅  АПЕЛЛЯЦИЯ    ║\n╚══════════════════╝\n\n"
+            "Твоя апелляция <b>одобрена</b>!\nБлокировка снята.", parse_mode="HTML")
+    except: pass
+    await reply_auto_delete(message,
+        f"╔══════════════════╗\n║  ✅  ОДОБРЕНО     ║\n╚══════════════════╝\n\n"
+        f"🪪 ID: <code>{uid}</code>\n<i>Пользователь разбанен и уведомлён.</i>", parse_mode="HTML")
+
+
+@dp.message(Command("appealdeny"))
+async def cmd_appeal_deny(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    if not command.args:
+        await reply_auto_delete(message, "⚠️ /appealdeny [user_id] [причина]"); return
+    parts = command.args.split(None, 1)
+    try: uid = int(parts[0])
+    except: await reply_auto_delete(message, "⚠️ Укажи корректный ID"); return
+    reason = parts[1] if len(parts) > 1 else "Без объяснений"
+    conn = db_connect()
+    import json as _json
+    row = conn.execute("SELECT data FROM appeals_db WHERE uid=?", (uid,)).fetchone()
+    if not row: conn.close(); await reply_auto_delete(message, "❌ Апелляция не найдена."); return
+    d = _json.loads(row["data"])
+    d["status"] = "rejected"; d["reply"] = reason
+    conn.execute("INSERT OR REPLACE INTO appeals_db VALUES (?,?)", (uid, _json.dumps(d)))
+    conn.commit(); conn.close()
+    try:
+        await bot.send_message(uid,
+            f"╔══════════════════╗\n║  ❌  АПЕЛЛЯЦИЯ    ║\n╚══════════════════╝\n\n"
+            f"Твоя апелляция <b>отклонена</b>.\n📋 Причина: {reason}", parse_mode="HTML")
+    except: pass
+    await reply_auto_delete(message,
+        f"╔══════════════════╗\n║  ❌  ОТКЛОНЕНО    ║\n╚══════════════════╝\n\n"
+        f"🪪 ID: <code>{uid}</code>\n📋 {reason}", parse_mode="HTML")
+
+
+# ══════════════════════════════════════════════════════════
+#  НАСТРОЙКИ ЧАТА /chatsettings
+# ══════════════════════════════════════════════════════════
+
+def _bool_str(val) -> str:
+    return "✅ вкл" if val else "❌ выкл"
+
+
+def kb_chatsettings_main(cid: int) -> InlineKeyboardMarkup:
+    s = cs.get_settings(cid)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"🛡 Антиспам {_bool_str(s.get('antispam_enabled'))}", callback_data=f"cs_toggle:{cid}:antispam_enabled")],
+        [InlineKeyboardButton(text=f"🧼 Антимат {_bool_str(s.get('antimat_enabled'))}", callback_data=f"cs_toggle:{cid}:antimat_enabled")],
+        [InlineKeyboardButton(text=f"🔗 Антиссылки {_bool_str(s.get('antilink_enabled'))}", callback_data=f"cs_toggle:{cid}:antilink_enabled")],
+        [InlineKeyboardButton(text=f"🔠 Антикапс {_bool_str(s.get('anticaps_enabled'))}", callback_data=f"cs_toggle:{cid}:anticaps_enabled")],
+        [InlineKeyboardButton(text=f"👋 Приветствие {_bool_str(s.get('welcome_enabled'))}", callback_data=f"cs_toggle:{cid}:welcome_enabled")],
+        [InlineKeyboardButton(text=f"✅ Верификация {_bool_str(s.get('verify_enabled'))}", callback_data=f"cs_toggle:{cid}:verify_enabled")],
+        [InlineKeyboardButton(text=f"⭐ XP система {_bool_str(s.get('xp_enabled'))}", callback_data=f"cs_toggle:{cid}:xp_enabled")],
+        [InlineKeyboardButton(text=f"💰 Экономика {_bool_str(s.get('economy_enabled'))}", callback_data=f"cs_toggle:{cid}:economy_enabled")],
+        [InlineKeyboardButton(text=f"🎮 Игры {_bool_str(s.get('games_enabled'))}", callback_data=f"cs_toggle:{cid}:games_enabled")],
+        [InlineKeyboardButton(text=f"📢 Авто-анонс {_bool_str(s.get('announce_enabled'))}", callback_data=f"cs_toggle:{cid}:announce_enabled")],
+        [InlineKeyboardButton(text=f"⏰ Расписание {_bool_str(s.get('schedule_enabled'))}", callback_data=f"cs_toggle:{cid}:schedule_enabled")],
+        [InlineKeyboardButton(text=f"🌙 Тихий час {_bool_str(s.get('quiet_enabled'))}", callback_data=f"cs_toggle:{cid}:quiet_enabled")],
+        [InlineKeyboardButton(text="⚙️ Параметры модерации", callback_data=f"cs_mod:{cid}")],
+        [InlineKeyboardButton(text="🔢 Параметры XP/экономики", callback_data=f"cs_xp:{cid}")],
+        [InlineKeyboardButton(text="🕐 Расписание чата", callback_data=f"cs_schedule:{cid}")],
+    ])
+
+
+def kb_cs_mod(cid: int) -> InlineKeyboardMarkup:
+    s = cs.get_settings(cid)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"⚠️ Макс варнов: {s.get('max_warns',3)}", callback_data=f"cs_set:{cid}:max_warns")],
+        [InlineKeyboardButton(text=f"⏳ Срок варна: {s.get('warn_expiry_days',30)} дн.", callback_data=f"cs_set:{cid}:warn_expiry_days")],
+        [InlineKeyboardButton(text=f"🔇 Мут по умолч.: {s.get('mute_duration',60)} мин.", callback_data=f"cs_set:{cid}:mute_duration")],
+        [InlineKeyboardButton(text=f"💬 Флуд порог: {s.get('flood_msgs',10)} msg/мин", callback_data=f"cs_set:{cid}:flood_msgs")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data=f"cs_main:{cid}")],
+    ])
+
+
+def kb_cs_xp(cid: int) -> InlineKeyboardMarkup:
+    s = cs.get_settings(cid)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"⭐ XP за сообщение: {s.get('xp_per_msg',5)}", callback_data=f"cs_set:{cid}:xp_per_msg")],
+        [InlineKeyboardButton(text=f"🎁 Дейли бонус: {s.get('daily_bonus',50)}", callback_data=f"cs_set:{cid}:daily_bonus")],
+        [InlineKeyboardButton(text=f"🎉 Бонус новичка: {s.get('newcomer_bonus',100)}", callback_data=f"cs_set:{cid}:newcomer_bonus")],
+        [InlineKeyboardButton(text=f"⏱ Кулдаун репы: {s.get('rep_cooldown_hours',1)} ч.", callback_data=f"cs_set:{cid}:rep_cooldown_hours")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data=f"cs_main:{cid}")],
+    ])
+
+
+def kb_cs_schedule(cid: int) -> InlineKeyboardMarkup:
+    s = cs.get_settings(cid)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"🔒 Закрытие: {s.get('close_time','00:00')}", callback_data=f"cs_set:{cid}:close_time")],
+        [InlineKeyboardButton(text=f"🔓 Открытие: {s.get('open_time','08:00')}", callback_data=f"cs_set:{cid}:open_time")],
+        [InlineKeyboardButton(text=f"🌙 Тихий с: {s.get('quiet_start','23:00')}", callback_data=f"cs_set:{cid}:quiet_start")],
+        [InlineKeyboardButton(text=f"☀️ Тихий до: {s.get('quiet_end','07:00')}", callback_data=f"cs_set:{cid}:quiet_end")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data=f"cs_main:{cid}")],
+    ])
+
+
+@dp.message(Command("chatsettings"))
+async def cmd_chatsettings(message: Message):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    s = cs.get_settings(cid)
+    text = (
+        f"╔══════════════════╗\n║  ⚙️  НАСТРОЙКИ ЧАТА ║\n╚══════════════════╝\n\n"
+        f"💬 Чат: <b>{message.chat.title}</b>\n"
+        f"🪪 ID: <code>{cid}</code>\n"
+        f"──────────────────\n"
+        f"Нажми кнопку чтобы переключить настройку:"
+    )
+    await message.answer(text, parse_mode="HTML", reply_markup=kb_chatsettings_main(cid))
+
+
+@dp.callback_query(F.data.startswith("cs_toggle:"))
+async def cb_cs_toggle(call: CallbackQuery):
+    if not await check_admin(call.message): 
+        await call.answer("⛔ Только для админов", show_alert=True); return
+    _, cid_str, key = call.data.split(":", 2)
+    cid = int(cid_str)
+    s = cs.get_settings(cid)
+    s[key] = not s.get(key, False)
+    cs.save_settings(cid, s)
+    val_str = "включено ✅" if s[key] else "выключено ❌"
+    await call.answer(f"{key}: {val_str}")
+    try:
+        await call.message.edit_reply_markup(reply_markup=kb_chatsettings_main(cid))
+    except: pass
+
+
+@dp.callback_query(F.data.startswith("cs_mod:"))
+async def cb_cs_mod(call: CallbackQuery):
+    if not await check_admin(call.message):
+        await call.answer("⛔", show_alert=True); return
+    cid = int(call.data.split(":")[1])
+    await call.message.edit_text(
+        f"╔══════════════════╗\n║  ⚙️  МОДЕРАЦИЯ    ║\n╚══════════════════╝\n\nПараметры модерации чата:",
+        parse_mode="HTML", reply_markup=kb_cs_mod(cid))
+    await call.answer()
+
+
+@dp.callback_query(F.data.startswith("cs_xp:"))
+async def cb_cs_xp(call: CallbackQuery):
+    if not await check_admin(call.message):
+        await call.answer("⛔", show_alert=True); return
+    cid = int(call.data.split(":")[1])
+    await call.message.edit_text(
+        f"╔══════════════════╗\n║  ⚙️  XP / ЭКОНОМИКА ║\n╚══════════════════╝\n\nПараметры XP и экономики:",
+        parse_mode="HTML", reply_markup=kb_cs_xp(cid))
+    await call.answer()
+
+
+@dp.callback_query(F.data.startswith("cs_schedule:"))
+async def cb_cs_schedule(call: CallbackQuery):
+    if not await check_admin(call.message):
+        await call.answer("⛔", show_alert=True); return
+    cid = int(call.data.split(":")[1])
+    await call.message.edit_text(
+        f"╔══════════════════╗\n║  ⚙️  РАСПИСАНИЕ   ║\n╚══════════════════╝\n\nВремя открытия/закрытия чата:",
+        parse_mode="HTML", reply_markup=kb_cs_schedule(cid))
+    await call.answer()
+
+
+@dp.callback_query(F.data.startswith("cs_main:"))
+async def cb_cs_main(call: CallbackQuery):
+    if not await check_admin(call.message):
+        await call.answer("⛔", show_alert=True); return
+    cid = int(call.data.split(":")[1])
+    await call.message.edit_text(
+        f"╔══════════════════╗\n║  ⚙️  НАСТРОЙКИ ЧАТА ║\n╚══════════════════╝\n\n"
+        f"🪪 ID: <code>{cid}</code>\n──────────────────\nНажми кнопку чтобы переключить:",
+        parse_mode="HTML", reply_markup=kb_chatsettings_main(cid))
+    await call.answer()
+
+
+# Ожидание ввода значения настройки
+_cs_pending_input: dict = {}  # {uid: {"cid": int, "key": str, "msg_id": int}}
+
+@dp.callback_query(F.data.startswith("cs_set:"))
+async def cb_cs_set(call: CallbackQuery):
+    if not await check_admin(call.message):
+        await call.answer("⛔", show_alert=True); return
+    _, cid_str, key = call.data.split(":", 2)
+    cid = int(cid_str)
+    key_labels = {
+        "max_warns": "максимальное количество варнов (число)",
+        "warn_expiry_days": "срок действия варна в днях (число)",
+        "mute_duration": "длительность мута по умолчанию в минутах (число)",
+        "flood_msgs": "порог флуда — сообщений в минуту (число)",
+        "xp_per_msg": "XP за одно сообщение (число)",
+        "daily_bonus": "размер дейли бонуса (число)",
+        "newcomer_bonus": "бонус новичка (число)",
+        "rep_cooldown_hours": "кулдаун репутации в часах (число)",
+        "close_time": "время закрытия чата (формат HH:MM)",
+        "open_time": "время открытия чата (формат HH:MM)",
+        "quiet_start": "начало тихого часа (формат HH:MM)",
+        "quiet_end": "конец тихого часа (формат HH:MM)",
+    }
+    label = key_labels.get(key, key)
+    _cs_pending_input[call.from_user.id] = {"cid": cid, "key": key}
+    await call.message.answer(
+        f"╔══════════════════╗\n║  ✏️  ИЗМЕНЕНИЕ    ║\n╚══════════════════╝\n\n"
+        f"Введи новое значение для:\n<b>{label}</b>",
+        parse_mode="HTML")
+    await call.answer()
+
+
+@dp.message(F.chat.type.in_({"group", "supergroup"}))
+async def handle_cs_input(message: Message):
+    uid = message.from_user.id
+    if uid not in _cs_pending_input: return
+    if not message.text: return
+    data = _cs_pending_input.pop(uid)
+    cid, key = data["cid"], data["key"]
+    val = message.text.strip()
+    # Определяем тип значения
+    time_keys = {"close_time", "open_time", "quiet_start", "quiet_end"}
+    if key in time_keys:
+        import re as _re
+        if not _re.match(r"^\d{2}:\d{2}$", val):
+            await reply_auto_delete(message, "⚠️ Формат: HH:MM (например 08:00)"); return
+        cs.update_setting(cid, key, val)
+    else:
+        try:
+            cs.update_setting(cid, key, int(val))
+        except ValueError:
+            await reply_auto_delete(message, "⚠️ Введи числовое значение"); return
+    await reply_auto_delete(message,
+        f"╔══════════════════╗\n║  ✅  СОХРАНЕНО    ║\n╚══════════════════╝\n\n"
+        f"⚙️ <b>{key}</b> = <code>{val}</code>", parse_mode="HTML")
+
+
+# ══════════════════════════════════════════════════════════
+#  ИНЦИДЕНТЫ /incidents
+# ══════════════════════════════════════════════════════════
+
+@dp.message(Command("incidents"))
+async def cmd_incidents(message: Message):
+    if not await require_admin(message): return
+    alerts_list = [a for a in shared.alerts if a.get("level") == "danger"]
+    if not alerts_list:
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  🚨  ИНЦИДЕНТЫ    ║\n╚══════════════════╝\n\n"
+            "✅ <i>Критических инцидентов нет.</i>", parse_mode="HTML"); return
+    lines = [f"╔══════════════════╗\n║  🚨  ИНЦИДЕНТЫ    ║\n╚══════════════════╝\n\n<b>Критических: {len(alerts_list)}</b>\n"]
+    for a in alerts_list[:15]:
+        lines.append(
+            f"──────────────────\n"
+            f"🔴 <b>{a.get('title','—')}</b>\n"
+            f"📝 {a.get('desc','—')[:100]}\n"
+            f"🕐 {a.get('time','—')}"
+        )
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
 # ══════════════════════════════════════════════════════════
 
 async def main():
