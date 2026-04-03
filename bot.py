@@ -376,100 +376,166 @@ def load_data():
 #  СИСТЕМА УРОВНЕЙ (500 уровней)
 # ══════════════════════════════════════════
 LEVEL_TITLES = {
-    # 1-10 Новички
-    1:  ("🌱", "Росток"),        2:  ("🌿", "Новичок"),
-    3:  ("🍃", "Участник"),      4:  ("🌾", "Активный"),
-    5:  ("⚡", "Энергичный"),    6:  ("🔥", "Горячий"),
-    7:  ("💫", "Звёздный"),      8:  ("🎯", "Меткий"),
-    9:  ("🛡", "Защитник"),      10: ("⚔️", "Воин"),
-    # 11-20
-    11: ("🗡", "Дуэлянт"),       12: ("🏹", "Лучник"),
-    13: ("🔮", "Мистик"),        14: ("🧙", "Маг"),
-    15: ("🌙", "Лунный"),        16: ("☄️", "Кометный"),
-    17: ("🌟", "Звезда"),        18: ("💎", "Бриллиант"),
-    19: ("👁", "Всевидящий"),    20: ("🏆", "Чемпион"),
-    # 21-30
-    21: ("🦁", "Лев"),           22: ("🐉", "Дракон"),
-    23: ("🦅", "Орёл"),          24: ("🌊", "Волна"),
-    25: ("⚜️", "Элита"),         26: ("🔱", "Посейдон"),
-    27: ("🌌", "Космос"),        28: ("🌠", "Метеор"),
-    29: ("🎖", "Медаль"),        30: ("👑", "Король"),
-    # 31-40
-    31: ("🏰", "Замок"),         32: ("⚡", "Молния"),
-    33: ("🔥", "Пламя"),         34: ("💀", "Тёмный"),
-    35: ("🌑", "Тень"),          36: ("🌀", "Вихрь"),
-    37: ("🎇", "Фейерверк"),     38: ("🧬", "Мутант"),
-    39: ("🤖", "Киборг"),        40: ("🛸", "Инопланетянин"),
-    # 41-50
-    41: ("🌍", "Хранитель"),     42: ("🌞", "Солнечный"),
-    43: ("🌈", "Радужный"),      44: ("⚗️", "Алхимик"),
-    45: ("🔯", "Чародей"),       46: ("🌺", "Сакура"),
-    47: ("🏯", "Сёгун"),         48: ("🐲", "Повелитель"),
-    49: ("💠", "Абсолют"),       50: ("👾", "Полубог"),
-    # 51-75
-    51: ("🌋", "Вулкан"),        55: ("🏔", "Горный"),
-    60: ("🌪", "Торнадо"),       65: ("🧊", "Ледяной"),
-    70: ("🦄", "Единорог"),      75: ("🦊", "Лис"),
-    # 76-100
-    76: ("🐺", "Волк"),          80: ("🦋", "Бабочка"),
-    85: ("🦂", "Скорпион"),      90: ("🐍", "Змей"),
-    95: ("🦁", "Царь зверей"),
-    100: ("🌠", "✨ СОТЫЙ ✨"),
-    # 101-150
-    105: ("💣", "Бомба"),        110: ("🚀", "Ракета"),
-    115: ("🧠", "Гений"),        120: ("🎓", "Профессор"),
-    125: ("💻", "Хакер"),        130: ("🕹", "Геймер"),
-    135: ("🎬", "Режиссёр"),     140: ("🎸", "Рокер"),
-    145: ("🥋", "Мастер"),
-    150: ("💀", "✨ ПОЛТОРА СТА ✨"),
-    # 151-200
-    155: ("🔥", "Адское пламя"),  160: ("⚡", "Гром"),
-    165: ("🌊", "Цунами"),        170: ("🌋", "Апокалипсис"),
-    175: ("☄️", "Астероид"),      180: ("🌌", "Галактика"),
-    185: ("🛸", "Вселенная"),     190: ("🌠", "Сверхновая"),
-    195: ("💥", "Большой взрыв"),
-    200: ("👁", "✨ ДВУХСОТЫЙ ✨"),
-    # 201-250
-    205: ("🌍", "Хранитель мира"), 210: ("⚜️", "Верховный"),
-    215: ("🏆", "Великий"),        220: ("💎", "Алмазный"),
-    225: ("👑", "Император"),      230: ("🐉", "Повелитель драконов"),
-    235: ("🌞", "Бессмертный"),    240: ("💠", "Вечный"),
-    245: ("🔯", "Всемогущий"),     249: ("👾", "Предел"),
-    250: ("✨", "✨ ДВЕСТИ ПЯТЬДЕСЯТ ✨"),
-    # 251-300
-    255: ("🌑", "Тёмный бог"),     260: ("☠️", "Смерть"),
-    265: ("👻", "Призрак"),        270: ("🔮", "Оракул"),
-    275: ("🌀", "Бездна"),         280: ("🧿", "Провидец"),
-    285: ("🌌", "Межзвёздный"),    290: ("⚫", "Чёрная дыра"),
-    295: ("🌠", "Квазар"),
-    300: ("🔱", "✨ ТРЁХСОТЫЙ ✨"),
-    # 301-350
-    305: ("🏯", "Сёгун II"),       310: ("🐲", "Дракон-бог"),
-    315: ("⚔️", "Легендарный воин"), 320: ("🗡", "Тёмный клинок"),
-    325: ("🛡", "Непоколебимый"),  330: ("🔥", "Феникс"),
-    335: ("❄️", "Вечная мерзлота"), 340: ("⚡", "Повелитель молний"),
-    345: ("🌊", "Нептун"),
-    350: ("🌟", "✨ ТРИСТА ПЯТЬДЕСЯТ ✨"),
-    # 351-400
-    355: ("🌋", "Вулкан-бог"),     360: ("☄️", "Комета смерти"),
-    365: ("🌌", "Повелитель космоса"), 370: ("💀", "Жнец"),
-    375: ("👑", "Верховный король"), 380: ("🐉", "Первородный дракон"),
-    385: ("🌞", "Бог солнца"),     390: ("🌑", "Бог тьмы"),
-    395: ("💎", "Кристальный"),
-    400: ("👾", "✨ ЧЕТЫРЁХСОТЫЙ ✨"),
-    # 401-450
-    405: ("🔯", "Архимаг II"),     410: ("🌠", "Астральный"),
-    415: ("⚜️", "Высший"),         420: ("🏆", "Абсолютный чемпион"),
-    425: ("💠", "Кристальный бог"), 430: ("🌈", "Спектр"),
-    435: ("🌀", "Хаос"),           440: ("🔥", "Вечный огонь"),
-    445: ("🌌", "Бесконечность"),
-    450: ("✨", "✨ ЧЕТЫРЕСТА ПЯТЬДЕСЯТ ✨"),
-    # 451-500
-    455: ("💥", "Сингулярность"),  460: ("⚫", "Абсолютная тьма"),
-    465: ("🌟", "Абсолютный свет"), 470: ("🐲", "Бог драконов"),
-    475: ("👁", "Всевидящий бог"),  480: ("🔱", "Посейдон II"),
-    485: ("👑", "Бог богов"),       490: ("🌌", "Создатель"),
-    495: ("💠", "Источник"),        499: ("🌠", "Грань"),
+    # ── 1–10: Новички ──────────────────────────
+    1:  ("🌱", "Росток"),
+    2:  ("🌿", "Новичок"),
+    3:  ("🍃", "Участник"),
+    4:  ("🌾", "Активный"),
+    5:  ("⚡", "Энергичный"),
+    6:  ("🔥", "Горячий"),
+    7:  ("💫", "Звёздный"),
+    8:  ("🎯", "Меткий"),
+    9:  ("🛡", "Страж"),
+    10: ("⚔️", "Воин"),
+    # ── 11–20: Бойцы ───────────────────────────
+    11: ("🗡", "Дуэлянт"),
+    12: ("🏹", "Лучник"),
+    13: ("🔮", "Мистик"),
+    14: ("🧙", "Маг"),
+    15: ("🌙", "Ночной страж"),
+    16: ("☄️", "Метеорит"),
+    17: ("🌟", "Звезда"),
+    18: ("💎", "Бриллиант"),
+    19: ("👁", "Всевидящий"),
+    20: ("🏆", "Чемпион"),
+    # ── 21–30: Элита ───────────────────────────
+    21: ("🦁", "Лев"),
+    22: ("🐉", "Дракон"),
+    23: ("🦅", "Орёл"),
+    24: ("🌊", "Волна"),
+    25: ("⚜️", "Элита"),
+    26: ("🔱", "Посейдон"),
+    27: ("🌌", "Космонавт"),
+    28: ("🌠", "Метеор"),
+    29: ("🎖", "Ветеран"),
+    30: ("👑", "Король"),
+    # ── 31–40: Легенды ─────────────────────────
+    31: ("🏰", "Рыцарь"),
+    32: ("⚡", "Молния"),
+    33: ("🔥", "Пламя"),
+    34: ("💀", "Тёмный рыцарь"),
+    35: ("🌑", "Тень"),
+    36: ("🌀", "Вихрь"),
+    37: ("🎇", "Феникс"),
+    38: ("🐺", "Одинокий волк"),
+    39: ("🦂", "Скорпион"),
+    40: ("🛸", "Пришелец"),
+    # ── 41–50: Мифы ────────────────────────────
+    41: ("🌍", "Хранитель"),
+    42: ("🌞", "Солнечный"),
+    43: ("🌈", "Радужный"),
+    44: ("⚗️", "Алхимик"),
+    45: ("🔯", "Чародей"),
+    46: ("🌺", "Сакура"),
+    47: ("🏯", "Сёгун"),
+    48: ("🐲", "Повелитель"),
+    49: ("💠", "Абсолют"),
+    50: ("👾", "Полубог"),
+    # ── 51–60: Высшие ──────────────────────────
+    51: ("🌋", "Вулкан"),
+    52: ("🧊", "Ледяной"),
+    53: ("🌪", "Торнадо"),
+    54: ("🦄", "Единорог"),
+    55: ("🧬", "Эволюция"),
+    56: ("🕷", "Паук"),
+    57: ("🦊", "Лис"),
+    58: ("🦋", "Бабочка"),
+    59: ("🐍", "Змей"),
+    60: ("🌟", "★ ШЕСТИДЕСЯТЫЙ ★"),
+    # ── 61–70: Боги природы ────────────────────
+    61: ("🌊", "Цунами"),
+    62: ("🔥", "Адское пламя"),
+    63: ("❄️", "Вечный лёд"),
+    64: ("⚡", "Гром"),
+    65: ("🌋", "Апокалипсис"),
+    66: ("☄️", "Астероид"),
+    67: ("🌌", "Галактика"),
+    68: ("🛸", "Вселенная"),
+    69: ("🌠", "Сверхновая"),
+    70: ("💥", "Большой взрыв"),
+    # ── 71–80: Тёмные силы ─────────────────────
+    71: ("🌑", "Тёмный бог"),
+    72: ("☠️", "Смерть"),
+    73: ("👻", "Призрак"),
+    74: ("🔮", "Оракул"),
+    75: ("🌀", "Бездна"),
+    76: ("🧿", "Провидец"),
+    77: ("⚫", "Чёрная дыра"),
+    78: ("🌠", "Квазар"),
+    79: ("💀", "Жнец"),
+    80: ("🌟", "★ ВОСЬМИДЕСЯТЫЙ ★"),
+    # ── 81–90: Повелители ──────────────────────
+    81: ("🧠", "Гений"),
+    82: ("🚀", "Ракета"),
+    83: ("💻", "Хакер"),
+    84: ("🎓", "Профессор"),
+    85: ("🥋", "Мастер"),
+    86: ("🎬", "Режиссёр"),
+    87: ("🎸", "Рокер"),
+    88: ("🏆", "Великий"),
+    89: ("💎", "Алмазный"),
+    90: ("👑", "Император"),
+    # ── 91–99: Пред-сотый ──────────────────────
+    91: ("🐉", "Повелитель драконов"),
+    92: ("🌞", "Бессмертный"),
+    93: ("💠", "Вечный"),
+    94: ("🔯", "Всемогущий"),
+    95: ("⚜️", "Верховный"),
+    96: ("🌌", "Межзвёздный"),
+    97: ("🔱", "Нептун"),
+    98: ("🔥", "Феникс"),
+    99: ("🌠", "Грань сотни"),
+    # ── 100: Рубеж ─────────────────────────────
+    100: ("💯", "⚡ СОТЫЙ ⚡"),
+    # ── 101–149: Легендарные ───────────────────
+    101: ("🗡", "Тёмный клинок"),
+    105: ("🛡", "Непоколебимый"),
+    110: ("⚔️", "Легендарный воин"),
+    115: ("🌋", "Вулкан-бог"),
+    120: ("☄️", "Комета смерти"),
+    125: ("🌌", "Повелитель космоса"),
+    130: ("🔥", "Вечный огонь"),
+    135: ("🌀", "Хаос"),
+    140: ("🌈", "Спектр"),
+    145: ("🏆", "Абсолютный чемпион"),
+    # ── 150: Рубеж ─────────────────────────────
+    150: ("💎", "⚡ ПОЛТОРАСТА ⚡"),
+    # ── 151–199: Боги ──────────────────────────
+    155: ("🌑", "Бог тьмы"),
+    160: ("🌞", "Бог солнца"),
+    165: ("🐉", "Бог драконов"),
+    170: ("👁", "Всевидящий бог"),
+    175: ("🔱", "Посейдон II"),
+    180: ("👑", "Бог богов"),
+    185: ("🌌", "Создатель"),
+    190: ("💠", "Источник"),
+    195: ("🔯", "Архимаг"),
+    # ── 200: Рубеж ─────────────────────────────
+    200: ("👁", "⚡ ДВУХСОТЫЙ ⚡"),
+    # ── 201–299: Демиурги ──────────────────────
+    210: ("⚜️", "Демиург"),
+    220: ("🌠", "Астральный"),
+    230: ("💥", "Сингулярность"),
+    240: ("⚫", "Абсолютная тьма"),
+    250: ("🌟", "⚡ ДВЕСТИ ПЯТЬДЕСЯТ ⚡"),
+    260: ("🌟", "Абсолютный свет"),
+    270: ("🌌", "Бесконечность"),
+    280: ("💠", "Кристальный бог"),
+    290: ("🔥", "Пламя вечности"),
+    # ── 300: Рубеж ─────────────────────────────
+    300: ("🔱", "⚡ ТРЁХСОТЫЙ ⚡"),
+    # ── 301–399: Первородные ───────────────────
+    325: ("🐉", "Первородный дракон"),
+    350: ("👑", "⚡ ТРИСТА ПЯТЬДЕСЯТ ⚡"),
+    375: ("💀", "Первородная смерть"),
+    # ── 400: Рубеж ─────────────────────────────
+    400: ("☠️", "⚡ ЧЕТЫРЁХСОТЫЙ ⚡"),
+    # ── 401–499: Запредельные ──────────────────
+    425: ("🌌", "Запредельный"),
+    450: ("✨", "⚡ ЧЕТЫРЕСТА ПЯТЬДЕСЯТ ⚡"),
+    475: ("💫", "Трансцендентный"),
+    499: ("🌠", "Грань"),
+    # ── 500: Максимум ──────────────────────────
     500: ("🆚", "⚡ БОГ ЧАТА ⚡"),
 }
 
@@ -518,6 +584,10 @@ OWNER_ID         = 7823802800
 ADMIN_IDS        = {7823802800, 8046083268, 7397338777, 7991589995}
 MAX_WARNINGS     = 3
 ANTI_MAT_ENABLED  = False
+
+# 📸 Кэш последних сообщений для доказательной базы
+# {cid: {uid: [msg_id, msg_id, ...]}}  — хранит последние 10 msg_id
+_violation_msg_cache: dict = defaultdict(lambda: defaultdict(list))
 
 # 💳 Платёжная система отключена
 
@@ -945,18 +1015,34 @@ def schedule_unmute(cid: int, uid: int, mins: int, uname: str):
 
 async def log_violation_screenshot(cid: int, uid: int, uname: str, msg_text: str,
                                     action: str, reason: str, by_name: str, chat_title: str):
-    """Сохраняет текст сообщения-нарушения в лог"""
+    """Логирует нарушение + форвардит последние сообщения как доказательство"""
     preview = msg_text[:300] + ("…" if len(msg_text) > 300 else "")
     await log_action(
-        f"📸 <b>Скриншот нарушения</b>\n\n"
+        f"╔══════════════════╗\n║  📸  НАРУШЕНИЕ    ║\n╚══════════════════╝\n\n"
         f"👤 <b>Нарушитель:</b> {uname} (<code>{uid}</code>)\n"
         f"⚖️ <b>Действие:</b> {action}\n"
         f"📝 <b>Причина:</b> {reason}\n"
         f"👮 <b>Модератор:</b> {by_name}\n"
         f"💬 <b>Чат:</b> {chat_title}\n"
         f"🕐 <b>Время:</b> {datetime.now().strftime('%d.%m.%Y %H:%M')}\n\n"
-        f"💬 <b>Текст сообщения:</b>\n<code>{preview}</code>"
+        f"💬 <b>Сообщение:</b>\n<code>{preview}</code>"
     )
+    # Форвардим последние сообщения нарушителя из кэша как доказательства
+    if uid in _violation_msg_cache.get(cid, {}):
+        msgs = _violation_msg_cache[cid][uid][-5:]
+        if msgs:
+            try:
+                await bot.send_message(
+                    LOG_CHANNEL_ID,
+                    f"📎 <b>Доказательная база — последние {len(msgs)} сообщений {uname}:</b>",
+                    parse_mode="HTML"
+                )
+                for msg_id in msgs:
+                    try:
+                        await bot.forward_message(LOG_CHANNEL_ID, cid, msg_id)
+                        await asyncio.sleep(0.2)
+                    except: pass
+            except: pass
 
 async def dm_warn_user(uid: int, uname: str, reason: str, chat_title: str,
                        action: str, by_name: str):
@@ -1342,6 +1428,13 @@ class StatsMiddleware(BaseMiddleware):
             try:
                 shared.update_online(uid, event.from_user.full_name, cid)
                 await shared.check_spam(uid, cid, event.from_user.full_name, event.chat.title or "")
+                # 📸 Кэшируем msg_id для доказательной базы (последние 10)
+                _violation_msg_cache[cid][uid].append(event.message_id)
+                if len(_violation_msg_cache[cid][uid]) > 10:
+                    _violation_msg_cache[cid][uid].pop(0)
+                # 🔴 Проверка триггер-слов
+                if event.text:
+                    await _check_trigger_words(event, cid, uid)
                 if shared.dashboard_settings.get("media_log_enabled", True):
                     media_type = None
                     file_id = ""
@@ -1634,6 +1727,9 @@ async def on_new_member(message: Message):
                 conn.commit()
                 conn.close()
             except: pass
+
+        # 🌐 АнтиVPN проверка
+        asyncio.create_task(_process_new_member_vpn(message, member))
 
 @dp.message(F.left_chat_member)
 async def on_left_member(message: Message):
@@ -12644,6 +12740,447 @@ async def cmd_incidents(message: Message):
 
 
 # ══════════════════════════════════════════════════════════
+#  🔴 ТРИГГЕР-СЛОВА
+# ══════════════════════════════════════════════════════════
+
+# Хранилище триггеров: {cid: [{word, action, reason, added_by, ts}]}
+_trigger_words: dict = {}
+
+def _triggers_db_init():
+    conn = db_connect()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS trigger_words (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER, word TEXT, action TEXT DEFAULT 'warn',
+            reason TEXT DEFAULT 'Использование запрещённого слова',
+            added_by TEXT, ts INTEGER
+        )""")
+    conn.commit(); conn.close()
+
+def _triggers_load(cid: int) -> list:
+    conn = db_connect()
+    rows = conn.execute(
+        "SELECT * FROM trigger_words WHERE cid=?", (cid,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def _trigger_add(cid: int, word: str, action: str, reason: str, by: str):
+    conn = db_connect()
+    conn.execute(
+        "INSERT INTO trigger_words (cid,word,action,reason,added_by,ts) VALUES (?,?,?,?,?,?)",
+        (cid, word.lower(), action, reason, by, int(_time_module.time()))
+    )
+    conn.commit(); conn.close()
+
+def _trigger_del(cid: int, word: str):
+    conn = db_connect()
+    conn.execute("DELETE FROM trigger_words WHERE cid=? AND word=?", (cid, word.lower()))
+    conn.commit(); conn.close()
+
+async def _check_trigger_words(message: Message, cid: int, uid: int):
+    """Проверяет сообщение на триггер-слова и применяет действие"""
+    if uid in ADMIN_IDS: return
+    try:
+        member = await bot.get_chat_member(cid, uid)
+        if member.status in ("administrator", "creator"): return
+    except: pass
+
+    triggers = _triggers_load(cid)
+    if not triggers: return
+
+    text_lower = message.text.lower()
+    for t in triggers:
+        if t["word"] in text_lower:
+            action = t.get("action", "warn")
+            reason = t.get("reason", "Триггер-слово")
+            uname = message.from_user.full_name
+
+            # Логируем
+            await log_action(
+                f"╔══════════════════╗\n║  🔴  ТРИГГЕР      ║\n╚══════════════════╝\n\n"
+                f"👤 {uname} (<code>{uid}</code>)\n"
+                f"🔤 Слово: <b>{t['word']}</b>\n"
+                f"⚖️ Действие: <b>{action}</b>\n"
+                f"💬 Чат: {message.chat.title}"
+            )
+            # Кэшируем для доказательной базы
+            _violation_msg_cache[cid][uid].append(message.message_id)
+
+            try:
+                if action == "delete":
+                    await message.delete()
+                elif action == "warn":
+                    await message.delete()
+                    clean_expired_warns(cid, uid)
+                    add_warn_with_expiry(cid, uid)
+                    count = warnings[cid][uid]
+                    add_mod_history(cid, uid, f"⚡ Варн {count}/{MAX_WARNINGS}", reason, "Автомодератор")
+                    await log_violation_screenshot(cid, uid, uname, message.text, f"⚡ Варн {count}/{MAX_WARNINGS}", reason, "Автомодератор", message.chat.title or "")
+                    sent = await message.answer(
+                        f"╔══════════════════╗\n║  🔴  ТРИГГЕР      ║\n╚══════════════════╝\n\n"
+                        f"👤 {message.from_user.mention_html()}\n"
+                        f"⚡ Варн: <b>{count}/{MAX_WARNINGS}</b>\n"
+                        f"📋 Причина: {reason}\n──────────────────",
+                        parse_mode="HTML")
+                    asyncio.create_task(_auto_delete_after(sent, 15))
+                elif action == "mute":
+                    await message.delete()
+                    await bot.restrict_chat_member(
+                        cid, uid,
+                        permissions=ChatPermissions(can_send_messages=False),
+                        until_date=datetime.now() + timedelta(minutes=30)
+                    )
+                    add_mod_history(cid, uid, "🔇 Мут 30 мин", reason, "Автомодератор")
+                    await log_violation_screenshot(cid, uid, uname, message.text, "🔇 Мут 30 мин", reason, "Автомодератор", message.chat.title or "")
+                    sent = await message.answer(
+                        f"╔══════════════════╗\n║  🔴  ТРИГГЕР      ║\n╚══════════════════╝\n\n"
+                        f"👤 {message.from_user.mention_html()}\n"
+                        f"🔇 Мут: <b>30 минут</b>\n"
+                        f"📋 Причина: {reason}\n──────────────────",
+                        parse_mode="HTML")
+                    asyncio.create_task(_auto_delete_after(sent, 15))
+                elif action == "ban":
+                    await message.delete()
+                    await bot.ban_chat_member(cid, uid)
+                    add_mod_history(cid, uid, "🔨 Бан", reason, "Автомодератор")
+                    await log_violation_screenshot(cid, uid, uname, message.text, "🔨 Бан", reason, "Автомодератор", message.chat.title or "")
+                    sent = await message.answer(
+                        f"╔══════════════════╗\n║  🔴  ТРИГГЕР      ║\n╚══════════════════╝\n\n"
+                        f"👤 {message.from_user.mention_html()}\n"
+                        f"🔨 Забанен автоматически\n"
+                        f"📋 Причина: {reason}\n──────────────────",
+                        parse_mode="HTML")
+                    asyncio.create_task(_auto_delete_after(sent, 15))
+            except Exception as e:
+                logging.warning(f"Trigger word action error: {e}")
+            break
+
+
+async def _auto_delete_after(msg, seconds: int):
+    await asyncio.sleep(seconds)
+    try: await msg.delete()
+    except: pass
+
+
+@dp.message(Command("trigger"))
+async def cmd_trigger(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    if not command.args:
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  🔴  ТРИГГЕРЫ     ║\n╚══════════════════╝\n\n"
+            "<b>Использование:</b>\n"
+            "/trigger add слово [действие] [причина]\n"
+            "/trigger del слово\n"
+            "/trigger list\n\n"
+            "<b>Действия:</b> delete / warn / mute / ban\n"
+            "<i>По умолчанию: warn</i>", parse_mode="HTML"); return
+
+    parts = command.args.split(None, 3)
+    sub = parts[0].lower()
+    cid = message.chat.id
+
+    if sub == "list":
+        triggers = _triggers_load(cid)
+        if not triggers:
+            await reply_auto_delete(message,
+                "╔══════════════════╗\n║  🔴  ТРИГГЕРЫ     ║\n╚══════════════════╝\n\n"
+                "<i>Список пуст. Добавь: /trigger add слово</i>", parse_mode="HTML"); return
+        lines = ["╔══════════════════╗\n║  🔴  ТРИГГЕРЫ     ║\n╚══════════════════╝\n"]
+        for t in triggers:
+            lines.append(f"──────────────────\n🔤 <code>{t['word']}</code> → <b>{t['action']}</b>\n📋 {t['reason']}\n👮 {t['added_by']}")
+        await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+    elif sub == "add" and len(parts) >= 2:
+        word = parts[1].lower()
+        action = parts[2].lower() if len(parts) > 2 and parts[2] in ("delete","warn","mute","ban") else "warn"
+        reason = parts[3] if len(parts) > 3 else "Использование запрещённого слова"
+        _trigger_add(cid, word, action, reason, message.from_user.full_name)
+        await reply_auto_delete(message,
+            f"╔══════════════════╗\n║  ✅  ТРИГГЕР ДОБАВЛЕН ║\n╚══════════════════╝\n\n"
+            f"🔤 Слово: <code>{word}</code>\n⚖️ Действие: <b>{action}</b>\n📋 {reason}", parse_mode="HTML")
+
+    elif sub == "del" and len(parts) >= 2:
+        word = parts[1].lower()
+        _trigger_del(cid, word)
+        await reply_auto_delete(message,
+            f"╔══════════════════╗\n║  🗑  ТРИГГЕР УДАЛЁН ║\n╚══════════════════╝\n\n"
+            f"🔤 <code>{word}</code> удалён из списка.", parse_mode="HTML")
+    else:
+        await reply_auto_delete(message, "⚠️ /trigger add/del/list")
+
+
+# ══════════════════════════════════════════════════════════
+#  🕊 АВТОПОМИЛОВАНИЕ
+# ══════════════════════════════════════════════════════════
+
+async def autopardons_loop():
+    """Каждые 6 часов снимает устаревшие варны у хорошо ведущих себя юзеров"""
+    while True:
+        try:
+            await asyncio.sleep(6 * 3600)
+            await _run_autopardons()
+        except Exception as e:
+            logging.warning(f"autopardons_loop: {e}")
+
+
+async def _run_autopardons():
+    conn = db_connect()
+    # Берём юзеров у которых есть варны
+    rows = conn.execute("SELECT cid, uid, count FROM warnings WHERE count > 0").fetchall()
+    conn.close()
+
+    now = _time_module.time()
+    pardoned = 0
+    for row in rows:
+        cid, uid, count = row["cid"], row["uid"], row["count"]
+        # Проверяем — не было ли новых нарушений за последние 7 дней
+        if uid not in warn_expiry.get(cid, {}): continue
+        expiries = warn_expiry[cid][uid]
+        if not expiries: continue
+        last_warn_ts = max(expiries)
+        days_since = (now - last_warn_ts) / 86400
+        if days_since >= 7:
+            # Снимаем 1 варн автоматически
+            warnings[cid][uid] = max(0, count - 1)
+            db_set_int("warnings", cid, uid, "count", warnings[cid][uid])
+            add_mod_history(cid, uid, "🕊 Автопомилование", "Хорошее поведение 7+ дней", "Система")
+            pardoned += 1
+            try:
+                await bot.send_message(
+                    uid,
+                    f"╔══════════════════╗\n║  🕊  ПОМИЛОВАНИЕ  ║\n╚══════════════════╝\n\n"
+                    f"Одно предупреждение автоматически снято!\n"
+                    f"⚡ Осталось варнов: <b>{warnings[cid][uid]}/{MAX_WARNINGS}</b>\n\n"
+                    f"<i>Продолжай соблюдать правила 👍</i>",
+                    parse_mode="HTML"
+                )
+            except: pass
+
+    if pardoned > 0:
+        await log_action(
+            f"╔══════════════════╗\n║  🕊  АВТОПОМИЛОВАНИЕ ║\n╚══════════════════╝\n\n"
+            f"Снято предупреждений: <b>{pardoned}</b>\n"
+            f"<i>Юзеры без нарушений 7+ дней</i>"
+        )
+
+
+@dp.message(Command("autopardonstatus"))
+async def cmd_autopardon_status(message: Message):
+    if not await require_admin(message): return
+    conn = db_connect()
+    rows = conn.execute("SELECT cid, uid, count FROM warnings WHERE count > 0 AND cid=?", (message.chat.id,)).fetchall()
+    conn.close()
+    now = _time_module.time()
+    candidates = []
+    for row in rows:
+        cid, uid, count = row["cid"], row["uid"], row["count"]
+        if uid in warn_expiry.get(cid, {}) and warn_expiry[cid][uid]:
+            last = max(warn_expiry[cid][uid])
+            days = (now - last) / 86400
+            if days >= 5:
+                candidates.append((uid, count, round(days, 1)))
+    if not candidates:
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  🕊  АВТОПОМИЛОВАНИЕ ║\n╚══════════════════╝\n\n"
+            "<i>Кандидатов на помилование нет.\nТребуется 7 дней без нарушений.</i>", parse_mode="HTML"); return
+    lines = ["╔══════════════════╗\n║  🕊  КАНДИДАТЫ    ║\n╚══════════════════╝\n\n<b>Скоро будут помилованы:</b>\n"]
+    for uid, count, days in candidates[:10]:
+        lines.append(f"──────────────────\n🪪 <code>{uid}</code>\n⚡ Варнов: {count} | Дней чисто: {days}")
+    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+
+
+# ══════════════════════════════════════════════════════════
+#  🌐 АНТИVPN / АНТИПРОКСИ
+# ══════════════════════════════════════════════════════════
+
+# Настройки антиVPN по чатам: {cid: {"enabled": bool, "action": "warn"/"kick"/"ban"}}
+_antivpn_settings: dict = {}
+
+# Кэш результатов проверки: {uid: {"is_vpn": bool, "ts": float}}
+_vpn_check_cache: dict = {}
+
+
+def _antivpn_get(cid: int) -> dict:
+    return _antivpn_settings.get(cid, {"enabled": False, "action": "warn"})
+
+
+async def _check_vpn(uid: int) -> tuple[bool, str]:
+    """Проверяет юзера через vpnapi.io (бесплатный тариф)"""
+    # Проверяем кэш (24 часа)
+    if uid in _vpn_check_cache:
+        cached = _vpn_check_cache[uid]
+        if _time_module.time() - cached["ts"] < 86400:
+            return cached["is_vpn"], cached.get("reason", "")
+
+    vpn_api_key = os.getenv("VPN_API_KEY", "")
+    if not vpn_api_key:
+        return False, ""
+
+    # Получаем IP юзера через Telegram (недоступно напрямую)
+    # Используем обходной путь — проверяем по user_id через публичный сервис
+    try:
+        async with aiohttp.ClientSession() as sess:
+            # Используем vpnapi.io
+            async with sess.get(
+                f"https://vpnapi.io/api/?key={vpn_api_key}",
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    security = data.get("security", {})
+                    is_vpn = (
+                        security.get("vpn", False) or
+                        security.get("proxy", False) or
+                        security.get("tor", False) or
+                        security.get("relay", False)
+                    )
+                    reason = []
+                    if security.get("vpn"): reason.append("VPN")
+                    if security.get("proxy"): reason.append("Прокси")
+                    if security.get("tor"): reason.append("Tor")
+                    if security.get("relay"): reason.append("Relay")
+                    reason_str = ", ".join(reason)
+                    _vpn_check_cache[uid] = {"is_vpn": is_vpn, "reason": reason_str, "ts": _time_module.time()}
+                    return is_vpn, reason_str
+    except: pass
+    return False, ""
+
+
+@dp.message(Command("antivpn"))
+async def cmd_antivpn(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    current = _antivpn_get(cid)
+
+    if not command.args:
+        status = "✅ включён" if current["enabled"] else "❌ выключен"
+        await reply_auto_delete(message,
+            f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+            f"Статус: <b>{status}</b>\n"
+            f"Действие: <b>{current['action']}</b>\n\n"
+            f"<b>Команды:</b>\n"
+            f"/antivpn on — включить\n"
+            f"/antivpn off — выключить\n"
+            f"/antivpn action warn/kick/ban — действие\n\n"
+            f"<i>⚠️ Требуется VPN_API_KEY в .env\nПолучить: vpnapi.io</i>",
+            parse_mode="HTML"); return
+
+    args = command.args.lower().split()
+    if args[0] == "on":
+        _antivpn_settings[cid] = {**current, "enabled": True}
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+            "✅ АнтиVPN <b>включён</b>!\n"
+            "<i>Новые участники будут проверяться.</i>", parse_mode="HTML")
+    elif args[0] == "off":
+        _antivpn_settings[cid] = {**current, "enabled": False}
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+            "❌ АнтиVPN <b>выключен</b>.", parse_mode="HTML")
+    elif args[0] == "action" and len(args) > 1 and args[1] in ("warn", "kick", "ban"):
+        _antivpn_settings[cid] = {**current, "action": args[1]}
+        await reply_auto_delete(message,
+            f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+            f"⚙️ Действие изменено: <b>{args[1]}</b>", parse_mode="HTML")
+    else:
+        await reply_auto_delete(message, "⚠️ /antivpn on/off/action warn|kick|ban")
+
+
+async def _process_new_member_vpn(message: Message, member):
+    """Проверяет нового участника на VPN при вступлении"""
+    cid = message.chat.id
+    cfg = _antivpn_get(cid)
+    if not cfg.get("enabled"): return
+    if not os.getenv("VPN_API_KEY", ""): return
+
+    is_vpn, reason = await _check_vpn(member.id)
+    if not is_vpn: return
+
+    action = cfg.get("action", "warn")
+    uname = member.full_name
+
+    await log_action(
+        f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+        f"👤 {uname} (<code>{member.id}</code>)\n"
+        f"🔍 Обнаружено: <b>{reason}</b>\n"
+        f"⚖️ Действие: <b>{action}</b>\n"
+        f"💬 Чат: {message.chat.title}"
+    )
+
+    try:
+        if action == "kick":
+            await bot.ban_chat_member(cid, member.id)
+            await bot.unban_chat_member(cid, member.id)
+            sent = await message.answer(
+                f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+                f"👤 {uname}\n🔍 Обнаружен: <b>{reason}</b>\n"
+                f"🚪 <b>Кикнут автоматически</b>\n──────────────────",
+                parse_mode="HTML")
+            asyncio.create_task(_auto_delete_after(sent, 20))
+        elif action == "ban":
+            await bot.ban_chat_member(cid, member.id)
+            sent = await message.answer(
+                f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+                f"👤 {uname}\n🔍 Обнаружен: <b>{reason}</b>\n"
+                f"🔨 <b>Забанен автоматически</b>\n──────────────────",
+                parse_mode="HTML")
+            asyncio.create_task(_auto_delete_after(sent, 20))
+        else:  # warn
+            sent = await message.answer(
+                f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+                f"⚠️ {member.mention_html()}\n🔍 Обнаружен: <b>{reason}</b>\n"
+                f"<i>Администраторы уведомлены.</i>\n──────────────────",
+                parse_mode="HTML")
+            asyncio.create_task(_auto_delete_after(sent, 30))
+            # Уведомляем админов
+            for admin_id in ADMIN_IDS:
+                try:
+                    await bot.send_message(
+                        admin_id,
+                        f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+                        f"👤 {uname} (<code>{member.id}</code>)\n"
+                        f"🔍 {reason}\n💬 {message.chat.title}\n\n"
+                        f"<i>Принять меры?</i>",
+                        parse_mode="HTML",
+                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                            InlineKeyboardButton(text="🔨 Бан", callback_data=f"vpn_ban:{cid}:{member.id}"),
+                            InlineKeyboardButton(text="🚪 Кик", callback_data=f"vpn_kick:{cid}:{member.id}"),
+                            InlineKeyboardButton(text="✅ Игнор", callback_data=f"vpn_ignore:{cid}:{member.id}"),
+                        ]])
+                    )
+                except: pass
+    except Exception as e:
+        logging.warning(f"antivpn action error: {e}")
+
+
+@dp.callback_query(F.data.startswith("vpn_"))
+async def cb_vpn_action(call: CallbackQuery):
+    if call.from_user.id not in ADMIN_IDS:
+        await call.answer("⛔", show_alert=True); return
+    parts = call.data.split(":")
+    action, cid, uid = parts[0], int(parts[1]), int(parts[2])
+    if action == "vpn_ban":
+        try:
+            await bot.ban_chat_member(cid, uid)
+            await call.answer("🔨 Забанен!", show_alert=True)
+        except Exception as e:
+            await call.answer(f"❌ {e}", show_alert=True)
+    elif action == "vpn_kick":
+        try:
+            await bot.ban_chat_member(cid, uid)
+            await bot.unban_chat_member(cid, uid)
+            await call.answer("🚪 Кикнут!", show_alert=True)
+        except Exception as e:
+            await call.answer(f"❌ {e}", show_alert=True)
+    else:
+        await call.answer("✅ Проигнорировано")
+    try:
+        await call.message.edit_reply_markup(reply_markup=None)
+    except: pass
+
+
+# ══════════════════════════════════════════════════════════
 
 async def main():
     import time as _tstart
@@ -12668,6 +13205,9 @@ async def main():
     await features.init(bot, dp, ADMIN_IDS, OWNER_ID)
     await notif.init(bot, dp)
 
+    # ── Инициализация систем ─────────────────────────────
+    _triggers_db_init()
+
     # ── Фоновые задачи ───────────────────────────────────
     asyncio.create_task(cs.schedule_loop())
     asyncio.create_task(birthday_checker())
@@ -12681,6 +13221,7 @@ async def main():
     asyncio.create_task(smart_notify_loop())
     asyncio.create_task(auto_backup_loop())
     asyncio.create_task(daily_idea_loop())
+    asyncio.create_task(autopardons_loop())
     asyncio.create_task(compliment_daily_loop())
 
     # ── Веб дашборд ──────────────────────────────────────
