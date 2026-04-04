@@ -12766,6 +12766,46 @@ async def cmd_chatsettings(message: Message):
     await message.answer(text, parse_mode="HTML", reply_markup=kb_chatsettings_main(cid))
 
 
+@dp.message(Command("antivpn"))
+async def cmd_antivpn(message: Message, command: CommandObject):
+    if not await require_admin(message): return
+    cid = message.chat.id
+    current = _antivpn_get(cid)
+
+    if not command.args:
+        status = "✅ включён" if current["enabled"] else "❌ выключен"
+        await reply_auto_delete(message,
+            f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+            f"Статус: <b>{status}</b>\n"
+            f"Действие: <b>{current['action']}</b>\n\n"
+            f"<b>Команды:</b>\n"
+            f"/antivpn on — включить\n"
+            f"/antivpn off — выключить\n"
+            f"/antivpn action warn/kick/ban — действие\n\n"
+            f"<i>⚠️ Для проверки IP нужен VPN_API_KEY в .env\nПолучить: vpnapi.io</i>",
+            parse_mode="HTML"); return
+
+    args = command.args.lower().split()
+    if args[0] == "on":
+        _antivpn_settings[cid] = {**current, "enabled": True}
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+            "✅ АнтиVPN <b>включён</b>!\n"
+            "<i>Новые участники будут проверяться.</i>", parse_mode="HTML")
+    elif args[0] == "off":
+        _antivpn_settings[cid] = {**current, "enabled": False}
+        await reply_auto_delete(message,
+            "╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+            "❌ АнтиVPN <b>выключен</b>.", parse_mode="HTML")
+    elif args[0] == "action" and len(args) > 1 and args[1] in ("warn", "kick", "ban"):
+        _antivpn_settings[cid] = {**current, "action": args[1]}
+        await reply_auto_delete(message,
+            f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+            f"⚙️ Действие изменено: <b>{args[1]}</b>", parse_mode="HTML")
+    else:
+        await reply_auto_delete(message, "⚠️ /antivpn on/off/action warn|kick|ban")
+
+
 @dp.callback_query(F.data.startswith("cs_toggle:"))
 async def cb_cs_toggle(call: CallbackQuery):
     if not await check_admin(call.message): 
@@ -12859,7 +12899,7 @@ async def cb_cs_set(call: CallbackQuery):
     await call.answer()
 
 
-@dp.message(F.chat.type.in_({"group", "supergroup"}))
+@dp.message(F.text & ~F.text.startswith("/") & F.chat.type.in_({"group", "supergroup"}))
 async def handle_cs_input(message: Message):
     uid = message.from_user.id
     if uid not in _cs_pending_input: return
@@ -13213,46 +13253,6 @@ async def _check_vpn(uid: int) -> tuple[bool, str]:
                     return is_vpn, reason_str
     except: pass
     return False, ""
-
-
-@dp.message(Command("antivpn"))
-async def cmd_antivpn(message: Message, command: CommandObject):
-    if not await require_admin(message): return
-    cid = message.chat.id
-    current = _antivpn_get(cid)
-
-    if not command.args:
-        status = "✅ включён" if current["enabled"] else "❌ выключен"
-        await reply_auto_delete(message,
-            f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-            f"Статус: <b>{status}</b>\n"
-            f"Действие: <b>{current['action']}</b>\n\n"
-            f"<b>Команды:</b>\n"
-            f"/antivpn on — включить\n"
-            f"/antivpn off — выключить\n"
-            f"/antivpn action warn/kick/ban — действие\n\n"
-            f"<i>⚠️ Требуется VPN_API_KEY в .env\nПолучить: vpnapi.io</i>",
-            parse_mode="HTML"); return
-
-    args = command.args.lower().split()
-    if args[0] == "on":
-        _antivpn_settings[cid] = {**current, "enabled": True}
-        await reply_auto_delete(message,
-            "╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-            "✅ АнтиVPN <b>включён</b>!\n"
-            "<i>Новые участники будут проверяться.</i>", parse_mode="HTML")
-    elif args[0] == "off":
-        _antivpn_settings[cid] = {**current, "enabled": False}
-        await reply_auto_delete(message,
-            "╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-            "❌ АнтиVPN <b>выключен</b>.", parse_mode="HTML")
-    elif args[0] == "action" and len(args) > 1 and args[1] in ("warn", "kick", "ban"):
-        _antivpn_settings[cid] = {**current, "action": args[1]}
-        await reply_auto_delete(message,
-            f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-            f"⚙️ Действие изменено: <b>{args[1]}</b>", parse_mode="HTML")
-    else:
-        await reply_auto_delete(message, "⚠️ /antivpn on/off/action warn|kick|ban")
 
 
 async def _process_new_member_vpn(message: Message, member):
