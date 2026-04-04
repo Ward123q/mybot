@@ -812,10 +812,178 @@ async def health(request):
 async def serve_mini_app(request):
     return web.FileResponse("mini_app.html")
 
+# Ожидающие верификацию: {uid: {"cid": int, "name": str, "ts": float}}
+_verify_pending: dict = {}
+# Результаты верификации: {uid: {"passed": bool, "reason": str}}
+_verify_results: dict = {}
+
+async def serve_verify(request):
+    """Страница верификации через WebApp"""
+    vpn_key = os.getenv("VPN_API_KEY", "")
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Верификация — Chat Guard</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;}}
+body{{background:#0d0f14;color:#e8eaf0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;}}
+.card{{background:#111318;border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:32px 24px;max-width:360px;width:100%;text-align:center;}}
+.icon{{font-size:56px;margin-bottom:16px;}}
+h1{{font-size:20px;font-weight:700;margin-bottom:8px;}}
+p{{color:#7c8299;font-size:14px;line-height:1.5;margin-bottom:24px;}}
+.btn{{background:#5865f2;color:#fff;border:none;border-radius:12px;padding:14px 24px;font-size:16px;font-weight:600;cursor:pointer;width:100%;transition:opacity .2s;}}
+.btn:active{{opacity:.8;}}
+.btn:disabled{{opacity:.5;cursor:not-allowed;}}
+.status{{margin-top:16px;font-size:13px;color:#7c8299;min-height:20px;}}
+.ok{{color:#23a55a;}} .err{{color:#f23f42;}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">🛡</div>
+  <h1>Верификация</h1>
+  <p>Для входа в чат нам нужно убедиться что ты не бот и не используешь VPN/прокси.</p>
+  <button class="btn" id="btn" onclick="verify()">✅ Пройти проверку</button>
+  <div class="status" id="status">Нажми кнопку для проверки</div>
+</div>
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+async function verify() {{
+  const btn = document.getElementById('btn');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+  status.textContent = '⏳ Проверяем...';
+
+  try {{
+    // Получаем IP через публичный сервис
+    const ipResp = await fetch('https://api.ipify.org?format=json');
+    const ipData = await ipResp.json();
+    const ip = ipData.ip;
+
+    // Проверяем IP через vpnapi.io
+    const vpnKey = '{vpn_key}';
+    let isVpn = false;
+    let vpnReason = '';
+
+    if (vpnKey) {{
+      const vpnResp = await fetch(`https://vpnapi.io/api/${{ip}}?key=${{vpnKey}}`);
+      const vpnData = await vpnResp.json();
+      const sec = vpnData.security || {{}};
+      isVpn = sec.vpn || sec.proxy || sec.tor || sec.relay || false;
+      if (sec.vpn) vpnReason += 'VPN ';
+      if (sec.proxy) vpnReason += 'Proxy ';
+      if (sec.tor) vpnReason += 'Tor ';
+      if (sec.relay) vpnReason += 'Relay ';
+    }}
+
+    // Отправляем результат на сервер
+    const uid = tg.initDataUnsafe?.user?.id;
+    await fetch('/verify_result', {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify({{
+        uid: uid,
+        ip: ip,
+        is_vpn: isVpn,
+        reason: vpnReason.trim(),
+        init_data: tg.initData
+      }})
+    }});
+
+    if (isVpn) {{
+      status.innerHTML = `<span class="err">❌ Обнаружен ${{vpnReason.trim()}}. Отключи и попробуй снова.</span>`;
+      btn.disabled = false;
+    }} else {{
+      status.innerHTML = '<span class="ok">✅ Проверка пройдена! Можешь закрыть окно.</span>';
+      btn.textContent = '✅ Готово';
+      setTimeout(() => tg.close(), 2000);
+    }}
+  }} catch(e) {{
+    status.innerHTML = '<span class="err">❌ Ошибка соединения. Попробуй снова.</span>';
+    btn.disabled = false;
+  }}
+}}
+</script>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
+
+
+async def handle_verify_result(request):
+    """Принимает результат верификации от WebApp"""
+    try:
+        data = await request.json()
+        uid = int(data.get("uid", 0))
+        is_vpn = data.get("is_vpn", False)
+        reason = data.get("reason", "")
+        ip = data.get("ip", "")
+
+        if uid not in _verify_pending:
+            return web.Response(text="ok")
+
+        pending = _verify_pending.pop(uid)
+        cid = pending["cid"]
+        name = pending["name"]
+        action = pending.get("action", "kick")
+
+        _verify_results[uid] = {"passed": not is_vpn, "reason": reason, "ip": ip}
+
+        if is_vpn:
+            # VPN обнаружен — применяем действие
+            await log_action(
+                f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+                f"👤 {name} (<code>{uid}</code>)\n"
+                f"🌐 IP: <code>{ip}</code>\n"
+                f"🔍 Обнаружено: <b>{reason}</b>\n"
+                f"⚖️ Действие: <b>{action}</b>\n"
+                f"💬 Чат: <code>{cid}</code>"
+            )
+            try:
+                if action == "ban":
+                    await bot.ban_chat_member(cid, uid)
+                elif action in ("kick", "warn"):
+                    await bot.ban_chat_member(cid, uid)
+                    await bot.unban_chat_member(cid, uid)
+                # Уведомляем юзера
+                await bot.send_message(uid,
+                    f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+                    f"❌ Обнаружен: <b>{reason}</b>\n"
+                    f"Отключи VPN/прокси и попробуй зайти снова.",
+                    parse_mode="HTML")
+            except: pass
+        else:
+            # Чистый — снимаем ограничения
+            try:
+                await bot.restrict_chat_member(
+                    cid, uid,
+                    permissions=ChatPermissions(
+                        can_send_messages=True,
+                        can_send_media_messages=True,
+                        can_send_polls=True,
+                        can_send_other_messages=True,
+                        can_add_web_page_previews=True
+                    )
+                )
+            except: pass
+
+    except Exception as e:
+        logging.warning(f"verify_result error: {e}")
+
+    return web.Response(text="ok")
+
+
 async def start_web():
     app = web.Application()
     app.router.add_get("/", health)
     app.router.add_get("/mini", serve_mini_app)
+    app.router.add_get("/verify", serve_verify)
+    app.router.add_post("/verify_result", handle_verify_result)
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", 8080).start()
@@ -13088,70 +13256,161 @@ async def cmd_antivpn(message: Message, command: CommandObject):
 
 
 async def _process_new_member_vpn(message: Message, member):
-    """Проверяет нового участника на VPN при вступлении"""
+    """Полная антиVPN проверка: профиль + WebApp верификация"""
     cid = message.chat.id
     cfg = _antivpn_get(cid)
     if not cfg.get("enabled"): return
-    if not os.getenv("VPN_API_KEY", ""): return
 
-    is_vpn, reason = await _check_vpn(member.id)
-    if not is_vpn: return
+    uid = member.id
+    name = member.full_name
+    action = cfg.get("action", "kick")
 
-    action = cfg.get("action", "warn")
-    uname = member.full_name
+    # ── Шаг 1: Проверка профиля ──────────────────────────
+    risk_score = 0
+    risk_flags = []
 
-    await log_action(
-        f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-        f"👤 {uname} (<code>{member.id}</code>)\n"
-        f"🔍 Обнаружено: <b>{reason}</b>\n"
-        f"⚖️ Действие: <b>{action}</b>\n"
-        f"💬 Чат: {message.chat.title}"
-    )
+    # Нет username
+    if not member.username:
+        risk_score += 2
+        risk_flags.append("нет username")
 
+    # Нет фото профиля
     try:
-        if action == "kick":
-            await bot.ban_chat_member(cid, member.id)
-            await bot.unban_chat_member(cid, member.id)
+        photos = await bot.get_user_profile_photos(uid, limit=1)
+        if photos.total_count == 0:
+            risk_score += 2
+            risk_flags.append("нет фото")
+    except: pass
+
+    # Имя состоит только из цифр или очень короткое
+    import re as _re
+    if _re.match(r'^[\d\s]+$', name):
+        risk_score += 3
+        risk_flags.append("имя из цифр")
+    if len(name) <= 2:
+        risk_score += 2
+        risk_flags.append("очень короткое имя")
+
+    # Имя на кириллице но без фото и username — подозрительно меньше
+    # Имя на латинице/иероглифах при остальных признаках
+    if not _re.search(r'[а-яёА-ЯЁ]', name) and risk_score >= 2:
+        risk_score += 1
+        risk_flags.append("не кириллица")
+
+    # Premium аккаунт — снижаем риск
+    if getattr(member, 'is_premium', False):
+        risk_score -= 3
+
+    # ── Если высокий риск — сразу действуем ─────────────
+    if risk_score >= 5:
+        flags_str = ", ".join(risk_flags)
+        await log_action(
+            f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+            f"⚠️ <b>Подозрительный профиль</b>\n"
+            f"👤 {name} (<code>{uid}</code>)\n"
+            f"🔍 Признаки: {flags_str}\n"
+            f"📊 Риск: {risk_score}/10\n"
+            f"⚖️ Действие: <b>{action}</b>\n"
+            f"💬 Чат: {message.chat.title}"
+        )
+        try:
+            if action == "ban":
+                await bot.ban_chat_member(cid, uid)
+                sent = await message.answer(
+                    f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+                    f"👤 {member.mention_html()}\n"
+                    f"🔍 Подозрительный профиль: {flags_str}\n"
+                    f"🔨 <b>Забанен автоматически</b>", parse_mode="HTML")
+                asyncio.create_task(_auto_delete_after(sent, 20))
+                return
+            elif action in ("kick", "warn"):
+                await bot.ban_chat_member(cid, uid)
+                await bot.unban_chat_member(cid, uid)
+                sent = await message.answer(
+                    f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
+                    f"👤 {member.mention_html()}\n"
+                    f"🔍 Подозрительный профиль: {flags_str}\n"
+                    f"🚪 <b>Кикнут автоматически</b>", parse_mode="HTML")
+                asyncio.create_task(_auto_delete_after(sent, 20))
+                return
+        except: pass
+
+    # ── Шаг 2: WebApp верификация (всегда если включена) ─
+    render_url = os.getenv("RENDER_URL", "https://mybot-1s9l.onrender.com")
+    verify_url = f"{render_url}/verify"
+
+    # Мутим на время верификации
+    try:
+        await bot.restrict_chat_member(
+            cid, uid,
+            permissions=ChatPermissions(can_send_messages=False),
+            until_date=datetime.now() + timedelta(minutes=10)
+        )
+    except: pass
+
+    # Сохраняем в очередь ожидания
+    _verify_pending[uid] = {
+        "cid": cid, "name": name,
+        "action": action, "ts": _time_module.time(),
+        "risk_score": risk_score, "risk_flags": risk_flags
+    }
+
+    # Отправляем кнопку верификации
+    try:
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="🛡 Пройти верификацию",
+                web_app=WebAppInfo(url=verify_url)
+            )
+        ]])
+        await bot.send_message(
+            uid,
+            f"╔══════════════════╗\n║  🛡  ВЕРИФИКАЦИЯ  ║\n╚══════════════════╝\n\n"
+            f"👋 Привет, <b>{name}</b>!\n\n"
+            f"Для доступа в чат нужно пройти быструю проверку.\n"
+            f"⏱ У тебя есть <b>10 минут</b>.\n\n"
+            f"Нажми кнопку ниже 👇",
+            parse_mode="HTML",
+            reply_markup=kb
+        )
+    except:
+        # Если не можем написать в ЛС — пишем в чат
+        try:
+            risk_text = f"\n⚠️ Признаки: {', '.join(risk_flags)}" if risk_flags else ""
+            kb = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text="🛡 Пройти верификацию",
+                    web_app=WebAppInfo(url=verify_url)
+                )
+            ]])
             sent = await message.answer(
-                f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-                f"👤 {uname}\n🔍 Обнаружен: <b>{reason}</b>\n"
-                f"🚪 <b>Кикнут автоматически</b>\n──────────────────",
-                parse_mode="HTML")
-            asyncio.create_task(_auto_delete_after(sent, 20))
-        elif action == "ban":
-            await bot.ban_chat_member(cid, member.id)
-            sent = await message.answer(
-                f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-                f"👤 {uname}\n🔍 Обнаружен: <b>{reason}</b>\n"
-                f"🔨 <b>Забанен автоматически</b>\n──────────────────",
-                parse_mode="HTML")
-            asyncio.create_task(_auto_delete_after(sent, 20))
-        else:  # warn
-            sent = await message.answer(
-                f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-                f"⚠️ {member.mention_html()}\n🔍 Обнаружен: <b>{reason}</b>\n"
-                f"<i>Администраторы уведомлены.</i>\n──────────────────",
-                parse_mode="HTML")
-            asyncio.create_task(_auto_delete_after(sent, 30))
-            # Уведомляем админов
-            for admin_id in ADMIN_IDS:
-                try:
-                    await bot.send_message(
-                        admin_id,
-                        f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-                        f"👤 {uname} (<code>{member.id}</code>)\n"
-                        f"🔍 {reason}\n💬 {message.chat.title}\n\n"
-                        f"<i>Принять меры?</i>",
-                        parse_mode="HTML",
-                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                            InlineKeyboardButton(text="🔨 Бан", callback_data=f"vpn_ban:{cid}:{member.id}"),
-                            InlineKeyboardButton(text="🚪 Кик", callback_data=f"vpn_kick:{cid}:{member.id}"),
-                            InlineKeyboardButton(text="✅ Игнор", callback_data=f"vpn_ignore:{cid}:{member.id}"),
-                        ]])
-                    )
-                except: pass
-    except Exception as e:
-        logging.warning(f"antivpn action error: {e}")
+                f"╔══════════════════╗\n║  🛡  ВЕРИФИКАЦИЯ  ║\n╚══════════════════╝\n\n"
+                f"👤 {member.mention_html()}, пройди верификацию чтобы получить доступ к чату.{risk_text}\n"
+                f"⏱ <b>10 минут</b>",
+                parse_mode="HTML", reply_markup=kb
+            )
+            asyncio.create_task(_auto_delete_after(sent, 600))
+        except: pass
+
+    # Автокик если не прошёл верификацию за 10 минут
+    asyncio.create_task(_verify_timeout_kick(uid, cid, name, action))
+
+
+async def _verify_timeout_kick(uid: int, cid: int, name: str, action: str):
+    """Кикает юзера если не прошёл верификацию за 10 минут"""
+    await asyncio.sleep(600)
+    if uid not in _verify_pending: return  # уже прошёл
+    _verify_pending.pop(uid, None)
+    try:
+        await bot.ban_chat_member(cid, uid)
+        await bot.unban_chat_member(cid, uid)
+        await log_action(
+            f"╔══════════════════╗\n║  🛡  ВЕРИФИКАЦИЯ  ║\n╚══════════════════╝\n\n"
+            f"⏱ Таймаут верификации\n"
+            f"👤 {name} (<code>{uid}</code>)\n"
+            f"🚪 Кикнут за неактивность"
+        )
+    except: pass
 
 
 @dp.callback_query(F.data.startswith("vpn_"))
