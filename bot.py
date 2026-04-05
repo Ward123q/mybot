@@ -1419,7 +1419,8 @@ def kb_user_panel(tid: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📝  Заметки",            callback_data=f"panel:usernotes:{tid}"),
          InlineKeyboardButton(text="💎  VIP",                callback_data=f"panel:vip:{tid}")],
         [InlineKeyboardButton(text="🎭  Приколы",            callback_data=f"panel:fun:{tid}"),
-         InlineKeyboardButton(text="‹ Назад",               callback_data=f"panel:mainmenu:0")],
+         InlineKeyboardButton(text="🎰  Казино",             callback_data=f"game:casino:{tid}")],
+        [InlineKeyboardButton(text="‹ Назад",               callback_data=f"panel:mainmenu:0")],
     ])
 
 def kb_owner_panel() -> InlineKeyboardMarkup:
@@ -1539,16 +1540,16 @@ def kb_chat(tid: int) -> InlineKeyboardMarkup:
 
 def kb_games(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎲 Кубик d6",           callback_data=f"game:roll:{tid}"),
+        [InlineKeyboardButton(text="🎰 Казино",             callback_data=f"game:casino:{tid}"),
          InlineKeyboardButton(text="🪙 Монетка",            callback_data=f"game:flip:{tid}")],
-        [InlineKeyboardButton(text="🎱 Шар предсказаний",   callback_data=f"game:8ball:{tid}"),
-         InlineKeyboardButton(text="🧩 Викторина",          callback_data=f"game:trivia:{tid}")],
+        [InlineKeyboardButton(text="🎲 Кубик d6",           callback_data=f"game:roll:{tid}"),
+         InlineKeyboardButton(text="🎱 Шар предсказаний",   callback_data=f"game:8ball:{tid}")],
+        [InlineKeyboardButton(text="🧩 Викторина",          callback_data=f"game:trivia:{tid}"),
+         InlineKeyboardButton(text="🎯 Угадай число",        callback_data=f"game:guess:{tid}")],
         [InlineKeyboardButton(text="✊ КНБ — Камень",       callback_data=f"game:rps_k:{tid}"),
          InlineKeyboardButton(text="✌️ КНБ — Ножницы",      callback_data=f"game:rps_n:{tid}")],
         [InlineKeyboardButton(text="🖐 КНБ — Бумага",       callback_data=f"game:rps_b:{tid}"),
-         InlineKeyboardButton(text="🎯 Угадай число",        callback_data=f"game:guess:{tid}")],
-        [InlineKeyboardButton(text="🌤 Погода — Москва",    callback_data=f"game:weather_Москва:{tid}"),
-         InlineKeyboardButton(text="🌍 Свой город",          callback_data=f"game:weather_custom:{tid}")],
+         InlineKeyboardButton(text="🌤 Погода",             callback_data=f"game:weather_Москва:{tid}")],
         [InlineKeyboardButton(text="⏱ Отсчёт 5 сек",       callback_data=f"game:countdown5:{tid}"),
          InlineKeyboardButton(text="⏱ Отсчёт 10 сек",      callback_data=f"game:countdown10:{tid}")],
         [InlineKeyboardButton(text="🔙 Назад",              callback_data=f"panel:mainmenu:0")],
@@ -2937,6 +2938,22 @@ async def cb_game(call: CallbackQuery):
     back_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔄 Ещё раз", callback_data=call.data)],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]])
+
+    if action == "casino":
+        uid = call.from_user.id
+        bal = _casino_get(cid, uid)
+        jackpot = _casino_jackpot[cid]
+        text = (
+            f"╔══════════════════╗\n║  🎰  КАЗИНО       ║\n╚══════════════════╝\n\n"
+            f"👤 {call.from_user.mention_html()}\n"
+            f"💰 Баланс: <b>{bal}</b> монет\n"
+            f"🏆 Джекпот: <b>{jackpot}</b> монет\n"
+            f"──────────────────\n"
+            f"<i>Выбери игру:</i>"
+        )
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb_casino(cid, uid))
+        await call.answer()
+        return
     if action == "roll":
         await call.message.edit_text(
             f"🎲 Бросаю кубик... выпало: <b>{random.randint(1,6)}</b>!", parse_mode="HTML", reply_markup=back_kb)
@@ -3080,6 +3097,7 @@ async def cmd_help(message: Message):
         "└ /followers — мои подписчики\n\n"
 
         "🎮 <b>Игры и развлечения</b>\n"
+        "├ /casino — 🎰 казино (слоты, рулетка, монетка)\n"
         "├ /roll [N] — бросить кубик\n"
         "├ /flip — монетка орёл/решка\n"
         "├ /rps к/н/б — камень ножницы бумага\n"
@@ -13946,6 +13964,244 @@ async def cb_vpn_action(call: CallbackQuery):
         await call.answer("✅ Проигнорировано")
     try:
         await call.message.edit_reply_markup(reply_markup=None)
+    except: pass
+
+
+# ══════════════════════════════════════════════════════════
+#  🎰 КАЗИНО
+# ══════════════════════════════════════════════════════════
+
+# Баланс казино {cid: {uid: int}}
+_casino_balance: dict = defaultdict(lambda: defaultdict(lambda: 1000))
+# Кулдаун {cid:uid: float}
+_casino_cooldown: dict = {}
+# Джекпот {cid: int}
+_casino_jackpot: dict = defaultdict(lambda: 500)
+
+CASINO_START_BALANCE = 1000
+CASINO_COOLDOWN_SEC  = 30
+
+
+def _casino_get(cid: int, uid: int) -> int:
+    return _casino_balance[cid][uid]
+
+def _casino_set(cid: int, uid: int, val: int):
+    _casino_balance[cid][uid] = max(0, val)
+
+def _casino_cd_ok(cid: int, uid: int) -> tuple[bool, int]:
+    key = f"{cid}:{uid}"
+    now = _time_module.time()
+    if key in _casino_cooldown:
+        diff = now - _casino_cooldown[key]
+        if diff < CASINO_COOLDOWN_SEC:
+            return False, int(CASINO_COOLDOWN_SEC - diff)
+    return True, 0
+
+def _casino_cd_set(cid: int, uid: int):
+    _casino_cooldown[f"{cid}:{uid}"] = _time_module.time()
+
+
+def kb_casino(cid: int, uid: int) -> InlineKeyboardMarkup:
+    bal = _casino_get(cid, uid)
+    jackpot = _casino_jackpot[cid]
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"🎰 Слоты (10 монет)",   callback_data=f"casino:slots:{uid}:10")],
+        [InlineKeyboardButton(text=f"🎰 Слоты (50 монет)",   callback_data=f"casino:slots:{uid}:50")],
+        [InlineKeyboardButton(text=f"🎰 Слоты (100 монет)",  callback_data=f"casino:slots:{uid}:100")],
+        [InlineKeyboardButton(text=f"🎲 Рулетка чётное (50)", callback_data=f"casino:roulette:{uid}:even:50")],
+        [InlineKeyboardButton(text=f"🎲 Рулетка нечётное (50)", callback_data=f"casino:roulette:{uid}:odd:50")],
+        [InlineKeyboardButton(text=f"🪙 Монетка (25 монет)", callback_data=f"casino:coin:{uid}:25")],
+        [InlineKeyboardButton(text=f"💰 Баланс: {bal} | 🏆 Джекпот: {jackpot}", callback_data="casino:balance:0:0")],
+        [InlineKeyboardButton(text="✖️ Закрыть",             callback_data="casino:close:0:0")],
+    ])
+
+
+SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "🔔", "⭐", "💎", "7️⃣"]
+SLOT_WEIGHTS  = [30,   25,   20,   15,   5,    3,    1,    1]
+
+def _spin_slots() -> list:
+    import random as _r
+    return _r.choices(SLOT_SYMBOLS, weights=SLOT_WEIGHTS, k=3)
+
+def _slots_result(symbols: list, bet: int, jackpot: int) -> tuple[int, str]:
+    s = symbols
+    if s[0] == s[1] == s[2]:
+        if s[0] == "💎":
+            return jackpot, "💎💎💎 ДЖЕКПОТ! 🎉"
+        elif s[0] == "7️⃣":
+            return bet * 10, "7️⃣7️⃣7️⃣ СЕМЁРКИ! 🔥"
+        elif s[0] == "⭐":
+            return bet * 7, "⭐⭐⭐ ЗВЁЗДЫ! ✨"
+        elif s[0] == "🔔":
+            return bet * 5, "🔔🔔🔔 КОЛОКОЛА! 🎶"
+        else:
+            return bet * 3, f"{s[0]}{s[1]}{s[2]} Три в ряд!"
+    elif s[0] == s[1] or s[1] == s[2] or s[0] == s[2]:
+        return bet, "Два одинаковых — возврат ставки."
+    else:
+        return 0, "Нет совпадений."
+
+
+@dp.message(Command("casino"))
+async def cmd_casino(message: Message):
+    cid = message.chat.id
+    uid = message.from_user.id
+    bal = _casino_get(cid, uid)
+    jackpot = _casino_jackpot[cid]
+    text = (
+        f"╔══════════════════╗\n║  🎰  КАЗИНО       ║\n╚══════════════════╝\n\n"
+        f"👤 {message.from_user.mention_html()}\n"
+        f"💰 Баланс: <b>{bal}</b> монет\n"
+        f"🏆 Джекпот: <b>{jackpot}</b> монет\n"
+        f"──────────────────\n"
+        f"<i>Выбери игру:</i>"
+    )
+    sent = await message.answer(text, parse_mode="HTML", reply_markup=kb_casino(cid, uid))
+    asyncio.create_task(_auto_delete_after(sent, 30))
+    asyncio.create_task(_auto_delete_after(message, 5))
+
+
+@dp.callback_query(F.data.startswith("casino:"))
+async def cb_casino(call: CallbackQuery):
+    parts = call.data.split(":")
+    action = parts[1]
+    uid    = int(parts[2])
+    cid    = call.message.chat.id
+
+    # Закрыть
+    if action == "close":
+        try: await call.message.delete()
+        except: pass
+        await call.answer()
+        return
+
+    # Баланс — просто уведомление
+    if action == "balance":
+        bal = _casino_get(cid, call.from_user.id)
+        jackpot = _casino_jackpot[cid]
+        await call.answer(f"💰 Баланс: {bal} монет\n🏆 Джекпот: {jackpot} монет", show_alert=True)
+        return
+
+    # Только сам юзер может играть
+    if call.from_user.id != uid:
+        await call.answer("❌ Это не твоё казино!", show_alert=True); return
+
+    # Кулдаун
+    ok, remaining = _casino_cd_ok(cid, uid)
+    if not ok:
+        await call.answer(f"⏳ Подожди ещё {remaining} сек.", show_alert=True); return
+
+    player_uid = call.from_user.id
+    bal = _casino_get(cid, player_uid)
+
+    # ── СЛОТЫ ────────────────────────────────────────────
+    if action == "slots":
+        bet = int(parts[3])
+        if bal < bet:
+            await call.answer(f"❌ Недостаточно монет! У тебя {bal}.", show_alert=True); return
+
+        _casino_cd_set(cid, player_uid)
+        symbols = _spin_slots()
+        win, desc = _slots_result(symbols, bet, _casino_jackpot[cid])
+
+        if win == _casino_jackpot[cid]:
+            # Джекпот — сбрасываем
+            _casino_jackpot[cid] = 500
+            new_bal = bal - bet + win
+        elif win == 0:
+            # Проигрыш — добавляем в джекпот
+            _casino_jackpot[cid] += bet // 5
+            new_bal = bal - bet
+        else:
+            new_bal = bal - bet + win
+
+        _casino_set(cid, player_uid, new_bal)
+        slot_str = " | ".join(symbols)
+        result_emoji = "🎉" if win > bet else ("↩️" if win == bet else "😭")
+
+        text = (
+            f"╔══════════════════╗\n║  🎰  СЛОТЫ        ║\n╚══════════════════╝\n\n"
+            f"[ {slot_str} ]\n\n"
+            f"{result_emoji} {desc}\n"
+            f"──────────────────\n"
+            f"{'🏆 Выигрыш' if win > 0 else '💸 Проигрыш'}: <b>{win if win > 0 else bet} монет</b>\n"
+            f"💰 Баланс: <b>{new_bal}</b>\n"
+            f"🏆 Джекпот: <b>{_casino_jackpot[cid]}</b>"
+        )
+        try:
+            await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb_casino(cid, player_uid))
+        except: pass
+        await call.answer()
+
+    # ── РУЛЕТКА ──────────────────────────────────────────
+    elif action == "roulette":
+        bet_type = parts[3]  # even / odd
+        bet = int(parts[4])
+        if bal < bet:
+            await call.answer(f"❌ Недостаточно монет! У тебя {bal}.", show_alert=True); return
+
+        _casino_cd_set(cid, player_uid)
+        number = random.randint(0, 36)
+        is_even = number % 2 == 0 and number != 0
+        won = (bet_type == "even" and is_even) or (bet_type == "odd" and not is_even and number != 0)
+
+        if number == 0:
+            won = False
+            new_bal = bal - bet
+            result_text = "🟢 Зеро! Казино забирает всё."
+        elif won:
+            new_bal = bal + bet
+            result_text = f"✅ {'Чётное' if is_even else 'Нечётное'}! Ты угадал!"
+        else:
+            new_bal = bal - bet
+            result_text = f"❌ {'Нечётное' if is_even else 'Чётное'}! Не угадал."
+
+        _casino_set(cid, player_uid, new_bal)
+        color = "🔴" if number % 2 != 0 else ("🟢" if number == 0 else "⚫")
+        text = (
+            f"╔══════════════════╗\n║  🎲  РУЛЕТКА      ║\n╚══════════════════╝\n\n"
+            f"{color} Выпало: <b>{number}</b>\n\n"
+            f"{result_text}\n"
+            f"──────────────────\n"
+            f"{'💰 +' if won else '💸 -'}<b>{bet}</b> монет\n"
+            f"💰 Баланс: <b>{new_bal}</b>"
+        )
+        try:
+            await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb_casino(cid, player_uid))
+        except: pass
+        await call.answer()
+
+    # ── МОНЕТКА ──────────────────────────────────────────
+    elif action == "coin":
+        bet = int(parts[3])
+        if bal < bet:
+            await call.answer(f"❌ Недостаточно монет! У тебя {bal}.", show_alert=True); return
+
+        _casino_cd_set(cid, player_uid)
+        result = random.choice(["орёл", "решка"])
+        won = result == "орёл"
+        new_bal = bal + bet if won else bal - bet
+        _casino_set(cid, player_uid, new_bal)
+
+        text = (
+            f"╔══════════════════╗\n║  🪙  МОНЕТКА      ║\n╚══════════════════╝\n\n"
+            f"{'🦅 Орёл!' if won else '🪙 Решка!'}\n\n"
+            f"{'✅ Победа' if won else '❌ Проигрыш'}: <b>{bet}</b> монет\n"
+            f"──────────────────\n"
+            f"💰 Баланс: <b>{new_bal}</b>"
+        )
+        try:
+            await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb_casino(cid, player_uid))
+        except: pass
+        await call.answer()
+
+    # Авто-удаление сообщения казино через 30 сек от последнего действия
+    asyncio.create_task(_casino_autodelete(call.message, 30))
+
+
+async def _casino_autodelete(msg, delay: int):
+    await asyncio.sleep(delay)
+    try: await msg.delete()
     except: pass
 
 
