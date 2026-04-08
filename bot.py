@@ -4070,10 +4070,44 @@ async def cmd_rep(message: Message):
         f"╔══════════════════╗\n║  {'🌟' if score>=0 else '💀'}  РЕПУТАЦИЯ    ║\n╚══════════════════╝\n\n👤 {target.mention_html()}\n📈 Счёт: <b>{score:+d}</b>\n──────────────────",
         parse_mode="HTML")
 
+# ── ВЕРИФИКАЦИЯ ПО КОДУ — должна быть до всех текстовых обработчиков ──
+@dp.message(F.text & F.chat.type.in_({"group", "supergroup"}))
+async def handle_verify_code_input(message: Message):
+    """Проверяет введённый код верификации — ПРИОРИТЕТ ВЫШЕ ВСЕХ"""
+    if not message.text: return
+    cid = message.chat.id
+    uid = message.from_user.id
+    text = message.text.strip()
+
+    # Проверяем есть ли ожидающая верификация для этого юзера
+    if cid not in _code_verify or uid not in _code_verify[cid]:
+        return
+    data = _code_verify[cid][uid]
+    if text != data["code"]:
+        return  # не тот код — молча игнорируем, не блокируем чат
+
+    # ✅ Код совпал!
+    _code_verify[cid].pop(uid, None)
+
+    try: await message.delete()
+    except: pass
+
+    try:
+        await bot.edit_message_text(
+            f"╔══════════════════╗\n"
+            f"║  ✅  ВЕРИФИКАЦИЯ  ║\n"
+            f"╚══════════════════╝\n\n"
+            f"👤 {message.from_user.mention_html()}\n"
+            f"✅ Код принят — добро пожаловать!",
+            chat_id=cid, message_id=data["msg_id"],
+            parse_mode="HTML"
+        )
+        asyncio.create_task(_auto_delete_after_id(cid, data["msg_id"], 10))
+    except: pass
+
+
 @dp.message(F.text.in_({"+1", "+", "👍"}))
 async def rep_plus(message: Message):
-    if not message.reply_to_message: return
-    target = message.reply_to_message.from_user
     if target.id == message.from_user.id: await reply_auto_delete(message, "😏 Себе репу не накручивай!"); return
     key = (message.chat.id, message.from_user.id, target.id); now = time()
     if key in rep_cooldown and now - rep_cooldown[key] < 3600:
@@ -5817,6 +5851,10 @@ async def cmd_guess(message: Message):
 @dp.message(F.text.regexp(r'^\d+$'))
 async def guess_handler(message: Message):
     cid = message.chat.id
+    uid = message.from_user.id
+    # Пропускаем если юзер в процессе верификации
+    if cid in _code_verify and uid in _code_verify[cid]:
+        return
     if cid not in guess_games: return
     game = guess_games[cid]
     try: num = int(message.text)
@@ -13878,40 +13916,6 @@ async def _auto_delete_after_id(cid: int, msg_id: int, delay: int):
     try: await bot.delete_message(cid, msg_id)
     except: pass
 
-
-@dp.message(F.text & F.chat.type.in_({"group", "supergroup"}))
-async def handle_verify_code_input(message: Message):
-    """Проверяет введённый код верификации"""
-    cid = message.chat.id
-    uid = message.from_user.id
-    text = (message.text or "").strip()
-
-    if cid not in _code_verify or uid not in _code_verify[cid]:
-        return
-    data = _code_verify[cid][uid]
-    if text != data["code"]:
-        return  # не тот код — молча игнорируем
-
-    # Код совпал — верифицирован!
-    _code_verify[cid].pop(uid, None)
-
-    # Удаляем сообщение с кодом пользователя
-    try: await message.delete()
-    except: pass
-
-    # Редактируем сообщение верификации
-    try:
-        await bot.edit_message_text(
-            f"╔══════════════════╗\n"
-            f"║  ✅  ВЕРИФИКАЦИЯ  ║\n"
-            f"╚══════════════════╝\n\n"
-            f"👤 {message.from_user.mention_html()}\n"
-            f"✅ Код принят — добро пожаловать!",
-            chat_id=cid, message_id=data["msg_id"],
-            parse_mode="HTML"
-        )
-        asyncio.create_task(_auto_delete_after_id(cid, data["msg_id"], 10))
-    except: pass
 
 
 @dp.callback_query(F.data.startswith("verifyapprove:"))
