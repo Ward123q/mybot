@@ -17,6 +17,13 @@ from functools import wraps
 from aiohttp import web
 import database as db
 import shared
+try:
+    import antiraid
+    import night_mode
+    import security_features as sf
+    _SF_LOADED = True
+except ImportError:
+    _SF_LOADED = False
 
 log = logging.getLogger(__name__)
 
@@ -1284,6 +1291,7 @@ def navbar(sess: dict | None = None, active: str = "") -> str:
         {link("plugins", "/dashboard/plugins", "🧩", "Плагины", "manage_plugins")}
         {link("broadcast", "/dashboard/broadcast", "📢", "Рассылка", "broadcast")}
         {link("chat_settings", "/dashboard/chat_settings", "⚙️", "Настройки чатов", "manage_chat_settings")}
+        {link("security", "/dashboard/security", "🛡", "Защита", "view_moderation")}
         {link("admins", "/dashboard/admins", "👑", "Администраторы", "view_overview") if rank >= OWNER_RANK else ""}
         {f'<a href="/dashboard/owner" class="nav-link{"  active" if active=="owner" else ""}">'
          f'<span class="nav-icon">🌟</span><span>Панель владельца</span></a>'
@@ -9714,6 +9722,15 @@ async def start_dashboard():
     app.router.add_get("/dashboard/owner",  handle_owner_panel)
     app.router.add_post("/dashboard/owner", handle_owner_panel)
 
+    # ── Модуль защиты ────────────────────────────────────────
+    app.router.add_get("/dashboard/security",            handle_security)
+    app.router.add_post("/dashboard/security",           handle_security)
+    app.router.add_get("/dashboard/security/{cid}",      handle_security)
+    app.router.add_post("/dashboard/security/{cid}",     handle_security)
+    app.router.add_post("/api/security/force_night",     api_force_night)
+    app.router.add_post("/api/security/force_raid",      api_force_raid)
+    app.router.add_get("/api/security/stats",            api_security_stats)
+
     # Запускаем фоновые задачи
     _start_background_tasks()
 
@@ -11152,3 +11169,489 @@ async def api_threats(request: web.Request):
     _analyze_threats()
     active = [t for t in _threat_log if t.get("status") == "active"]
     return web.json_response({"count": len(active), "threats": active[:10]})
+
+# ══════════════════════════════════════════════════════════════════════
+#  🛡 СТРАНИЦА ЗАЩИТЫ — /dashboard/security
+# ══════════════════════════════════════════════════════════════════════
+
+async def handle_security(request: web.Request) -> web.Response:
+    sess = _get_session(request)
+    if not sess:
+        raise web.HTTPFound("/dashboard/login")
+    _track_session(request)
+
+    if not _SF_LOADED:
+        return web.Response(
+            text=page(navbar(sess, "security") + """
+            <div class="container">
+              <div class="page-title">🛡 Защита</div>
+              <div class="card" style="padding:32px;text-align:center;color:var(--t2);">
+                Модули защиты не загружены.<br>
+                Убедись что <code>antiraid.py</code>, <code>night_mode.py</code>,
+                <code>security_features.py</code> находятся в папке бота
+                и перезапусти бота.
+              </div>
+            </div>"""),
+            content_type="text/html"
+        )
+
+    chats = [dict(r) for r in await db.get_all_chats()]
+    cid_raw = request.match_info.get("cid", "") or request.rel_url.query.get("cid", "")
+    cid = int(cid_raw) if cid_raw and cid_raw.isdigit() else (chats[0]["cid"] if chats else 0)
+    chat_title = next((c.get("title", str(cid)) for c in chats if c["cid"] == cid), str(cid))
+
+    # ── POST — сохранение ─────────────────────────────────────
+    if request.method == "POST":
+        data = await request.post()
+        section = data.get("section", "")
+
+        if section == "night_mode" and cid:
+            upd = {}
+            for f in ["enabled","read_only","block_media","block_stickers",
+                      "block_voice","block_files","block_forwards",
+                      "notify","delete_violations","warn_violators"]:
+                upd[f] = data.get(f) == "1"
+            for f in ["start_time","end_time","msg_start","msg_end"]:
+                if f in data: upd[f] = data[f]
+            try: upd["slowmode"] = int(data.get("slowmode", 0))
+            except: pass
+            night_mode.update_config(cid, upd)
+
+        elif section == "antiraid" and cid:
+            upd = {}
+            for f in ["enabled","scam_check","notify_admins"]:
+                upd[f] = data.get(f) == "1"
+            for f, d in [("threshold",7),("window_secs",10),
+                         ("lock_minutes",10),("slowmode_delay",30),("scam_threshold",60)]:
+                try: upd[f] = int(data.get(f, d))
+                except: pass
+            if "action" in data: upd["action"] = data["action"]
+            antiraid.update_chat_raid_cfg(cid, upd)
+
+        elif section == "antilink" and cid:
+            upd = {}
+            for f in ["enabled","warn_on_del","allow_admins","block_tg_invites","block_masked"]:
+                upd[f] = data.get(f) == "1"
+            if "action" in data: upd["action"] = data["action"]
+            wl_raw = data.get("whitelist", "")
+            upd["whitelist"] = [d.strip() for d in wl_raw.split("\n") if d.strip()]
+            sf.update_antilink_cfg(cid, upd)
+
+        elif section == "avatarcheck" and cid:
+            upd = {
+                "enabled": data.get("enabled") == "1",
+                "action":  data.get("action", "kick"),
+            }
+            try: upd["mute_mins"] = int(data.get("mute_mins", 60))
+            except: pass
+            sf.update_avatar_cfg(cid, upd)
+
+        raise web.HTTPFound(f"/dashboard/security/{cid}?saved=1")
+
+    # ── GET — отрисовка ───────────────────────────────────────
+    nm_cfg   = night_mode.get_chat_config(cid) if cid else {}
+    ar_cfg   = antiraid.get_chat_raid_cfg(cid) if cid else {}
+    al_cfg   = sf.get_antilink_cfg(cid)        if cid else {}
+    av_cfg   = sf.get_avatar_cfg(cid)          if cid else {}
+    al_stats = sf.get_antilink_stats(cid)      if cid else {}
+    rd_stats = antiraid.get_raid_stats_for_dashboard()
+
+    saved = request.rel_url.query.get("saved") == "1"
+
+    chat_opts = "".join(
+        f'<option value="{c["cid"]}" {"selected" if c["cid"]==cid else ""}>'
+        f'{c.get("title","") or c["cid"]}</option>'
+        for c in chats
+    )
+
+    def tog(key, label, val):
+        ch = "checked" if val else ""
+        return (f'<label class="sec-toggle-row">'
+                f'<span>{label}</span>'
+                f'<input type="checkbox" name="{key}" value="1" {ch} class="sec-cb">'
+                f'<span class="sec-slider"></span></label>')
+
+    def dot(active):
+        if active is True:   return '<span class="sdot sdot-on"></span>'
+        if active is False:  return '<span class="sdot sdot-off"></span>'
+        return '<span class="sdot sdot-warn"></span>'
+
+    nm_active  = nm_cfg.get("is_active", False)
+    nm_enabled = nm_cfg.get("enabled",   False)
+
+    # Последние события антилинк
+    al_recent = al_stats.get("recent", [])[:5]
+    al_log_html = "".join(
+        f'<div class="ev-row">'
+        f'<span class="ev-badge ev-red">ССЫЛКА</span>'
+        f'<span>@{r.get("username") or r.get("uid","?")} — <code>{r.get("url","")}</code></span>'
+        f'<span class="ev-time">{_fmt_ts(r.get("ts",0))}</span></div>'
+        for r in al_recent
+    ) or '<div class="ev-empty">Нарушений не было</div>'
+
+    # Последние рейды
+    rd_recent = rd_stats.get("recent_raids", [])[:5]
+    rd_log_html = "".join(
+        f'<div class="ev-row">'
+        f'<span class="ev-badge ev-red">РЕЙД</span>'
+        f'<span>{r.get("chat_title","?")} — {r.get("join_count","?")} чел.</span>'
+        f'<span class="ev-time">{_fmt_ts(r.get("ts",0))}</span></div>'
+        for r in rd_recent
+    ) or '<div class="ev-empty">Рейдов не было</div>'
+
+    scam_recent = rd_stats.get("recent_scams", [])[:5]
+    scam_log_html = "".join(
+        f'<div class="ev-row">'
+        f'<span class="ev-badge ev-ylw">СКАМ</span>'
+        f'<span>@{r.get("username") or r.get("uid","?")} — риск {r.get("score","?")}%</span>'
+        f'<span class="ev-time">{_fmt_ts(r.get("ts",0))}</span></div>'
+        for r in scam_recent
+    ) or '<div class="ev-empty">Скам-аккаунтов не обнаружено</div>'
+
+    wl_val = "\n".join(al_cfg.get("whitelist", []))
+
+    action_opts_al = "".join(
+        f'<option value="{v}" {"selected" if al_cfg.get("action")==v else ""}>{l}</option>'
+        for v, l in [("delete","Удалить"),("warn","Предупредить"),
+                     ("mute","Замьютить 30м"),("kick","Кикнуть"),("ban","Забанить")]
+    )
+    action_opts_ar = "".join(
+        f'<option value="{v}" {"selected" if ar_cfg.get("action")==v else ""}>{l}</option>'
+        for v, l in [("lock","🔒 Заблокировать чат"),
+                     ("slowmode","🐢 Замедленный режим"),
+                     ("members_only","👥 Запрет новым")]
+    )
+    action_opts_av = "".join(
+        f'<option value="{v}" {"selected" if av_cfg.get("action")==v else ""}>{l}</option>'
+        for v, l in [("kick","👢 Кикнуть"),("ban","🔨 Забанить"),
+                     ("mute","🔇 Замьютить"),("warn","⚠️ Предупредить")]
+    )
+
+    save_flash = ('<div class="flash flash-ok">✅ Настройки сохранены</div>' if saved else "")
+
+    body = navbar(sess, "security") + f"""
+    <div class="container">
+      {save_flash}
+      <div class="page-title">🛡 Защита чатов</div>
+
+      <div class="sec-topbar">
+        <select class="form-control sec-chat-sel"
+          onchange="window.location='/dashboard/security/'+this.value">
+          {chat_opts}
+        </select>
+        <div class="sec-counters">
+          <div class="sec-cnt sec-cnt-red">
+            <span>🚨</span><span>Рейдов сегодня</span>
+            <strong>{rd_stats.get("raids_today",0)}</strong>
+          </div>
+          <div class="sec-cnt sec-cnt-ylw">
+            <span>🤖</span><span>Скам всего</span>
+            <strong>{rd_stats.get("scams_total",0)}</strong>
+          </div>
+          <div class="sec-cnt sec-cnt-blue">
+            <span>🔗</span><span>Блок. ссылок сегодня</span>
+            <strong>{al_stats.get("today",0)}</strong>
+          </div>
+          <div class="sec-cnt {"sec-cnt-green" if nm_active else "sec-cnt-dim"}">
+            <span>🌙</span><span>Ночной режим</span>
+            <strong>{"АКТИВЕН" if nm_active else "ВЫКЛЮЧЕН"}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-grid">
+
+        <!-- ── НОЧНОЙ РЕЖИМ ───────────────────── -->
+        <div class="sec-card">
+          <div class="sec-card-head">
+            <div class="sec-card-title">{dot(nm_active if nm_enabled else False)} Ночной режим</div>
+            <div class="sec-force-btns">
+              <button class="btn-force btn-force-on"  onclick="forceNight({cid},true)">▶ Вкл</button>
+              <button class="btn-force btn-force-off" onclick="forceNight({cid},false)">■ Выкл</button>
+            </div>
+          </div>
+          <form method="POST">
+            <input type="hidden" name="section" value="night_mode">
+            {tog("enabled","Включить ночной режим",nm_cfg.get("enabled",False))}
+            <div class="sec-time-row">
+              <div><label>Начало</label>
+                <input class="form-control" type="time" name="start_time"
+                  value="{nm_cfg.get("start_time","23:00")}"></div>
+              <div><label>Конец</label>
+                <input class="form-control" type="time" name="end_time"
+                  value="{nm_cfg.get("end_time","07:00")}"></div>
+            </div>
+            <div class="sec-sublabel">Ограничения</div>
+            {tog("read_only","🔇 Полный запрет (только чтение)",nm_cfg.get("read_only",False))}
+            {tog("block_media","🖼 Блокировать медиа",nm_cfg.get("block_media",True))}
+            {tog("block_stickers","😊 Блокировать стикеры",nm_cfg.get("block_stickers",True))}
+            {tog("block_voice","🎤 Блокировать голосовые",nm_cfg.get("block_voice",True))}
+            {tog("block_files","📎 Блокировать файлы",nm_cfg.get("block_files",False))}
+            {tog("block_forwards","↩️ Блокировать форварды",nm_cfg.get("block_forwards",True))}
+            <div class="sec-sublabel">Поведение</div>
+            {tog("notify","📢 Уведомлять чат",nm_cfg.get("notify",True))}
+            {tog("delete_violations","🗑 Удалять нарушения",nm_cfg.get("delete_violations",True))}
+            {tog("warn_violators","⚠️ Предупреждать нарушителей",nm_cfg.get("warn_violators",False))}
+            <div class="sec-field-row">
+              <label>Замедленный режим (сек, 0=выкл)</label>
+              <input class="form-control" type="number" name="slowmode" min="0" max="600"
+                value="{nm_cfg.get("slowmode",30)}" style="width:90px">
+            </div>
+            <div class="sec-field-row">
+              <label>Сообщение при включении</label>
+              <textarea class="form-control sec-ta" name="msg_start">{nm_cfg.get("msg_start","🌙 Ночной режим активирован")}</textarea>
+            </div>
+            <div class="sec-field-row">
+              <label>Сообщение при выключении</label>
+              <textarea class="form-control sec-ta" name="msg_end">{nm_cfg.get("msg_end","☀️ Доброе утро!")}</textarea>
+            </div>
+            <button type="submit" class="btn btn-primary sec-save-btn">💾 Сохранить</button>
+          </form>
+        </div>
+
+        <!-- ── АНТИРЕЙД + СКАМ ────────────────── -->
+        <div class="sec-card">
+          <div class="sec-card-head">
+            <div class="sec-card-title">{dot("warn" if rd_stats.get("active_raids",0) > 0 else ar_cfg.get("enabled",False))} Антирейд + Скам</div>
+          </div>
+          <form method="POST">
+            <input type="hidden" name="section" value="antiraid">
+            {tog("enabled","Антирейд включён",ar_cfg.get("enabled",True))}
+            {tog("scam_check","🤖 Детектор скам-аккаунтов",ar_cfg.get("scam_check",True))}
+            {tog("notify_admins","🔔 Уведомлять администраторов",ar_cfg.get("notify_admins",True))}
+            <div class="sec-sublabel">Порог рейда</div>
+            <div class="sec-time-row">
+              <div><label>Входов за окно</label>
+                <input class="form-control" type="number" name="threshold" min="3" max="100"
+                  value="{ar_cfg.get("threshold",7)}"></div>
+              <div><label>Окно (сек)</label>
+                <input class="form-control" type="number" name="window_secs" min="5" max="300"
+                  value="{ar_cfg.get("window_secs",10)}"></div>
+            </div>
+            <div class="sec-sublabel">Действие при рейде</div>
+            <select class="form-control" name="action" style="margin-bottom:10px;">
+              {action_opts_ar}
+            </select>
+            <div class="sec-time-row">
+              <div><label>Блокировка (мин)</label>
+                <input class="form-control" type="number" name="lock_minutes" min="1" max="1440"
+                  value="{ar_cfg.get("lock_minutes",10)}"></div>
+              <div><label>Слоумод (сек)</label>
+                <input class="form-control" type="number" name="slowmode_delay" min="5" max="600"
+                  value="{ar_cfg.get("slowmode_delay",30)}"></div>
+            </div>
+            <div class="sec-sublabel">Порог скама (сейчас {ar_cfg.get("scam_threshold",60)}%)</div>
+            <input type="range" name="scam_threshold" min="20" max="100"
+              value="{ar_cfg.get("scam_threshold",60)}" class="sec-range"
+              oninput="this.previousElementSibling.textContent='Порог скама (сейчас '+this.value+'%)'">
+            <div class="sec-range-labels"><span>Агрессивно (20)</span><span>Строго (100)</span></div>
+            <button type="submit" class="btn btn-primary sec-save-btn">💾 Сохранить</button>
+          </form>
+        </div>
+
+        <!-- ── АНТИЛИНК ───────────────────────── -->
+        <div class="sec-card">
+          <div class="sec-card-head">
+            <div class="sec-card-title">{dot(al_cfg.get("enabled",False))} Антилинк</div>
+            <span class="sec-stat-pill sec-stat-red">{al_stats.get("total",0)} блок.</span>
+          </div>
+          <form method="POST">
+            <input type="hidden" name="section" value="antilink">
+            {tog("enabled","Антилинк включён",al_cfg.get("enabled",False))}
+            {tog("block_tg_invites","📨 Блок. Telegram-инвайты",al_cfg.get("block_tg_invites",True))}
+            {tog("block_masked","🎭 Блок. замаскированные ссылки",al_cfg.get("block_masked",True))}
+            {tog("allow_admins","👑 Разрешить администраторам",al_cfg.get("allow_admins",True))}
+            {tog("warn_on_del","⚠️ Предупреждать при удалении",al_cfg.get("warn_on_del",True))}
+            <div class="sec-sublabel">Действие при нарушении</div>
+            <select class="form-control" name="action" style="margin-bottom:12px;">
+              {action_opts_al}
+            </select>
+            <div class="sec-sublabel">Белый список доменов (по одному на строку)</div>
+            <textarea class="form-control sec-ta sec-ta-lg" name="whitelist">{wl_val}</textarea>
+            <button type="submit" class="btn btn-primary sec-save-btn">💾 Сохранить</button>
+          </form>
+        </div>
+
+        <!-- ── ПРОВЕРКА АВАТАРА ───────────────── -->
+        <div class="sec-card">
+          <div class="sec-card-head">
+            <div class="sec-card-title">{dot(av_cfg.get("enabled",False))} Проверка аватара</div>
+          </div>
+          <form method="POST">
+            <input type="hidden" name="section" value="avatarcheck">
+            {tog("enabled","Проверка аватара при входе",av_cfg.get("enabled",False))}
+            <div class="sec-sublabel">Действие при отсутствии аватара</div>
+            <select class="form-control" name="action" style="margin-bottom:10px;">
+              {action_opts_av}
+            </select>
+            <div class="sec-field-row">
+              <label>Мут на (мин, при действии «Замьютить»)</label>
+              <input class="form-control" type="number" name="mute_mins" min="1" max="10080"
+                value="{av_cfg.get("mute_mins",60)}" style="width:90px">
+            </div>
+            <button type="submit" class="btn btn-primary sec-save-btn">💾 Сохранить</button>
+          </form>
+        </div>
+
+        <!-- ── ЛОГ СОБЫТИЙ ────────────────────── -->
+        <div class="sec-card sec-card-full">
+          <div class="sec-card-head">
+            <div class="sec-card-title">📋 Последние события</div>
+          </div>
+          <div class="sec-log-grid">
+            <div>
+              <div class="sec-sublabel" style="margin-bottom:8px;">🚨 Рейды</div>
+              {rd_log_html}
+            </div>
+            <div>
+              <div class="sec-sublabel" style="margin-bottom:8px;">🤖 Скам-аккаунты</div>
+              {scam_log_html}
+            </div>
+            <div>
+              <div class="sec-sublabel" style="margin-bottom:8px;">🔗 Блокировки ссылок</div>
+              {al_log_html}
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /.sec-grid -->
+    </div><!-- /.container -->
+
+    <style>
+    .sec-topbar {{ display:flex; align-items:center; gap:16px; margin-bottom:20px; flex-wrap:wrap; }}
+    .sec-chat-sel {{ max-width:260px; }}
+    .sec-counters {{ display:flex; gap:10px; flex-wrap:wrap; }}
+    .sec-cnt {{ display:flex; align-items:center; gap:6px; padding:6px 12px;
+                border-radius:8px; font-size:13px; border:1px solid var(--br1); }}
+    .sec-cnt strong {{ font-size:15px; font-weight:700; margin-left:4px; }}
+    .sec-cnt-red  {{ border-color:rgba(242,63,66,.3);  color:var(--red);   background:var(--red-g); }}
+    .sec-cnt-ylw  {{ border-color:rgba(240,177,50,.3); color:var(--ylw);   background:var(--ylw-g); }}
+    .sec-cnt-blue {{ border-color:rgba(59,130,246,.3); color:var(--blue);  background:var(--blue-g); }}
+    .sec-cnt-green{{ border-color:rgba(35,165,90,.3);  color:var(--green); background:var(--green-g); }}
+    .sec-cnt-dim  {{ border-color:var(--br1); color:var(--t3); }}
+    .sec-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }}
+    .sec-card {{ background:var(--bg3); border:1px solid var(--br1); border-radius:var(--r2); padding:20px; }}
+    .sec-card-full {{ grid-column:1 / -1; }}
+    .sec-card-head {{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }}
+    .sec-card-title {{ display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:var(--t1); }}
+    .sdot {{ display:inline-block; width:8px; height:8px; border-radius:50%; flex-shrink:0; }}
+    .sdot-on   {{ background:#23a55a; box-shadow:0 0 6px #23a55a; }}
+    .sdot-off  {{ background:var(--t3); }}
+    .sdot-warn {{ background:var(--ylw); box-shadow:0 0 6px var(--ylw); }}
+    .sec-toggle-row {{ display:flex; align-items:center; justify-content:space-between;
+                       padding:7px 0; border-bottom:1px solid var(--br0); cursor:pointer;
+                       font-size:13px; color:var(--t2); gap:8px; }}
+    .sec-toggle-row:last-of-type {{ border-bottom:none; }}
+    .sec-cb {{ display:none; }}
+    .sec-slider {{ position:relative; width:36px; height:20px; flex-shrink:0;
+                   background:var(--br2); border-radius:10px; transition:.2s; }}
+    .sec-slider::before {{ content:""; position:absolute; width:14px; height:14px;
+                           background:#fff; border-radius:50%; top:3px; left:3px; transition:.2s; }}
+    .sec-cb:checked + .sec-slider {{ background:var(--acc); }}
+    .sec-cb:checked + .sec-slider::before {{ transform:translateX(16px); }}
+    .sec-sublabel {{ font-size:11px; font-weight:600; text-transform:uppercase;
+                     letter-spacing:.06em; color:var(--t3); margin:14px 0 6px; }}
+    .sec-time-row {{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }}
+    .sec-time-row label {{ font-size:11px; color:var(--t3); display:block; margin-bottom:4px; }}
+    .sec-field-row {{ margin:10px 0; }}
+    .sec-field-row label {{ font-size:12px; color:var(--t2); display:block; margin-bottom:4px; }}
+    .sec-ta {{ resize:vertical; min-height:64px; font-size:12px; }}
+    .sec-ta-lg {{ min-height:110px; }}
+    .sec-save-btn {{ width:100%; margin-top:16px; }}
+    .sec-range {{ width:100%; margin:4px 0; accent-color:var(--acc); }}
+    .sec-range-labels {{ display:flex; justify-content:space-between; font-size:10px; color:var(--t3); margin-bottom:10px; }}
+    .sec-stat-pill {{ padding:2px 10px; border-radius:99px; font-size:11px; font-weight:600; }}
+    .sec-stat-red {{ background:var(--red-g); color:var(--red); }}
+    .sec-force-btns {{ display:flex; gap:6px; }}
+    .btn-force {{ padding:4px 12px; border-radius:6px; border:1px solid var(--br2);
+                  background:transparent; cursor:pointer; font-size:12px; font-weight:500;
+                  transition:.15s; color:var(--t1); }}
+    .btn-force-on:hover  {{ border-color:rgba(35,165,90,.5); color:var(--green); background:var(--green-g); }}
+    .btn-force-off:hover {{ border-color:rgba(242,63,66,.5); color:var(--red);   background:var(--red-g); }}
+    .sec-log-grid {{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; }}
+    .ev-row {{ display:flex; align-items:center; gap:8px; padding:6px 0;
+               border-bottom:1px solid var(--br0); font-size:12px; flex-wrap:wrap; }}
+    .ev-row:last-child {{ border-bottom:none; }}
+    .ev-badge {{ padding:2px 7px; border-radius:4px; font-size:10px; font-weight:700; flex-shrink:0; }}
+    .ev-red  {{ background:var(--red-g);  color:var(--red); }}
+    .ev-ylw  {{ background:var(--ylw-g);  color:var(--ylw); }}
+    .ev-time {{ margin-left:auto; color:var(--t3); font-size:11px; white-space:nowrap; }}
+    .ev-empty {{ color:var(--t3); font-size:13px; padding:12px 0; }}
+    .flash {{ padding:10px 16px; border-radius:8px; margin-bottom:16px; font-size:13px; }}
+    .flash-ok {{ background:var(--green-g); color:var(--green); border:1px solid rgba(35,165,90,.3); }}
+    @media(max-width:900px){{
+      .sec-grid {{ grid-template-columns:1fr; }}
+      .sec-card-full {{ grid-column:1; }}
+      .sec-log-grid {{ grid-template-columns:1fr; }}
+    }}
+    </style>
+
+    <script>
+    async function forceNight(cid, activate) {{
+      const r = await fetch('/api/security/force_night', {{
+        method:'POST', headers:{{'Content-Type':'application/json'}},
+        body: JSON.stringify({{cid, activate}})
+      }});
+      const d = await r.json();
+      if(d.ok) {{ location.reload(); }}
+      else {{ alert('Ошибка: ' + (d.error||'?')); }}
+    }}
+    </script>
+    """
+
+    return web.Response(text=page(body), content_type="text/html")
+
+
+def _fmt_ts(ts):
+    try:
+        return datetime.fromtimestamp(int(ts)).strftime("%d.%m %H:%M")
+    except:
+        return "—"
+
+
+async def api_force_night(request: web.Request) -> web.Response:
+    sess = _get_session(request)
+    if not sess:
+        return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+    try:
+        data     = await request.json()
+        cid      = int(data.get("cid", 0))
+        activate = bool(data.get("activate", True))
+        if not cid:
+            return web.json_response({"ok": False, "error": "cid required"})
+        if activate:
+            await night_mode.force_activate(cid)
+        else:
+            await night_mode.force_deactivate(cid)
+        return web.json_response({"ok": True})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)})
+
+
+async def api_force_raid(request: web.Request) -> web.Response:
+    sess = _get_session(request)
+    if not sess:
+        return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+    return web.json_response({"ok": True})
+
+
+async def api_security_stats(request: web.Request) -> web.Response:
+    sess = _get_session(request)
+    if not sess:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+    try:
+        cid_raw = request.rel_url.query.get("cid", "")
+        cid     = int(cid_raw) if cid_raw.isdigit() else 0
+        rd      = antiraid.get_raid_stats_for_dashboard()
+        al      = sf.get_antilink_stats(cid) if cid else sf.get_antilink_stats()
+        nm_on   = night_mode.is_active(cid) if cid else False
+        return web.json_response({
+            "ok": True,
+            "raids_today":       rd.get("raids_today", 0),
+            "scams_total":       rd.get("scams_total", 0),
+            "active_raids":      rd.get("active_raids", 0),
+            "antilink_today":    al.get("today", 0),
+            "night_mode_active": nm_on,
+        })
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)})

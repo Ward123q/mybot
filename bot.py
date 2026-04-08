@@ -30,6 +30,9 @@ import features
 import notifications as notif
 import shared
 import chat_settings as cs
+import antiraid
+import night_mode
+import security_features as sf
 
 DB_FILE_MAIN = "skinvault.db"
 
@@ -1819,6 +1822,11 @@ class StatsMiddleware(BaseMiddleware):
                 for word in event.text.lower().split():
                     if len(word) > 3:
                         word_stats[cid][word] += 1
+            # ── АНТИЛИНК ───────────────────────────────────────────
+            try:
+                if await sf.check_message(event):
+                    return
+            except: pass
         return await handler(event, data)
 
 class SpecialEffectsMiddleware(BaseMiddleware):
@@ -2024,6 +2032,8 @@ async def on_new_member(message: Message):
 
         # 🌐 АнтиVPN проверка
         asyncio.create_task(_process_new_member_vpn(message, member))
+        # 📸 Аватар + вотчлист
+        asyncio.create_task(sf.check_new_member(message, member))
 
 @dp.message(F.left_chat_member)
 async def on_left_member(message: Message):
@@ -4070,10 +4080,10 @@ async def cmd_rep(message: Message):
         f"╔══════════════════╗\n║  {'🌟' if score>=0 else '💀'}  РЕПУТАЦИЯ    ║\n╚══════════════════╝\n\n👤 {target.mention_html()}\n📈 Счёт: <b>{score:+d}</b>\n──────────────────",
         parse_mode="HTML")
 
-# ── ВЕРИФИКАЦИЯ ПО КОДУ — должна быть до всех текстовых обработчиков ──
-@dp.message(F.text & F.chat.type.in_({"group", "supergroup"}))
+# ── ВЕРИФИКАЦИЯ ПО КОДУ — только 6-значные числа, не глотает чужие сообщения ──
+@dp.message(F.text.regexp(r'^\d{6}$') & F.chat.type.in_({"group", "supergroup"}))
 async def handle_verify_code_input(message: Message):
-    """Проверяет введённый код верификации — ПРИОРИТЕТ ВЫШЕ ВСЕХ"""
+    """Проверяет введённый 6-значный код верификации"""
     if not message.text: return
     cid = message.chat.id
     uid = message.from_user.id
@@ -4081,7 +4091,7 @@ async def handle_verify_code_input(message: Message):
 
     # Проверяем есть ли ожидающая верификация для этого юзера
     if cid not in _code_verify or uid not in _code_verify[cid]:
-        return
+        return  # не в процессе верификации — пропускаем, не поглощаем
     data = _code_verify[cid][uid]
     if text != data["code"]:
         return  # не тот код — молча игнорируем, не блокируем чат
@@ -13354,17 +13364,20 @@ async def cmd_antivpn(message: Message, command: CommandObject):
     args = command.args.lower().split()
     if args[0] == "on":
         _antivpn_settings[cid] = {**current, "enabled": True}
+        _antivpn_save(cid, _antivpn_settings[cid])
         await reply_auto_delete(message,
             "╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
             "✅ АнтиVPN <b>включён</b>!\n"
             "<i>Новые участники будут проверяться.</i>", parse_mode="HTML")
     elif args[0] == "off":
         _antivpn_settings[cid] = {**current, "enabled": False}
+        _antivpn_save(cid, _antivpn_settings[cid])
         await reply_auto_delete(message,
             "╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
             "❌ АнтиVPN <b>выключен</b>.", parse_mode="HTML")
     elif args[0] == "action" and len(args) > 1 and args[1] in ("warn", "kick", "ban"):
         _antivpn_settings[cid] = {**current, "action": args[1]}
+        _antivpn_save(cid, _antivpn_settings[cid])
         await reply_auto_delete(message,
             f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
             f"⚙️ Действие изменено: <b>{args[1]}</b>", parse_mode="HTML")
@@ -13775,8 +13788,32 @@ _antivpn_settings: dict = {}
 _vpn_check_cache: dict = {}
 
 
+def _antivpn_db_init():
+    conn = db_connect()
+    conn.execute("""CREATE TABLE IF NOT EXISTS antivpn_settings
+        (cid INTEGER PRIMARY KEY, enabled INTEGER DEFAULT 0, action TEXT DEFAULT 'kick')""")
+    conn.commit()
+    for row in conn.execute("SELECT cid, enabled, action FROM antivpn_settings"):
+        _antivpn_settings[row["cid"]] = {
+            "enabled": bool(row["enabled"]),
+            "action":  row["action"] or "kick"
+        }
+    conn.close()
+
+
+def _antivpn_save(cid: int, cfg: dict):
+    conn = db_connect()
+    conn.execute(
+        "INSERT INTO antivpn_settings (cid, enabled, action) VALUES (?,?,?) "
+        "ON CONFLICT(cid) DO UPDATE SET enabled=excluded.enabled, action=excluded.action",
+        (cid, 1 if cfg.get("enabled") else 0, cfg.get("action", "kick"))
+    )
+    conn.commit()
+    conn.close()
+
+
 def _antivpn_get(cid: int) -> dict:
-    return _antivpn_settings.get(cid, {"enabled": False, "action": "warn"})
+    return _antivpn_settings.get(cid, {"enabled": False, "action": "kick"})
 
 
 async def _check_vpn(uid: int) -> tuple[bool, str]:
@@ -14216,10 +14253,14 @@ async def main():
     shared.init(bot, ADMIN_IDS, OWNER_ID, LOG_CHANNEL_ID)
     cs.init_tables()
     cs.set_bot(bot)
+    _antivpn_db_init()  # загружаем antivpn настройки из БД
     dashboard.set_bot(bot, ADMIN_IDS)
     tkt.set_bot(bot)
     await features.init(bot, dp, ADMIN_IDS, OWNER_ID)
     await notif.init(bot, dp)
+    await antiraid.init(bot, dp, ADMIN_IDS, LOG_CHANNEL_ID)
+    await night_mode.init(bot)
+    await sf.init(bot, dp, ADMIN_IDS, LOG_CHANNEL_ID)
 
     # ── Инициализация систем ─────────────────────────────
     _triggers_db_init()
