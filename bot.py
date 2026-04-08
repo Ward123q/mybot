@@ -13783,162 +13783,194 @@ async def _check_vpn(uid: int) -> tuple[bool, str]:
     return False, ""
 
 
+# ── Хранилище кодовых верификаций: {cid: {uid: {code, name, msg_id, ts}}}
+_code_verify: dict = {}
+
 async def _process_new_member_vpn(message: Message, member):
-    """Полная антиVPN проверка: профиль + WebApp верификация"""
+    """Верификация по коду — без блокировки чата, 90 секунд"""
     cid = message.chat.id
     cfg = _antivpn_get(cid)
     if not cfg.get("enabled"): return
 
-    uid = member.id
+    uid  = member.id
     name = member.full_name
-    action = cfg.get("action", "kick")
 
-    # ── Шаг 1: Проверка профиля ──────────────────────────
-    risk_score = 0
-    risk_flags = []
+    # Генерируем 6-значный код
+    import random as _r
+    code = str(_r.randint(100000, 999999))
 
-    # Нет username
-    if not member.username:
-        risk_score += 2
-        risk_flags.append("нет username")
+    # Кнопка одобрения для админов
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text="✅ Одобрить вручную",
+            callback_data=f"verifyapprove:{cid}:{uid}"
+        ),
+        InlineKeyboardButton(
+            text="🚪 Кикнуть",
+            callback_data=f"verifykick:{cid}:{uid}"
+        ),
+    ]])
 
-    # Нет фото профиля
+    # Отправляем сообщение в чат — без мута
     try:
-        photos = await bot.get_user_profile_photos(uid, limit=1)
-        if photos.total_count == 0:
-            risk_score += 2
-            risk_flags.append("нет фото")
-    except: pass
-
-    # Имя состоит только из цифр или очень короткое
-    import re as _re
-    if _re.match(r'^[\d\s]+$', name):
-        risk_score += 3
-        risk_flags.append("имя из цифр")
-    if len(name) <= 2:
-        risk_score += 2
-        risk_flags.append("очень короткое имя")
-
-    # Имя на кириллице но без фото и username — подозрительно меньше
-    # Имя на латинице/иероглифах при остальных признаках
-    if not _re.search(r'[а-яёА-ЯЁ]', name) and risk_score >= 2:
-        risk_score += 1
-        risk_flags.append("не кириллица")
-
-    # Premium аккаунт — снижаем риск
-    if getattr(member, 'is_premium', False):
-        risk_score -= 3
-
-    # ── Если высокий риск — сразу действуем ─────────────
-    if risk_score >= 5:
-        flags_str = ", ".join(risk_flags)
-        await log_action(
-            f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-            f"⚠️ <b>Подозрительный профиль</b>\n"
-            f"👤 {name} (<code>{uid}</code>)\n"
-            f"🔍 Признаки: {flags_str}\n"
-            f"📊 Риск: {risk_score}/10\n"
-            f"⚖️ Действие: <b>{action}</b>\n"
-            f"💬 Чат: {message.chat.title}"
-        )
-        try:
-            if action == "ban":
-                await bot.ban_chat_member(cid, uid)
-                sent = await message.answer(
-                    f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-                    f"👤 {member.mention_html()}\n"
-                    f"🔍 Подозрительный профиль: {flags_str}\n"
-                    f"🔨 <b>Забанен автоматически</b>", parse_mode="HTML")
-                asyncio.create_task(_auto_delete_after(sent, 20))
-                return
-            elif action in ("kick", "warn"):
-                await bot.ban_chat_member(cid, uid)
-                await bot.unban_chat_member(cid, uid)
-                sent = await message.answer(
-                    f"╔══════════════════╗\n║  🌐  АНТИVPN      ║\n╚══════════════════╝\n\n"
-                    f"👤 {member.mention_html()}\n"
-                    f"🔍 Подозрительный профиль: {flags_str}\n"
-                    f"🚪 <b>Кикнут автоматически</b>", parse_mode="HTML")
-                asyncio.create_task(_auto_delete_after(sent, 20))
-                return
-        except: pass
-
-    # ── Шаг 2: WebApp верификация (всегда если включена) ─
-    render_url = os.getenv("RENDER_URL", "https://mybot-1s9l.onrender.com")
-    verify_url = f"{render_url}/verify"
-
-    # Мутим на время верификации
-    try:
-        await bot.restrict_chat_member(
-            cid, uid,
-            permissions=ChatPermissions(can_send_messages=False),
-            until_date=datetime.now() + timedelta(minutes=10)
-        )
-    except: pass
-
-    # Сохраняем в очередь ожидания
-    _verify_pending[uid] = {
-        "cid": cid, "name": name,
-        "action": action, "ts": _time_module.time(),
-        "risk_score": risk_score, "risk_flags": risk_flags
-    }
-
-    # Отправляем кнопку верификации
-    try:
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(
-                text="🛡 Пройти верификацию",
-                web_app=WebAppInfo(url=verify_url)
-            )
-        ]])
-        await bot.send_message(
-            uid,
-            f"╔══════════════════╗\n║  🛡  ВЕРИФИКАЦИЯ  ║\n╚══════════════════╝\n\n"
-            f"👋 Привет, <b>{name}</b>!\n\n"
-            f"Для доступа в чат нужно пройти быструю проверку.\n"
-            f"⏱ У тебя есть <b>10 минут</b>.\n\n"
-            f"Нажми кнопку ниже 👇",
+        sent = await message.answer(
+            f"╔══════════════════╗\n"
+            f"║  🛡  ВЕРИФИКАЦИЯ  ║\n"
+            f"╚══════════════════╝\n\n"
+            f"👤 {member.mention_html()}\n"
+            f"──────────────────\n"
+            f"Введи код в чат в течение <b>90 секунд</b>:\n\n"
+            f"<code>{code}</code>\n\n"
+            f"<i>Или админ может одобрить вручную 👇</i>",
             parse_mode="HTML",
             reply_markup=kb
         )
+        msg_id = sent.message_id
     except:
-        # Если не можем написать в ЛС — пишем в чат
-        try:
-            risk_text = f"\n⚠️ Признаки: {', '.join(risk_flags)}" if risk_flags else ""
-            kb = InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(
-                    text="🛡 Пройти верификацию",
-                    web_app=WebAppInfo(url=verify_url)
-                )
-            ]])
-            sent = await message.answer(
-                f"╔══════════════════╗\n║  🛡  ВЕРИФИКАЦИЯ  ║\n╚══════════════════╝\n\n"
-                f"👤 {member.mention_html()}, пройди верификацию чтобы получить доступ к чату.{risk_text}\n"
-                f"⏱ <b>10 минут</b>",
-                parse_mode="HTML", reply_markup=kb
-            )
-            asyncio.create_task(_auto_delete_after(sent, 600))
-        except: pass
+        return
 
-    # Автокик если не прошёл верификацию за 10 минут
-    asyncio.create_task(_verify_timeout_kick(uid, cid, name, action))
+    # Сохраняем данные верификации
+    if cid not in _code_verify:
+        _code_verify[cid] = {}
+    _code_verify[cid][uid] = {
+        "code": code,
+        "name": name,
+        "msg_id": msg_id,
+        "ts": _time_module.time()
+    }
+
+    # Запускаем таймер 90 секунд
+    asyncio.create_task(_verify_code_timeout(cid, uid, name, msg_id))
 
 
-async def _verify_timeout_kick(uid: int, cid: int, name: str, action: str):
-    """Кикает юзера если не прошёл верификацию за 10 минут"""
-    await asyncio.sleep(600)
-    if uid not in _verify_pending: return  # уже прошёл
-    _verify_pending.pop(uid, None)
+async def _verify_code_timeout(cid: int, uid: int, name: str, msg_id: int):
+    """Кикает если не ввёл код за 90 секунд"""
+    await asyncio.sleep(90)
+    if cid not in _code_verify or uid not in _code_verify[cid]:
+        return  # уже верифицирован или одобрен вручную
+    _code_verify[cid].pop(uid, None)
     try:
         await bot.ban_chat_member(cid, uid)
         await bot.unban_chat_member(cid, uid)
-        await log_action(
-            f"╔══════════════════╗\n║  🛡  ВЕРИФИКАЦИЯ  ║\n╚══════════════════╝\n\n"
-            f"⏱ Таймаут верификации\n"
-            f"👤 {name} (<code>{uid}</code>)\n"
-            f"🚪 Кикнут за неактивность"
-        )
     except: pass
+    try:
+        await bot.edit_message_text(
+            f"╔══════════════════╗\n"
+            f"║  🛡  ВЕРИФИКАЦИЯ  ║\n"
+            f"╚══════════════════╝\n\n"
+            f"👤 <b>{name}</b>\n"
+            f"⏱ Время вышло — кикнут.",
+            chat_id=cid, message_id=msg_id,
+            parse_mode="HTML"
+        )
+        asyncio.create_task(_auto_delete_after_id(cid, msg_id, 10))
+    except: pass
+    await log_action(
+        f"🛡 Верификация провалена\n"
+        f"👤 {name} (<code>{uid}</code>)\n"
+        f"⏱ Не ввёл код за 90 сек — кикнут\n"
+        f"💬 Чат: <code>{cid}</code>"
+    )
+
+
+async def _auto_delete_after_id(cid: int, msg_id: int, delay: int):
+    await asyncio.sleep(delay)
+    try: await bot.delete_message(cid, msg_id)
+    except: pass
+
+
+@dp.message(F.text & F.chat.type.in_({"group", "supergroup"}))
+async def handle_verify_code_input(message: Message):
+    """Проверяет введённый код верификации"""
+    cid = message.chat.id
+    uid = message.from_user.id
+    text = (message.text or "").strip()
+
+    if cid not in _code_verify or uid not in _code_verify[cid]:
+        return
+    data = _code_verify[cid][uid]
+    if text != data["code"]:
+        return  # не тот код — молча игнорируем
+
+    # Код совпал — верифицирован!
+    _code_verify[cid].pop(uid, None)
+
+    # Удаляем сообщение с кодом пользователя
+    try: await message.delete()
+    except: pass
+
+    # Редактируем сообщение верификации
+    try:
+        await bot.edit_message_text(
+            f"╔══════════════════╗\n"
+            f"║  ✅  ВЕРИФИКАЦИЯ  ║\n"
+            f"╚══════════════════╝\n\n"
+            f"👤 {message.from_user.mention_html()}\n"
+            f"✅ Код принят — добро пожаловать!",
+            chat_id=cid, message_id=data["msg_id"],
+            parse_mode="HTML"
+        )
+        asyncio.create_task(_auto_delete_after_id(cid, data["msg_id"], 10))
+    except: pass
+
+
+@dp.callback_query(F.data.startswith("verifyapprove:"))
+async def cb_verify_approve(call: CallbackQuery):
+    if not await check_admin(call.message):
+        await call.answer("⛔ Только для админов", show_alert=True); return
+    _, cid_s, uid_s = call.data.split(":")
+    cid, uid = int(cid_s), int(uid_s)
+
+    if cid not in _code_verify or uid not in _code_verify[cid]:
+        await call.answer("✅ Уже верифицирован", show_alert=True)
+        try: await call.message.delete()
+        except: pass
+        return
+
+    data = _code_verify[cid].pop(uid)
+    await call.answer(f"✅ {data['name']} одобрен!")
+    try:
+        await call.message.edit_text(
+            f"╔══════════════════╗\n"
+            f"║  ✅  ВЕРИФИКАЦИЯ  ║\n"
+            f"╚══════════════════╝\n\n"
+            f"👤 <b>{data['name']}</b>\n"
+            f"✅ Одобрен администратором {call.from_user.full_name}",
+            parse_mode="HTML"
+        )
+        asyncio.create_task(_auto_delete_after_id(cid, call.message.message_id, 10))
+    except: pass
+
+
+@dp.callback_query(F.data.startswith("verifykick:"))
+async def cb_verify_kick(call: CallbackQuery):
+    if not await check_admin(call.message):
+        await call.answer("⛔ Только для админов", show_alert=True); return
+    _, cid_s, uid_s = call.data.split(":")
+    cid, uid = int(cid_s), int(uid_s)
+
+    data = _code_verify.get(cid, {}).pop(uid, None)
+    name = data["name"] if data else f"ID{uid}"
+
+    try:
+        await bot.ban_chat_member(cid, uid)
+        await bot.unban_chat_member(cid, uid)
+    except: pass
+
+    await call.answer(f"🚪 {name} кикнут!")
+    try:
+        await call.message.edit_text(
+            f"╔══════════════════╗\n"
+            f"║  🚪  ВЕРИФИКАЦИЯ  ║\n"
+            f"╚══════════════════╝\n\n"
+            f"👤 <b>{name}</b>\n"
+            f"🚪 Кикнут администратором {call.from_user.full_name}",
+            parse_mode="HTML"
+        )
+        asyncio.create_task(_auto_delete_after_id(cid, call.message.message_id, 10))
+    except: pass
+
+
 
 
 @dp.callback_query(F.data.startswith("vpn_"))
