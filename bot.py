@@ -7571,28 +7571,37 @@ async def cmd_start_ref(message: Message, command: CommandObject):
     _, lvl_title = get_level_title(user_lvl)
 
     await message.answer(
-        f"🛡 <b>CHAT GUARD</b>\n"
-        f"<i>Система управления и модерации</i>\n\n"
-        f"Здравствуйте, <b>{name}</b>.\n\n"
-        f"<b>Ваш профиль</b>\n"
-        f"· Уровень: <b>{user_lvl}</b> — {lvl_title}\n"
-        f"· Очки опыта: <b>{user_xp} XP</b>\n"
-        f"· Предупреждений: <b>{user_warns}</b>\n\n"
-        f"<b>Возможности системы</b>\n"
-        f"· Модерация — предупреждения, ограничения, блокировки\n"
-        f"· XP и уровни — прогрессия до 500 уровня\n"
-        f"· Тикеты — система обращений в поддержку\n"
-        f"· Дашборд — веб-панель администратора\n\n"
-        f"<i>Аптайм: {h}ч {m}м</i>",
+        f"╔━━━━━━━━━━━━━━━━━━━━╗\n"
+        f"║  🛡️  <b>CHAT GUARD</b>  ║\n"
+        f"╚━━━━━━━━━━━━━━━━━━━━╝\n"
+        f"\n"
+        f"👋 Привет, <b>{name}</b>!\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n"
+        f"🎖 <b>Твой статус</b>\n"
+        f"├ 📊 Уровень: <b>{user_lvl}</b> · {lvl_title}\n"
+        f"├ ✨ Опыт: <b>{user_xp} XP</b>\n"
+        f"└ ⚠️ Предупреждений: <b>{user_warns}</b>\n"
+        f"\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔧 <b>Возможности</b>\n"
+        f"├ 🛡 Модерация чата\n"
+        f"├ 📈 XP · Уровни · Репутация\n"
+        f"├ 👥 Друзья · Отношения · Подарки\n"
+        f"├ 🎫 Тикеты поддержки\n"
+        f"└ 🌐 Веб-дашборд админа\n"
+        f"\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<i>⏱ Аптайм: {h}ч {m}м</i>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Команды",          callback_data="start:help"),
-             InlineKeyboardButton(text="Мой профиль",      callback_data="start:profile")],
-            [InlineKeyboardButton(text="Открыть тикет",    callback_data="start:ticket"),
-             InlineKeyboardButton(text="Правила",           callback_data="start:rules")],
-            [InlineKeyboardButton(text="Мои друзья",        callback_data="start:friends"),
-             InlineKeyboardButton(text="Комплимент",         callback_data="start:compliment")],
-            [InlineKeyboardButton(text="Веб-дашборд",
+            [InlineKeyboardButton(text="📋 Команды",        callback_data="start:help"),
+             InlineKeyboardButton(text="👤 Профиль",        callback_data="start:profile")],
+            [InlineKeyboardButton(text="🎫 Тикет",          callback_data="start:ticket"),
+             InlineKeyboardButton(text="📜 Правила",         callback_data="start:rules")],
+            [InlineKeyboardButton(text="👥 Друзья",          callback_data="start:friends"),
+             InlineKeyboardButton(text="💌 Комплимент",      callback_data="start:compliment")],
+            [InlineKeyboardButton(text="🌐 Веб-дашборд",
              url=f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME','mybot.onrender.com')}/")],
         ])
     )
@@ -7605,24 +7614,34 @@ async def cb_start_menu(call: CallbackQuery):
 
     if action == "help":
         await call.message.edit_text(
-            f"📋 <b>Основные команды</b>\n"
+            f"╔━━━━━━━━━━━━━━━━━━━━╗\n"
+            f"║  📋  <b>КОМАНДЫ</b>  ║\n"
+            f"╚━━━━━━━━━━━━━━━━━━━━╝\n"
+            f"\n"
             f"👤 <b>Профиль</b>\n"
-            f"▸ /profile — мой профиль\n"
-            f"▸ /setbio — установить био\n"
-            f"▸ /setmood — настроение\n\n"
+            f"├ /profile — мой профиль\n"
+            f"├ /setbio — установить биографию\n"
+            f"└ /setmood — настроение\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"👥 <b>Социалка</b>\n"
-            f"▸ /addfriend — добавить друга\n"
-            f"▸ /propose — предложить отношения\n"
-            f"▸ /gift 🌹 — подарить\n\n"
+            f"├ /addfriend — добавить друга\n"
+            f"├ /propose — предложить отношения\n"
+            f"└ /gift 🌹 — подарить подарок\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🛠 <b>Утилиты</b>\n"
-            f"▸ /music — поиск трека\n"
-            f"▸ /imagine — генерация картинки\n"
-            f"▸ /tr — перевод\n"
-            f"▸ /idea — тема для обсуждения\n\n"
+            f"├ /music — поиск трека\n"
+            f"├ /imagine — генерация картинки\n"
+            f"├ /tr — перевод текста\n"
+            f"└ /idea — тема для обсуждения\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🎫 <b>Поддержка</b>\n"
-            f"▸ /ticket — открыть тикет\n"
-            f"▸ /appeal — апелляция\n\n"
-            f"💡 В чате доступно ещё /help",
+            f"├ /ticket — открыть тикет\n"
+            f"└ /appeal — апелляция\n"
+            f"\n"
+            f"<i>💡 В чате доступен /help с полным списком</i>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")
@@ -7641,13 +7660,25 @@ async def cb_start_menu(call: CallbackQuery):
         mood = p["mood"] if p and p["mood"] else "😐 Нормально"
         bio  = p["bio"]  if p and p["bio"]  else "Не указано"
         await call.message.edit_text(
-            f"👤 <b>Профиль — {name}</b>\n"
-            f"🆔 ID: <code>{uid}</code>\n"
-            f"🏅 Уровень: <b>{user_lvl}</b> — {lvl_title}\n"
-            f"⭐ XP: <b>{user_xp}</b>\n"
-            f"{mood}\n"
-            f"📝 Био: {bio}\n"
-            f"👥 Друзей: <b>{friends}</b>\n",
+            f"╔━━━━━━━━━━━━━━━━━━━━╗\n"
+            f"║  👤  <b>МОЙ ПРОФИЛЬ</b>  ║\n"
+            f"╚━━━━━━━━━━━━━━━━━━━━╝\n"
+            f"\n"
+            f"├ 🆔 ID: <code>{uid}</code>\n"
+            f"├ 👁 Имя: <b>{name}</b>\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏆 <b>Прогресс</b>\n"
+            f"├ 📊 Уровень: <b>{user_lvl}</b> · {lvl_title}\n"
+            f"└ ✨ Опыт: <b>{user_xp} XP</b>\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🌐 <b>Личное</b>\n"
+            f"├ {mood}\n"
+            f"├ 📝 Био: {bio}\n"
+            f"└ 👥 Друзей: <b>{friends}</b>\n"
+            f"\n"
+            f"<i>Изменить: /setbio · /setmood</i>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")
@@ -7662,17 +7693,24 @@ async def cb_start_menu(call: CallbackQuery):
 
     elif action == "rules":
         await call.message.edit_text(
-            f"📄 <b>Правила чата</b>\n"
-            f"🔞 Контент 18+ — варн → бан\n"
-            f"🥴 Наркотики — бан без предупреждений\n"
-            f"📢 Реклама — мут / бан\n"
-            f"🛡 Оскорбление администрации — варн → бан\n"
-            f"🚫 Спам и флуд — мут\n\n"
+            f"╔━━━━━━━━━━━━━━━━━━━━╗\n"
+            f"║  📜  <b>ПРАВИЛА</b>  ║\n"
+            f"╚━━━━━━━━━━━━━━━━━━━━╝\n"
+            f"\n"
+            f"⚠️ <b>Нарушения и санкции</b>\n"
+            f"├ 🔞 Контент 18+ → варн → бан\n"
+            f"├ 💊 Наркотики → бан без предупреждений\n"
+            f"├ 📢 Реклама / спам → мут / бан\n"
+            f"├ 🛡 Оскорбление администрации → варн → бан\n"
+            f"└ 🌊 Флуд → мут\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🔒 <b>Конфиденциальность</b>\n"
-            f"▸ Бот не хранит личные данные\n"
-            f"▸ Анонимность соблюдается\n"
-            f"▸ Данные только для модерации\n\n"
-            f"<i>Соблюдай правила — чат будет комфортным 🤝</i>",
+            f"├ Бот не хранит личные данные\n"
+            f"├ Анонимность гарантирована\n"
+            f"└ Данные используются только для модерации\n"
+            f"\n"
+            f"<i>🤝 Соблюдай правила — чат будет комфортным для всех!</i>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")
@@ -7684,13 +7722,31 @@ async def cb_start_menu(call: CallbackQuery):
         rows = conn.execute("SELECT friend_name FROM friends WHERE uid=? LIMIT 10", (uid,)).fetchall()
         reqs = conn.execute("SELECT COUNT(*) as c FROM friend_requests WHERE to_uid=?", (uid,)).fetchone()["c"]
         conn.close()
+        header = (
+            f"╔━━━━━━━━━━━━━━━━━━━━╗\n"
+            f"║  👥  <b>МОИ ДРУЗЬЯ</b>  ║\n"
+            f"╚━━━━━━━━━━━━━━━━━━━━╝\n"
+            f"\n"
+        )
         if not rows:
-            text = f"👥 <b>Друзья</b>\n\nДрузей нет пока 😔\nДобавь через /addfriend в чате!"
+            text = (
+                header +
+                f"😔 Друзей пока нет\n"
+                f"\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"<i>Добавь первого друга командой /addfriend в чате!</i>"
+            )
         else:
-            text = f"👥 <b>Друзья ({len(rows)})</b>\n\n"
-            text += "\n".join(f"▸ {r['friend_name']}" for r in rows)
+            friends_list = "\n".join(f"├ 👤 {r['friend_name']}" for r in rows[:-1])
+            if rows:
+                friends_list += f"\n└ 👤 {rows[-1]['friend_name']}"
+            text = (
+                header +
+                f"<b>Список ({len(rows)})</b>\n"
+                f"{friends_list}\n"
+            )
         if reqs:
-            text += f"\n\n📨 Запросов в ожидании: <b>{reqs}</b>"
+            text += f"\n━━━━━━━━━━━━━━━━━━━━━━\n📨 Входящих запросов: <b>{reqs}</b>\n<i>/acceptfriend — принять</i>"
         await call.message.edit_text(text, parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")
@@ -7709,26 +7765,39 @@ async def cb_start_menu(call: CallbackQuery):
         user_xp2 = xp_data[cid2].get(uid, 0) if cid2 in xp_data else 0
         user_lvl2 = get_level(user_xp2)
         _, lvl_title2 = get_level_title(user_lvl2)
+        user_warns2 = sum(warnings[c].get(uid, 0) for c in warnings)
         await call.message.edit_text(
-            f"👋 Привет, <b>{name}</b>!\n\n"
-            f"🏅 Уровень: <b>{user_lvl2}</b> — {lvl_title2}\n"
-            f"⭐ XP: <b>{user_xp2}</b>\n"
-            f"🤖 Я умный бот-модератор с кучей функций:\n\n"
-            f"🛡 <b>Модерация</b> — варны, муты, баны\n"
-            f"⭐ <b>XP и уровни</b> — 500 уровней\n"
-            f"👥 <b>Социалка</b> — друзья, отношения\n"
-            f"🎮 <b>Развлечения</b> — 55+ аутист-команд\n"
-            f"🎫 <b>Тикеты</b> — поддержка через ЛС\n\n"
-            f"⏱ Аптайм: <b>{h}ч {m}м</b>",
+            f"╔━━━━━━━━━━━━━━━━━━━━╗\n"
+            f"║  🛡️  <b>CHAT GUARD</b>  ║\n"
+            f"╚━━━━━━━━━━━━━━━━━━━━╝\n"
+            f"\n"
+            f"👋 Привет, <b>{name}</b>!\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"\n"
+            f"🎖 <b>Твой статус</b>\n"
+            f"├ 📊 Уровень: <b>{user_lvl2}</b> · {lvl_title2}\n"
+            f"├ ✨ Опыт: <b>{user_xp2} XP</b>\n"
+            f"└ ⚠️ Предупреждений: <b>{user_warns2}</b>\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔧 <b>Возможности</b>\n"
+            f"├ 🛡 Модерация чата\n"
+            f"├ 📈 XP · Уровни · Репутация\n"
+            f"├ 👥 Друзья · Отношения · Подарки\n"
+            f"├ 🎫 Тикеты поддержки\n"
+            f"└ 🌐 Веб-дашборд админа\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>⏱ Аптайм: {h}ч {m}м</i>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📋 Команды",       callback_data="start:help"),
-                 InlineKeyboardButton(text="👤 Мой профиль",   callback_data="start:profile")],
-                [InlineKeyboardButton(text="Открыть тикет", callback_data="start:ticket"),
-                 InlineKeyboardButton(text="📜 Правила",        callback_data="start:rules")],
-                [InlineKeyboardButton(text="👥 Мои друзья",     callback_data="start:friends"),
+                [InlineKeyboardButton(text="📋 Команды",        callback_data="start:help"),
+                 InlineKeyboardButton(text="👤 Профиль",        callback_data="start:profile")],
+                [InlineKeyboardButton(text="🎫 Тикет",          callback_data="start:ticket"),
+                 InlineKeyboardButton(text="📜 Правила",         callback_data="start:rules")],
+                [InlineKeyboardButton(text="👥 Друзья",          callback_data="start:friends"),
                  InlineKeyboardButton(text="💌 Комплимент",      callback_data="start:compliment")],
-                [InlineKeyboardButton(text="🌐 Дашборд",
+                [InlineKeyboardButton(text="🌐 Веб-дашборд",
                  url=f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME','mybot.onrender.com')}/")],
             ])
         )
@@ -9172,13 +9241,20 @@ async def cmd_mypanel(message: Message):
     for cid, title in known_chats.items():
         total_w = sum(warnings[cid].values())
         new_r = sum(1 for r in report_queue.get(cid, []) if r.get("status") == "new")
-        label = f"💬 {title[:20]} | ⚡{total_w} 🚨{new_r}"
+        warn_badge = f"⚡{total_w}" if total_w else "✅"
+        rep_badge  = f"🚨{new_r}" if new_r else ""
+        label = f"💬 {title[:22]}  {warn_badge} {rep_badge}".strip()
         rows.append([InlineKeyboardButton(text=label, callback_data=f"mypanel:chat:{cid}")])
-    rows.append([InlineKeyboardButton(text="🔗 Связать чаты", callback_data="mypanel:link:0")])
-    rows.append([InlineKeyboardButton(text="✖️ Закрыть", callback_data="mypanel:close:0")])
+    rows.append([InlineKeyboardButton(text="🔗 Связать чаты", callback_data="mypanel:link:0"),
+                 InlineKeyboardButton(text="✖️ Закрыть", callback_data="mypanel:close:0")])
     await message.answer(
-        f"🌍 <b>Мульти-чат панель</b>\n"
-        f"Чатов: <b>{len(known_chats)}</b>\n\nВыбери чат:",
+        f"╔━━━━━━━━━━━━━━━━━━━━╗\n"
+        f"║  🌐  <b>МОИ ЧАТЫ</b>  ║\n"
+        f"╚━━━━━━━━━━━━━━━━━━━━╝\n"
+        f"\n"
+        f"📊 Чатов под управлением: <b>{len(known_chats)}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<i>Выбери чат для управления</i>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
@@ -9204,21 +9280,28 @@ async def cb_mypanel(call: CallbackQuery):
         bans_count  = len(ban_list.get(cid, set()))
         roles_count = len(mod_roles.get(cid, {}))
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔇 Мут локдаун",  callback_data=f"mypanel:lockdown:{cid}"),
-             InlineKeyboardButton(text="📢 Анонс",         callback_data=f"mypanel:announce:{cid}")],
-            [InlineKeyboardButton(text="🚨 Репорты",       callback_data=f"mypanel:reports:{cid}"),
-             InlineKeyboardButton(text="🔐 Роли",          callback_data=f"mypanel:roles:{cid}")],
-            [InlineKeyboardButton(text="🧩 Плагины",       callback_data=f"mypanel:plugins:{cid}"),
-             InlineKeyboardButton(text="📊 Статистика",    callback_data=f"mypanel:stats:{cid}")],
-            [InlineKeyboardButton(text="◀️ Назад",         callback_data="mypanel:back:0")],
+            [InlineKeyboardButton(text="🔇 Мут-локдаун",   callback_data=f"mypanel:lockdown:{cid}"),
+             InlineKeyboardButton(text="📢 Анонс",          callback_data=f"mypanel:announce:{cid}")],
+            [InlineKeyboardButton(text="🚨 Репорты",        callback_data=f"mypanel:reports:{cid}"),
+             InlineKeyboardButton(text="🔐 Роли",           callback_data=f"mypanel:roles:{cid}")],
+            [InlineKeyboardButton(text="🧩 Плагины",        callback_data=f"mypanel:plugins:{cid}"),
+             InlineKeyboardButton(text="📊 Статистика",     callback_data=f"mypanel:stats:{cid}")],
+            [InlineKeyboardButton(text="◀️ К списку чатов", callback_data="mypanel:back:0")],
         ])
         await call.message.edit_text(
-            f"💬 <b>{title}</b>\n"
-            f"📨 Сообщений: <b>{total_msgs}</b>\n"
-            f"⚡ Варнов: <b>{total_warns}</b>\n"
-            f"🚨 Новых репортов: <b>{new_reports}</b>\n"
-            f"🔨 Банов: <b>{bans_count}</b>\n"
-            f"🎖 Ролей: <b>{roles_count}</b>",
+            f"╔━━━━━━━━━━━━━━━━━━━━╗\n"
+            f"║  💬  <b>{title[:16]}</b>\n"
+            f"╚━━━━━━━━━━━━━━━━━━━━╝\n"
+            f"\n"
+            f"📈 <b>Статистика чата</b>\n"
+            f"├ 📨 Сообщений: <b>{total_msgs}</b>\n"
+            f"├ ⚡ Предупреждений: <b>{total_warns}</b>\n"
+            f"├ 🚨 Новых репортов: <b>{new_reports}</b>\n"
+            f"├ 🔨 Банов: <b>{bans_count}</b>\n"
+            f"└ 🎖 Ролей: <b>{roles_count}</b>\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>Выбери действие:</i>",
             parse_mode="HTML", reply_markup=kb)
     elif action == "back":
         # Перестроить главное меню
@@ -9226,14 +9309,20 @@ async def cb_mypanel(call: CallbackQuery):
         for cid2, title2 in known_chats.items():
             total_w = sum(warnings[cid2].values())
             new_r = sum(1 for r in report_queue.get(cid2, []) if r.get("status") == "new")
-            rows.append([InlineKeyboardButton(
-                text=f"💬 {title2[:20]} | ⚡{total_w} 🚨{new_r}",
-                callback_data=f"mypanel:chat:{cid2}")])
-        rows.append([InlineKeyboardButton(text="🔗 Связать чаты", callback_data="mypanel:link:0")])
-        rows.append([InlineKeyboardButton(text="✖️ Закрыть", callback_data="mypanel:close:0")])
+            warn_badge = f"⚡{total_w}" if total_w else "✅"
+            rep_badge  = f"🚨{new_r}" if new_r else ""
+            label2 = f"💬 {title2[:22]}  {warn_badge} {rep_badge}".strip()
+            rows.append([InlineKeyboardButton(text=label2, callback_data=f"mypanel:chat:{cid2}")])
+        rows.append([InlineKeyboardButton(text="🔗 Связать чаты", callback_data="mypanel:link:0"),
+                     InlineKeyboardButton(text="✖️ Закрыть", callback_data="mypanel:close:0")])
         await call.message.edit_text(
-            f"🌍 <b>Мульти-чат панель</b>\n"
-            f"Чатов: <b>{len(known_chats)}</b>\n\nВыбери чат:",
+            f"╔━━━━━━━━━━━━━━━━━━━━╗\n"
+            f"║  🌐  <b>МОИ ЧАТЫ</b>  ║\n"
+            f"╚━━━━━━━━━━━━━━━━━━━━╝\n"
+            f"\n"
+            f"📊 Чатов под управлением: <b>{len(known_chats)}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>Выбери чат для управления</i>",
             parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     elif action == "lockdown":
         cid = int(val)
