@@ -1,1760 +1,866 @@
-"""
-features.py — Новые фичи для CHAT GUARD бота
-Подключение в bot.py:
-    import features
-    # В main(): await features.init(bot, dp, ADMIN_IDS, OWNER_ID)
-"""
-import asyncio
-import random
-import json
-import time
-import logging
-from datetime import datetime, timedelta
-from typing import Optional, Dict, List
-from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command
-from aiogram.types import (
-    Message, CallbackQuery,
-    InlineKeyboardMarkup, InlineKeyboardButton
-)
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Chat Guard — Панель владельца</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;900&display=swap');
 
-log = logging.getLogger(__name__)
-
-# Глобальные ссылки
-_bot: Optional[Bot] = None
-_admin_ids: set = set()
-_owner_id: int = 0
-
-# ── Состояния ──────────────────────────────────────────────────
-anon_reply_states: Dict[int, int] = {}       # {uid: anon_msg_id}
-anon_box_states: Dict[int, dict] = {}        # {uid: {step, cid}}
-auction_states: Dict[int, dict] = {}         # {cid: auction_data}
-poll_states: Dict[int, dict] = {}            # {cid: poll_data}
-
-# ── Блокировки анонимок ────────────────────────────────────────
-anon_blocks: Dict[int, set] = {}             # {uid: {blocked_uid, ...}}
-
-
-async def init(bot: Bot, dp: Dispatcher, admin_ids: set, owner_id: int):
-    global _bot, _admin_ids, _owner_id
-    _bot = bot
-    _admin_ids = admin_ids
-    _owner_id = owner_id
-    _register_handlers(dp)
-    log.info("✅ features.py инициализирован")
-
-
-def db():
-    import sqlite3
-    conn = sqlite3.connect("skinvault.db", check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
-
-
-def _init_tables():
-    conn = db()
-    conn.executescript("""
-    CREATE TABLE IF NOT EXISTS anon_messages_v2 (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        from_uid    INTEGER,
-        to_uid      INTEGER,
-        cid         INTEGER,
-        text        TEXT,
-        anon_nick   TEXT,
-        ts          INTEGER DEFAULT (strftime('%s','now')),
-        reactions   TEXT DEFAULT '{}',
-        is_box      INTEGER DEFAULT 0,
-        reply_to_id INTEGER
-    );
-    CREATE TABLE IF NOT EXISTS anon_blocks (
-        uid         INTEGER,
-        blocked_uid INTEGER,
-        PRIMARY KEY (uid, blocked_uid)
-    );
-    CREATE TABLE IF NOT EXISTS anon_box (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid         INTEGER,
-        owner_uid   INTEGER,
-        question    TEXT,
-        msg_id      INTEGER,
-        created_at  INTEGER DEFAULT (strftime('%s','now'))
-    );
-    CREATE TABLE IF NOT EXISTS achievements (
-        uid         INTEGER,
-        key         TEXT,
-        unlocked_at TEXT DEFAULT (datetime('now')),
-        PRIMARY KEY (uid, key)
-    );
-    CREATE TABLE IF NOT EXISTS polls_v2 (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid         INTEGER,
-        creator_uid INTEGER,
-        question    TEXT,
-        options     TEXT,
-        votes       TEXT DEFAULT '{}',
-        anonymous   INTEGER DEFAULT 0,
-        ends_at     INTEGER,
-        msg_id      INTEGER,
-        closed      INTEGER DEFAULT 0,
-        created_at  INTEGER DEFAULT (strftime('%s','now'))
-    );
-    CREATE TABLE IF NOT EXISTS auction_items (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid         INTEGER,
-        seller_uid  INTEGER,
-        seller_name TEXT,
-        item_name   TEXT,
-        start_price INTEGER,
-        current_bid INTEGER,
-        bidder_uid  INTEGER,
-        bidder_name TEXT,
-        ends_at     INTEGER,
-        msg_id      INTEGER,
-        closed      INTEGER DEFAULT 0
-    );
-    CREATE TABLE IF NOT EXISTS shop_items (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        category    TEXT,
-        name        TEXT,
-        emoji       TEXT,
-        price       INTEGER,
-        description TEXT,
-        effect      TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_anon_to_uid ON anon_messages_v2(to_uid);
-    CREATE INDEX IF NOT EXISTS idx_anon_cid    ON anon_messages_v2(cid);
-    CREATE INDEX IF NOT EXISTS idx_polls_cid   ON polls_v2(cid);
-    """)
-    conn.commit()
-    conn.close()
-    _seed_shop()
-
-
-def _seed_shop():
-    """Заполняет магазин базовыми товарами если пусто"""
-    conn = db()
-    count = conn.execute("SELECT COUNT(*) FROM shop_items").fetchone()[0]
-    if count == 0:
-        items = [
-            # Категория: Титулы
-            ("titles", "👑 Король чата",   "👑", 500,  "Престижный титул", "title:king"),
-            ("titles", "💎 Легенда",        "💎", 1000, "Для избранных",    "title:legend"),
-            ("titles", "🔥 Огонёк",         "🔥", 200,  "Горячий участник", "title:fire"),
-            ("titles", "🌟 Звезда",         "🌟", 300,  "Яркая личность",   "title:star"),
-            ("titles", "🐺 Волк-одиночка",  "🐺", 250,  "Сам по себе",      "title:wolf"),
-            ("titles", "🦅 Орёл",           "🦅", 400,  "Высоко летаешь",   "title:eagle"),
-            # Категория: Бустеры
-            ("boosters", "⚡ XP x2 (1ч)",   "⚡", 150, "Двойной XP на час",   "boost:xp2:3600"),
-            ("boosters", "💰 Репа x2 (1ч)", "💰", 200, "Двойная репа на час", "boost:rep2:3600"),
-            ("boosters", "🛡 Защита (24ч)", "🛡", 300, "Защита от -репы",     "boost:shield:86400"),
-            # Категория: Эффекты
-            ("effects", "✨ Блеск ника",    "✨", 100, "Красивый ник в топе", "effect:shine"),
-            ("effects", "🎭 Маска",         "🎭", 150, "Скрыть реп в профиле","effect:mask"),
-            ("effects", "🌈 Радуга",        "🌈", 200, "Цветной ник",         "effect:rainbow"),
-            # Категория: Разное
-            ("misc", "🎲 Лотерея x3",      "🎲", 50,  "3 лотерейных билета",  "lottery:3"),
-            ("misc", "💌 Анонимка VIP",    "💌", 100, "Анонимка без лимитов", "anon:vip"),
-            ("misc", "🔮 Предсказание+",   "🔮", 75,  "Точное предсказание",  "predict:plus"),
-        ]
-        conn.executemany(
-            "INSERT INTO shop_items (category, name, emoji, price, description, effect) "
-            "VALUES (?,?,?,?,?,?)",
-            items
-        )
-        conn.commit()
-    conn.close()
-
-
-# ══════════════════════════════════════════════════════════════
-#  ДОСТИЖЕНИЯ
-# ══════════════════════════════════════════════════════════════
-
-ACHIEVEMENTS = {
-    "first_msg":    ("💬", "Первое слово",      "Написал первое сообщение"),
-    "msg_100":      ("📝", "Болтун",             "100 сообщений в чате"),
-    "msg_1000":     ("🗣", "Оратор",             "1000 сообщений в чате"),
-    "msg_10000":    ("📢", "Легенда чата",       "10000 сообщений в чате"),
-    "rep_100":      ("⭐", "Уважаемый",          "100 очков репутации"),
-    "rep_500":      ("🌟", "Авторитет",          "500 очков репутации"),
-    "rep_1000":     ("💎", "Икона",              "1000 очков репутации"),
-    "level_10":     ("🏅", "Опытный",            "Достиг 10 уровня"),
-    "level_50":     ("🥇", "Ветеран",            "Достиг 50 уровня"),
-    "level_100":    ("👑", "Мастер",             "Достиг 100 уровня"),
-    "streak_7":     ("🔥", "Неделя подряд",      "7 дней активности подряд"),
-    "streak_30":    ("💪", "Месяц подряд",       "30 дней активности подряд"),
-    "birthday":     ("🎂", "День рождения",      "Сегодня твой день!"),
-    "anon_10":      ("💌", "Анонимщик",          "Отправил 10 анонимок"),
-    "first_win":    ("🏆", "Победитель",         "Выиграл первый аукцион"),
-    "poll_creator": ("📊", "Социолог",           "Создал 5 опросов"),
+:root {
+  --bg:      #0b0b14;
+  --bg2:     #11111e;
+  --bg3:     #181828;
+  --card:    #14142a;
+  --border:  #252540;
+  --accent:  #6366f1;
+  --accent2: #818cf8;
+  --green:   #22c55e;
+  --red:     #ef4444;
+  --yellow:  #eab308;
+  --purple:  #a855f7;
+  --cyan:    #06b6d4;
+  --text:    #e2e2f0;
+  --text2:   #7878a0;
+  --text3:   #404060;
+  --r:       12px;
 }
 
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
-async def check_achievements(uid: int, cid: int, msg_count: int = 0,
-                               rep: int = 0, level: int = 0,
-                               streak: int = 0) -> List[str]:
-    """Проверяет и выдаёт новые достижения"""
-    conn = db()
-    earned = conn.execute(
-        "SELECT key FROM achievements WHERE uid=?", (uid,)
-    ).fetchall()
-    earned_keys = {r["key"] for r in earned}
-    conn.close()
-
-    new_achievements = []
-
-    checks = [
-        ("first_msg",  msg_count >= 1),
-        ("msg_100",    msg_count >= 100),
-        ("msg_1000",   msg_count >= 1000),
-        ("msg_10000",  msg_count >= 10000),
-        ("rep_100",    rep >= 100),
-        ("rep_500",    rep >= 500),
-        ("rep_1000",   rep >= 1000),
-        ("level_10",   level >= 10),
-        ("level_50",   level >= 50),
-        ("level_100",  level >= 100),
-        ("streak_7",   streak >= 7),
-        ("streak_30",  streak >= 30),
-    ]
-
-    conn = db()
-    for key, condition in checks:
-        if condition and key not in earned_keys:
-            conn.execute(
-                "INSERT OR IGNORE INTO achievements (uid, key) VALUES (?,?)",
-                (uid, key)
-            )
-            new_achievements.append(key)
-    conn.commit()
-    conn.close()
-
-    return new_achievements
-
-
-async def notify_achievement(bot: Bot, cid: int, uid: int, keys: List[str]):
-    """Уведомляет чат о новых достижениях"""
-    for key in keys:
-        if key not in ACHIEVEMENTS:
-            continue
-        emoji, name, desc = ACHIEVEMENTS[key]
-        try:
-            await bot.send_message(
-                cid,
-                f"🏆 <b>ДОСТИЖЕНИЕ РАЗБЛОКИРОВАНО!</b>\n\n"
-                f"{emoji} <b>{name}</b>\n"
-                f"📝 {desc}\n\n"
-                f"👤 <a href='tg://user?id={uid}'>Поздравляем!</a>",
-                parse_mode="HTML"
-            )
-        except:
-            pass
-
-
-# ══════════════════════════════════════════════════════════════
-#  УЛУЧШЕННАЯ СИСТЕМА УРОВНЕЙ
-# ══════════════════════════════════════════════════════════════
-
-LEVEL_UP_MESSAGES = [
-    "🚀 {name} взлетел на уровень {level}!",
-    "⚡ {name} достиг уровня {level}! Сила растёт!",
-    "🌟 {name} эволюционировал до уровня {level}!",
-    "💥 БУМ! {name} теперь уровень {level}!",
-    "🔥 {name} горит на уровне {level}!",
-    "👑 {name} поднялся до уровня {level}! Уважение!",
-    "🎯 {name} пробил отметку уровня {level}!",
-    "💎 {name} засиял на уровне {level}!",
-]
-
-LEVEL_TITLES_NEW = {
-    1:   ("🌱", "Росток"),
-    5:   ("🌿", "Побег"),
-    10:  ("🌳", "Дерево"),
-    15:  ("⚡", "Искра"),
-    20:  ("🔥", "Огонёк"),
-    25:  ("💫", "Звёздочка"),
-    30:  ("🌟", "Звезда"),
-    35:  ("🏅", "Медалист"),
-    40:  ("🥈", "Серебро"),
-    45:  ("🥇", "Золото"),
-    50:  ("💎", "Бриллиант"),
-    60:  ("🦁", "Лев"),
-    70:  ("🐉", "Дракон"),
-    80:  ("⚔️", "Воин"),
-    90:  ("🛡", "Страж"),
-    100: ("👑", "Король"),
-    120: ("🌌", "Космонавт"),
-    150: ("🔮", "Мистик"),
-    200: ("🌀", "Легенда"),
-    250: ("💀", "Бессмертный"),
+body {
+  font-family: 'Golos Text', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding-bottom: 32px;
+  overflow-x: hidden;
 }
 
-
-def get_level_title_new(level: int) -> tuple:
-    title = ("🌱", "Новичок")
-    for lvl, data in sorted(LEVEL_TITLES_NEW.items()):
-        if level >= lvl:
-            title = data
-    return title
-
-
-async def announce_level_up(bot: Bot, cid: int, uid: int,
-                             name: str, new_level: int, new_xp: int):
-    """Красивое объявление о повышении уровня"""
-    emoji, title = get_level_title_new(new_level)
-    msg_template = random.choice(LEVEL_UP_MESSAGES)
-    msg = msg_template.format(name=name, level=new_level)
-
-    # Специальные анонсы для круглых уровней
-    if new_level % 50 == 0:
-        special = f"🎊 <b>НЕВЕРОЯТНО!</b> Уровень {new_level}!\n\n"
-    elif new_level % 25 == 0:
-        special = f"🎉 <b>ОТЛИЧНО!</b> Уровень {new_level}!\n\n"
-    elif new_level % 10 == 0:
-        special = f"✨ <b>КРУТО!</b> Уровень {new_level}!\n\n"
-    else:
-        special = ""
-
-    text = (
-        f"{special}"
-        f"━━━━━━━━━━━━━━━\n"
-        f"⬆️ <b>НОВЫЙ УРОВЕНЬ!</b>\n"
-        f"━━━━━━━━━━━━━━━\n\n"
-        f"👤 <a href='tg://user?id={uid}'>{name}</a>\n"
-        f"{msg}\n\n"
-        f"{emoji} <b>{title}</b>\n"
-        f"📊 Уровень: <b>{new_level}</b>\n"
-        f"⭐ XP: <b>{new_xp:,}</b>"
-    )
-
-    try:
-        await bot.send_message(cid, text, parse_mode="HTML")
-    except:
-        pass
-
-    # Проверяем достижения
-    new_ach = await check_achievements(uid, cid, level=new_level)
-    if new_ach:
-        await notify_achievement(bot, cid, uid, new_ach)
-
-
-# ══════════════════════════════════════════════════════════════
-#  ПРОФИЛЬ-КАРТОЧКА
-# ══════════════════════════════════════════════════════════════
-
-async def cmd_profile_card(message: Message):
-    """Красивая профиль-карточка пользователя"""
-    target = message.reply_to_message.from_user if message.reply_to_message else message.from_user
-    uid = target.id
-    cid = message.chat.id
-
-    conn = db()
-
-    # Собираем данные
-    stats_row = conn.execute(
-        "SELECT msg_count FROM chat_stats WHERE cid=? AND uid=?", (cid, uid)
-    ).fetchone()
-    rep_row = conn.execute(
-        "SELECT score FROM reputation WHERE cid=? AND uid=?", (cid, uid)
-    ).fetchone()
-    xp_row = conn.execute(
-        "SELECT xp FROM xp_data WHERE cid=? AND uid=?", (cid, uid)
-    ).fetchone()
-    level_row = conn.execute(
-        "SELECT level FROM levels WHERE cid=? AND uid=?", (cid, uid)
-    ).fetchone()
-    streak_row = conn.execute(
-        "SELECT streak FROM streaks WHERE cid=? AND uid=?", (cid, uid)
-    ).fetchone()
-    profile_row = conn.execute(
-        "SELECT bio, mood FROM user_profiles WHERE uid=?", (uid,)
-    ).fetchone()
-    achievements_count = conn.execute(
-        "SELECT COUNT(*) FROM achievements WHERE uid=?", (uid,)
-    ).fetchone()[0]
-    warns_row = conn.execute(
-        "SELECT count FROM warnings WHERE cid=? AND uid=?", (cid, uid)
-    ).fetchone()
-
-    conn.close()
-
-    msgs    = stats_row["msg_count"] if stats_row else 0
-    rep     = rep_row["score"] if rep_row else 0
-    xp      = xp_row["xp"] if xp_row else 0
-    level   = level_row["level"] if level_row else 0
-    streak  = streak_row["streak"] if streak_row else 0
-    bio     = profile_row["bio"] if profile_row and profile_row["bio"] else "Нет описания"
-    mood    = profile_row["mood"] if profile_row and profile_row["mood"] else "😶"
-    warns   = warns_row["count"] if warns_row else 0
-
-    emoji_lvl, title = get_level_title_new(level)
-
-    # Ранг в чате
-    conn = db()
-    rank_row = conn.execute(
-        "SELECT COUNT(*)+1 as rank FROM chat_stats "
-        "WHERE cid=? AND msg_count > (SELECT msg_count FROM chat_stats WHERE cid=? AND uid=?)",
-        (cid, cid, uid)
-    ).fetchone()
-    rank = rank_row["rank"] if rank_row else "—"
-    conn.close()
-
-    # Прогресс-бар XP
-    xp_for_next = (level + 1) * 100
-    xp_current = xp % 100 if level > 0 else xp
-    progress = int((xp_current / xp_for_next) * 10) if xp_for_next else 0
-    bar = "▓" * progress + "░" * (10 - progress)
-
-    # Репутация emoji
-    if rep >= 500:    rep_emoji = "💎"
-    elif rep >= 200:  rep_emoji = "🌟"
-    elif rep >= 100:  rep_emoji = "⭐"
-    elif rep >= 50:   rep_emoji = "✨"
-    elif rep >= 0:    rep_emoji = "😊"
-    elif rep >= -50:  rep_emoji = "😐"
-    else:             rep_emoji = "💀"
-
-    text = (
-        f"━━━━━━━━━━━━━━━\n"
-        f"📸 <b>ПРОФИЛЬ</b>\n"
-        f"━━━━━━━━━━━━━━━\n\n"
-        f"{mood} <b>{target.full_name}</b>\n"
-        f"<i>{bio}</i>\n\n"
-        f"{'─' * 20}\n"
-        f"{emoji_lvl} <b>{title}</b> · Ур. <b>{level}</b>\n"
-        f"[{bar}] {xp_current}/{xp_for_next} XP\n\n"
-        f"💬 Сообщений: <b>{msgs:,}</b>  #{rank} в чате\n"
-        f"{rep_emoji} Репутация: <b>{rep:+d}</b>\n"
-        f"🔥 Стрик: <b>{streak}</b> дн.\n"
-        f"🏆 Достижений: <b>{achievements_count}</b>\n"
-        f"⚡ Варнов: <b>{warns}/3</b>\n"
-        f"{'─' * 20}\n"
-        f"🆔 <code>{uid}</code>"
-    )
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(
-            text="🏆 Достижения",
-            callback_data=f"profile:achievements:{uid}"
-        ),
-        InlineKeyboardButton(
-            text="📊 Статистика",
-            callback_data=f"profile:stats:{uid}:{cid}"
-        ),
-    ]])
-
-    await message.answer(text, parse_mode="HTML", reply_markup=kb)
-
-
-# ══════════════════════════════════════════════════════════════
-#  АНОНИМКИ v2
-# ══════════════════════════════════════════════════════════════
-
-ANON_NICKS = [
-    "🌑 Тёмный незнакомец", "🌊 Морской волк", "🦊 Хитрая лиса",
-    "🐺 Серый волк", "🌙 Ночной странник", "🔥 Огненный дух",
-    "❄️ Ледяной воин", "⚡ Молния", "🌪 Вихрь", "💫 Звёздная пыль",
-    "🎭 Актёр в маске", "👁 Всевидящее око", "🗡 Тайный клинок",
-    "🌹 Красная роза", "🍀 Удачливый клевер", "🦋 Бабочка",
-]
-
-REACTION_EMOJIS = ["👍", "💔", "😂", "🔥", "😮", "👏", "💯", "🤡"]
-
-
-def kb_anon_reactions(msg_id: int, reactions: dict) -> InlineKeyboardMarkup:
-    """Клавиатура реакций для анонимки"""
-    rows = []
-    row = []
-    for emoji in REACTION_EMOJIS:
-        count = reactions.get(emoji, 0)
-        label = f"{emoji} {count}" if count > 0 else emoji
-        row.append(InlineKeyboardButton(
-            text=label,
-            callback_data=f"anon:react:{msg_id}:{emoji}"
-        ))
-        if len(row) == 4:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-
-    rows.append([
-        InlineKeyboardButton(text="🔄 Ответить анонимно", callback_data=f"anon:reply:{msg_id}"),
-        InlineKeyboardButton(text="🚫 Заблокировать",     callback_data=f"anon:block:{msg_id}"),
-    ])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def kb_anon_mod(msg_id: int) -> InlineKeyboardMarkup:
-    """Кнопка раскрытия автора для модераторов"""
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(
-            text="🕵️ Раскрыть автора",
-            callback_data=f"anon:reveal:{msg_id}"
-        )
-    ]])
-
-
-async def cmd_anonmsg_v2(message: Message):
-    """Улучшенная команда анонимного сообщения"""
-    if not message.reply_to_message:
-        await message.reply(
-            "━━━━━━━━━━━━━━━\n"
-            "💌 <b>АНОНИМНОЕ СООБЩЕНИЕ</b>\n"
-            "━━━━━━━━━━━━━━━\n\n"
-            "Используй реплай на юзера:\n"
-            "<code>/anonmsg текст сообщения</code>\n\n"
-            "📬 Или создай анонимный ящик:\n"
-            "<code>/anonbox вопрос</code>",
-            parse_mode="HTML"
-        )
-        return
-
-    text = (message.text or "").replace("/anonmsg", "").strip()
-    if not text:
-        await message.reply("⚠️ Напиши текст сообщения")
-        return
-
-    from_uid = message.from_user.id
-    target   = message.reply_to_message.from_user
-    to_uid   = target.id
-    cid      = message.chat.id
-
-    if from_uid == to_uid:
-        await message.reply("❌ Нельзя отправить анонимку самому себе")
-        return
-
-    # Проверяем блокировку
-    conn = db()
-    blocked = conn.execute(
-        "SELECT 1 FROM anon_blocks WHERE uid=? AND blocked_uid=?",
-        (to_uid, from_uid)
-    ).fetchone()
-    if blocked:
-        conn.close()
-        await message.reply("❌ Этот пользователь заблокировал тебя")
-        return
-
-    # Получаем ник
-    p = conn.execute(
-        "SELECT anon_nick FROM user_profiles WHERE uid=?", (from_uid,)
-    ).fetchone()
-    nick = p["anon_nick"] if p and p["anon_nick"] else random.choice(ANON_NICKS)
-
-    # Сохраняем
-    cur = conn.execute(
-        "INSERT INTO anon_messages_v2 (from_uid, to_uid, cid, text, anon_nick) VALUES (?,?,?,?,?)",
-        (from_uid, to_uid, cid, text, nick)
-    )
-    msg_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-
-    # Отправляем получателю
-    try:
-        sent = await _bot.send_message(
-            to_uid,
-            f"━━━━━━━━━━━━━━━\n"
-            f"💌 <b>АНОНИМНОЕ СООБЩЕНИЕ</b>\n"
-            f"━━━━━━━━━━━━━━━\n\n"
-            f"👤 От: <b>{nick}</b>\n\n"
-            f"📝 {text}",
-            parse_mode="HTML",
-            reply_markup=kb_anon_reactions(msg_id, {})
-        )
-        await message.reply("✅ Анонимное сообщение отправлено!")
-
-        # Удаляем команду
-        try:
-            await message.delete()
-        except:
-            pass
-
-    except Exception as e:
-        await message.reply("❌ Не удалось отправить — юзер закрыл ЛС боту")
-
-
-async def cb_anon(call: CallbackQuery):
-    """Обработчик кнопок анонимок"""
-    parts = call.data.split(":")
-    action = parts[1]
-
-    if action == "react":
-        msg_id = int(parts[2])
-        emoji  = parts[3]
-        uid    = call.from_user.id
-
-        conn = db()
-        row = conn.execute(
-            "SELECT reactions, to_uid, from_uid, text, anon_nick FROM anon_messages_v2 WHERE id=?",
-            (msg_id,)
-        ).fetchone()
-
-        if not row:
-            await call.answer("Сообщение не найдено", show_alert=True)
-            conn.close()
-            return
-
-        reactions = json.loads(row["reactions"] or "{}")
-
-        # Тогглим реакцию
-        key = f"{uid}:{emoji}"
-        user_reacts_key = f"_users_{emoji}"
-        users = set(reactions.get(user_reacts_key, []))
-
-        if uid in users:
-            users.discard(uid)
-            reactions[emoji] = max(0, reactions.get(emoji, 1) - 1)
-        else:
-            users.add(uid)
-            reactions[emoji] = reactions.get(emoji, 0) + 1
-
-        reactions[user_reacts_key] = list(users)
-        conn.execute(
-            "UPDATE anon_messages_v2 SET reactions=? WHERE id=?",
-            (json.dumps(reactions), msg_id)
-        )
-        conn.commit()
-        conn.close()
-
-        # Обновляем кнопки
-        try:
-            await call.message.edit_reply_markup(
-                reply_markup=kb_anon_reactions(msg_id, reactions)
-            )
-        except:
-            pass
-
-        # Уведомляем отправителя о реакции
-        try:
-            await _bot.send_message(
-                row["from_uid"],
-                f"💌 На твою анонимку поставили реакцию {emoji}!\n"
-                f"📝 <i>{row['text'][:50]}...</i>",
-                parse_mode="HTML"
-            )
-        except:
-            pass
-
-        await call.answer(f"Реакция {emoji} поставлена!")
-
-    elif action == "reply":
-        msg_id = int(parts[2])
-        uid    = call.from_user.id
-
-        conn = db()
-        row = conn.execute(
-            "SELECT from_uid, anon_nick, text FROM anon_messages_v2 WHERE id=?",
-            (msg_id,)
-        ).fetchone()
-        conn.close()
-
-        if not row:
-            await call.answer("Сообщение не найдено", show_alert=True)
-            return
-
-        anon_reply_states[uid] = msg_id
-        await call.message.answer(
-            f"━━━━━━━━━━━━━━━\n"
-            f"🔄 <b>АНОНИМНЫЙ ОТВЕТ</b>\n"
-            f"━━━━━━━━━━━━━━━\n\n"
-            f"Отвечаешь на сообщение от <b>{row['anon_nick']}</b>:\n"
-            f"<i>{row['text'][:100]}</i>\n\n"
-            f"✏️ Напиши ответ следующим сообщением:",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="❌ Отмена", callback_data="anon:cancel_reply")
-            ]])
-        )
-        await call.answer()
-
-    elif action == "cancel_reply":
-        uid = call.from_user.id
-        anon_reply_states.pop(uid, None)
-        await call.message.edit_text("❌ Ответ отменён")
-        await call.answer()
-
-    elif action == "block":
-        msg_id   = int(parts[2])
-        uid      = call.from_user.id
-
-        conn = db()
-        row = conn.execute(
-            "SELECT from_uid FROM anon_messages_v2 WHERE id=?", (msg_id,)
-        ).fetchone()
-        if row:
-            conn.execute(
-                "INSERT OR IGNORE INTO anon_blocks (uid, blocked_uid) VALUES (?,?)",
-                (uid, row["from_uid"])
-            )
-            conn.commit()
-        conn.close()
-
-        await call.answer("🚫 Отправитель заблокирован — больше не получишь от него анонимок", show_alert=True)
-        try:
-            await call.message.edit_reply_markup(reply_markup=None)
-        except:
-            pass
-
-    elif action == "reveal":
-        msg_id = int(parts[2])
-        uid    = call.from_user.id
-
-        # Только модераторы
-        if uid not in _admin_ids and uid != _owner_id:
-            await call.answer("🚫 Только для модераторов", show_alert=True)
-            return
-
-        conn = db()
-        row = conn.execute(
-            "SELECT from_uid FROM anon_messages_v2 WHERE id=?", (msg_id,)
-        ).fetchone()
-        conn.close()
-
-        if row:
-            try:
-                member = await _bot.get_chat_member(call.message.chat.id, row["from_uid"])
-                name = member.user.full_name
-                await call.answer(
-                    f"🕵️ Автор: {name} (ID: {row['from_uid']})",
-                    show_alert=True
-                )
-            except:
-                await call.answer(f"🕵️ ID автора: {row['from_uid']}", show_alert=True)
-        else:
-            await call.answer("Сообщение не найдено", show_alert=True)
-
-
-async def handle_anon_reply_text(message: Message) -> bool:
-    """Обрабатывает текстовый ответ на анонимку"""
-    uid = message.from_user.id
-    if uid not in anon_reply_states:
-        return False
-
-    msg_id = anon_reply_states.pop(uid)
-    text   = (message.text or "").strip()
-
-    conn = db()
-    row = conn.execute(
-        "SELECT from_uid, anon_nick FROM anon_messages_v2 WHERE id=?", (msg_id,)
-    ).fetchone()
-    conn.close()
-
-    if not row:
-        await message.reply("⚠️ Исходное сообщение не найдено")
-        return True
-
-    # Получаем ник отправителя ответа
-    conn = db()
-    p = conn.execute(
-        "SELECT anon_nick FROM user_profiles WHERE uid=?", (uid,)
-    ).fetchone()
-    my_nick = p["anon_nick"] if p and p["anon_nick"] else random.choice(ANON_NICKS)
-
-    # Сохраняем ответ
-    conn.execute(
-        "INSERT INTO anon_messages_v2 (from_uid, to_uid, text, anon_nick, reply_to_id) VALUES (?,?,?,?,?)",
-        (uid, row["from_uid"], text, my_nick, msg_id)
-    )
-    conn.commit()
-    conn.close()
-
-    try:
-        await _bot.send_message(
-            row["from_uid"],
-            f"━━━━━━━━━━━━━━━\n"
-            f"🔄 <b>АНОНИМНЫЙ ОТВЕТ</b>\n"
-            f"━━━━━━━━━━━━━━━\n\n"
-            f"👤 От: <b>{my_nick}</b>\n\n"
-            f"📝 {text}",
-            parse_mode="HTML",
-            reply_markup=kb_anon_reactions(0, {})
-        )
-        await message.reply("✅ Анонимный ответ отправлен!")
-    except:
-        await message.reply("❌ Не удалось отправить ответ")
-
-    return True
-
-
-# ══════════════════════════════════════════════════════════════
-#  АНОНИМНЫЙ ЯЩИК
-# ══════════════════════════════════════════════════════════════
-
-async def cmd_anonbox(message: Message):
-    """/anonbox вопрос — создать анонимный ящик вопросов"""
-    text = (message.text or "").replace("/anonbox", "").strip()
-    if not text:
-        await message.reply(
-            "📬 <b>Анонимный ящик</b>\n\n"
-            "Создай ящик вопросов:\n"
-            "<code>/anonbox Что вы думаете обо мне?</code>\n\n"
-            "Любой сможет ответить анонимно!",
-            parse_mode="HTML"
-        )
-        return
-
-    uid = message.from_user.id
-    cid = message.chat.id
-
-    sent = await message.answer(
-        f"━━━━━━━━━━━━━━━\n"
-        f"📬 <b>АНОНИМНЫЙ ЯЩИК</b>\n"
-        f"━━━━━━━━━━━━━━━\n\n"
-        f"❓ <b>{text}</b>\n\n"
-        f"👤 Автор: <a href='tg://user?id={uid}'>{message.from_user.first_name}</a>\n\n"
-        f"💌 Нажми кнопку чтобы ответить анонимно:",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(
-                text="💌 Ответить анонимно",
-                callback_data=f"anonbox:answer:0"  # обновим после сохранения
-            )
-        ]])
-    )
-
-    conn = db()
-    conn.execute(
-        "INSERT INTO anon_box (cid, owner_uid, question, msg_id) VALUES (?,?,?,?)",
-        (cid, uid, text, sent.message_id)
-    )
-    box_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    conn.commit()
-    conn.close()
-
-    # Обновляем кнопку с реальным box_id
-    try:
-        await sent.edit_reply_markup(
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(
-                    text="💌 Ответить анонимно",
-                    callback_data=f"anonbox:answer:{box_id}"
-                )
-            ]])
-        )
-    except:
-        pass
-
-    try:
-        await message.delete()
-    except:
-        pass
-
-
-async def cb_anonbox(call: CallbackQuery):
-    """Обработчик анонимного ящика"""
-    parts  = call.data.split(":")
-    action = parts[1]
-
-    if action == "answer":
-        box_id = int(parts[2])
-        uid    = call.from_user.id
-
-        conn = db()
-        box = conn.execute(
-            "SELECT * FROM anon_box WHERE id=?", (box_id,)
-        ).fetchone()
-        conn.close()
-
-        if not box:
-            await call.answer("Ящик не найден", show_alert=True)
-            return
-
-        anon_box_states[uid] = {
-            "box_id":    box_id,
-            "owner_uid": box["owner_uid"],
-            "question":  box["question"],
-            "cid":       box["cid"]
-        }
-
-        await call.message.answer(
-            f"━━━━━━━━━━━━━━━\n"
-            f"💌 <b>АНОНИМНЫЙ ОТВЕТ</b>\n"
-            f"━━━━━━━━━━━━━━━\n\n"
-            f"❓ <b>{box['question']}</b>\n\n"
-            f"✏️ Напиши ответ — он будет анонимным:",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="❌ Отмена", callback_data="anonbox:cancel")
-            ]])
-        )
-        await call.answer()
-
-    elif action == "cancel":
-        uid = call.from_user.id
-        anon_box_states.pop(uid, None)
-        await call.message.edit_text("❌ Отменено")
-        await call.answer()
-
-
-async def handle_anonbox_reply(message: Message) -> bool:
-    """Обрабатывает ответ в анонимный ящик"""
-    uid = message.from_user.id
-    if uid not in anon_box_states:
-        return False
-
-    state    = anon_box_states.pop(uid)
-    text     = (message.text or "").strip()
-    owner_uid = state["owner_uid"]
-
-    if uid == owner_uid:
-        await message.reply("❌ Нельзя отвечать в свой ящик")
-        return True
-
-    conn = db()
-    p = conn.execute(
-        "SELECT anon_nick FROM user_profiles WHERE uid=?", (uid,)
-    ).fetchone()
-    nick = p["anon_nick"] if p and p["anon_nick"] else random.choice(ANON_NICKS)
-    conn.close()
-
-    try:
-        await _bot.send_message(
-            owner_uid,
-            f"━━━━━━━━━━━━━━━\n"
-            f"📬 <b>ОТВЕТ В ЯЩИК</b>\n"
-            f"━━━━━━━━━━━━━━━\n\n"
-            f"❓ <i>{state['question']}</i>\n\n"
-            f"👤 От: <b>{nick}</b>\n"
-            f"💬 {text}",
-            parse_mode="HTML"
-        )
-        await message.reply("✅ Анонимный ответ отправлен!")
-    except:
-        await message.reply("❌ Не удалось отправить")
-
-    return True
-
-
-# ══════════════════════════════════════════════════════════════
-#  УЛУЧШЕННЫЕ ОПРОСЫ v2
-# ══════════════════════════════════════════════════════════════
-
-async def cmd_poll_v2(message: Message):
-    """/poll2 вопрос | вариант1 | вариант2 [| анон] [| 5м]"""
-    args = (message.text or "").replace("/poll2", "").strip()
-    if not args or "|" not in args:
-        await message.reply(
-            "📊 <b>Опрос v2</b>\n\n"
-            "Формат:\n"
-            "<code>/poll2 Вопрос | Вариант 1 | Вариант 2 | анон | 5м</code>\n\n"
-            "• <code>анон</code> — анонимный опрос\n"
-            "• <code>5м</code> — таймер 5 минут (1м-60м)\n\n"
-            "Пример:\n"
-            "<code>/poll2 Кто лучший? | Саша | Петя | анон | 10м</code>",
-            parse_mode="HTML"
-        )
-        return
-
-    parts     = [p.strip() for p in args.split("|")]
-    question  = parts[0]
-    options   = []
-    anonymous = False
-    duration  = 0  # секунды
-
-    for p in parts[1:]:
-        pl = p.lower()
-        if pl == "анон":
-            anonymous = True
-        elif pl.endswith("м") and pl[:-1].isdigit():
-            duration = int(pl[:-1]) * 60
-        elif pl.endswith("ч") and pl[:-1].isdigit():
-            duration = int(pl[:-1]) * 3600
-        else:
-            options.append(p)
-
-    if len(options) < 2:
-        await message.reply("⚠️ Нужно минимум 2 варианта ответа")
-        return
-
-    options = options[:8]  # максимум 8
-    cid     = message.chat.id
-    uid     = message.from_user.id
-    ends_at = int(time.time()) + duration if duration else 0
-
-    # Создаём опрос в БД
-    conn = db()
-    cur = conn.execute(
-        "INSERT INTO polls_v2 (cid, creator_uid, question, options, anonymous, ends_at) "
-        "VALUES (?,?,?,?,?,?)",
-        (cid, uid, question, json.dumps(options), 1 if anonymous else 0, ends_at)
-    )
-    poll_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-
-    # Формируем сообщение
-    anon_label = "🔒 Анонимный" if anonymous else "👁 Открытый"
-    time_label = f"⏰ {duration//60} мин" if duration else "∞ Бессрочный"
-
-    text = _format_poll(poll_id, question, options, {}, anonymous, ends_at)
-    kb   = _poll_keyboard(poll_id, options)
-
-    sent = await message.answer(text, parse_mode="HTML", reply_markup=kb)
-
-    # Обновляем msg_id
-    conn = db()
-    conn.execute("UPDATE polls_v2 SET msg_id=? WHERE id=?", (sent.message_id, poll_id))
-    conn.commit()
-    conn.close()
-
-    # Запускаем таймер если есть
-    if duration:
-        asyncio.create_task(_poll_timer(poll_id, duration, cid, sent.message_id))
-
-
-def _format_poll(poll_id: int, question: str, options: list,
-                 votes: dict, anonymous: bool, ends_at: int) -> str:
-    total = sum(len(v) for v in votes.values()) if votes else 0
-    anon  = "🔒" if anonymous else "👁"
-    time_str = ""
-    if ends_at:
-        remaining = ends_at - int(time.time())
-        if remaining > 0:
-            m, s = divmod(remaining, 60)
-            h, m = divmod(m, 60)
-            if h:
-                time_str = f"\n⏰ Осталось: {h}ч {m}м"
-            else:
-                time_str = f"\n⏰ Осталось: {m}м {s}с"
-        else:
-            time_str = "\n🔴 Опрос завершён"
-
-    text = (
-        f"━━━━━━━━━━━━━━━\n"
-        f"📊 <b>ОПРОС</b> {anon}\n"
-        f"━━━━━━━━━━━━━━━\n\n"
-        f"❓ <b>{question}</b>{time_str}\n\n"
-    )
-
-    for i, opt in enumerate(options):
-        opt_votes = len(votes.get(str(i), []))
-        pct = int(opt_votes / total * 100) if total else 0
-        bar_len = int(pct / 10)
-        bar = "▓" * bar_len + "░" * (10 - bar_len)
-        text += f"{i+1}. {opt}\n   [{bar}] {pct}% ({opt_votes})\n"
-
-    text += f"\n👥 Всего голосов: <b>{total}</b>"
-    return text
-
-
-def _poll_keyboard(poll_id: int, options: list) -> InlineKeyboardMarkup:
-    rows = []
-    row  = []
-    for i, opt in enumerate(options):
-        row.append(InlineKeyboardButton(
-            text=f"{i+1}. {opt[:20]}",
-            callback_data=f"poll2:vote:{poll_id}:{i}"
-        ))
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    rows.append([
-        InlineKeyboardButton(text="📊 Результаты", callback_data=f"poll2:results:{poll_id}"),
-        InlineKeyboardButton(text="🔴 Завершить",  callback_data=f"poll2:close:{poll_id}"),
-    ])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-async def cb_poll_v2(call: CallbackQuery):
-    """Обработчик опросов v2"""
-    parts  = call.data.split(":")
-    action = parts[1]
-
-    if action == "vote":
-        poll_id    = int(parts[2])
-        option_idx = int(parts[3])
-        uid        = call.from_user.id
-
-        conn = db()
-        poll = conn.execute("SELECT * FROM polls_v2 WHERE id=?", (poll_id,)).fetchone()
-        if not poll:
-            await call.answer("Опрос не найден", show_alert=True)
-            conn.close()
-            return
-
-        if poll["closed"]:
-            await call.answer("Опрос уже завершён", show_alert=True)
-            conn.close()
-            return
-
-        if poll["ends_at"] and int(time.time()) > poll["ends_at"]:
-            await call.answer("Время опроса истекло", show_alert=True)
-            conn.close()
-            return
-
-        votes   = json.loads(poll["votes"] or "{}")
-        options = json.loads(poll["options"])
-        key     = str(option_idx)
-
-        # Убираем предыдущий голос
-        for k in votes:
-            if uid in votes[k]:
-                votes[k].remove(uid)
-
-        # Добавляем голос
-        if key not in votes:
-            votes[key] = []
-        votes[key].append(uid)
-
-        conn.execute("UPDATE polls_v2 SET votes=? WHERE id=?", (json.dumps(votes), poll_id))
-        conn.commit()
-        conn.close()
-
-        # Обновляем сообщение
-        text = _format_poll(
-            poll_id, poll["question"], options, votes,
-            bool(poll["anonymous"]), poll["ends_at"]
-        )
-        try:
-            await call.message.edit_text(
-                text, parse_mode="HTML",
-                reply_markup=_poll_keyboard(poll_id, options)
-            )
-        except:
-            pass
-
-        await call.answer(f"✅ Голос за: {options[option_idx]}")
-
-    elif action == "results":
-        poll_id = int(parts[2])
-        conn    = db()
-        poll    = conn.execute("SELECT * FROM polls_v2 WHERE id=?", (poll_id,)).fetchone()
-        conn.close()
-
-        if not poll:
-            await call.answer("Опрос не найден", show_alert=True)
-            return
-
-        votes   = json.loads(poll["votes"] or "{}")
-        options = json.loads(poll["options"])
-        total   = sum(len(v) for v in votes.values())
-
-        result_text = f"📊 <b>Результаты опроса</b>\n\n❓ {poll['question']}\n\n"
-        for i, opt in enumerate(options):
-            opt_votes = len(votes.get(str(i), []))
-            pct = int(opt_votes / total * 100) if total else 0
-            result_text += f"• {opt}: <b>{opt_votes}</b> ({pct}%)\n"
-
-        result_text += f"\n👥 Всего: {total}"
-        await call.answer(result_text[:200], show_alert=True)
-
-    elif action == "close":
-        poll_id = int(parts[2])
-        uid     = call.from_user.id
-
-        conn = db()
-        poll = conn.execute("SELECT * FROM polls_v2 WHERE id=?", (poll_id,)).fetchone()
-
-        if not poll:
-            await call.answer("Опрос не найден", show_alert=True)
-            conn.close()
-            return
-
-        if poll["creator_uid"] != uid and uid not in _admin_ids:
-            await call.answer("Только создатель может завершить опрос", show_alert=True)
-            conn.close()
-            return
-
-        conn.execute("UPDATE polls_v2 SET closed=1 WHERE id=?", (poll_id,))
-        conn.commit()
-
-        votes   = json.loads(poll["votes"] or "{}")
-        options = json.loads(poll["options"])
-        conn.close()
-
-        text = _format_poll(
-            poll_id, poll["question"], options, votes,
-            bool(poll["anonymous"]), 0
-        ) + "\n\n🔴 <b>ОПРОС ЗАВЕРШЁН</b>"
-
-        try:
-            await call.message.edit_text(text, parse_mode="HTML")
-        except:
-            pass
-        await call.answer("✅ Опрос завершён")
-
-
-async def _poll_timer(poll_id: int, duration: int, cid: int, msg_id: int):
-    """Автоматически завершает опрос по таймеру"""
-    await asyncio.sleep(duration)
-
-    conn = db()
-    poll = conn.execute("SELECT * FROM polls_v2 WHERE id=?", (poll_id,)).fetchone()
-    if poll and not poll["closed"]:
-        conn.execute("UPDATE polls_v2 SET closed=1 WHERE id=?", (poll_id,))
-        conn.commit()
-
-        votes   = json.loads(poll["votes"] or "{}")
-        options = json.loads(poll["options"])
-        conn.close()
-
-        text = _format_poll(
-            poll_id, poll["question"], options, votes,
-            bool(poll["anonymous"]), 0
-        ) + "\n\n🔴 <b>ОПРОС ЗАВЕРШЁН (время вышло)</b>"
-
-        try:
-            await _bot.edit_message_text(
-                text, chat_id=cid, message_id=msg_id, parse_mode="HTML"
-            )
-        except:
-            pass
-    else:
-        if conn:
-            conn.close()
-
-
-# ══════════════════════════════════════════════════════════════
-#  МАГАЗИН v2 С КАТЕГОРИЯМИ
-# ══════════════════════════════════════════════════════════════
-
-SHOP_CATEGORIES = {
-    "titles":   "👑 Титулы",
-    "boosters": "⚡ Бустеры",
-    "effects":  "✨ Эффекты",
-    "misc":     "🎲 Разное",
+#lock-screen {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px; z-index: 999; padding: 32px;
+}
+.lock-icon { font-size: 64px; }
+.lock-title { font-size: 22px; font-weight: 700; text-align: center; }
+.lock-sub { font-size: 14px; color: var(--text2); text-align: center; }
+
+.header {
+  background: linear-gradient(135deg, #12123a 0%, #0b0b20 100%);
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  position: relative; overflow: hidden;
+}
+.header::after {
+  content:''; position:absolute; top:-60px; right:-60px;
+  width:200px; height:200px;
+  background: radial-gradient(circle, rgba(99,102,241,0.25) 0%, transparent 70%);
+  pointer-events:none;
+}
+.header-row { display:flex; align-items:center; gap:12px; }
+.logo {
+  width:42px; height:42px;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  border-radius:13px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px; flex-shrink:0;
+  box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+}
+.header-text h1 { font-size:18px; font-weight:800; letter-spacing:-0.4px; }
+.header-text p  { font-size:12px; color:var(--text2); margin-top:1px; }
+.owner-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  background: rgba(234,179,8,0.15);
+  border: 1px solid rgba(234,179,8,0.3);
+  border-radius:20px; padding:3px 10px;
+  font-size:11px; color:var(--yellow); font-weight:600;
+  margin-top:10px;
 }
 
-
-async def cmd_shop_v2(message: Message):
-    """Магазин v2 с категориями"""
-    await message.answer(
-        "━━━━━━━━━━━━━━━\n"
-        "🏪 <b>МАГАЗИН</b>\n"
-        "━━━━━━━━━━━━━━━\n\n"
-        "Выбери категорию:",
-        parse_mode="HTML",
-        reply_markup=_shop_category_kb()
-    )
-
-
-def _shop_category_kb() -> InlineKeyboardMarkup:
-    rows = []
-    for key, label in SHOP_CATEGORIES.items():
-        rows.append([InlineKeyboardButton(
-            text=label,
-            callback_data=f"shop2:cat:{key}"
-        )])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def _shop_items_kb(category: str, items: list) -> InlineKeyboardMarkup:
-    rows = []
-    for item in items:
-        rows.append([InlineKeyboardButton(
-            text=f"{item['emoji']} {item['name']} — {item['price']} 💰",
-            callback_data=f"shop2:buy:{item['id']}"
-        )])
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="shop2:back")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-async def cb_shop_v2(call: CallbackQuery):
-    """Обработчик магазина v2"""
-    parts  = call.data.split(":")
-    action = parts[1]
-
-    if action == "cat":
-        category = parts[2]
-        conn = db()
-        items = conn.execute(
-            "SELECT * FROM shop_items WHERE category=? ORDER BY price",
-            (category,)
-        ).fetchall()
-        conn.close()
-
-        label = SHOP_CATEGORIES.get(category, category)
-        text  = f"━━━━━━━━━━━━━━━\n{label}\n━━━━━━━━━━━━━━━\n\n"
-
-        for item in [dict(i) for i in items]:
-            text += f"{item['emoji']} <b>{item['name']}</b> — <b>{item['price']}</b> 💰\n"
-            text += f"   <i>{item['description']}</i>\n\n"
-
-        await call.message.edit_text(
-            text, parse_mode="HTML",
-            reply_markup=_shop_items_kb(category, [dict(i) for i in items])
-        )
-
-    elif action == "buy":
-        item_id = int(parts[2])
-        uid     = call.from_user.id
-        cid     = call.message.chat.id
-
-        conn = db()
-        item = conn.execute(
-            "SELECT * FROM shop_items WHERE id=?", (item_id,)
-        ).fetchone()
-
-        if not item:
-            await call.answer("Товар не найден", show_alert=True)
-            conn.close()
-            return
-
-        # Проверяем репутацию
-        rep_row = conn.execute(
-            "SELECT score FROM reputation WHERE cid=? AND uid=?", (cid, uid)
-        ).fetchone()
-        rep = rep_row["score"] if rep_row else 0
-
-        if rep < item["price"]:
-            await call.answer(
-                f"❌ Недостаточно репутации!\nНужно: {item['price']} 💰\nЕсть: {rep} 💰",
-                show_alert=True
-            )
-            conn.close()
-            return
-
-        # Списываем репутацию
-        conn.execute(
-            "UPDATE reputation SET score=score-? WHERE cid=? AND uid=?",
-            (item["price"], cid, uid)
-        )
-        conn.commit()
-        conn.close()
-
-        await call.answer(
-            f"✅ Куплено: {item['emoji']} {item['name']}!\n"
-            f"Списано {item['price']} 💰",
-            show_alert=True
-        )
-
-        # Применяем эффект
-        await _apply_shop_effect(uid, cid, item["effect"], item["name"])
-
-    elif action == "back":
-        await call.message.edit_text(
-            "━━━━━━━━━━━━━━━\n"
-            "🏪 <b>МАГАЗИН</b>\n"
-            "━━━━━━━━━━━━━━━\n\n"
-            "Выбери категорию:",
-            parse_mode="HTML",
-            reply_markup=_shop_category_kb()
-        )
-
-    await call.answer()
-
-
-async def _apply_shop_effect(uid: int, cid: int, effect: str, item_name: str):
-    """Применяет эффект купленного товара"""
-    if effect.startswith("title:"):
-        title = item_name
-        conn = db()
-        conn.execute(
-            "INSERT INTO user_titles (uid, active, purchased) VALUES (?,?,?) "
-            "ON CONFLICT(uid) DO UPDATE SET active=?, purchased=json_insert(purchased,'$[#]',?)",
-            (uid, title, json.dumps([title]), title, title)
-        )
-        conn.commit()
-        conn.close()
-
-    elif effect.startswith("boost:"):
-        parts = effect.split(":")
-        boost_type = parts[1]
-        duration   = int(parts[2]) if len(parts) > 2 else 3600
-        expires    = int(time.time()) + duration
-        conn = db()
-        row = conn.execute("SELECT data FROM boosters WHERE uid=?", (uid,)).fetchone()
-        data = json.loads(row["data"]) if row else {}
-        data[boost_type] = expires
-        conn.execute(
-            "INSERT INTO boosters (uid,data) VALUES (?,?) ON CONFLICT(uid) DO UPDATE SET data=?",
-            (uid, json.dumps(data), json.dumps(data))
-        )
-        conn.commit()
-        conn.close()
-
-    elif effect.startswith("lottery:"):
-        count = int(effect.split(":")[1])
-        conn = db()
-        for _ in range(count):
-            conn.execute(
-                "INSERT OR IGNORE INTO lottery_tickets (cid,uid) VALUES (?,?)", (cid, uid)
-            )
-        conn.commit()
-        conn.close()
-
-
-# ══════════════════════════════════════════════════════════════
-#  АУКЦИОН
-# ══════════════════════════════════════════════════════════════
-
-async def cmd_auction(message: Message):
-    """/auction предмет | начальная_цена | время_минуты"""
-    args = (message.text or "").replace("/auction", "").strip()
-    if not args or "|" not in args:
-        await message.reply(
-            "━━━━━━━━━━━━━━━\n"
-            "🔨 <b>АУКЦИОН</b>\n"
-            "━━━━━━━━━━━━━━━\n\n"
-            "Формат:\n"
-            "<code>/auction Предмет | цена | 30</code>\n\n"
-            "Пример:\n"
-            "<code>/auction VIP титул | 100 | 60</code>",
-            parse_mode="HTML"
-        )
-        return
-
-    parts = [p.strip() for p in args.split("|")]
-    if len(parts) < 2:
-        await message.reply("⚠️ Нужно указать предмет и цену")
-        return
-
-    item_name   = parts[0]
-    start_price = int(parts[1]) if parts[1].isdigit() else 50
-    duration    = int(parts[2]) * 60 if len(parts) > 2 and parts[2].isdigit() else 1800
-
-    uid  = message.from_user.id
-    cid  = message.chat.id
-    name = message.from_user.full_name
-    ends_at = int(time.time()) + duration
-
-    conn = db()
-    cur = conn.execute(
-        "INSERT INTO auction_items (cid, seller_uid, seller_name, item_name, "
-        "start_price, current_bid, ends_at) VALUES (?,?,?,?,?,?,?)",
-        (cid, uid, name, item_name, start_price, start_price, ends_at)
-    )
-    auction_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-
-    m, s = divmod(duration, 60)
-    h, m = divmod(m, 60)
-    time_str = f"{h}ч {m}м" if h else f"{m}м"
-
-    sent = await message.answer(
-        f"━━━━━━━━━━━━━━━\n"
-        f"🔨 <b>АУКЦИОН #{auction_id}</b>\n"
-        f"━━━━━━━━━━━━━━━\n\n"
-        f"📦 Лот: <b>{item_name}</b>\n"
-        f"👤 Продавец: <b>{name}</b>\n"
-        f"💰 Старт: <b>{start_price}</b> 💰\n"
-        f"🏆 Текущая ставка: <b>{start_price}</b> 💰\n"
-        f"⏰ Время: <b>{time_str}</b>\n\n"
-        f"Нажми кнопку чтобы сделать ставку!",
-        parse_mode="HTML",
-        reply_markup=_auction_kb(auction_id, start_price)
-    )
-
-    conn = db()
-    conn.execute("UPDATE auction_items SET msg_id=? WHERE id=?", (sent.message_id, auction_id))
-    conn.commit()
-    conn.close()
-
-    asyncio.create_task(_auction_timer(auction_id, duration, cid, sent.message_id))
-
-
-def _auction_kb(auction_id: int, current_bid: int) -> InlineKeyboardMarkup:
-    bid_10  = current_bid + 10
-    bid_50  = current_bid + 50
-    bid_100 = current_bid + 100
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text=f"+10 💰 ({bid_10})",  callback_data=f"auction:bid:{auction_id}:{bid_10}"),
-            InlineKeyboardButton(text=f"+50 💰 ({bid_50})",  callback_data=f"auction:bid:{auction_id}:{bid_50}"),
-        ],
-        [
-            InlineKeyboardButton(text=f"+100 💰 ({bid_100})", callback_data=f"auction:bid:{auction_id}:{bid_100}"),
-            InlineKeyboardButton(text="💰 Своя ставка",       callback_data=f"auction:custom:{auction_id}"),
-        ],
-    ])
-
-
-async def cb_auction(call: CallbackQuery):
-    """Обработчик аукциона"""
-    parts  = call.data.split(":")
-    action = parts[1]
-
-    if action == "bid":
-        auction_id = int(parts[2])
-        bid_amount = int(parts[3])
-        uid        = call.from_user.id
-        name       = call.from_user.full_name
-
-        conn = db()
-        auc = conn.execute(
-            "SELECT * FROM auction_items WHERE id=?", (auction_id,)
-        ).fetchone()
-
-        if not auc:
-            await call.answer("Аукцион не найден", show_alert=True)
-            conn.close()
-            return
-
-        if auc["closed"]:
-            await call.answer("Аукцион завершён", show_alert=True)
-            conn.close()
-            return
-
-        if int(time.time()) > auc["ends_at"]:
-            await call.answer("Время аукциона истекло", show_alert=True)
-            conn.close()
-            return
-
-        if uid == auc["seller_uid"]:
-            await call.answer("Нельзя ставить на свой аукцион", show_alert=True)
-            conn.close()
-            return
-
-        # Проверяем репу
-        rep_row = conn.execute(
-            "SELECT score FROM reputation WHERE cid=? AND uid=?",
-            (auc["cid"], uid)
-        ).fetchone()
-        rep = rep_row["score"] if rep_row else 0
-
-        if rep < bid_amount:
-            await call.answer(
-                f"❌ Недостаточно репы!\nНужно: {bid_amount} 💰\nЕсть: {rep} 💰",
-                show_alert=True
-            )
-            conn.close()
-            return
-
-        if bid_amount <= auc["current_bid"]:
-            await call.answer(
-                f"❌ Ставка должна быть больше текущей ({auc['current_bid']} 💰)",
-                show_alert=True
-            )
-            conn.close()
-            return
-
-        conn.execute(
-            "UPDATE auction_items SET current_bid=?, bidder_uid=?, bidder_name=? WHERE id=?",
-            (bid_amount, uid, name, auction_id)
-        )
-        conn.commit()
-
-        remaining = auc["ends_at"] - int(time.time())
-        m2, s2 = divmod(remaining, 60)
-        time_str = f"{m2}м {s2}с"
-
-        try:
-            await call.message.edit_text(
-                f"━━━━━━━━━━━━━━━\n"
-                f"🔨 <b>АУКЦИОН #{auction_id}</b>\n"
-                f"━━━━━━━━━━━━━━━\n\n"
-                f"📦 Лот: <b>{auc['item_name']}</b>\n"
-                f"👤 Продавец: <b>{auc['seller_name']}</b>\n"
-                f"💰 Старт: <b>{auc['start_price']}</b> 💰\n"
-                f"🏆 Текущая ставка: <b>{bid_amount}</b> 💰\n"
-                f"👤 Лидер: <b>{name}</b>\n"
-                f"⏰ Осталось: <b>{time_str}</b>",
-                parse_mode="HTML",
-                reply_markup=_auction_kb(auction_id, bid_amount)
-            )
-        except:
-            pass
-
-        conn.close()
-        await call.answer(f"✅ Ставка {bid_amount} 💰 принята!")
-
-    elif action == "custom":
-        auction_id = int(parts[2])
-        uid        = call.from_user.id
-        auction_states[uid] = auction_id
-        await call.message.answer(
-            "💰 Введи свою ставку (число):",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="❌ Отмена", callback_data=f"auction:cancel:{auction_id}")
-            ]])
-        )
-        await call.answer()
-
-    elif action == "cancel":
-        uid = call.from_user.id
-        auction_states.pop(uid, None)
-        await call.message.edit_text("❌ Отменено")
-        await call.answer()
-
-
-async def _auction_timer(auction_id: int, duration: int, cid: int, msg_id: int):
-    """Завершает аукцион по таймеру"""
-    await asyncio.sleep(duration)
-
-    conn = db()
-    auc = conn.execute(
-        "SELECT * FROM auction_items WHERE id=?", (auction_id,)
-    ).fetchone()
-
-    if auc and not auc["closed"]:
-        conn.execute("UPDATE auction_items SET closed=1 WHERE id=?", (auction_id,))
-        conn.commit()
-        conn.close()
-
-        if auc["bidder_uid"]:
-            result = (
-                f"━━━━━━━━━━━━━━━\n"
-                f"🔨 <b>АУКЦИОН ЗАВЕРШЁН #{auction_id}</b>\n"
-                f"━━━━━━━━━━━━━━━\n\n"
-                f"📦 Лот: <b>{auc['item_name']}</b>\n"
-                f"🏆 Победитель: <b>{auc['bidder_name']}</b>\n"
-                f"💰 Финальная цена: <b>{auc['current_bid']}</b> 💰\n\n"
-                f"🎉 Поздравляем победителя!"
-            )
-            # Списываем репу у победителя
-            try:
-                conn2 = db()
-                conn2.execute(
-                    "UPDATE reputation SET score=score-? WHERE cid=? AND uid=?",
-                    (auc["current_bid"], cid, auc["bidder_uid"])
-                )
-                # Добавляем продавцу
-                conn2.execute(
-                    "INSERT INTO reputation (cid,uid,score) VALUES (?,?,?) "
-                    "ON CONFLICT(cid,uid) DO UPDATE SET score=score+?",
-                    (cid, auc["seller_uid"], auc["current_bid"], auc["current_bid"])
-                )
-                conn2.commit()
-                conn2.close()
-            except:
-                pass
-        else:
-            result = (
-                f"━━━━━━━━━━━━━━━\n"
-                f"🔨 <b>АУКЦИОН ЗАВЕРШЁН #{auction_id}</b>\n"
-                f"━━━━━━━━━━━━━━━\n\n"
-                f"📦 Лот: <b>{auc['item_name']}</b>\n"
-                f"😔 Ставок не было. Лот не продан."
-            )
-
-        try:
-            await _bot.edit_message_text(
-                result, chat_id=cid, message_id=msg_id, parse_mode="HTML"
-            )
-        except:
-            try:
-                await _bot.send_message(cid, result, parse_mode="HTML")
-            except:
-                pass
-    else:
-        if conn:
-            conn.close()
-
-
-# ══════════════════════════════════════════════════════════════
-#  CALLBACK ДЛЯ ПРОФИЛЯ
-# ══════════════════════════════════════════════════════════════
-
-async def cb_profile(call: CallbackQuery):
-    """Обработчик кнопок профиля"""
-    parts  = call.data.split(":")
-    action = parts[1]
-
-    if action == "achievements":
-        uid  = int(parts[2])
-        conn = db()
-        rows = conn.execute(
-            "SELECT key, unlocked_at FROM achievements WHERE uid=? ORDER BY unlocked_at DESC",
-            (uid,)
-        ).fetchall()
-        conn.close()
-
-        if not rows:
-            await call.answer("Достижений пока нет", show_alert=True)
-            return
-
-        text = "━━━━━━━━━━━━━━━\n🏆 <b>ДОСТИЖЕНИЯ</b>\n━━━━━━━━━━━━━━━\n\n"
-        for r in rows:
-            key = r["key"]
-            if key in ACHIEVEMENTS:
-                emoji, name, desc = ACHIEVEMENTS[key]
-                dt = str(r["unlocked_at"])[:10] if r["unlocked_at"] else ""
-                text += f"{emoji} <b>{name}</b>\n   <i>{desc}</i> · {dt}\n\n"
-
-        await call.message.answer(text, parse_mode="HTML")
-        await call.answer()
-
-    elif action == "stats":
-        uid = int(parts[2])
-        cid = int(parts[3])
-        conn = db()
-
-        # Детальная статистика
-        hourly = conn.execute(
-            "SELECT hour, count FROM hourly_stats WHERE cid=? AND uid=? ORDER BY hour",
-            (cid, uid)
-        ).fetchall()
-        activity = conn.execute(
-            "SELECT day, count FROM user_activity WHERE cid=? AND uid=? "
-            "ORDER BY day DESC LIMIT 7",
-            (cid, uid)
-        ).fetchall()
-        conn.close()
-
-        peak_hour = max(hourly, key=lambda x: x["count"])["hour"] if hourly else "—"
-        total_days = len(activity)
-
-        text = (
-            f"━━━━━━━━━━━━━━━\n"
-            f"📊 <b>ДЕТАЛЬНАЯ СТАТИСТИКА</b>\n"
-            f"━━━━━━━━━━━━━━━\n\n"
-            f"⏰ Пик активности: <b>{peak_hour}:00</b>\n"
-            f"📅 Активных дней (7д): <b>{total_days}</b>\n\n"
-            f"<b>Активность по дням:</b>\n"
-        )
-        for r in reversed(list(activity)):
-            text += f"• {r['day']}: {r['count']} сообщ.\n"
-
-        await call.message.answer(text, parse_mode="HTML")
-        await call.answer()
-
-
-# ══════════════════════════════════════════════════════════════
-#  РЕГИСТРАЦИЯ ХЕНДЛЕРОВ
-# ══════════════════════════════════════════════════════════════
-
-def _register_handlers(dp: Dispatcher):
-    _init_tables()
-
-    # Профиль карточка
-    dp.message.register(
-        cmd_profile_card,
-        Command("card"),
-    )
-
-    # Анонимки v2
-    dp.message.register(
-        cmd_anonmsg_v2,
-        Command("anonmsg"),
-        F.chat.type.in_({"group", "supergroup"})
-    )
-    dp.message.register(
-        cmd_anonbox,
-        Command("anonbox"),
-        F.chat.type.in_({"group", "supergroup"})
-    )
-    dp.callback_query.register(cb_anon,   F.data.startswith("anon:"))
-    dp.callback_query.register(cb_anonbox, F.data.startswith("anonbox:"))
-
-    # Опросы v2
-    dp.message.register(
-        cmd_poll_v2,
-        Command("poll2"),
-        F.chat.type.in_({"group", "supergroup"})
-    )
-    dp.callback_query.register(cb_poll_v2, F.data.startswith("poll2:"))
-
-    # Магазин v2
-    dp.message.register(
-        cmd_shop_v2,
-        Command("shop2"),
-        F.chat.type.in_({"group", "supergroup"})
-    )
-    dp.callback_query.register(cb_shop_v2, F.data.startswith("shop2:"))
-
-    # Аукцион
-    dp.message.register(
-        cmd_auction,
-        Command("auction"),
-        F.chat.type.in_({"group", "supergroup"})
-    )
-    dp.callback_query.register(cb_auction, F.data.startswith("auction:"))
-
-    # Профиль callbacks
-    dp.callback_query.register(cb_profile, F.data.startswith("profile:"))
-
-    log.info("✅ Все хендлеры features.py зарегистрированы")
+.stats-row {
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:8px; padding:14px 12px 0;
+}
+.stat-card {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--r); padding:12px 8px; text-align:center;
+  position:relative; overflow:hidden;
+}
+.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+.stat-card.blue::before   { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.stat-card.green::before  { background: linear-gradient(90deg, var(--green), #16a34a); }
+.stat-card.purple::before { background: linear-gradient(90deg, var(--purple), #9333ea); }
+.stat-card.red::before    { background: linear-gradient(90deg, var(--red), #dc2626); }
+.stat-card.cyan::before   { background: linear-gradient(90deg, var(--cyan), #0891b2); }
+.stat-card.yellow::before { background: linear-gradient(90deg, var(--yellow), #ca8a04); }
+.stat-val   { font-size:20px; font-weight:900; letter-spacing:-0.5px; }
+.stat-label { font-size:10px; color:var(--text2); margin-top:2px; }
+
+.tabs {
+  display:flex; padding:14px 12px 0;
+  overflow-x:auto; scrollbar-width:none; gap:6px;
+}
+.tabs::-webkit-scrollbar { display:none; }
+.tab {
+  flex-shrink:0; padding:8px 14px;
+  font-size:12px; font-weight:600; color:var(--text2);
+  border-radius:8px; cursor:pointer; transition: all 0.2s; white-space:nowrap;
+}
+.tab.active { background:var(--accent); color:#fff; }
+.tab:not(.active):active { background:var(--bg3); color:var(--text); }
+
+.section { display:none; padding:12px; }
+.section.active { display:block; }
+
+.card {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--r); margin-bottom:10px; overflow:hidden;
+}
+.card-header {
+  padding:12px 14px 10px; border-bottom:1px solid var(--border);
+  font-size:11px; font-weight:700; display:flex; align-items:center; gap:6px;
+  color:var(--text2); text-transform:uppercase; letter-spacing:0.6px;
+}
+
+.setting-row {
+  padding:13px 14px;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  border-bottom:1px solid var(--border); transition: background 0.15s;
+}
+.setting-row:last-child { border-bottom:none; }
+.setting-row:active { background:var(--bg3); }
+.setting-info { flex:1; min-width:0; }
+.setting-label { font-size:14px; font-weight:500; }
+.setting-desc  { font-size:11px; color:var(--text2); margin-top:2px; }
+
+.toggle {
+  width:44px; height:24px; flex-shrink:0;
+  background:var(--bg3); border:2px solid var(--border);
+  border-radius:12px; position:relative; cursor:pointer; transition: all 0.25s;
+}
+.toggle.on { background:var(--accent); border-color:var(--accent); }
+.toggle::after {
+  content:''; position:absolute; top:2px; left:2px;
+  width:16px; height:16px; background:#fff; border-radius:50%;
+  transition: transform 0.25s; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+.toggle.on::after { transform:translateX(20px); }
+
+.num-control {
+  display:flex; align-items:center;
+  background:var(--bg3); border:1px solid var(--border);
+  border-radius:8px; overflow:hidden; flex-shrink:0;
+}
+.num-btn {
+  width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; font-size:16px; font-weight:700; color:var(--text2);
+  transition: background 0.15s; user-select:none;
+}
+.num-btn:active { background:var(--bg); color:var(--accent2); }
+.num-val { min-width:36px; text-align:center; font-size:13px; font-weight:700; padding:0 4px; }
+
+.text-input-row { padding:10px 14px; border-bottom:1px solid var(--border); }
+.text-input-row:last-child { border-bottom:none; }
+.text-input-label { font-size:11px; color:var(--text2); margin-bottom:5px; font-weight:600; text-transform:uppercase; letter-spacing:0.4px; }
+.text-input {
+  width:100%; background:var(--bg3); border:1px solid var(--border);
+  border-radius:8px; padding:9px 12px;
+  font-family: inherit; font-size:14px; color:var(--text); outline:none;
+  transition: border-color 0.2s;
+}
+.text-input:focus { border-color:var(--accent); }
+
+.range-row { padding:13px 14px; border-bottom:1px solid var(--border); }
+.range-row:last-child { border-bottom:none; }
+.range-label-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.range-label { font-size:14px; font-weight:500; }
+.range-vals   { font-size:12px; color:var(--accent2); font-weight:700; }
+.range-inputs { display:flex; gap:8px; }
+.range-input {
+  flex:1; background:var(--bg3); border:1px solid var(--border);
+  border-radius:8px; padding:8px 10px;
+  font-family:inherit; font-size:13px; color:var(--text); outline:none; text-align:center;
+  transition: border-color 0.2s;
+}
+.range-input:focus { border-color:var(--accent); }
+.range-sep { display:flex; align-items:center; color:var(--text3); font-size:12px; }
+
+.save-btn {
+  width:100%; padding:13px;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  border:none; border-radius:10px;
+  color:#fff; font-family:inherit; font-size:15px; font-weight:700;
+  cursor:pointer; margin-top:12px;
+  box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+  transition: opacity 0.2s, transform 0.15s; letter-spacing:-0.2px;
+}
+.save-btn:active { opacity:0.85; transform:scale(0.98); }
+
+.danger-btn {
+  width:100%; padding:12px;
+  background: rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3);
+  border-radius:10px; color:var(--red);
+  font-family:inherit; font-size:14px; font-weight:600;
+  cursor:pointer; margin-top:8px; transition: background 0.2s;
+}
+.danger-btn:active { background: rgba(239,68,68,0.22); }
+
+.toast {
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px);
+  background:var(--accent); color:#fff;
+  padding:10px 20px; border-radius:20px;
+  font-size:13px; font-weight:600;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  z-index:100; white-space:nowrap;
+}
+.toast.show  { transform:translateX(-50%) translateY(0); }
+.toast.error { background:var(--red); }
+
+.rank-item {
+  padding:12px 14px; display:flex; align-items:flex-start; gap:10px;
+  border-bottom:1px solid var(--border);
+}
+.rank-item:last-child { border-bottom:none; }
+.rank-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; margin-top:3px; }
+.rank-name  { font-size:13px; font-weight:700; }
+.rank-cmd   { font-size:11px; color:var(--accent2); margin-top:3px; font-family:monospace; }
+.rank-perms { font-size:11px; color:var(--text3); margin-top:2px; }
+</style>
+</head>
+<body>
+
+<div id="lock-screen">
+  <div class="lock-icon">🔒</div>
+  <div class="lock-title">Доступ запрещён</div>
+  <div class="lock-sub">Панель только для владельца бота</div>
+</div>
+
+<div id="app" style="display:none">
+
+  <div class="header">
+    <div class="header-row">
+      <div class="logo">🛡</div>
+      <div class="header-text">
+        <h1>Chat Guard</h1>
+        <p>Панель управления</p>
+      </div>
+    </div>
+    <div class="owner-badge">👑 Владелец</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card blue">
+      <div class="stat-val" id="s-chats">—</div>
+      <div class="stat-label">Чатов</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-val" id="s-users">—</div>
+      <div class="stat-label">Юзеров</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-val" id="s-warns">—</div>
+      <div class="stat-label">Варнов</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-val" id="s-bans">—</div>
+      <div class="stat-label">Банов</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-val" id="s-mods">—</div>
+      <div class="stat-label">Модеров</div>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-val" id="s-msgs">—</div>
+      <div class="stat-label">Сообщений</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-sec="xp">⭐ XP</div>
+    <div class="tab" data-sec="mod">🛡 Модерация</div>
+    <div class="tab" data-sec="eco">💰 Экономика</div>
+    <div class="tab" data-sec="anon">💌 Анонимки</div>
+    <div class="tab" data-sec="features">🎮 Функции</div>
+    <div class="tab" data-sec="rating">🏆 Рейтинг</div>
+    <div class="tab" data-sec="ranks">🎖 Ранги</div>
+  </div>
+
+  <!-- XP -->
+  <div class="section active" id="sec-xp">
+    <div class="card">
+      <div class="card-header">⭐ XP и Уровни</div>
+      <div class="range-row">
+        <div class="range-label-row">
+          <span class="range-label">XP за сообщение</span>
+          <span class="range-vals" id="lbl-xp-range">1 – 15</span>
+        </div>
+        <div class="range-inputs">
+          <input class="range-input" id="xp_per_msg_min" type="number" min="1" max="100" value="1">
+          <div class="range-sep">–</div>
+          <input class="range-input" id="xp_per_msg_max" type="number" min="1" max="100" value="15">
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Кулдаун XP (секунд)</div>
+          <div class="setting-desc">Минимум между начислением XP</div>
+        </div>
+        <div class="num-control">
+          <div class="num-btn" onclick="numChange('xp_cooldown_secs',-10,1,3600)">−</div>
+          <div class="num-val" id="nv-xp_cooldown_secs">60</div>
+          <div class="num-btn" onclick="numChange('xp_cooldown_secs',10,1,3600)">+</div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Двойной XP в выходные</div>
+          <div class="setting-desc">×2 в субботу и воскресенье</div>
+        </div>
+        <div class="toggle" id="tog-xp_weekend_double" onclick="toggleKey('xp_weekend_double')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Анонс повышения уровня</div>
+          <div class="setting-desc">Писать в чат при level up</div>
+        </div>
+        <div class="toggle" id="tog-level_up_announce" onclick="toggleKey('level_up_announce')"></div>
+      </div>
+    </div>
+    <button class="save-btn" onclick="saveKeys(['xp_per_msg_min','xp_per_msg_max','xp_cooldown_secs','xp_weekend_double','level_up_announce'])">💾 Сохранить</button>
+  </div>
+
+  <!-- Moderation -->
+  <div class="section" id="sec-mod">
+    <div class="card">
+      <div class="card-header">🛡 Модерация</div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Макс. варнов до бана</div>
+          <div class="setting-desc">При превышении — автобан</div>
+        </div>
+        <div class="num-control">
+          <div class="num-btn" onclick="numChange('max_warns',-1,1,20)">−</div>
+          <div class="num-val" id="nv-max_warns">3</div>
+          <div class="num-btn" onclick="numChange('max_warns',1,1,20)">+</div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Варн сгорает через (дней)</div>
+          <div class="setting-desc">0 = никогда не сгорает</div>
+        </div>
+        <div class="num-control">
+          <div class="num-btn" onclick="numChange('warn_expiry_days',-5,0,365)">−</div>
+          <div class="num-val" id="nv-warn_expiry_days">30</div>
+          <div class="num-btn" onclick="numChange('warn_expiry_days',5,0,365)">+</div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Мут по умолчанию (мин)</div>
+          <div class="setting-desc">Без указания времени в команде</div>
+        </div>
+        <div class="num-control">
+          <div class="num-btn" onclick="numChange('default_mute_mins',-15,1,10080)">−</div>
+          <div class="num-val" id="nv-default_mute_mins">60</div>
+          <div class="num-btn" onclick="numChange('default_mute_mins',15,1,10080)">+</div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Автобан при макс. варнах</div>
+        </div>
+        <div class="toggle" id="tog-auto_ban_on_warns" onclick="toggleKey('auto_ban_on_warns')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Антимат</div>
+          <div class="setting-desc">Автоудаление матерных слов</div>
+        </div>
+        <div class="toggle" id="tog-antimat" onclick="toggleKey('antimat')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Анти-NSFW</div>
+          <div class="setting-desc">Блокировка 18+ контента</div>
+        </div>
+        <div class="toggle" id="tog-anti_nsfw" onclick="toggleKey('anti_nsfw')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Автокик ботов</div>
+          <div class="setting-desc">Кикать ботов при вступлении</div>
+        </div>
+        <div class="toggle" id="tog-auto_kick_bots" onclick="toggleKey('auto_kick_bots')"></div>
+      </div>
+    </div>
+    <button class="save-btn" onclick="saveKeys(['max_warns','warn_expiry_days','default_mute_mins','auto_ban_on_warns','antimat','anti_nsfw','auto_kick_bots'])">💾 Сохранить</button>
+  </div>
+
+  <!-- Economy -->
+  <div class="section" id="sec-eco">
+    <div class="card">
+      <div class="card-header">💰 Экономика</div>
+      <div class="range-row">
+        <div class="range-label-row">
+          <span class="range-label">Дейли бонус (XP)</span>
+          <span class="range-vals" id="lbl-daily-range">20 – 100</span>
+        </div>
+        <div class="range-inputs">
+          <input class="range-input" id="daily_xp_min" type="number" min="1" value="20">
+          <div class="range-sep">–</div>
+          <input class="range-input" id="daily_xp_max" type="number" min="1" value="100">
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Стоимость лотерейного билета</div>
+          <div class="setting-desc">В единицах репутации</div>
+        </div>
+        <div class="num-control">
+          <div class="num-btn" onclick="numChange('lottery_ticket_cost',-5,1,1000)">−</div>
+          <div class="num-val" id="nv-lottery_ticket_cost">20</div>
+          <div class="num-btn" onclick="numChange('lottery_ticket_cost',5,1,1000)">+</div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Множитель приза лотереи</div>
+        </div>
+        <div class="num-control">
+          <div class="num-btn" onclick="numChange('lottery_prize_mult',-5,1,100)">−</div>
+          <div class="num-val" id="nv-lottery_prize_mult">20</div>
+          <div class="num-btn" onclick="numChange('lottery_prize_mult',5,1,100)">+</div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Кулдаун репутации (часов)</div>
+        </div>
+        <div class="num-control">
+          <div class="num-btn" onclick="numChange('rep_cooldown_hours',-1,1,72)">−</div>
+          <div class="num-val" id="nv-rep_cooldown_hours">1</div>
+          <div class="num-btn" onclick="numChange('rep_cooldown_hours',1,1,72)">+</div>
+        </div>
+      </div>
+      <div class="range-row">
+        <div class="range-label-row">
+          <span class="range-label">Биржа (% изменение)</span>
+          <span class="range-vals" id="lbl-stock-range">-50% – +100%</span>
+        </div>
+        <div class="range-inputs">
+          <input class="range-input" id="stock_min_mult" type="number" max="0" value="-50">
+          <div class="range-sep">–</div>
+          <input class="range-input" id="stock_max_mult" type="number" min="0" value="100">
+        </div>
+      </div>
+    </div>
+    <button class="save-btn" onclick="saveKeys(['daily_xp_min','daily_xp_max','lottery_ticket_cost','lottery_prize_mult','rep_cooldown_hours','stock_min_mult','stock_max_mult'])">💾 Сохранить</button>
+  </div>
+
+  <!-- Anon -->
+  <div class="section" id="sec-anon">
+    <div class="card">
+      <div class="card-header">💌 Анонимки</div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Анонимки включены</div>
+          <div class="setting-desc">Глобальное вкл/выкл</div>
+        </div>
+        <div class="toggle" id="tog-anon_enabled" onclick="toggleKey('anon_enabled')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Кулдаун анонимки (сек)</div>
+          <div class="setting-desc">Между отправками</div>
+        </div>
+        <div class="num-control">
+          <div class="num-btn" onclick="numChange('anon_cooldown_secs',-5,0,3600)">−</div>
+          <div class="num-val" id="nv-anon_cooldown_secs">30</div>
+          <div class="num-btn" onclick="numChange('anon_cooldown_secs',5,0,3600)">+</div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Раскрытие автора для модов</div>
+          <div class="setting-desc">Модераторы видят кто написал</div>
+        </div>
+        <div class="toggle" id="tog-anon_reveal_admins" onclick="toggleKey('anon_reveal_admins')"></div>
+      </div>
+    </div>
+    <button class="save-btn" onclick="saveKeys(['anon_enabled','anon_cooldown_secs','anon_reveal_admins'])">💾 Сохранить</button>
+  </div>
+
+  <!-- Features -->
+  <div class="section" id="sec-features">
+    <div class="card">
+      <div class="card-header">🎮 Функции</div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Welcome-экран</div>
+          <div class="setting-desc">Приветствие новых участников</div>
+        </div>
+        <div class="toggle" id="tog-welcome_enabled" onclick="toggleKey('welcome_enabled')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Газета чата</div>
+          <div class="setting-desc">Еженедельная газета событий</div>
+        </div>
+        <div class="toggle" id="tog-newspaper_enabled" onclick="toggleKey('newspaper_enabled')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Ивенты (XP буст)</div>
+          <div class="setting-desc">Периодические бонусы XP</div>
+        </div>
+        <div class="toggle" id="tog-events_enabled" onclick="toggleKey('events_enabled')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Авто-комплименты</div>
+          <div class="setting-desc">Случайные комплименты в чате</div>
+        </div>
+        <div class="toggle" id="tog-compliment_enabled" onclick="toggleKey('compliment_enabled')"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">🤖 Имя бота</div>
+      <div class="text-input-row">
+        <div class="text-input-label">Отображаемое имя</div>
+        <input class="text-input" id="bot_name" type="text" maxlength="50" placeholder="CHAT GUARD">
+      </div>
+    </div>
+    <button class="save-btn" onclick="saveKeys(['welcome_enabled','newspaper_enabled','events_enabled','compliment_enabled','bot_name'])">💾 Сохранить</button>
+  </div>
+
+  <!-- Rating -->
+  <div class="section" id="sec-rating">
+    <div class="card">
+      <div class="card-header">🏆 Рейтинг и Топ</div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Размер топа (мест)</div>
+        </div>
+        <div class="num-control">
+          <div class="num-btn" onclick="numChange('top_size',-5,3,50)">−</div>
+          <div class="num-val" id="nv-top_size">10</div>
+          <div class="num-btn" onclick="numChange('top_size',5,3,50)">+</div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Сброс рейтинга каждые (дней)</div>
+          <div class="setting-desc">0 = никогда</div>
+        </div>
+        <div class="num-control">
+          <div class="num-btn" onclick="numChange('rating_reset_days',-7,0,365)">−</div>
+          <div class="num-val" id="nv-rating_reset_days">0</div>
+          <div class="num-btn" onclick="numChange('rating_reset_days',7,0,365)">+</div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info"><div class="setting-label">XP в топе</div></div>
+        <div class="toggle" id="tog-show_xp_in_top" onclick="toggleKey('show_xp_in_top')"></div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info"><div class="setting-label">Репутация в топе</div></div>
+        <div class="toggle" id="tog-show_rep_in_top" onclick="toggleKey('show_rep_in_top')"></div>
+      </div>
+    </div>
+    <button class="save-btn" onclick="saveKeys(['top_size','rating_reset_days','show_xp_in_top','show_rep_in_top'])">💾 Сохранить</button>
+    <button class="danger-btn" onclick="doReset('xp')">⚠️ Сбросить XP всех пользователей</button>
+    <button class="danger-btn" onclick="doReset('rep')">⚠️ Сбросить репутацию всех</button>
+  </div>
+
+  <!-- Ranks -->
+  <div class="section" id="sec-ranks">
+    <div class="card">
+      <div class="card-header">🎖 Система рангов</div>
+      <div class="rank-item">
+        <div class="rank-dot" style="background:#64748b"></div>
+        <div>
+          <div class="rank-name">🔘 Стажёр</div>
+          <div class="rank-cmd">аутист дать роль @user стажёр</div>
+          <div class="rank-perms">варн, репорты</div>
+        </div>
+      </div>
+      <div class="rank-item">
+        <div class="rank-dot" style="background:#22c55e"></div>
+        <div>
+          <div class="rank-name">🟢 Модератор</div>
+          <div class="rank-cmd">аутист дать роль @user модератор</div>
+          <div class="rank-perms">+ мут, кик</div>
+        </div>
+      </div>
+      <div class="rank-item">
+        <div class="rank-dot" style="background:#3b82f6"></div>
+        <div>
+          <div class="rank-name">🔵 Старший модератор</div>
+          <div class="rank-cmd">аутист дать роль @user старший</div>
+          <div class="rank-perms">+ бан, заметки, очистка</div>
+        </div>
+      </div>
+      <div class="rank-item">
+        <div class="rank-dot" style="background:#a855f7"></div>
+        <div>
+          <div class="rank-name">🟣 Хранитель</div>
+          <div class="rank-cmd">аутист дать роль @user хранитель</div>
+          <div class="rank-perms">+ разбан, локдаун, темпбан</div>
+        </div>
+      </div>
+      <div class="rank-item">
+        <div class="rank-dot" style="background:#ef4444"></div>
+        <div>
+          <div class="rank-name">🔴 Страж порядка</div>
+          <div class="rank-cmd">аутист дать роль @user страж</div>
+          <div class="rank-perms">+ выдача ролей, полный доступ</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">📋 Команды ролей</div>
+      <div class="rank-item" style="flex-direction:column;align-items:flex-start;gap:5px">
+        <div style="font-size:11px;color:var(--text2);font-weight:600">ВЫДАТЬ:</div>
+        <div style="font-size:12px;color:var(--accent2);font-family:monospace">/giverole @user ранг</div>
+        <div style="font-size:12px;color:var(--accent2);font-family:monospace">аутист дать роль @user ранг</div>
+      </div>
+      <div class="rank-item" style="flex-direction:column;align-items:flex-start;gap:5px">
+        <div style="font-size:11px;color:var(--text2);font-weight:600">ЗАБРАТЬ:</div>
+        <div style="font-size:12px;color:var(--accent2);font-family:monospace">/takerole @user</div>
+        <div style="font-size:12px;color:var(--accent2);font-family:monospace">аутист снять роль @user</div>
+      </div>
+      <div class="rank-item" style="flex-direction:column;align-items:flex-start;gap:5px">
+        <div style="font-size:11px;color:var(--text2);font-weight:600">СПИСОК:</div>
+        <div style="font-size:12px;color:var(--accent2);font-family:monospace">/roles</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.expand();
+tg.setHeaderColor && tg.setHeaderColor('#0b0b14');
+tg.setBackgroundColor && tg.setBackgroundColor('#0b0b14');
+
+const OWNER_ID = 7823802800;
+const API = 'https://mybot-1s9l.onrender.com';
+let S = {}, uid = 0;
+
+// ── AUTH ──
+function init() {
+  try {
+    const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
+    if (!user) { showLock('Откройте через Telegram'); return; }
+    uid = user.id;
+    if (uid !== OWNER_ID) { showLock('Только для владельца бота'); return; }
+  } catch(e) {
+    showLock('Ошибка авторизации');
+    return;
+  }
+  document.getElementById('lock-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadAll();
+  initTabs();
+  initRangeListeners();
+}
+
+function showLock(msg) {
+  document.querySelector('#lock-screen .lock-sub').textContent = msg;
+}
+
+// ── TABS ──
+function initTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('sec-' + tab.dataset.sec).classList.add('active');
+    });
+  });
+}
+
+// ── RANGE LISTENERS ──
+function initRangeListeners() {
+  const watch = [
+    ['xp_per_msg_min','xp_per_msg_max','lbl-xp-range', (a,b) => a+' – '+b],
+    ['daily_xp_min','daily_xp_max','lbl-daily-range', (a,b) => a+' – '+b],
+    ['stock_min_mult','stock_max_mult','lbl-stock-range', (a,b) => a+'% – +'+b+'%'],
+  ];
+  watch.forEach(([id1,id2,lbl,fmt]) => {
+    [id1,id2].forEach(id => {
+      document.getElementById(id).addEventListener('input', () => {
+        const a = document.getElementById(id1).value;
+        const b = document.getElementById(id2).value;
+        document.getElementById(lbl).textContent = fmt(a,b);
+        S[id1] = String(a); S[id2] = String(b);
+      });
+    });
+  });
+}
+
+// ── LOAD ──
+async function loadAll() {
+  try {
+    const r = await fetch(API+'/api/settings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({uid})
+    });
+    if (r.ok) { const d = await r.json(); S = d.settings || {}; }
+  } catch(e) {}
+  applyAll();
+
+  try {
+    const r = await fetch(API+'/api/stats', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({uid})
+    });
+    if (r.ok) {
+      const d = await r.json();
+      setText('s-chats', d.chats);
+      setText('s-users', fmt(d.users));
+      setText('s-warns', d.warns);
+      setText('s-bans',  d.bans);
+      setText('s-mods',  d.mods);
+      setText('s-msgs',  fmt(d.messages));
+    }
+  } catch(e) {}
+}
+
+function fmt(n) {
+  if (!n && n !== 0) return '—';
+  if (n >= 1000) return (n/1000).toFixed(1)+'k';
+  return n;
+}
+function setText(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = (v !== undefined && v !== null) ? v : '—';
+}
+
+function g(k, def) { return S[k] !== undefined ? S[k] : def; }
+
+function applyAll() {
+  // XP
+  setInp('xp_per_msg_min', g('xp_per_msg_min','1'));
+  setInp('xp_per_msg_max', g('xp_per_msg_max','15'));
+  updateRangeLabel('xp_per_msg_min','xp_per_msg_max','lbl-xp-range', (a,b)=>a+' – '+b);
+  setNv('xp_cooldown_secs', g('xp_cooldown_secs','60'));
+  setTog('xp_weekend_double', g('xp_weekend_double','1'));
+  setTog('level_up_announce', g('level_up_announce','1'));
+  // Mod
+  setNv('max_warns', g('max_warns','3'));
+  setNv('warn_expiry_days', g('warn_expiry_days','30'));
+  setNv('default_mute_mins', g('default_mute_mins','60'));
+  setTog('auto_ban_on_warns', g('auto_ban_on_warns','1'));
+  setTog('antimat', g('antimat','0'));
+  setTog('anti_nsfw', g('anti_nsfw','1'));
+  setTog('auto_kick_bots', g('auto_kick_bots','1'));
+  // Eco
+  setInp('daily_xp_min', g('daily_xp_min','20'));
+  setInp('daily_xp_max', g('daily_xp_max','100'));
+  updateRangeLabel('daily_xp_min','daily_xp_max','lbl-daily-range', (a,b)=>a+' – '+b);
+  setNv('lottery_ticket_cost', g('lottery_ticket_cost','20'));
+  setNv('lottery_prize_mult', g('lottery_prize_mult','20'));
+  setNv('rep_cooldown_hours', g('rep_cooldown_hours','1'));
+  setInp('stock_min_mult', g('stock_min_mult','-50'));
+  setInp('stock_max_mult', g('stock_max_mult','100'));
+  updateRangeLabel('stock_min_mult','stock_max_mult','lbl-stock-range', (a,b)=>a+'% – +'+b+'%');
+  // Anon
+  setTog('anon_enabled', g('anon_enabled','1'));
+  setNv('anon_cooldown_secs', g('anon_cooldown_secs','30'));
+  setTog('anon_reveal_admins', g('anon_reveal_admins','1'));
+  // Features
+  setTog('welcome_enabled', g('welcome_enabled','1'));
+  setTog('newspaper_enabled', g('newspaper_enabled','1'));
+  setTog('events_enabled', g('events_enabled','1'));
+  setTog('compliment_enabled', g('compliment_enabled','1'));
+  setInp('bot_name', g('bot_name','CHAT GUARD'));
+  // Rating
+  setNv('top_size', g('top_size','10'));
+  setNv('rating_reset_days', g('rating_reset_days','0'));
+  setTog('show_xp_in_top', g('show_xp_in_top','1'));
+  setTog('show_rep_in_top', g('show_rep_in_top','1'));
+}
+
+function setInp(id, v) { const e=document.getElementById(id); if(e) e.value=v; S[id]=String(v); }
+function setNv(key, v)  { const e=document.getElementById('nv-'+key); if(e) e.textContent=v; S[key]=String(v); }
+function setTog(key, v) {
+  const e=document.getElementById('tog-'+key); if(!e) return;
+  const on = String(v)==='1'; e.classList.toggle('on', on); S[key]=on?'1':'0';
+}
+function updateRangeLabel(id1,id2,lbl,fmt) {
+  const a=document.getElementById(id1)?.value; const b=document.getElementById(id2)?.value;
+  const el=document.getElementById(lbl); if(el&&a&&b) el.textContent=fmt(a,b);
+}
+
+// ── CONTROLS ──
+function numChange(key, delta, min, max) {
+  let cur = parseInt(S[key]||'0'); cur = Math.max(min, Math.min(max, cur+delta));
+  setNv(key, cur); tg.HapticFeedback && tg.HapticFeedback.impactOccurred('light');
+}
+
+function toggleKey(key) {
+  const newVal = S[key]==='1' ? '0' : '1'; setTog(key, newVal);
+  tg.HapticFeedback && tg.HapticFeedback.impactOccurred('light');
+}
+
+// ── SAVE ──
+async function saveKeys(keys) {
+  // Pull latest values from inputs & num-vals
+  keys.forEach(k => {
+    const inp = document.getElementById(k); if(inp) S[k]=inp.value;
+    const nv  = document.getElementById('nv-'+k); if(nv) S[k]=nv.textContent;
+  });
+
+  let allOk = true;
+  for (const k of keys) {
+    if (S[k] === undefined) continue;
+    try {
+      const r = await fetch(API+'/api/set', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({uid, key:k, value:S[k]})
+      });
+      if (!r.ok) allOk = false;
+    } catch(e) { allOk=false; }
+  }
+  if (allOk) {
+    toast('✅ Сохранено!'); tg.HapticFeedback && tg.HapticFeedback.notificationOccurred('success');
+  } else {
+    toast('❌ Ошибка сохранения', true); tg.HapticFeedback && tg.HapticFeedback.notificationOccurred('error');
+  }
+}
+
+function doReset(type) {
+  const label = type==='xp' ? 'XP всех пользователей' : 'репутацию всех';
+  tg.showConfirm('Сбросить '+label+'?\nЭто нельзя отменить!', async (ok) => {
+    if (!ok) return;
+    await fetch(API+'/api/set', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({uid, key:'action_reset_'+type, value:'1'})
+    }).catch(()=>{});
+    toast('✅ Сброс выполнен');
+  });
+}
+
+// ── TOAST ──
+function toast(msg, err=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast'+(err?' error':'');
+  setTimeout(()=>t.classList.add('show'),10);
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+init();
+</script>
+</body>
+</html>

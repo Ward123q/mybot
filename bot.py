@@ -1120,12 +1120,95 @@ async def handle_verify_result(request):
     return web.Response(text="ok")
 
 
+async def api_get_settings(request):
+    """API: получить настройки (только для владельца)"""
+    import hmac, hashlib, json as _json
+    try:
+        data = await request.json()
+        uid = int(data.get("uid", 0))
+        if uid != OWNER_ID:
+            return web.Response(status=403, text="Forbidden")
+        s = _owner_settings_get()
+        return web.Response(
+            content_type="application/json",
+            text=_json.dumps({"ok": True, "settings": s, "chats": len(known_chats)})
+        )
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
+
+async def api_set_setting(request):
+    """API: изменить настройку (только для владельца)"""
+    import json as _json
+    try:
+        data = await request.json()
+        uid = int(data.get("uid", 0))
+        if uid != OWNER_ID:
+            return web.Response(status=403, text="Forbidden")
+        key = data.get("key", "")
+        value = str(data.get("value", ""))
+        allowed_keys = {
+            "xp_per_msg_min","xp_per_msg_max","xp_weekend_double","xp_cooldown_secs",
+            "level_up_announce","max_warns","warn_expiry_days","auto_ban_on_warns",
+            "default_mute_mins","antimat","anti_nsfw","auto_kick_bots",
+            "daily_xp_min","daily_xp_max","lottery_ticket_cost","lottery_prize_mult",
+            "rep_cooldown_hours","stock_min_mult","stock_max_mult","top_size",
+            "rating_reset_days","show_xp_in_top","show_rep_in_top",
+            "anon_enabled","anon_cooldown_secs","anon_reveal_admins",
+            "welcome_enabled","newspaper_enabled","events_enabled",
+            "compliment_enabled","bot_name"
+        }
+        if key not in allowed_keys:
+            return web.Response(status=400, text="Unknown key")
+        _owner_settings_set(key, value)
+        # Apply live
+        if key == "antimat":
+            global ANTI_MAT_ENABLED
+            ANTI_MAT_ENABLED = value == "1"
+        elif key == "max_warns":
+            global MAX_WARNINGS
+            try: MAX_WARNINGS = int(value)
+            except: pass
+        return web.Response(content_type="application/json", text=_json.dumps({"ok": True}))
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
+
+async def api_get_stats(request):
+    """API: статистика бота"""
+    import json as _json
+    try:
+        data = await request.json()
+        uid = int(data.get("uid", 0))
+        if uid != OWNER_ID:
+            return web.Response(status=403, text="Forbidden")
+        total_users = sum(len(v) for v in chat_stats.values())
+        total_msgs = sum(sum(v.values()) for v in chat_stats.values())
+        total_warns = sum(sum(v.values()) for v in warnings.values())
+        total_bans = sum(len(v) for v in ban_list.values())
+        total_mods = sum(len(v) for v in mod_roles.values())
+        return web.Response(
+            content_type="application/json",
+            text=_json.dumps({
+                "ok": True,
+                "chats": len(known_chats),
+                "users": total_users,
+                "messages": total_msgs,
+                "warns": total_warns,
+                "bans": total_bans,
+                "mods": total_mods,
+            })
+        )
+    except Exception as e:
+        return web.Response(status=500, text=str(e))
+
 async def start_web():
     app = web.Application()
     app.router.add_get("/", health)
     app.router.add_get("/mini", serve_mini_app)
     app.router.add_get("/verify", serve_verify)
     app.router.add_post("/verify_result", handle_verify_result)
+    app.router.add_post("/api/settings", api_get_settings)
+    app.router.add_post("/api/set", api_set_setting)
+    app.router.add_post("/api/stats", api_get_stats)
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", 8080).start()
