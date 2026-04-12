@@ -657,20 +657,33 @@ streak_dates  = defaultdict(lambda: defaultdict(str))
 # ══════════════════════════════════════════
 #  🆕 НОВЫЕ ГЛОБАЛЬНЫЕ СТРУКТУРЫ
 # ══════════════════════════════════════════
-# Роли модераторов: {cid: {uid: "junior"/"senior"/"head"}}
+# Роли модераторов: {cid: {uid: "стажёр"/"модератор"/"старший"/"хранитель"/"страж"}}
 mod_roles = defaultdict(dict)
 
-# Права ролей
+# Права ролей (5 уровней)
 MOD_ROLE_PERMISSIONS = {
-    "junior": {"warn", "mute", "kick", "report_handle"},
-    "senior": {"warn", "mute", "kick", "ban", "report_handle", "clear", "notes"},
-    "head":   {"warn", "mute", "kick", "ban", "unban", "report_handle", "clear",
-               "notes", "announce", "lockdown", "tempban"},
+    "стажёр":    {"warn", "report_handle"},
+    "модератор": {"warn", "mute", "kick", "report_handle"},
+    "старший":   {"warn", "mute", "kick", "ban", "report_handle", "clear", "notes"},
+    "хранитель": {"warn", "mute", "kick", "ban", "unban", "report_handle", "clear",
+                  "notes", "announce", "tempban"},
+    "страж":     {"warn", "mute", "kick", "ban", "unban", "report_handle", "clear",
+                  "notes", "announce", "lockdown", "tempban", "giverole", "takerole"},
 }
 MOD_ROLE_LABELS = {
-    "junior": "🟢 Junior Mod",
-    "senior": "🔵 Senior Mod",
-    "head":   "🔴 Head Mod",
+    "стажёр":    "🔘 Стажёр",
+    "модератор": "🟢 Модератор",
+    "старший":   "🔵 Старший модератор",
+    "хранитель": "🟣 Хранитель",
+    "страж":     "🔴 Страж порядка",
+}
+# Описания рангов для /giverole
+MOD_ROLE_DESCRIPTIONS = {
+    "стажёр":    "варн, репорты",
+    "модератор": "+ мут, кик",
+    "старший":   "+ бан, заметки, очистка",
+    "хранитель": "+ разбан, локдаун, темпбан",
+    "страж":     "+ выдача ролей, полный доступ",
 }
 
 # Плагины: {cid: {plugin_name: bool}}
@@ -3274,6 +3287,8 @@ async def cmd_help(message: Message):
         "├ аутист ядерка / молния / взрыв / хаос\n"
         "├ аутист локдаун / локдаун выкл\n"
         "├ аутист тишина 10м\n"
+        "├ аутист дать роль @user ранг — выдать ранг мода\n"
+        "├ аутист снять роль @user — забрать ранг\n"
         "└ аутист корона / анонс / сос / рестарт\n\n"
 
         "──────────────────────\n"
@@ -4320,7 +4335,7 @@ async def autist_commands(message: Message):
     if len(parts) < 2: return
     rest = parts[1].strip()
     action = None
-    for cmd in ["снять варн","разварн","размут","разбан","варн","мут навсегда","мут","бан","захуесосить","кик",
+    for cmd in ["снять варн","разварн","размут","разбан","дать роль","снять роль","варн","мут навсегда","мут","бан","захуесосить","кик",
                 "тег","убрать тег","очистить","удалить","закрепить","предупредить","инфо","варны","репутация",
                 "обозвать","поженить","проверить","казнить","диагноз","профессия","похитить","дуэль","экзамен","история",
                 "подарить","предложить","разлюбить",
@@ -4486,6 +4501,51 @@ async def autist_commands(message: Message):
             ban_list[cid].pop(target.id, None); save_data()
             add_mod_history(cid, target.id, "🕊 Разбан", reason, message.from_user.full_name)
             await reply_auto_delete(message, f"🕊 {tname} разбанен.", parse_mode="HTML")
+        elif action == "дать роль":
+            if message.from_user.id not in ADMIN_IDS:
+                await reply_auto_delete(message, "🚫 Только владелец может выдавать роли!"); return
+            role_arg = rest.strip().lower()
+            if not role_arg:
+                roles_info = "\n".join(
+                    f"{MOD_ROLE_LABELS[r]} — {MOD_ROLE_DESCRIPTIONS[r]}"
+                    for r in MOD_ROLE_PERMISSIONS
+                )
+                await reply_auto_delete(message,
+                    "⚙️ <b>Использование:</b>\n"
+                    "<code>аутист дать роль @user ранг</code>\n\n"
+                    "<b>Доступные ранги:</b>\n" + roles_info,
+                    parse_mode="HTML"); return
+            if role_arg not in MOD_ROLE_PERMISSIONS:
+                roles_list = " / ".join(MOD_ROLE_PERMISSIONS.keys())
+                await reply_auto_delete(message, f"⚠️ Неизвестный ранг. Доступно: {roles_list}"); return
+            mod_roles[cid][target.id] = role_arg
+            save_data()
+            await reply_auto_delete(message,
+                f"✅ {target.mention_html()} получил ранг <b>{MOD_ROLE_LABELS[role_arg]}</b>",
+                parse_mode="HTML")
+            await log_action(
+                f"🔐 <b>Роль выдана (аутист)</b>\n"
+                f"👤 {target.full_name}\n"
+                f"🎖 Ранг: {MOD_ROLE_LABELS[role_arg]}\n"
+                f"👑 Кем: {message.from_user.full_name}\n"
+                f"💬 Чат: {message.chat.title}")
+        elif action == "снять роль":
+            if message.from_user.id not in ADMIN_IDS:
+                await reply_auto_delete(message, "🚫 Только владелец может забирать роли!"); return
+            if target.id in mod_roles[cid]:
+                old_role = MOD_ROLE_LABELS.get(mod_roles[cid].pop(target.id), "")
+                save_data()
+                await reply_auto_delete(message,
+                    f"❌ У {target.mention_html()} забран ранг <b>{old_role}</b>",
+                    parse_mode="HTML")
+                await log_action(
+                    f"🔐 <b>Роль снята (аутист)</b>\n"
+                    f"👤 {target.full_name}\n"
+                    f"🎖 Был: {old_role}\n"
+                    f"👑 Кем: {message.from_user.full_name}\n"
+                    f"💬 Чат: {message.chat.title}")
+            else:
+                await reply_auto_delete(message, f"⚠️ У {tname} нет роли модератора.", parse_mode="HTML")
         elif action == "размут":
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(
                 can_send_messages=True, can_send_media_messages=True, can_send_polls=True,
@@ -8958,21 +9018,24 @@ def get_mod_role_label(cid: int, uid: int) -> str:
 
 @dp.message(Command("giverole"))
 async def cmd_give_role(message: Message):
-    """аутист дать роль @user junior/senior/head — только владелец"""
+    """Дать роль @user стажёр/модератор/старший/хранитель/страж — только владелец"""
     if message.from_user.id not in ADMIN_IDS:
         await reply_auto_delete(message, "🚫 Только владелец может выдавать роли!"); return
     args = message.text.split()[1:] if message.text else []
     if len(args) < 2:
+        roles_info = "\n".join(
+            f"{MOD_ROLE_LABELS[r]} — {MOD_ROLE_DESCRIPTIONS[r]}"
+            for r in MOD_ROLE_PERMISSIONS
+        )
         await reply_auto_delete(message,
             "⚙️ <b>Использование:</b>\n"
-            "<code>/giverole @user junior|senior|head</code>\n\n"
-            "🟢 Junior — варн, мут, кик\n"
-            "🔵 Senior — + бан, заметки, очистка\n"
-            "🔴 Head — + разбан, локдаун, темпбан",
+            "<code>/giverole @user ранг</code>\n\n"
+            "<b>Доступные ранги:</b>\n" + roles_info,
             parse_mode="HTML"); return
     role_arg = args[-1].lower()
     if role_arg not in MOD_ROLE_PERMISSIONS:
-        await reply_auto_delete(message, "⚠️ Роль: junior / senior / head"); return
+        roles_list = " / ".join(MOD_ROLE_PERMISSIONS.keys())
+        await reply_auto_delete(message, f"⚠️ Ранг: {roles_list}"); return
     target = None
     if message.reply_to_message:
         target = message.reply_to_message.from_user
@@ -11348,12 +11411,12 @@ async def cmd_set_perm(message: Message):
     if len(args) < 2:
         await reply_auto_delete(message,
             "🔐 <b>Использование:</b>\n<code>/setperm команда роль</code>\n"
-            "Роли: junior / senior / head / admin / owner\n"
-            "Пример: <code>/setperm warn junior</code>",
+            "Ранги: стажёр / модератор / старший / хранитель / страж / admin / owner\n"
+            "Пример: <code>/setperm warn модератор</code>",
             parse_mode="HTML"); return
     cmd, role = args[0].lower(), args[1].lower()
-    if role not in ("junior", "senior", "head", "admin", "owner"):
-        await reply_auto_delete(message, "⚠️ Роли: junior / senior / head / admin / owner"); return
+    if role not in ("стажёр", "модератор", "старший", "хранитель", "страж", "admin", "owner"):
+        await reply_auto_delete(message, "⚠️ Ранги: стажёр / модератор / старший / хранитель / страж / admin / owner"); return
     cid = message.chat.id
     conn = db_connect()
     conn.execute("INSERT OR REPLACE INTO cmd_permissions VALUES (?,?,?)", (cid, cmd, role))
