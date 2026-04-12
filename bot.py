@@ -1412,7 +1412,7 @@ def kb_main_menu(tid: int = 0) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="👋  Welcome",          callback_data=f"panel:welcome:{tid}"),
          InlineKeyboardButton(text="🧩  Плагины",          callback_data=f"panel:plugins:{tid}")],
         [InlineKeyboardButton(text="🎫  Тикеты",           callback_data=f"panel:tickets:{tid}"),
-         InlineKeyboardButton(text="📱  Open App",         web_app=WebAppInfo(url="https://mybot-1s9l.onrender.com/mini"))],
+         InlineKeyboardButton(text="📱  Мини-апп",         web_app=WebAppInfo(url="https://mybot-1s9l.onrender.com/mini"))],
         [InlineKeyboardButton(text="✕  Закрыть",          callback_data="panel:close:0")],
     ])
 
@@ -7569,6 +7569,21 @@ async def cmd_ref(message: Message):
         f"🔗 Твоя ссылка:\n<code>{ref_link}</code>\n\n"
         f"<i>За каждого приглашённого +30 репы!</i>",
         parse_mode="HTML")
+
+@dp.message(Command("app"))
+async def cmd_open_app(message: Message):
+    """Открыть мини-апп"""
+    await message.answer(
+        "📱 <b>Мини-апп Chat Guard</b>\n\n"
+        "Нажми кнопку ниже чтобы открыть панель управления:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="📱 Открыть панель",
+                web_app=WebAppInfo(url="https://mybot-1s9l.onrender.com/mini")
+            )
+        ]])
+    )
 
 @dp.message(Command("start"))
 async def cmd_start_ref(message: Message, command: CommandObject):
