@@ -33,7 +33,6 @@ import chat_settings as cs
 import antiraid
 import night_mode
 import security_features as sf
-import anti_channel
 
 DB_FILE_MAIN = "skinvault.db"
 
@@ -14512,7 +14511,6 @@ async def main():
     await antiraid.init(bot, dp, ADMIN_IDS, LOG_CHANNEL_ID)
     await night_mode.init(bot)
     await sf.init(bot, dp, ADMIN_IDS, LOG_CHANNEL_ID)
-    anti_channel.init(bot, dp, ADMIN_IDS, LOG_CHANNEL_ID)
 
     # ── Инициализация систем ─────────────────────────────
     _triggers_db_init()
