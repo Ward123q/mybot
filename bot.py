@@ -2201,7 +2201,14 @@ async def cb_panel(call: CallbackQuery):
                 can_send_other_messages=True, can_add_web_page_previews=True))
             await call.message.edit_text(f"🔊 <b>{tname}</b> размучен.", parse_mode="HTML")
             asyncio.create_task(schedule_delete(call.message))
-            await log_action(f"🔊 <b>Размут</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+            await log_action(
+        f"🔊 <b>РАЗМУТ</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {call.from_user.mention_html()}\n"
+        f"🎯 <b>Пользователь:</b> <b>{tname}</b>\n"
+        f"💬 <b>Чат:</b> {call.message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
         elif action == "warn":
             await call.message.edit_text(f"⚡ <b>Варн для {tname}</b>\n\nВыбери причину:",
                 parse_mode="HTML", reply_markup=kb_warn(tid))
@@ -2218,7 +2225,14 @@ async def cb_panel(call: CallbackQuery):
             await bot.unban_chat_member(cid, tid, only_if_banned=True)
             await call.message.edit_text(f"🕊 <b>{tname}</b> разбанен.", parse_mode="HTML")
             asyncio.create_task(schedule_delete(call.message))
-            await log_action(f"🕊️ <b>Разбан</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+            await log_action(
+        f"🕊️ <b>РАЗБАН</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {call.from_user.mention_html()}\n"
+        f"🎯 <b>Пользователь:</b> <b>{tname}</b>\n"
+        f"💬 <b>Чат:</b> {call.message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
         elif action == "del":
             try: await call.message.reply_to_message.delete()
             except: pass
@@ -2785,7 +2799,23 @@ async def cb_mute(call: CallbackQuery):
         permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(minutes=mins))
     await call.message.edit_text(
         random.choice(MUTE_MESSAGES).format(name=f"<b>{tname}</b>", time=label), parse_mode="HTML")
-    await log_action(f"🔇 <b>МУТ</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    _warn_cnt  = warnings[cid].get(tid, 0)
+    _rep       = reputation[cid].get(tid, 0)
+    _hist_cnt  = len(mod_history[cid].get(tid, []))
+    _role_lbl  = get_mod_role_label(cid, call.from_user.id)
+    _mod_label = f"{call.from_user.mention_html()}" + (f" {_role_lbl}" if _role_lbl else "")
+    await log_action(
+        f"🔇 <b>МУТ</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {_mod_label}\n"
+        f"🎯 <b>Нарушитель:</b> <b>{tname}</b>\n"
+        f"⏳ <b>Длительность:</b> {label}\n"
+        f"⚠️ <b>Варнов у юзера:</b> {_warn_cnt}/{MAX_WARNINGS}\n"
+        f"🌟 <b>Репутация:</b> {_rep:+d}\n"
+        f"📋 <b>Нарушений в истории:</b> {_hist_cnt}\n"
+        f"💬 <b>Чат:</b> {call.message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
     await call.answer(f"Замутен на {label}!")
 
 @dp.callback_query(F.data.startswith("warn:"))
@@ -2808,7 +2838,18 @@ async def cb_warn(call: CallbackQuery):
     else:
         msg = random.choice(WARN_MESSAGES).format(
             name=f"<b>{tname}</b>", count=count, max=MAX_WARNINGS, reason=reason)
-        await log_action(f"⚠️ <b>Предупреждение</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+        await log_action(
+        f"⚠️ <b>ВАРН</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {call.from_user.mention_html()}" + (f" {get_mod_role_label(cid, call.from_user.id)}" if get_mod_role_label(cid, call.from_user.id) else "") + "\n"
+        f"🎯 <b>Нарушитель:</b> <b>{tname}</b>\n"
+        f"📝 <b>Причина:</b> {reason}\n"
+        f"⚡ <b>Варнов:</b> {warnings[cid].get(tid,0)}/{MAX_WARNINGS}\n"
+        f"🌟 <b>Репутация:</b> {reputation[cid].get(tid,0):+d}\n"
+        f"📋 <b>Нарушений в истории:</b> {len(mod_history[cid].get(tid,[]))}\n"
+        f"💬 <b>Чат:</b> {call.message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
     await call.message.edit_text(msg, parse_mode="HTML")
     asyncio.create_task(schedule_delete(call.message))
     await call.answer("Варн выдан!")
@@ -2834,7 +2875,20 @@ async def cb_ban(call: CallbackQuery):
     await bot.ban_chat_member(cid, tid)
     await call.message.edit_text(
         random.choice(BAN_MESSAGES).format(name=f"<b>{tname}</b>", reason=reason), parse_mode="HTML")
-    await log_action(f"🔨 <b>БАН</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    _r2 = get_mod_role_label(cid, call.from_user.id)
+    await log_action(
+        f"🔨 <b>БАН</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {call.from_user.mention_html()}" + (f" {_r2}" if _r2 else "") + "\n"
+        f"🎯 <b>Нарушитель:</b> <b>{tname}</b>\n"
+        f"📝 <b>Причина:</b> {reason}\n"
+        f"⚠️ <b>Варнов было:</b> {warnings[cid].get(tid,0)}/{MAX_WARNINGS}\n"
+        f"🌟 <b>Репутация:</b> {reputation[cid].get(tid,0):+d}\n"
+        f"📋 <b>Нарушений в истории:</b> {len(mod_history[cid].get(tid,[]))}\n"
+        f"💬 <b>Сообщений в чате:</b> {chat_stats[cid].get(tid,0)}\n"
+        f"💬 <b>Чат:</b> {call.message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
     await call.answer("Забанен!")
 
 @dp.callback_query(F.data.startswith("fun:"))
@@ -3487,7 +3541,20 @@ async def cmd_ban(message: Message, command: CommandObject):
     reply = random.choice(BAN_MESSAGES).format(name=target.mention_html(), reason=reason)
     if dm_ok: reply += "\n<i>Пользователь уведомлён в личные сообщения.</i>"
     await reply_auto_delete(message, reply, parse_mode="HTML")
-    await log_action(f"🔨 <b>БАН</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    _r3 = get_mod_role_label(message.chat.id, message.from_user.id)
+    await log_action(
+        f"🔨 <b>БАН</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {message.from_user.mention_html()}" + (f" {_r3}" if _r3 else "") + "\n"
+        f"🎯 <b>Нарушитель:</b> {target.mention_html()}\n"
+        f"📝 <b>Причина:</b> {reason}\n"
+        f"⚠️ <b>Варнов было:</b> {warnings[message.chat.id].get(target.id,0)}/{MAX_WARNINGS}\n"
+        f"🌟 <b>Репутация:</b> {reputation[message.chat.id].get(target.id,0):+d}\n"
+        f"📋 <b>Нарушений в истории:</b> {len(mod_history[message.chat.id].get(target.id,[]))}\n"
+        f"💬 <b>Сообщений в чате:</b> {chat_stats[message.chat.id].get(target.id,0)}\n"
+        f"💬 <b>Чат:</b> {message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
     add_mod_history(cid, target.id, "🔨 Бан", reason, message.from_user.full_name)
     ban_list[cid][target.id] = {
         "name": target.full_name, "reason": reason,
@@ -3506,7 +3573,14 @@ async def cmd_unban(message: Message):
     add_mod_history(message.chat.id, target.id, "🕊 Разбан", "—", message.from_user.full_name)
     ban_list[message.chat.id].pop(target.id, None); save_data()
     await reply_auto_delete(message, f"╔══════════════════╗\n║  🕊  РАЗ БАН      ║\n╚══════════════════╝\n\n👤 Цель: {target.mention_html()}\n──────────────────\n<i>Блокировка снята.</i>", parse_mode="HTML")
-    await log_action(f"🕊️ <b>Разбан</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    await log_action(
+        f"🕊️ <b>РАЗБАН</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {message.from_user.mention_html()}\n"
+        f"🎯 <b>Пользователь:</b> {target.mention_html()}\n"
+        f"💬 <b>Чат:</b> {message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
 
 @dp.message(Command("mute"))
 async def cmd_mute(message: Message, command: CommandObject):
@@ -3533,7 +3607,19 @@ async def cmd_mute(message: Message, command: CommandObject):
     reply = random.choice(MUTE_MESSAGES).format(name=target.mention_html(), time=label)
     if dm_ok: reply += "\n<i>Пользователь уведомлён в личные сообщения.</i>"
     await reply_auto_delete(message, reply, parse_mode="HTML")
-    await log_action(f"🔇 <b>МУТ</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    _r4 = get_mod_role_label(message.chat.id, message.from_user.id)
+    await log_action(
+        f"🔇 <b>МУТ</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {message.from_user.mention_html()}" + (f" {_r4}" if _r4 else "") + "\n"
+        f"🎯 <b>Нарушитель:</b> {target.mention_html()}\n"
+        f"⏳ <b>Длительность:</b> {label}\n"
+        f"⚠️ <b>Варнов у юзера:</b> {warnings[message.chat.id].get(target.id,0)}/{MAX_WARNINGS}\n"
+        f"🌟 <b>Репутация:</b> {reputation[message.chat.id].get(target.id,0):+d}\n"
+        f"📋 <b>Нарушений в истории:</b> {len(mod_history[message.chat.id].get(target.id,[]))}\n"
+        f"💬 <b>Чат:</b> {message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
     add_mod_history(cid, target.id, f"🔇 Мут {label}", command.args or "—", message.from_user.full_name)
     mod_reasons[cid][target.id]["mute"] = f"{label} — {command.args or 'Нарушение правил'}"
     # 🔄 Запуск автоснятия мута
@@ -3549,7 +3635,14 @@ async def cmd_unmute(message: Message):
             can_send_polls=True, can_send_other_messages=True, can_add_web_page_previews=True))
     add_mod_history(message.chat.id, target.id, "🔊 Размут", "—", message.from_user.full_name)
     await reply_auto_delete(message, f"╔══════════════════╗\n║  🔊  РАЗМУТ       ║\n╚══════════════════╝\n\n👤 Цель: {target.mention_html()}\n──────────────────\n<i>Голос восстановлен.</i>", parse_mode="HTML")
-    await log_action(f"🔊 <b>Размут</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    await log_action(
+        f"🔊 <b>РАЗМУТ</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {message.from_user.mention_html()}\n"
+        f"🎯 <b>Пользователь:</b> {target.mention_html()}\n"
+        f"💬 <b>Чат:</b> {message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
 
 @dp.message(Command("warn"))
 async def cmd_warn(message: Message, command: CommandObject):
@@ -3588,7 +3681,19 @@ async def cmd_warn(message: Message, command: CommandObject):
     else:
         msg = random.choice(WARN_MESSAGES).format(
             name=target.mention_html(), count=count, max=MAX_WARNINGS, reason=reason)
-        await log_action(f"⚠️ <b>Предупреждение</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n⚠️ <b>Варнов:</b> {warnings[message.chat.id][target.id]}/{MAX_WARNINGS}\n⏳ <b>Сгорит через:</b> {WARN_EXPIRY_DAYS} дн.\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+        await log_action(
+        f"⚠️ <b>ВАРН</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {message.from_user.mention_html()}" + (f" {get_mod_role_label(cid, message.from_user.id)}" if get_mod_role_label(cid, message.from_user.id) else "") + "\n"
+        f"🎯 <b>Нарушитель:</b> {target.mention_html()}\n"
+        f"📝 <b>Причина:</b> {reason}\n"
+        f"⚡ <b>Варнов:</b> {warnings[message.chat.id][target.id]}/{MAX_WARNINGS}\n"
+        f"⏳ <b>Сгорит через:</b> {WARN_EXPIRY_DAYS} дн.\n"
+        f"🌟 <b>Репутация:</b> {reputation[cid].get(target.id,0):+d}\n"
+        f"📋 <b>Нарушений в истории:</b> {len(mod_history[cid].get(target.id,[]))}\n"
+        f"💬 <b>Чат:</b> {message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
         add_mod_history(cid, target.id, f"⚡ Варн {count}/{MAX_WARNINGS}", reason, message.from_user.full_name)
         # 📨 ЛС нарушителю
         dm_ok = await dm_warn_user(target.id, target.full_name, reason,
@@ -4529,7 +4634,15 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, f"🔨 {tname} забанен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
             add_mod_history(cid, target.id, "🔨 Бан", reason, message.from_user.full_name)
             ban_list[cid][target.id] = True; save_data()
-            await log_action(f"🔨 <b>БАН</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+            await log_action(
+        f"🔨 <b>БАН</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {message.from_user.mention_html()}\n"
+        f"🎯 <b>Нарушитель:</b> {tname}\n"
+        f"📝 <b>Причина:</b> {reason}\n"
+        f"💬 <b>Чат:</b> {message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
         elif action == "захуесосить":
             await bot.ban_chat_member(cid, target.id)
             await bot.unban_chat_member(cid, target.id)
@@ -4546,7 +4659,15 @@ async def autist_commands(message: Message):
                 permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(minutes=mins))
             await reply_auto_delete(message, f"🔇 {tname} замучен на <b>{label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
             add_mod_history(cid, target.id, f"🔇 Мут {label}", reason, message.from_user.full_name)
-            await log_action(f"🔇 <b>МУТ</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+            await log_action(
+        f"🔇 <b>МУТ</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {message.from_user.mention_html()}\n"
+        f"🎯 <b>Нарушитель:</b> {tname}\n"
+        f"⏳ <b>Длительность:</b> {label}\n"
+        f"💬 <b>Чат:</b> {message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
         elif action == "мут навсегда":
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(can_send_messages=False))
             await reply_auto_delete(message, f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
@@ -4573,7 +4694,18 @@ async def autist_commands(message: Message):
                 add_mod_history(cid, target.id, f"⚡ Варн {count}/{MAX_WARNINGS}", reason, message.from_user.full_name)
                 time_note = f"\n⏰ Автосброс через: <b>{duration_label}</b>" if duration_mins else ""
                 await reply_auto_delete(message, f"⚡ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}{time_note}", parse_mode="HTML")
-                await log_action(f"⚠️ <b>Предупреждение</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+                await log_action(
+        f"⚠️ <b>ВАРН</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+        f"👮 <b>Модератор:</b> {message.from_user.mention_html()}" + (f" {get_mod_role_label(cid, message.from_user.id)}" if get_mod_role_label(cid, message.from_user.id) else "") + "\n"
+        f"🎯 <b>Нарушитель:</b> {tname}\n"
+        f"📝 <b>Причина:</b> {reason}\n"
+        f"⚠️ <b>Варнов:</b> {warnings[cid].get(target.id,0)}/{MAX_WARNINGS}\n"
+        f"🌟 <b>Репутация:</b> {reputation[cid].get(target.id,0):+d}\n"
+        f"📋 <b>Нарушений в истории:</b> {len(mod_history[cid].get(target.id,[]))}\n"
+        f"💬 <b>Чат:</b> {message.chat.title}\n"
+        f"🕐 {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
         elif action in ("снять варн", "разварн"):
             if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1; save_data()
             add_mod_history(cid, target.id, "🌿 Снят варн", reason, message.from_user.full_name)
