@@ -4067,68 +4067,135 @@ handle_chat_settings = require_auth("manage_chat_settings")(handle_chat_settings
 async def handle_settings(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
+    s = shared.dashboard_settings
 
     if request.method == "POST":
         data = await request.post()
-        shared.dashboard_settings["alerts_enabled"]    = data.get("alerts_enabled") == "1"
-        shared.dashboard_settings["media_log_enabled"] = data.get("media_log_enabled") == "1"
-        shared.dashboard_settings["spam_threshold"]    = int(data.get("spam_threshold", 10))
-        shared.dashboard_settings["flood_threshold"]   = int(data.get("flood_threshold", 15))
-        shared.dashboard_settings["show_user_ids"]     = data.get("show_user_ids") == "1"
-        shared.dashboard_settings["auto_refresh"]      = data.get("auto_refresh") == "1"
-        shared.dashboard_settings["items_per_page"]    = int(data.get("items_per_page", 20))
+        # Булевые настройки — все разделы
+        bool_keys = [
+            "alerts_enabled","media_log_enabled","show_user_ids","auto_refresh",
+            "antichannel_enabled","antichannel_log","antichannel_notify_chat",
+            "alert_on_mass_ban","alert_on_raid","alert_on_new_member",
+            "log_mutes","log_bans","log_warns","log_kicks",
+            "log_joins","log_leaves","log_edited_messages","log_deleted_messages",
+            "dark_theme","compact_view","show_avatars",
+        ]
+        for k in bool_keys:
+            s[k] = data.get(k) == "1"
+        s["spam_threshold"]  = int(data.get("spam_threshold", 10))
+        s["flood_threshold"] = int(data.get("flood_threshold", 15))
+        s["items_per_page"]  = int(data.get("items_per_page", 20))
         _log_admin_db(sess.get("uid",0) if sess else 0, "SETTINGS", "Настройки дашборда обновлены")
         raise web.HTTPFound("/dashboard/settings")
 
-    s = shared.dashboard_settings
-    def tog(key, label, desc=""):
+    def tog(key, label, desc="", icon=""):
         val = s.get(key, True)
-        desc_html = f"<span>{desc}</span>" if desc else ""
+        desc_html = f'<small style="color:var(--text2);display:block;margin-top:2px;">{desc}</small>' if desc else ""
         checked = "checked" if val else ""
-        return (
-            f'<div class="toggle-wrap">'
-            f'<div class="toggle-info"><b>{label}</b>{desc_html}</div>'
-            f'<label class="toggle-switch">'
-            f'<input type="checkbox" name="{key}" value="1" {checked}>'
-            f'<span class="toggle-slider"></span>'
-            f'</label>'
-            f'</div>'
-        )
+        ico = f'<span style="margin-right:6px;">{icon}</span>' if icon else ""
+        return f"""
+        <label style="display:flex;align-items:flex-start;justify-content:space-between;
+                       padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;gap:12px;">
+          <div>
+            <span style="font-weight:500;">{ico}{label}</span>
+            {desc_html}
+          </div>
+          <div style="flex-shrink:0;">
+            <input type="checkbox" name="{key}" value="1" {checked}
+                   style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent);">
+          </div>
+        </label>"""
 
-    log_html = "".join(f"<tr><td style='font-size:11px;color:var(--text2);'>{r['time']}</td><td>{r['action']}</td></tr>" for r in shared.admin_action_log[:20]) or "<tr><td colspan='2' class='empty-state'>Нет</td></tr>"
+    def num_input(key, label, val, mn, mx, desc=""):
+        desc_html = f'<small style="color:var(--text2)">{desc}</small>' if desc else ""
+        return f"""
+        <div style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <div><span style="font-weight:500;">{label}</span>{desc_html}</div>
+            <input type="number" name="{key}" value="{val}" min="{mn}" max="{mx}"
+                   style="width:80px;padding:6px 10px;border-radius:8px;
+                          border:1px solid var(--border);background:var(--bg3);
+                          color:var(--text);font-size:14px;text-align:center;">
+          </div>
+        </div>"""
+
+    # Антиканал статистика
+    total_blocked = sum(v.get("blocked",0) for v in shared.antichannel_stats.values())
+    last_blocks = []
+    for cid_, stat in shared.antichannel_stats.items():
+        if stat.get("last_blocked","—") != "—":
+            last_blocks.append(f"<tr><td><code>{cid_}</code></td><td>{stat['last_blocked']}</td><td><b>{stat['blocked']}</b></td></tr>")
+    blocks_html = "".join(last_blocks) or "<tr><td colspan='3' style='text-align:center;color:var(--text2)'>Нет заблокированных каналов</td></tr>"
+
+    log_html = "".join(
+        f"<tr><td style='font-size:11px;color:var(--text2);white-space:nowrap'>{r['time']}</td>"
+        f"<td style='font-size:13px'>{r['action']}</td></tr>"
+        for r in shared.admin_action_log[:30]
+    ) or "<tr><td colspan='2' class='empty-state'>Нет действий</td></tr>"
+
+    card = lambda title, content: f"""
+    <div class="section" style="margin-bottom:16px;">
+      <div class="section-header">{title}</div>
+      <div style="padding:0 20px 8px;">
+        <form method="POST">{content}
+          <button class="btn btn-primary" type="submit" style="width:100%;margin-top:16px;">💾 Сохранить</button>
+        </form>
+      </div>
+    </div>"""
+
+    antichannel_section = card("📢 Антиканал — защита от спама каналов", f"""
+      {tog("antichannel_enabled","Антиканал включён","Автоматически удалять сообщения от каналов и банить их","🛡")}
+      {tog("antichannel_log","Логировать в канал","Отправлять отчёт при каждом бане канала","📋")}
+      {tog("antichannel_notify_chat","Уведомлять чат","Писать сообщение в чат при бане канала","💬")}
+    """)
+
+    alerts_section = card("🚨 Алерты и мониторинг", f"""
+      {tog("alerts_enabled","Алерты включены","Детектор спама и флуда","⚡")}
+      {tog("alert_on_mass_ban","Алерт при массовом бане","5+ банов за 1 минуту = тревога","🔴")}
+      {tog("alert_on_raid","Алерт при рейде","Массовый вход новых аккаунтов","⚠️")}
+      {tog("alert_on_new_member","Алерт на нового участника","Каждый вход = запись в алертах","👤")}
+      {num_input("spam_threshold","Порог спама",s.get("spam_threshold",10),5,60,"сообщений/мин")}
+      {num_input("flood_threshold","Порог флуда",s.get("flood_threshold",15),5,100,"сообщений/мин")}
+    """)
+
+    logs_section = card("📋 Логирование событий", f"""
+      {tog("log_bans","Логировать баны","","")}
+      {tog("log_mutes","Логировать муты","","")}
+      {tog("log_warns","Логировать варны","","")}
+      {tog("log_kicks","Логировать кики","","")}
+      {tog("log_joins","Логировать входы","Может быть много записей","👋")}
+      {tog("log_leaves","Логировать выходы","","")}
+      {tog("log_edited_messages","Логировать редактирование","Сохранять исходный текст","✏️")}
+      {tog("log_deleted_messages","Логировать удалённые","Сохранять удалённые сообщения","🗑")}
+      {tog("media_log_enabled","Медиа-лог","Логировать фото/видео/файлы","🖼")}
+    """)
+
+    display_section = card("🎨 Интерфейс дашборда", f"""
+      {tog("show_user_ids","Показывать ID пользователей","","")}
+      {tog("auto_refresh","Авто-обновление каждые 30с","","")}
+      {tog("compact_view","Компактный вид","Меньше отступов, больше данных","📦")}
+      {tog("show_avatars","Показывать аватары","","")}
+      {num_input("items_per_page","Записей на странице",s.get("items_per_page",20),5,100,"")}
+    """)
 
     body = navbar(sess, "settings") + f"""
     <div class="container">
-      <div class="page-title">🔧 Настройки дашборда</div>
-      <div class="grid-2">
+      <div class="page-title">🔧 Настройки</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
         <div>
-          <div class="section">
-            <div class="section-header">⚙️ Параметры</div>
-            <form method="POST" style="padding:0 20px;">
-              {tog("alerts_enabled","Алерты","Детектор спама и флуда")}
-              {tog("media_log_enabled","Медиа-лог","Логировать фото/видео")}
-              {tog("show_user_ids","Показывать ID","ID пользователей в таблицах")}
-              {tog("auto_refresh","Авто-обновление","Обновлять каждые 30с")}
-              <div style="padding:16px 0;">
-                <div class="form-group">
-                  <label>Порог спама (сообщ/мин)</label>
-                  <input class="form-control" type="number" name="spam_threshold" value="{s['spam_threshold']}" min="5" max="60">
-                </div>
-                <div class="form-group">
-                  <label>Порог флуда (сообщ/мин)</label>
-                  <input class="form-control" type="number" name="flood_threshold" value="{s['flood_threshold']}" min="5" max="100">
-                </div>
-                <div class="form-group">
-                  <label>Записей на странице</label>
-                  <select class="form-control" name="items_per_page">
-                    {''.join(f'<option value="{n}" {"selected" if s["items_per_page"]==n else ""}>{n}</option>' for n in [10,20,50,100])}
-                  </select>
-                </div>
-                <button class="btn btn-primary" type="submit" style="width:100%;">💾 Сохранить</button>
-              </div>
-            </form>
+          {antichannel_section}
+          {alerts_section}
+          <div class="section" style="margin-bottom:16px;">
+            <div class="section-header">📊 Антиканал — статистика</div>
+            <div style="padding:8px 16px 4px;font-size:13px;color:var(--text2);">
+              Всего заблокировано каналов: <b style="color:var(--text)">{total_blocked}</b>
+            </div>
+            <table>
+              <thead><tr><th>Чат ID</th><th>Последний блок</th><th>Всего</th></tr></thead>
+              <tbody>{blocks_html}</tbody>
+            </table>
           </div>
-          <div class="section" style="margin-top:16px;">
+          <div class="section" style="margin-bottom:16px;">
             <div class="section-header">📥 Экспорт данных</div>
             <div style="padding:16px;display:flex;flex-direction:column;gap:8px;">
               <a href="/dashboard/export/stats" class="btn btn-outline">📊 Статистика (.csv)</a>
@@ -4137,12 +4204,16 @@ async def handle_settings(request: web.Request):
             </div>
           </div>
         </div>
-        <div class="section">
-          <div class="section-header">📜 Лог действий</div>
-          <table>
-            <thead><tr><th>Время</th><th>Действие</th></tr></thead>
-            <tbody>{log_html}</tbody>
-          </table>
+        <div>
+          {logs_section}
+          {display_section}
+          <div class="section">
+            <div class="section-header">📜 Лог действий администраторов</div>
+            <table>
+              <thead><tr><th>Время</th><th>Действие</th></tr></thead>
+              <tbody>{log_html}</tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -4151,6 +4222,7 @@ async def handle_settings(request: web.Request):
     return web.Response(text=page(body), content_type="text/html")
 
 handle_settings = require_auth("view_settings")(handle_settings)
+
 
 
 # ══════════════════════════════════════════
