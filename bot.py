@@ -1199,6 +1199,77 @@ async def api_get_stats(request):
     except Exception as e:
         return web.Response(status=500, text=str(e))
 
+# ══════════════════════════════════════════════════════════
+#  📢 АНТИКАНАЛ — защита от спама от имени каналов
+# ══════════════════════════════════════════════════════════
+
+@dp.message(F.sender_chat)
+async def antichannel_handler(message: Message):
+    """Блокирует сообщения от имени каналов"""
+    cid = message.chat.id
+
+    # Проверяем включён ли антиканал через shared
+    if not shared.antichannel_is_enabled(cid):
+        return
+
+    sender = message.sender_chat
+    if not sender:
+        return
+
+    # Разрешаем сам чат писать от своего имени
+    if sender.id == cid:
+        return
+
+    # Проверяем whitelist
+    if shared.antichannel_is_whitelisted(cid, sender.id):
+        return
+
+    channel_title = getattr(sender, 'title', None) or str(sender.id)
+
+    # Удаляем сообщение
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    # Баним канал
+    try:
+        await bot.ban_chat_sender_chat(cid, sender.id)
+    except Exception as e:
+        logging.warning(f"antichannel: не удалось забанить {sender.id}: {e}")
+
+    # Обновляем статистику в shared
+    shared.antichannel_log_block(cid, channel_title)
+
+    # Уведомляем чат если включено
+    if shared.dashboard_settings.get("antichannel_notify_chat", False):
+        try:
+            chat_title = message.chat.title or "чат"
+            await bot.send_message(
+                cid,
+                f"🚫 Канал <b>{channel_title}</b> заблокирован за рассылку сообщений.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+    # Логируем в канал если включено
+    if shared.dashboard_settings.get("antichannel_log", True) and LOG_CHANNEL_ID:
+        try:
+            chat_title = message.chat.title or str(cid)
+            await log_action(
+                f"📢 <b>АНТИКАНАЛ</b>\n"
+                f"<code>━━━━━━━━━━━━━━━━━━━━</code>\n"
+                f"🚫 <b>Канал:</b> {channel_title}\n"
+                f"🆔 <b>ID канала:</b> <code>{sender.id}</code>\n"
+                f"💬 <b>Чат:</b> {chat_title}\n"
+                f"🔨 <b>Действие:</b> удалено + бан канала\n"
+                f"🕐 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+            )
+        except Exception:
+            pass
+
+
 async def start_web():
     app = web.Application()
     app.router.add_get("/", health)
