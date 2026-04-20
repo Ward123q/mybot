@@ -1639,163 +1639,250 @@ async def handle_overview(request: web.Request):
     total_bans  = conn.execute("SELECT COUNT(*) FROM ban_list").fetchone()[0] or 0
     total_warns = conn.execute("SELECT COALESCE(SUM(count),0) FROM warnings").fetchone()[0] or 0
 
-    recent_acts = []
-    top_mods = []
+    recent_acts, top_mods = [], []
     try:
         act_rows = conn.execute(
-            "SELECT action, reason, by_name, created_at FROM mod_history ORDER BY created_at DESC LIMIT 8"
+            "SELECT action, reason, by_name, created_at FROM mod_history ORDER BY created_at DESC LIMIT 10"
         ).fetchall()
         recent_acts = [dict(r) for r in act_rows]
         mod_rows = conn.execute(
-            "SELECT by_name, COUNT(*) as cnt FROM mod_history GROUP BY by_name ORDER BY cnt DESC LIMIT 5"
+            "SELECT by_name, COUNT(*) as cnt FROM mod_history GROUP BY by_name ORDER BY cnt DESC LIMIT 6"
         ).fetchall()
         top_mods = [dict(r) for r in mod_rows]
     except:
         pass
+
+    # Today's actions count
+    try:
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        today_acts = conn.execute(
+            "SELECT COUNT(*) FROM mod_history WHERE created_at LIKE ?", (today_str + "%",)
+        ).fetchone()[0] or 0
+    except:
+        today_acts = 0
+
     conn.close()
 
     online_count = shared.get_online_count()
     alerts_count = len(shared.alerts)
+    antichannel_blocked = sum(v.get("blocked", 0) for v in shared.antichannel_stats.values())
 
-    # Топ чатов
+    # ── Stat cards ──────────────────────────────────────────────────────────
+    def stat_card(icon, label, value, sub="", color="var(--acc)", live_key=""):
+        live = f' data-live="{live_key}"' if live_key else ""
+        return f"""
+        <div class="card" style="--card-accent:{color};">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div style="font-size:11px;color:var(--t2);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;">{label}</div>
+              <div style="font-size:28px;font-weight:900;font-family:'Space Mono',monospace;color:{color};line-height:1;"{live}>{value}</div>
+              {f'<div style="font-size:11px;color:var(--t3);margin-top:6px;">{sub}</div>' if sub else ''}
+            </div>
+            <div style="font-size:28px;opacity:.4;">{icon}</div>
+          </div>
+          <div style="margin-top:12px;height:2px;background:var(--br1);border-radius:2px;overflow:hidden;">
+            <div style="height:100%;width:60%;background:{color};border-radius:2px;opacity:.5;"></div>
+          </div>
+        </div>"""
+
+    cards_html = f"""
+    <div class="cards" style="grid-template-columns:repeat(4,1fr);">
+      {stat_card("💬", "Чатов", len(chats), "подключено", "var(--acc)")}
+      {stat_card("👥", "Участников", f"{total_users:,}", "уникальных", "var(--blue)", "messages")}
+      {stat_card("🟢", "Онлайн", online_count, "за 5 минут", "var(--green)", "online")}
+      {stat_card("📨", "Сообщений", f"{total_msgs:,}", "всего", "var(--pur)")}
+    </div>
+    <div class="cards" style="grid-template-columns:repeat(4,1fr);margin-top:0;">
+      {stat_card("🔨", "Банов", total_bans, "активных", "var(--red)")}
+      {stat_card("⚡", "Варнов", total_warns, "активных", "var(--ylw)")}
+      {stat_card("🎫", "Тикетов", ticket_stats['open'], f"из {ticket_stats['total']} всего", "var(--cyan)", "tickets_open")}
+      {stat_card("🚨", "Алертов", alerts_count, "требуют внимания", "var(--red)", "alerts")}
+    </div>"""
+
+    # ── Top chats ────────────────────────────────────────────────────────────
     chat_rows_html = ""
-    for c in chats[:6]:
+    for i, c in enumerate(chats[:8]):
         cid = c["cid"]
         title = c.get("title") or str(cid)
         cc = db.get_conn()
-        msgs = cc.execute("SELECT COALESCE(SUM(msg_count),0) FROM chat_stats WHERE cid=?", (cid,)).fetchone()[0] or 0
+        msgs  = cc.execute("SELECT COALESCE(SUM(msg_count),0) FROM chat_stats WHERE cid=?", (cid,)).fetchone()[0] or 0
         users = cc.execute("SELECT COUNT(DISTINCT uid) FROM chat_stats WHERE cid=?", (cid,)).fetchone()[0] or 0
+        bans  = cc.execute("SELECT COUNT(*) FROM ban_list WHERE cid=?", (cid,)).fetchone()[0] or 0
         cc.close()
+        num_badge = f'<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:var(--bg4);border-radius:6px;font-size:10px;font-weight:800;color:var(--t3);font-family:Space Mono,monospace;">{i+1}</span>'
         chat_rows_html += f"""
         <tr>
-          <td><a href="/dashboard/chats/{cid}" style="color:var(--text);font-weight:600;">{title[:25]}</a></td>
-          <td>{users:,}</td>
-          <td>{msgs:,}</td>
-          <td><a href="/dashboard/chats/{cid}" class="btn btn-xs btn-ghost">→</a></td>
+          <td>{num_badge} <a href="/dashboard/chats/{cid}" style="color:var(--t1);font-weight:600;text-decoration:none;">{title[:28]}</a></td>
+          <td><span style="font-family:Space Mono,monospace;color:var(--blue);">{users:,}</span></td>
+          <td><span style="font-family:Space Mono,monospace;color:var(--pur);">{msgs:,}</span></td>
+          <td><span style="font-family:Space Mono,monospace;color:var(--red);">{bans}</span></td>
+          <td><a href="/dashboard/chats/{cid}" class="btn btn-xs btn-ghost">Открыть →</a></td>
         </tr>"""
+
+    # ── Recent actions ────────────────────────────────────────────────────────
+    def act_color(act):
+        if "Бан" in act: return "var(--red)"
+        if "Мут" in act: return "var(--ylw)"
+        if "Варн" in act: return "var(--ylw)"
+        if "Разбан" in act or "Размут" in act: return "var(--green)"
+        return "var(--t2)"
 
     act_rows_html = ""
     for r in recent_acts:
-        dt = str(r.get("created_at", ""))[:16].replace("T", " ")
+        dt  = str(r.get("created_at", ""))[:16].replace("T", " ")
         act = r.get("action", "—")
-        by = r.get("by_name", "—")
-        color = "var(--danger)" if "Бан" in act else ("var(--warn)" if "Мут" in act or "Варн" in act else "var(--text2)")
+        by  = r.get("by_name", "—")
+        reason = (r.get("reason") or "—")[:28]
+        color = act_color(act)
         act_rows_html += f"""
         <tr>
-          <td style="color:var(--text2);font-size:11px;font-family:monospace;">{dt}</td>
-          <td style="color:{color};font-weight:600;">{act}</td>
-          <td style="color:var(--text2);">{r.get('reason','—')[:30]}</td>
-          <td>{by}</td>
+          <td style="font-family:Space Mono,monospace;font-size:10px;color:var(--t3);white-space:nowrap;">{dt}</td>
+          <td><span style="color:{color};font-weight:700;font-size:12px;">{act}</span></td>
+          <td style="color:var(--t2);font-size:12px;">{reason}</td>
+          <td style="font-size:12px;color:var(--t2);">{by}</td>
         </tr>"""
 
+    # ── Top mods ─────────────────────────────────────────────────────────────
+    max_cnt = top_mods[0]["cnt"] if top_mods else 1
     mod_rows_html = ""
-    for r in top_mods:
-        mod_rows_html += f"<tr><td>👮 {r['by_name']}</td><td style='font-family:Space Mono,monospace;color:var(--accent);'>{r['cnt']}</td></tr>"
+    for i, r in enumerate(top_mods):
+        pct = int(r["cnt"] / max_cnt * 100)
+        medal = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣"][i] if i < 6 else f"{i+1}."
+        mod_rows_html += f"""
+        <tr>
+          <td style="font-size:14px;">{medal}</td>
+          <td style="font-weight:600;">👮 {r['by_name']}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="flex:1;height:4px;background:var(--bg4);border-radius:4px;overflow:hidden;">
+                <div style="height:100%;width:{pct}%;background:var(--acc);border-radius:4px;"></div>
+              </div>
+              <span style="font-family:Space Mono,monospace;font-size:12px;color:var(--acc);min-width:30px;text-align:right;">{r['cnt']}</span>
+            </div>
+          </td>
+        </tr>"""
+
+    # ── Active sessions ────────────────────────────────────────────────────────
+    sessions_html = ""
+    for s in _get_active_sessions():
+        ago = int((time.time() - s["last_seen"]) // 60)
+        sessions_html += f"""
+        <div style="display:flex;justify-content:space-between;align-items:center;
+                    padding:10px 18px;border-bottom:1px solid var(--br0);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;
+                         box-shadow:0 0 6px var(--green);"></span>
+            <code style="font-size:12px;">{s['ip']}</code>
+            <span style="font-size:11px;color:var(--t3);">{s.get('current','')[:40]}</span>
+          </div>
+          <span style="font-size:11px;color:var(--t3);">{ago}м назад · {s.get('pages',0)} стр.</span>
+        </div>"""
+
+    # ── Quick actions row ─────────────────────────────────────────────────────
+    quick_actions = f"""
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+      <a href="/dashboard/tickets" class="btn btn-outline btn-sm">🎫 Тикеты
+        {f'<span style="background:var(--red);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;">{ticket_stats["open"]}</span>' if ticket_stats["open"] else ""}
+      </a>
+      <a href="/dashboard/reports" class="btn btn-outline btn-sm">🚨 Репорты</a>
+      <a href="/dashboard/alerts" class="btn btn-outline btn-sm">🔴 Алерты
+        {f'<span style="background:var(--red);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;">{alerts_count}</span>' if alerts_count else ""}
+      </a>
+      <a href="/dashboard/moderation" class="btn btn-outline btn-sm">🛡 Модерация</a>
+      <a href="/dashboard/broadcast" class="btn btn-outline btn-sm">📢 Рассылка</a>
+      <a href="/dashboard/command_center" class="btn btn-primary btn-sm">🎮 Command Center</a>
+    </div>"""
+
+    # ── Status bar ────────────────────────────────────────────────────────────
+    ac_status = "🟢 Включён" if shared.dashboard_settings.get("antichannel_enabled") else "🔴 Выключен"
+    status_bar = f"""
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px;">
+      <div style="background:var(--bg2);border:1px solid var(--br1);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">📢</span>
+        <div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Антиканал</div>
+        <div style="font-size:13px;font-weight:600;">{ac_status} · {antichannel_blocked} блоков</div></div>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--br1);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">⚡</span>
+        <div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Сегодня действий</div>
+        <div style="font-size:13px;font-weight:600;">{today_acts} операций</div></div>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--br1);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">👁</span>
+        <div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Сессий дашборда</div>
+        <div style="font-size:13px;font-weight:600;">{len(_get_active_sessions())} активных</div></div>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--br1);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">🕐</span>
+        <div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Обновлено</div>
+        <div style="font-size:13px;font-weight:600;">{datetime.now().strftime('%H:%M:%S')}</div></div>
+      </div>
+    </div>"""
 
     body = navbar(sess, "overview") + f"""
     <div class="container">
-      <div class="page-title">📊 Обзор
-        <span style="font-size:12px;color:var(--text2);font-weight:400;margin-left:auto;">{datetime.now().strftime('%d.%m.%Y %H:%M')}</span>
+      <div class="page-title">
+        📊 Обзор
+        <span style="font-size:12px;color:var(--t2);font-weight:400;margin-left:auto;font-family:'Space Mono',monospace;">
+          {datetime.now().strftime('%d.%m.%Y %H:%M')}
+        </span>
       </div>
 
-      <div class="cards">
-        <div class="card">
-          <div class="card-icon">💬</div>
-          <div class="card-label">Чатов</div>
-          <div class="card-value" data-live="chats">{len(chats)}</div>
-          <div class="card-sub">активных чатов</div>
-        </div>
-        <div class="card">
-          <div class="card-icon">🟢</div>
-          <div class="card-label">Онлайн</div>
-          <div class="card-value" data-live="online">{online_count}</div>
-          <div class="card-sub">активны за 5 мин</div>
-        </div>
-        <div class="card">
-          <div class="card-icon">👥</div>
-          <div class="card-label">Участников</div>
-          <div class="card-value" data-live="messages">{total_users:,}</div>
-          <div class="card-sub">уникальных юзеров</div>
-        </div>
-        <div class="card">
-          <div class="card-icon">💬</div>
-          <div class="card-label">Сообщений</div>
-          <div class="card-value">{total_msgs:,}</div>
-          <div class="card-sub">всего обработано</div>
-        </div>
-        <div class="card">
-          <div class="card-icon">🔨</div>
-          <div class="card-label">Банов</div>
-          <div class="card-value" style="color:var(--danger);">{total_bans}</div>
-          <div class="card-sub">активных банов</div>
-        </div>
-        <div class="card">
-          <div class="card-icon">⚡</div>
-          <div class="card-label">Варнов</div>
-          <div class="card-value" style="color:var(--warn);">{total_warns}</div>
-          <div class="card-sub">активных варнов</div>
-        </div>
-        <div class="card">
-          <div class="card-icon">🎫</div>
-          <div class="card-label">Тикетов</div>
-          <div class="card-value" style="color:var(--accent);" data-live="tickets_open">{ticket_stats['open']}</div>
-          <div class="card-sub">открытых / {ticket_stats['total']} всего</div>
-        </div>
-        <div class="card">
-          <div class="card-icon">🔴</div>
-          <div class="card-label">Алертов</div>
-          <div class="card-value" style="color:var(--danger);" data-live="alerts">{alerts_count}</div>
-          <div class="card-sub">требуют внимания</div>
-        </div>
-      </div>
-
-      <!-- Активные сессии -->
-      <div class="section" style="margin-bottom:20px;">
-        <div class="section-header">
-          👁 Активные сессии дашборда
-          <span style="font-size:12px;color:var(--text2);">{len(_get_active_sessions())} онлайн</span>
-        </div>
-        <div style="padding:4px 0;">
-          {"".join(
-            f'<div style="padding:10px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'
-            f'<div><code>{s["ip"]}</code><span style="margin-left:12px;color:var(--text2);font-size:12px;">{s.get("current","")}</span></div>'
-            f'<div style="font-size:12px;color:var(--text2);">{int((time.time()-s["last_seen"])//60)} мин назад · {s.get("pages",0)} стр.</div>'
-            f'</div>'
-            for s in _get_active_sessions()
-          ) or '<div class="empty-state" style="padding:20px;">Нет активных сессий</div>'}
-        </div>
-      </div>
+      {status_bar}
+      {cards_html}
+      {quick_actions}
 
       <div class="grid-2">
-        <div class="section">
-          <div class="section-header">⚡ Последние действия</div>
-          <table>
-            <thead><tr><th>Время</th><th>Действие</th><th>Причина</th><th>Кто</th></tr></thead>
-            <tbody>{act_rows_html or "<tr><td colspan='4' class='empty-state'>Нет данных</td></tr>"}</tbody>
-          </table>
+        <div>
+          <div class="section">
+            <div class="section-header">
+              ⚡ Последние действия
+              <a href="/dashboard/moderation" style="margin-left:auto;font-size:11px;color:var(--acc);text-decoration:none;">Все →</a>
+            </div>
+            <table>
+              <thead><tr><th>Время</th><th>Действие</th><th>Причина</th><th>Кто</th></tr></thead>
+              <tbody>{act_rows_html or "<tr><td colspan='4' class='empty-state'>Нет данных</td></tr>"}</tbody>
+            </table>
+          </div>
+
+          <div class="section" style="margin-top:16px;">
+            <div class="section-header">📈 Активность по часам <span style="font-size:10px;color:var(--t3);margin-left:4px;">за сегодня</span></div>
+            <div style="padding:16px;"><canvas id="actChart" height="80"></canvas></div>
+          </div>
         </div>
-        <div class="section">
-          <div class="section-header">👮 Топ модераторов</div>
-          <table>
-            <thead><tr><th>Модератор</th><th>Действий</th></tr></thead>
-            <tbody>{mod_rows_html or "<tr><td colspan='2' class='empty-state'>Нет данных</td></tr>"}</tbody>
-          </table>
+
+        <div>
+          <div class="section">
+            <div class="section-header">
+              👮 Топ модераторов
+              <a href="/dashboard/admins" style="margin-left:auto;font-size:11px;color:var(--acc);text-decoration:none;">Состав →</a>
+            </div>
+            <table>
+              <thead><tr><th>#</th><th>Модератор</th><th>Действия</th></tr></thead>
+              <tbody>{mod_rows_html or "<tr><td colspan='3' class='empty-state'>Нет данных</td></tr>"}</tbody>
+            </table>
+          </div>
+
+          <div class="section" style="margin-top:16px;">
+            <div class="section-header">
+              👁 Активные сессии
+              <span style="margin-left:auto;font-size:11px;color:var(--t3);">{len(_get_active_sessions())} онлайн</span>
+            </div>
+            <div>
+              {sessions_html or '<div class="empty-state" style="padding:20px;">Нет активных сессий</div>'}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="section" style="margin-top:20px;">
+      <div class="section" style="margin-top:16px;">
         <div class="section-header">
-          📈 Активность по часам
-          <span style="font-size:12px;color:var(--text2);">за сегодня</span>
+          💬 Топ чатов по активности
+          <a href="/dashboard/chats" style="margin-left:auto;font-size:11px;color:var(--acc);text-decoration:none;">Все чаты →</a>
         </div>
-        <div style="padding:16px;"><canvas id="actChart" height="70"></canvas></div>
-      </div>
-
-      <div class="section" style="margin-top:20px;">
-        <div class="section-header">💬 Топ чатов по активности</div>
         <table>
-          <thead><tr><th>Чат</th><th>Участников</th><th>Сообщений</th><th></th></tr></thead>
-          <tbody>{chat_rows_html or "<tr><td colspan='4' class='empty-state'>Нет данных</td></tr>"}</tbody>
+          <thead><tr><th>#</th><th>Чат</th><th>👥 Участников</th><th>💬 Сообщений</th><th>🔨 Банов</th><th></th></tr></thead>
+          <tbody>{chat_rows_html or "<tr><td colspan='6' class='empty-state'>Нет данных</td></tr>"}</tbody>
         </table>
       </div>
     </div>
@@ -1807,6 +1894,7 @@ async def handle_overview(request: web.Request):
         if(!ctx || typeof Chart==='undefined') return;
         var labels = Array.from({{length:24}},function(_,i){{return i+':00';}});
         var data = labels.map(function(_,i){{return d[i]||0;}});
+        var maxVal = Math.max.apply(null, data) || 1;
         new Chart(ctx, {{
           type: 'bar',
           data: {{
@@ -1814,25 +1902,29 @@ async def handle_overview(request: web.Request):
             datasets: [{{
               label: 'Сообщений',
               data: data,
-              backgroundColor: function(ctx){{
-                var g = ctx.chart.ctx.createLinearGradient(0,0,0,100);
-                g.addColorStop(0,'rgba(59,130,246,0.8)');
-                g.addColorStop(1,'rgba(168,85,247,0.4)');
-                return g;
-              }},
+              backgroundColor: data.map(function(v){{
+                var a = 0.3 + 0.7*(v/maxVal);
+                return 'rgba(88,101,242,'+a+')';
+              }}),
               borderRadius: 4, borderSkipped: false,
             }}]
           }},
           options: {{
             responsive: true,
-            plugins: {{legend:{{display:false}},tooltip:{{
-              backgroundColor:'rgba(14,18,32,0.95)',
-              borderColor:'rgba(30,42,64,.8)',borderWidth:1,
-              titleColor:'#e2e8f0',bodyColor:'#94a3b8',
-            }}}},
+            plugins: {{
+              legend:{{display:false}},
+              tooltip:{{
+                backgroundColor:'rgba(8,11,20,.95)',
+                borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+                titleColor:'#f0f4ff',bodyColor:'#7b8cad',
+                callbacks: {{
+                  label: function(ctx){{ return ' ' + ctx.parsed.y + ' сообщений'; }}
+                }}
+              }}
+            }},
             scales: {{
-              y: {{ticks:{{color:'#475569',font:{{size:11}}}},grid:{{color:'rgba(255,255,255,0.04)'}}}},
-              x: {{ticks:{{color:'#475569',font:{{size:10}},maxTicksLimit:8}},grid:{{display:false}}}}
+              y: {{ticks:{{color:'#4a5568',font:{{size:10}}}},grid:{{color:'rgba(255,255,255,0.03)'}}}},
+              x: {{ticks:{{color:'#4a5568',font:{{size:9}},maxTicksLimit:8}},grid:{{display:false}}}}
             }}
           }}
         }});
@@ -1841,6 +1933,9 @@ async def handle_overview(request: web.Request):
     </script>
     """ + close_main()
     return web.Response(text=page(body), content_type="text/html")
+
+handle_overview = require_auth("view_overview")(handle_overview)
+
 
 handle_overview = require_auth("view_overview")(handle_overview)
 
