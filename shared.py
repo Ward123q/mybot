@@ -56,13 +56,10 @@ dashboard_settings: dict = {
     "auto_refresh":            False,
     "items_per_page":          20,
     # Антиканал
-    "antichannel_enabled":     True,
-    "antichannel_log":         True,
-    "antichannel_notify_chat": False,
     # Антиспам дашборда
-    "alert_on_mass_ban":       True,
-    "alert_on_raid":           True,
-    "alert_on_new_member":     False,
+    "alert_on_mass_ban":       True,   # алерт при 5+ банов за 1 мин
+    "alert_on_raid":           True,   # алерт при рейде
+    "alert_on_new_member":     False,  # алерт на каждого нового участника
     # Модерация
     "log_mutes":               True,
     "log_bans":                True,
@@ -79,37 +76,6 @@ dashboard_settings: dict = {
 }
 
 # Антиканал: whitelist каналов {cid: [channel_id, ...]}
-antichannel_whitelist: dict = {}
-
-# Антиканал: статистика {cid: {"blocked": int, "last_blocked": str}}
-antichannel_stats: dict = {}
-
-def antichannel_is_enabled(cid: int) -> bool:
-    if not dashboard_settings.get("antichannel_enabled", True):
-        return False
-    return True
-
-def antichannel_add_whitelist(cid: int, channel_id: int):
-    if cid not in antichannel_whitelist:
-        antichannel_whitelist[cid] = []
-    if channel_id not in antichannel_whitelist[cid]:
-        antichannel_whitelist[cid].append(channel_id)
-
-def antichannel_remove_whitelist(cid: int, channel_id: int):
-    if cid in antichannel_whitelist:
-        antichannel_whitelist[cid] = [x for x in antichannel_whitelist[cid] if x != channel_id]
-
-def antichannel_is_whitelisted(cid: int, channel_id: int) -> bool:
-    return channel_id in antichannel_whitelist.get(cid, [])
-
-def antichannel_log_block(cid: int, channel_title: str):
-    from datetime import datetime
-    if cid not in antichannel_stats:
-        antichannel_stats[cid] = {"blocked": 0, "last_blocked": "—"}
-    antichannel_stats[cid]["blocked"] += 1
-    antichannel_stats[cid]["last_blocked"] = f"{channel_title} • {datetime.now().strftime('%d.%m %H:%M')}"
-
-# Лог действий в дашборде
 admin_action_log: list = []
 
 # SSE клиенты для уведомлений в браузере
@@ -197,6 +163,7 @@ def log_admin_action(action: str):
 
 
 async def notify_sse(data: dict):
+    """Уведомляет все открытые браузеры через SSE"""
     import json
     msg = json.dumps(data)
     for q in sse_clients:
@@ -208,6 +175,8 @@ async def notify_sse(data: dict):
 
 async def notify_new_ticket(ticket_id: int, user_name: str, subject: str,
                              chat_title: str, priority: str):
+    """Вызывается при создании нового тикета"""
+    # SSE уведомление в браузер
     await notify_sse({
         "type": "new_ticket",
         "id": ticket_id,
@@ -215,6 +184,7 @@ async def notify_new_ticket(ticket_id: int, user_name: str, subject: str,
         "subject": subject
     })
 
+    # Уведомление в Telegram всем админам
     if not bot:
         return
 
@@ -241,6 +211,7 @@ async def notify_new_ticket(ticket_id: int, user_name: str, subject: str,
         except:
             pass
 
+    # Лог-канал
     try:
         await bot.send_message(log_channel_id, text, parse_mode="HTML")
     except:
@@ -248,6 +219,7 @@ async def notify_new_ticket(ticket_id: int, user_name: str, subject: str,
 
 
 async def send_log(text: str):
+    """Отправить сообщение в лог-канал"""
     if not bot:
         return
     try:
@@ -260,12 +232,17 @@ async def send_log(text: str):
 #  РЕПОРТЫ — синхронизация с дашбордом
 # ══════════════════════════════════════════
 
+# Список репортов для дашборда
+# [{cid, cid_title, reporter_id, reporter_name, target_id, target_name,
+#   reason, category, priority, status, ts, idx}]
 reports_cache: list = []
 
 
 def sync_report(cid: int, cid_title: str, idx: int, report: dict):
+    """Добавляет или обновляет репорт в кэше для дашборда"""
     import time as _t
     key = f"{cid}:{idx}"
+    # Удаляем старую запись если есть
     for i, r in enumerate(reports_cache):
         if r.get("key") == key:
             reports_cache[i] = {
@@ -283,6 +260,7 @@ def sync_report(cid: int, cid_title: str, idx: int, report: dict):
             }
             return
 
+    # Добавляем новую
     reports_cache.insert(0, {
         "key": key, "cid": cid, "cid_title": cid_title,
         "reporter_id": report.get("reporter"),
@@ -297,11 +275,13 @@ def sync_report(cid: int, cid_title: str, idx: int, report: dict):
         "idx": idx,
     })
 
+    # Максимум 200 репортов
     if len(reports_cache) > 200:
         reports_cache.pop()
 
 
 def update_report_status(cid: int, idx: int, status: str):
+    """Обновляет статус репорта"""
     key = f"{cid}:{idx}"
     for r in reports_cache:
         if r.get("key") == key:
