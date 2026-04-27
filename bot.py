@@ -945,6 +945,10 @@ _verify_pending: dict = {}
 # Результаты верификации: {uid: {"passed": bool, "reason": str}}
 _verify_results: dict = {}
 
+# ── КАПЧА ────────────────────────────────────────────────────────────
+# {cid: {uid: {"msg_id": int, "answer": str, "ts": float, "kick_task": Task}}}
+_captcha_pending: dict = defaultdict(dict)
+
 async def serve_verify(request):
     """Страница верификации через WebApp"""
     vpn_key = os.getenv("VPN_API_KEY", "")
@@ -1966,6 +1970,178 @@ dp.message.middleware(SpecialEffectsMiddleware())
 dp.message.middleware(AntiNSFWMiddleware())
 dp.message.middleware(AntiMatMiddleware())
 
+
+# ══════════════════════════════════════════════════════════
+#  🔐 КАПЧА — защита от ботов при вступлении
+# ══════════════════════════════════════════════════════════
+
+import random as _rnd
+
+CAPTCHA_TIMEOUT = 90  # секунд
+
+def _gen_captcha():
+    """Генерирует случайную математическую капчу"""
+    variants = [
+        lambda: (f"{_rnd.randint(2,9)} + {_rnd.randint(2,9)}", None),
+        lambda: (f"{_rnd.randint(2,9)} × {_rnd.randint(2,9)}", None),
+        lambda: (f"{_rnd.randint(10,50)} - {_rnd.randint(1,9)}", None),
+    ]
+    fn = _rnd.choice(variants)
+    expr, _ = fn()
+    # Считаем ответ
+    answer = str(eval(expr.replace("×", "*")))
+    # Генерируем 3 ложных варианта
+    wrong = set()
+    while len(wrong) < 3:
+        fake = str(int(answer) + _rnd.choice([-3,-2,-1,1,2,3,4]))
+        if fake != answer and fake not in wrong and int(fake) > 0:
+            wrong.add(fake)
+    options = list(wrong) + [answer]
+    _rnd.shuffle(options)
+    return expr, answer, options
+
+
+async def _captcha_timeout_kick(cid: int, uid: int, name: str, msg_id: int):
+    """Кикает участника если не прошёл капчу за 90 секунд"""
+    await asyncio.sleep(CAPTCHA_TIMEOUT)
+    if uid not in _captcha_pending.get(cid, {}):
+        return  # уже прошёл
+    # Удаляем капчу
+    try: await bot.delete_message(cid, msg_id)
+    except: pass
+    # Кикаем
+    try:
+        await bot.ban_chat_member(cid, uid)
+        await bot.unban_chat_member(cid, uid)
+    except: pass
+    _captcha_pending[cid].pop(uid, None)
+    # Уведомление
+    note = await bot.send_message(
+        cid,
+        f"⏱ <b>Капча не пройдена</b>\n"
+        f"👤 <b>{name}</b> не ответил за {CAPTCHA_TIMEOUT} секунд и был удалён.",
+        parse_mode="HTML"
+    )
+    await asyncio.sleep(10)
+    try: await note.delete()
+    except: pass
+
+
+async def send_captcha(message: Message, member):
+    """Отправить капчу новому участнику"""
+    cid = message.chat.id
+    uid = member.id
+    name = member.full_name
+
+    expr, answer, options = _gen_captcha()
+
+    # Мутим до прохождения капчи
+    try:
+        await bot.restrict_chat_member(
+            cid, uid,
+            permissions=ChatPermissions(can_send_messages=False)
+        )
+    except: pass
+
+    # Строим клавиатуру
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=opt, callback_data=f"captcha:{uid}:{opt}:{answer}")
+        for opt in options
+    ]])
+
+    sent = await message.answer(
+        f"🔐 <b>Проверка безопасности</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━━━</code>\n\n"
+        f"👋 Привет, <b>{name}</b>!\n"
+        f"Реши пример чтобы войти в чат:\n\n"
+        f"<b>{expr} = ?</b>\n\n"
+        f"⏱ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>",
+        parse_mode="HTML",
+        reply_markup=kb
+    )
+
+    # Сохраняем состояние
+    task = asyncio.create_task(_captcha_timeout_kick(cid, uid, name, sent.message_id))
+    _captcha_pending[cid][uid] = {
+        "msg_id": sent.message_id,
+        "answer": answer,
+        "ts": time(),
+        "kick_task": task,
+        "name": name,
+    }
+
+
+@dp.callback_query(F.data.startswith("captcha:"))
+async def cb_captcha(call: CallbackQuery):
+    parts = call.data.split(":")
+    # captcha:{uid}:{chosen}:{answer}
+    if len(parts) != 4:
+        await call.answer(); return
+
+    _, uid_str, chosen, answer = parts
+    uid = int(uid_str)
+    cid = call.message.chat.id
+
+    # Только сам участник может нажимать
+    if call.from_user.id != uid:
+        await call.answer("🚫 Это не твоя капча!", show_alert=True); return
+
+    pending = _captcha_pending.get(cid, {}).get(uid)
+    if not pending:
+        await call.answer("⏱ Время вышло или капча уже пройдена.", show_alert=True); return
+
+    name = pending.get("name", call.from_user.full_name)
+
+    if chosen == answer:
+        # ✅ Правильно — снимаем ограничения
+        pending["kick_task"].cancel()
+        _captcha_pending[cid].pop(uid, None)
+
+        try:
+            await bot.restrict_chat_member(
+                cid, uid,
+                permissions=ChatPermissions(
+                    can_send_messages=True,
+                    can_send_media_messages=True,
+                    can_send_polls=True,
+                    can_send_other_messages=True,
+                    can_add_web_page_previews=True
+                )
+            )
+        except: pass
+
+        try: await call.message.delete()
+        except: pass
+
+        note = await call.message.answer(
+            f"✅ <b>{name}</b> прошёл проверку и вошёл в чат!",
+            parse_mode="HTML"
+        )
+        await asyncio.sleep(5)
+        try: await note.delete()
+        except: pass
+
+    else:
+        # ❌ Неправильно — кикаем сразу
+        pending["kick_task"].cancel()
+        _captcha_pending[cid].pop(uid, None)
+
+        try: await call.message.delete()
+        except: pass
+
+        try:
+            await bot.ban_chat_member(cid, uid)
+            await bot.unban_chat_member(cid, uid)
+        except: pass
+
+        note = await call.message.answer(
+            f"❌ <b>{name}</b> ввёл неверный ответ и был удалён.",
+            parse_mode="HTML"
+        )
+        await asyncio.sleep(8)
+        try: await note.delete()
+        except: pass
+
 @dp.message(F.new_chat_members)
 async def on_new_member(message: Message):
     cid = message.chat.id
@@ -2030,6 +2206,9 @@ async def on_new_member(message: Message):
                 conn.close()
             except: pass
 
+        # 🔐 Капча
+        if cs.get_settings(cid).get("captcha_enabled", False):
+            asyncio.create_task(send_captcha(message, member))
         # 🌐 АнтиVPN проверка
         asyncio.create_task(_process_new_member_vpn(message, member))
         # 📸 Аватар + вотчлист
@@ -3363,6 +3542,23 @@ async def cmd_panel(message: Message):
             f"👁 Наблюдение: <b>{'вкл' if surveillance_enabled(cid) else 'выкл'}</b>",
             parse_mode="HTML",
             reply_markup=kb_main_menu())
+
+
+@dp.message(Command("captcha"))
+async def cmd_captcha(message: Message):
+    """Включить/выключить капчу в чате — только администраторы"""
+    if not await check_admin(message): return
+    cid = message.chat.id
+    settings = cs.get_settings(cid)
+    current = settings.get("captcha_enabled", False)
+    new_val = not current
+    cs.set_setting(cid, "captcha_enabled", new_val)
+    status = "включена ✅" if new_val else "выключена ❌"
+    await reply_auto_delete(message,
+        f"🔐 <b>Капча {status}</b>\n"
+        f"<i>Новые участники будут {'проходить' if new_val else 'пропускаться без'} проверки.</i>",
+        parse_mode="HTML"
+    )
 
 @dp.message(Command("ban"))
 async def cmd_ban(message: Message, command: CommandObject):
@@ -9663,6 +9859,178 @@ async def cmd_quarantine(message: Message):
             parse_mode="HTML")
 
 # Хук карантина — срабатывает при входе нового участника
+
+# ══════════════════════════════════════════════════════════
+#  🔐 КАПЧА — защита от ботов при вступлении
+# ══════════════════════════════════════════════════════════
+
+import random as _rnd
+
+CAPTCHA_TIMEOUT = 90  # секунд
+
+def _gen_captcha():
+    """Генерирует случайную математическую капчу"""
+    variants = [
+        lambda: (f"{_rnd.randint(2,9)} + {_rnd.randint(2,9)}", None),
+        lambda: (f"{_rnd.randint(2,9)} × {_rnd.randint(2,9)}", None),
+        lambda: (f"{_rnd.randint(10,50)} - {_rnd.randint(1,9)}", None),
+    ]
+    fn = _rnd.choice(variants)
+    expr, _ = fn()
+    # Считаем ответ
+    answer = str(eval(expr.replace("×", "*")))
+    # Генерируем 3 ложных варианта
+    wrong = set()
+    while len(wrong) < 3:
+        fake = str(int(answer) + _rnd.choice([-3,-2,-1,1,2,3,4]))
+        if fake != answer and fake not in wrong and int(fake) > 0:
+            wrong.add(fake)
+    options = list(wrong) + [answer]
+    _rnd.shuffle(options)
+    return expr, answer, options
+
+
+async def _captcha_timeout_kick(cid: int, uid: int, name: str, msg_id: int):
+    """Кикает участника если не прошёл капчу за 90 секунд"""
+    await asyncio.sleep(CAPTCHA_TIMEOUT)
+    if uid not in _captcha_pending.get(cid, {}):
+        return  # уже прошёл
+    # Удаляем капчу
+    try: await bot.delete_message(cid, msg_id)
+    except: pass
+    # Кикаем
+    try:
+        await bot.ban_chat_member(cid, uid)
+        await bot.unban_chat_member(cid, uid)
+    except: pass
+    _captcha_pending[cid].pop(uid, None)
+    # Уведомление
+    note = await bot.send_message(
+        cid,
+        f"⏱ <b>Капча не пройдена</b>\n"
+        f"👤 <b>{name}</b> не ответил за {CAPTCHA_TIMEOUT} секунд и был удалён.",
+        parse_mode="HTML"
+    )
+    await asyncio.sleep(10)
+    try: await note.delete()
+    except: pass
+
+
+async def send_captcha(message: Message, member):
+    """Отправить капчу новому участнику"""
+    cid = message.chat.id
+    uid = member.id
+    name = member.full_name
+
+    expr, answer, options = _gen_captcha()
+
+    # Мутим до прохождения капчи
+    try:
+        await bot.restrict_chat_member(
+            cid, uid,
+            permissions=ChatPermissions(can_send_messages=False)
+        )
+    except: pass
+
+    # Строим клавиатуру
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=opt, callback_data=f"captcha:{uid}:{opt}:{answer}")
+        for opt in options
+    ]])
+
+    sent = await message.answer(
+        f"🔐 <b>Проверка безопасности</b>\n"
+        f"<code>━━━━━━━━━━━━━━━━━━━━━━</code>\n\n"
+        f"👋 Привет, <b>{name}</b>!\n"
+        f"Реши пример чтобы войти в чат:\n\n"
+        f"<b>{expr} = ?</b>\n\n"
+        f"⏱ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>",
+        parse_mode="HTML",
+        reply_markup=kb
+    )
+
+    # Сохраняем состояние
+    task = asyncio.create_task(_captcha_timeout_kick(cid, uid, name, sent.message_id))
+    _captcha_pending[cid][uid] = {
+        "msg_id": sent.message_id,
+        "answer": answer,
+        "ts": time(),
+        "kick_task": task,
+        "name": name,
+    }
+
+
+@dp.callback_query(F.data.startswith("captcha:"))
+async def cb_captcha(call: CallbackQuery):
+    parts = call.data.split(":")
+    # captcha:{uid}:{chosen}:{answer}
+    if len(parts) != 4:
+        await call.answer(); return
+
+    _, uid_str, chosen, answer = parts
+    uid = int(uid_str)
+    cid = call.message.chat.id
+
+    # Только сам участник может нажимать
+    if call.from_user.id != uid:
+        await call.answer("🚫 Это не твоя капча!", show_alert=True); return
+
+    pending = _captcha_pending.get(cid, {}).get(uid)
+    if not pending:
+        await call.answer("⏱ Время вышло или капча уже пройдена.", show_alert=True); return
+
+    name = pending.get("name", call.from_user.full_name)
+
+    if chosen == answer:
+        # ✅ Правильно — снимаем ограничения
+        pending["kick_task"].cancel()
+        _captcha_pending[cid].pop(uid, None)
+
+        try:
+            await bot.restrict_chat_member(
+                cid, uid,
+                permissions=ChatPermissions(
+                    can_send_messages=True,
+                    can_send_media_messages=True,
+                    can_send_polls=True,
+                    can_send_other_messages=True,
+                    can_add_web_page_previews=True
+                )
+            )
+        except: pass
+
+        try: await call.message.delete()
+        except: pass
+
+        note = await call.message.answer(
+            f"✅ <b>{name}</b> прошёл проверку и вошёл в чат!",
+            parse_mode="HTML"
+        )
+        await asyncio.sleep(5)
+        try: await note.delete()
+        except: pass
+
+    else:
+        # ❌ Неправильно — кикаем сразу
+        pending["kick_task"].cancel()
+        _captcha_pending[cid].pop(uid, None)
+
+        try: await call.message.delete()
+        except: pass
+
+        try:
+            await bot.ban_chat_member(cid, uid)
+            await bot.unban_chat_member(cid, uid)
+        except: pass
+
+        note = await call.message.answer(
+            f"❌ <b>{name}</b> ввёл неверный ответ и был удалён.",
+            parse_mode="HTML"
+        )
+        await asyncio.sleep(8)
+        try: await note.delete()
+        except: pass
+
 @dp.message(F.new_chat_members)
 async def on_new_member_quarantine(message: Message):
     cid = message.chat.id
