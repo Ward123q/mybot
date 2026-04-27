@@ -1867,6 +1867,109 @@ async def handle_overview(request: web.Request):
     """ + close_main()
     return web.Response(text=page(body), content_type="text/html")
 
+async def handle_settings(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    s = shared.dashboard_settings
+
+    if request.method == "POST":
+        data = await request.post()
+        bool_keys = [
+            "alerts_enabled","media_log_enabled","show_user_ids","auto_refresh",
+            "alert_on_mass_ban","alert_on_raid","alert_on_new_member",
+            "log_mutes","log_bans","log_warns","log_kicks",
+            "log_joins","log_leaves","log_edited_messages","log_deleted_messages",
+            "dark_theme","compact_view","show_avatars",
+        ]
+        for k in bool_keys:
+            s[k] = data.get(k) == "1"
+        s["spam_threshold"]  = int(data.get("spam_threshold", 10))
+        s["flood_threshold"] = int(data.get("flood_threshold", 15))
+        s["items_per_page"]  = int(data.get("items_per_page", 20))
+        _log_admin_db(sess.get("uid",0) if sess else 0, "SETTINGS", "Настройки дашборда обновлены")
+        raise web.HTTPFound("/dashboard/settings")
+
+    def tog(key, label, desc="", icon=""):
+        val = s.get(key, True)
+        desc_html = f'<small style="color:var(--t2);display:block;margin-top:2px;">{desc}</small>' if desc else ""
+        checked = "checked" if val else ""
+        return (f'<label style="display:flex;align-items:flex-start;justify-content:space-between;'                f'padding:12px 0;border-bottom:1px solid var(--br0);cursor:pointer;gap:12px;">'                f'<div><span style="font-weight:500;">{icon} {label}</span>{desc_html}</div>'                f'<input type="checkbox" name="{key}" value="1" {checked} '                f'style="width:18px;height:18px;cursor:pointer;accent-color:var(--acc);flex-shrink:0;"></label>')
+
+    def num_input(key, label, val, mn, mx, desc=""):
+        desc_html = f'<small style="color:var(--t2)">{desc}</small>' if desc else ""
+        return (f'<div style="padding:12px 0;border-bottom:1px solid var(--br0);">'                f'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">'                f'<div><span style="font-weight:500;">{label}</span>{desc_html}</div>'                f'<input type="number" name="{key}" value="{val}" min="{mn}" max="{mx}" '                f'style="width:80px;padding:6px 10px;border-radius:8px;border:1px solid var(--br1);'                f'background:var(--bg3);color:var(--t1);font-size:14px;text-align:center;"></div></div>')
+
+    log_html = "".join(
+        f"<tr><td style='font-size:11px;color:var(--t2);white-space:nowrap'>{r['time']}</td>"
+        f"<td style='font-size:13px'>{r['action']}</td></tr>"
+        for r in shared.admin_action_log[:30]
+    ) or "<tr><td colspan='2' class='empty-state'>Нет действий</td></tr>"
+
+    def card(title, content):
+        return (f'<div class="section" style="margin-bottom:16px;">'                f'<div class="section-header">{title}</div>'                f'<div style="padding:0 20px 8px;">'                f'<form method="POST">{content}'                f'<button class="btn btn-primary" type="submit" style="width:100%;margin-top:16px;">💾 Сохранить</button>'                f'</form></div></div>')
+
+    alerts_section = card("🚨 Алерты и мониторинг",
+        tog("alerts_enabled","Алерты включены","Детектор спама и флуда","⚡") +
+        tog("alert_on_mass_ban","Алерт при массовом бане","5+ банов за минуту","🔴") +
+        tog("alert_on_raid","Алерт при рейде","Массовый вход новых аккаунтов","⚠️") +
+        tog("alert_on_new_member","Алерт на нового участника","","👤") +
+        num_input("spam_threshold","Порог спама",s.get("spam_threshold",10),5,60,"сообщ/мин") +
+        num_input("flood_threshold","Порог флуда",s.get("flood_threshold",15),5,100,"сообщ/мин")
+    )
+
+    logs_section = card("📋 Логирование событий",
+        tog("log_bans","Логировать баны") +
+        tog("log_mutes","Логировать муты") +
+        tog("log_warns","Логировать варны") +
+        tog("log_kicks","Логировать кики") +
+        tog("log_joins","Логировать входы","","👋") +
+        tog("log_leaves","Логировать выходы") +
+        tog("log_edited_messages","Логировать редактирование","","✏️") +
+        tog("log_deleted_messages","Логировать удалённые","","🗑") +
+        tog("media_log_enabled","Медиа-лог","Фото/видео/файлы","🖼")
+    )
+
+    display_section = card("🎨 Интерфейс дашборда",
+        tog("show_user_ids","Показывать ID пользователей") +
+        tog("auto_refresh","Авто-обновление каждые 30с") +
+        tog("compact_view","Компактный вид","","📦") +
+        tog("show_avatars","Показывать аватары") +
+        num_input("items_per_page","Записей на странице",s.get("items_per_page",20),5,100,"")
+    )
+
+    body = navbar(sess, "settings") + f"""
+    <div class="container">
+      <div class="page-title">🔧 Настройки</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          {alerts_section}
+          {logs_section}
+          <div class="section" style="margin-bottom:16px;">
+            <div class="section-header">📥 Экспорт данных</div>
+            <div style="padding:16px;display:flex;flex-direction:column;gap:8px;">
+              <a href="/dashboard/export/stats" class="btn btn-outline">📊 Статистика (.csv)</a>
+              <a href="/dashboard/export/bans" class="btn btn-outline">🔨 Список банов (.csv)</a>
+              <a href="/dashboard/export/modhistory" class="btn btn-outline">📋 История модерации (.csv)</a>
+            </div>
+          </div>
+        </div>
+        <div>
+          {display_section}
+          <div class="section">
+            <div class="section-header">📜 Лог действий администраторов</div>
+            <table>
+              <thead><tr><th>Время</th><th>Действие</th></tr></thead>
+              <tbody>{log_html}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    {'<script>setTimeout(function(){location.reload()},30000)</script>' if s.get("auto_refresh") else ""}
+    """ + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+
+
 handle_settings = require_auth("view_settings")(handle_settings)
 
 
