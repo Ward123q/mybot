@@ -7416,6 +7416,426 @@ async def handle_economy_dashboard(request: web.Request):
 
 handle_economy_dashboard = require_auth("view_overview")(handle_economy_dashboard)
 
+
+# ══════════════════════════════════════════════════════════
+#  ВОССТАНОВЛЕННЫЕ ХЕНДЛЕРЫ СТРАНИЦ
+# ══════════════════════════════════════════════════════════
+
+async def handle_chats(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    chats = [dict(r) for r in await db.get_all_chats()]
+    rows = ""
+    for c in chats:
+        cid = c["cid"]; title = c.get("title") or str(cid)
+        conn = db.get_conn()
+        msgs  = conn.execute("SELECT COALESCE(SUM(msg_count),0) FROM chat_stats WHERE cid=?", (cid,)).fetchone()[0] or 0
+        users = conn.execute("SELECT COUNT(DISTINCT uid) FROM chat_stats WHERE cid=?", (cid,)).fetchone()[0] or 0
+        bans  = conn.execute("SELECT COUNT(*) FROM ban_list WHERE cid=?", (cid,)).fetchone()[0] or 0
+        conn.close()
+        rows += f"<tr><td><a href='/dashboard/chats/{cid}' style='color:var(--acc);text-decoration:none;font-weight:600;'>{title}</a><br><small style='color:var(--t3);font-family:monospace;'>{cid}</small></td><td style='font-family:Space Mono,monospace;color:var(--blue);'>{users:,}</td><td style='font-family:Space Mono,monospace;color:var(--pur);'>{msgs:,}</td><td style='font-family:Space Mono,monospace;color:var(--red);'>{bans}</td><td><a href='/dashboard/chats/{cid}' class='btn btn-xs btn-ghost'>→</a></td></tr>"
+    body = navbar(sess, "chats") + f"""
+    <div class="container">
+      <div class="page-title">💬 Чаты <span style="font-size:14px;color:var(--t2);font-weight:400;">({len(chats)} подключено)</span></div>
+      <div class="section">
+        <table><thead><tr><th>Чат</th><th>👥 Участников</th><th>💬 Сообщений</th><th>🔨 Банов</th><th></th></tr></thead>
+        <tbody>{rows or "<tr><td colspan='5' class='empty-state'>Нет чатов</td></tr>"}</tbody></table>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_chats = require_auth("view_chats")(handle_chats)
+
+async def handle_chat_detail(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    cid = int(request.match_info.get("cid", 0))
+    conn = db.get_conn()
+    chat = conn.execute("SELECT * FROM chats WHERE cid=?", (cid,)).fetchone()
+    title = dict(chat)["title"] if chat else str(cid)
+    stats = conn.execute("SELECT uid, msg_count FROM chat_stats WHERE cid=? ORDER BY msg_count DESC LIMIT 20", (cid,)).fetchall()
+    bans  = conn.execute("SELECT * FROM ban_list WHERE cid=? LIMIT 50", (cid,)).fetchall()
+    warns = conn.execute("SELECT uid, count FROM warnings WHERE cid=? ORDER BY count DESC LIMIT 20", (cid,)).fetchall()
+    conn.close()
+    rows = "".join(f"<tr><td><code>{r['uid']}</code></td><td style='font-family:Space Mono,monospace;color:var(--blue);'>{r['msg_count']}</td></tr>" for r in stats)
+    warn_rows = "".join(f"<tr><td><code>{r['uid']}</code></td><td style='color:var(--ylw);font-weight:700;'>{r['count']}</td></tr>" for r in warns)
+    body = navbar(sess, "chats") + f"""
+    <div class="container">
+      <div class="page-title">💬 {title}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="section"><div class="section-header">📊 Топ активных</div>
+          <table><thead><tr><th>ID</th><th>Сообщений</th></tr></thead>
+          <tbody>{rows or "<tr><td colspan='2' class='empty-state'>Нет данных</td></tr>"}</tbody></table></div>
+        <div class="section"><div class="section-header">⚡ Варны</div>
+          <table><thead><tr><th>ID</th><th>Варнов</th></tr></thead>
+          <tbody>{warn_rows or "<tr><td colspan='2' class='empty-state'>Нет варнов</td></tr>"}</tbody></table></div>
+      </div>
+      <div class="section" style="margin-top:16px;"><div class="section-header">🔨 Баны ({len(bans)})</div>
+        <table><thead><tr><th>ID</th><th>Причина</th></tr></thead>
+        <tbody>{"".join(f"<tr><td><code>{r['uid']}</code></td><td>{r['reason'] or '—'}</td></tr>" for r in bans) or "<tr><td colspan='2' class='empty-state'>Нет банов</td></tr>"}</tbody></table></div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_chat_detail = require_auth("view_chats")(handle_chat_detail)
+
+async def handle_users(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    conn = db.get_conn()
+    users = conn.execute("SELECT uid, SUM(msg_count) as msgs FROM chat_stats GROUP BY uid ORDER BY msgs DESC LIMIT 100").fetchall()
+    conn.close()
+    rows = "".join(f"<tr><td><code>{r['uid']}</code></td><td style='font-family:Space Mono,monospace;color:var(--pur);'>{r['msgs']:,}</td></tr>" for r in users)
+    body = navbar(sess, "users") + f"""
+    <div class="container">
+      <div class="page-title">👥 Пользователи</div>
+      <div class="section">
+        <table><thead><tr><th>ID</th><th>Сообщений</th></tr></thead>
+        <tbody>{rows or "<tr><td colspan='2' class='empty-state'>Нет данных</td></tr>"}</tbody></table>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_users = require_auth("view_users")(handle_users)
+
+async def handle_user_detail(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    uid = int(request.match_info.get("uid", 0))
+    conn = db.get_conn()
+    msgs  = conn.execute("SELECT SUM(msg_count) FROM chat_stats WHERE uid=?", (uid,)).fetchone()[0] or 0
+    warns = conn.execute("SELECT cid, count FROM warnings WHERE uid=?", (uid,)).fetchall()
+    bans  = conn.execute("SELECT cid, reason FROM ban_list WHERE uid=?", (uid,)).fetchall()
+    hist  = conn.execute("SELECT action, reason, by_name, created_at FROM mod_history WHERE uid=? ORDER BY created_at DESC LIMIT 30", (uid,)).fetchall()
+    conn.close()
+    hist_rows = "".join(f"<tr><td style='font-size:11px;color:var(--t3);white-space:nowrap;'>{r['created_at'][:16]}</td><td style='font-weight:600;'>{r['action']}</td><td>{r['reason'] or '—'}</td><td style='color:var(--t2);'>{r['by_name']}</td></tr>" for r in hist)
+    body = navbar(sess, "users") + f"""
+    <div class="container">
+      <div class="page-title">👤 Пользователь <code style="font-size:18px;">{uid}</code></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+        <div class="card" style="text-align:center;"><div style="font-size:24px;font-weight:900;color:var(--pur);">{msgs:,}</div><div style="font-size:11px;color:var(--t2);">Сообщений</div></div>
+        <div class="card" style="text-align:center;"><div style="font-size:24px;font-weight:900;color:var(--ylw);">{sum(r["count"] for r in warns)}</div><div style="font-size:11px;color:var(--t2);">Варнов</div></div>
+        <div class="card" style="text-align:center;"><div style="font-size:24px;font-weight:900;color:var(--red);">{len(bans)}</div><div style="font-size:11px;color:var(--t2);">Банов</div></div>
+      </div>
+      <div class="section"><div class="section-header">📋 История действий</div>
+        <table><thead><tr><th>Время</th><th>Действие</th><th>Причина</th><th>Кто</th></tr></thead>
+        <tbody>{hist_rows or "<tr><td colspan='4' class='empty-state'>Нет записей</td></tr>"}</tbody></table></div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_user_detail = require_auth("view_users")(handle_user_detail)
+
+async def handle_moderation(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    conn = db.get_conn()
+    try:
+        hist = conn.execute("SELECT action, reason, by_name, created_at FROM mod_history ORDER BY created_at DESC LIMIT 100").fetchall()
+    except: hist = []
+    conn.close()
+    rows = "".join(
+        f"<tr><td style='font-size:11px;color:var(--t3);white-space:nowrap;'>{r['created_at'][:16]}</td>"
+        f"<td style='font-weight:600;color:var(--ylw);'>{r['action']}</td>"
+        f"<td style='font-size:12px;'>{(r['reason'] or '—')[:40]}</td>"
+        f"<td style='color:var(--t2);font-size:12px;'>{r['by_name']}</td></tr>" for r in hist)
+    body = navbar(sess, "moderation") + f"""
+    <div class="container">
+      <div class="page-title">🛡 История модерации</div>
+      <div class="section">
+        <table><thead><tr><th>Время</th><th>Действие</th><th>Причина</th><th>Модератор</th></tr></thead>
+        <tbody>{rows or "<tr><td colspan='4' class='empty-state'>Нет записей</td></tr>"}</tbody></table>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_moderation = require_auth("view_moderation")(handle_moderation)
+
+async def handle_tickets(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    try:
+        tickets = await db.get_all_tickets(limit=100)
+    except: tickets = []
+    status_color = {"open":"var(--green)","closed":"var(--t3)","pending":"var(--ylw)"}
+    rows = "".join(
+        f"<tr><td><b>#{t['id']}</b></td>"
+        f"<td>{t.get('subject','—')[:40]}</td>"
+        f"<td>{t.get('user_name','—')}</td>"
+        f"<td><span style='color:{status_color.get(t.get("status","open"),"var(--t2)")};font-weight:600;'>{t.get('status','—')}</span></td>"
+        f"<td><a href='/dashboard/tickets/{t["id"]}' class='btn btn-xs btn-ghost'>→</a></td></tr>"
+        for t in tickets)
+    body = navbar(sess, "tickets") + f"""
+    <div class="container">
+      <div class="page-title">🎫 Тикеты</div>
+      <div class="section">
+        <table><thead><tr><th>#</th><th>Тема</th><th>Пользователь</th><th>Статус</th><th></th></tr></thead>
+        <tbody>{rows or "<tr><td colspan='5' class='empty-state'>Нет тикетов</td></tr>"}</tbody></table>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_tickets = require_auth("view_tickets")(handle_tickets)
+
+async def handle_ticket_detail(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    tid = int(request.match_info.get("id", 0))
+    try:
+        ticket = await db.get_ticket(tid)
+        msgs   = await db.get_ticket_messages(tid)
+    except: ticket = None; msgs = []
+    if not ticket:
+        raise web.HTTPFound("/dashboard/tickets")
+    msgs_html = "".join(
+        f"<div style='padding:10px 14px;border-bottom:1px solid var(--br0);'>"
+        f"<div style='font-size:11px;color:var(--t3);margin-bottom:4px;'>{m.get('created_at','')[:16]} · {m.get('sender_name','—')}</div>"
+        f"<div style='font-size:14px;'>{m.get('text','')}</div></div>" for m in msgs)
+    body = navbar(sess, "tickets") + f"""
+    <div class="container">
+      <div class="page-title">🎫 Тикет #{tid} — {ticket.get('subject','—')}</div>
+      <div class="section" style="margin-bottom:16px;">
+        <div style="padding:14px 18px;display:flex;gap:20px;font-size:13px;">
+          <span>👤 {ticket.get('user_name','—')}</span>
+          <span>📊 Статус: <b>{ticket.get('status','—')}</b></span>
+        </div>
+        <div>{msgs_html or '<div class="empty-state" style="padding:20px;">Нет сообщений</div>'}</div>
+      </div>
+      <form method="POST" action="/dashboard/tickets/{tid}/reply" style="display:flex;gap:10px;">
+        <input name="text" placeholder="Ответить..." style="flex:1;padding:10px 14px;border-radius:8px;border:1px solid var(--br1);background:var(--bg3);color:var(--t1);font-size:14px;">
+        <button class="btn btn-primary" type="submit">Отправить</button>
+      </form>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_ticket_detail = require_auth("view_tickets")(handle_ticket_detail)
+
+async def handle_ticket_reply(request: web.Request):
+    sess = _get_session(request)
+    tid = int(request.match_info.get("id", 0))
+    if request.method == "POST":
+        data = await request.post()
+        text = data.get("text","").strip()
+        if text and sess:
+            try: await db.add_ticket_message(tid, 0, sess.get("name","Admin"), text, "admin")
+            except: pass
+    raise web.HTTPFound(f"/dashboard/tickets/{tid}")
+handle_ticket_reply = require_auth("view_tickets")(handle_ticket_reply)
+
+async def handle_ticket_close_web(request: web.Request):
+    tid = int(request.match_info.get("id", 0))
+    try: await db.close_ticket(tid)
+    except: pass
+    raise web.HTTPFound(f"/dashboard/tickets/{tid}")
+handle_ticket_close_web = require_auth("view_tickets")(handle_ticket_close_web)
+
+async def handle_reports(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    reports = shared.get_reports()
+    status_color = {"new":"var(--red)","reviewed":"var(--ylw)","closed":"var(--t3)"}
+    rows = "".join(
+        f"<tr><td>{r.get('time','—')}</td>"
+        f"<td>{r.get('reporter_name','—')}</td>"
+        f"<td>{r.get('target_name','—')}</td>"
+        f"<td style='font-size:12px;'>{(r.get('reason','—'))[:40]}</td>"
+        f"<td><span style='color:{status_color.get(r.get("status","new"),"var(--t2)")};font-weight:600;'>{r.get('status','—')}</span></td></tr>"
+        for r in reports)
+    body = navbar(sess, "reports") + f"""
+    <div class="container">
+      <div class="page-title">🚨 Репорты</div>
+      <div class="section">
+        <table><thead><tr><th>Время</th><th>От кого</th><th>На кого</th><th>Причина</th><th>Статус</th></tr></thead>
+        <tbody>{rows or "<tr><td colspan='5' class='empty-state'>Нет репортов</td></tr>"}</tbody></table>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_reports = require_auth("view_reports")(handle_reports)
+
+async def handle_alerts(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    level_color = {"danger":"var(--red)","warn":"var(--ylw)","info":"var(--acc)"}
+    rows = "".join(
+        f"<tr><td style='font-size:11px;color:var(--t3);white-space:nowrap;'>{a['time']}</td>"
+        f"<td><span style='color:{level_color.get(a["level"],"var(--t2)")};font-weight:700;'>{a['title']}</span></td>"
+        f"<td style='font-size:12px;'>{a['desc'][:60]}</td></tr>"
+        for a in shared.alerts)
+    body = navbar(sess, "alerts") + f"""
+    <div class="container">
+      <div class="page-title">🔴 Алерты <span style="font-size:14px;color:var(--t2);font-weight:400;">({len(shared.alerts)})</span>
+        <a href="/dashboard/alerts/clear" class="btn btn-sm btn-ghost" style="margin-left:auto;">Очистить</a>
+      </div>
+      <div class="section">
+        <table><thead><tr><th>Время</th><th>Тип</th><th>Описание</th></tr></thead>
+        <tbody>{rows or "<tr><td colspan='3' class='empty-state'>Нет алертов</td></tr>"}</tbody></table>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_alerts = require_auth("view_alerts")(handle_alerts)
+
+async def handle_alerts_clear(request: web.Request):
+    shared.alerts.clear()
+    raise web.HTTPFound("/dashboard/alerts")
+handle_alerts_clear = require_auth("view_alerts")(handle_alerts_clear)
+
+async def handle_media(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    rows = "".join(
+        f"<tr><td style='font-size:11px;color:var(--t3);white-space:nowrap;'>{m['time']}</td>"
+        f"<td>{m['name']}</td><td style='color:var(--acc);'>{m['type']}</td>"
+        f"<td style='font-size:12px;'>{m['chat']}</td></tr>"
+        for m in shared.media_log[:100])
+    body = navbar(sess, "media") + f"""
+    <div class="container">
+      <div class="page-title">🎬 Медиа-лог</div>
+      <div class="section">
+        <table><thead><tr><th>Время</th><th>Пользователь</th><th>Тип</th><th>Чат</th></tr></thead>
+        <tbody>{rows or "<tr><td colspan='4' class='empty-state'>Нет медиа</td></tr>"}</tbody></table>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_media = require_auth("view_media")(handle_media)
+
+async def handle_deleted(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    body = navbar(sess, "deleted") + """
+    <div class="container">
+      <div class="page-title">🗑 Удалённые сообщения</div>
+      <div class="section"><div class="empty-state" style="padding:40px;">Функция в разработке</div></div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_deleted = require_auth("view_deleted")(handle_deleted)
+
+async def handle_broadcast(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    result = ""
+    if request.method == "POST":
+        data = await request.post()
+        text = data.get("text","").strip()
+        if text:
+            chats = [dict(r) for r in await db.get_all_chats()]
+            sent = 0
+            for c in chats:
+                try:
+                    from shared import bot as _b
+                    if _b: await _b.send_message(c["cid"], text, parse_mode="HTML")
+                    sent += 1
+                except: pass
+            result = f'<div style="padding:12px 18px;background:rgba(34,197,94,.1);border-radius:8px;color:var(--green);margin-bottom:16px;">✅ Отправлено в {sent} чатов</div>'
+    body = navbar(sess, "broadcast") + f"""
+    <div class="container">
+      <div class="page-title">📢 Рассылка</div>
+      {result}
+      <div class="section">
+        <div style="padding:16px 18px;">
+          <form method="POST">
+            <div style="margin-bottom:12px;font-size:13px;color:var(--t2);">HTML поддерживается. Сообщение отправится во все подключённые чаты.</div>
+            <textarea name="text" placeholder="Текст рассылки..." rows="6"
+              style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--br1);
+                     background:var(--bg3);color:var(--t1);font-size:14px;resize:vertical;"></textarea>
+            <button class="btn btn-primary" type="submit" style="width:100%;margin-top:12px;padding:13px;">
+              📢 Разослать всем
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_broadcast = require_auth("broadcast")(handle_broadcast)
+
+async def handle_plugins(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    body = navbar(sess, "plugins") + """
+    <div class="container">
+      <div class="page-title">🧩 Плагины</div>
+      <div class="section"><div class="empty-state" style="padding:40px;">Управление плагинами доступно через /plugins в боте</div></div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_plugins = require_auth("manage_plugins")(handle_plugins)
+
+async def handle_chat_settings(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    body = navbar(sess, "chat_settings") + """
+    <div class="container">
+      <div class="page-title">⚙️ Настройки чатов</div>
+      <div class="section"><div class="empty-state" style="padding:40px;">Настройки чатов доступны через /settings в боте</div></div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_chat_settings = require_auth("manage_chat_settings")(handle_chat_settings)
+
+async def handle_analytics(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    conn = db.get_conn()
+    try:
+        top_chats = conn.execute("SELECT cid, SUM(msg_count) as total FROM chat_stats GROUP BY cid ORDER BY total DESC LIMIT 10").fetchall()
+        top_users = conn.execute("SELECT uid, SUM(msg_count) as total FROM chat_stats GROUP BY uid ORDER BY total DESC LIMIT 10").fetchall()
+    except: top_chats = []; top_users = []
+    conn.close()
+    chat_rows = "".join(f"<tr><td><code>{r['cid']}</code></td><td style='font-family:Space Mono,monospace;color:var(--pur);'>{r['total']:,}</td></tr>" for r in top_chats)
+    user_rows = "".join(f"<tr><td><code>{r['uid']}</code></td><td style='font-family:Space Mono,monospace;color:var(--blue);'>{r['total']:,}</td></tr>" for r in top_users)
+    body = navbar(sess, "analytics") + f"""
+    <div class="container">
+      <div class="page-title">📈 Аналитика</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="section"><div class="section-header">💬 Топ чатов</div>
+          <table><thead><tr><th>Чат ID</th><th>Сообщений</th></tr></thead>
+          <tbody>{chat_rows or "<tr><td colspan='2' class='empty-state'>Нет данных</td></tr>"}</tbody></table></div>
+        <div class="section"><div class="section-header">👥 Топ пользователей</div>
+          <table><thead><tr><th>User ID</th><th>Сообщений</th></tr></thead>
+          <tbody>{user_rows or "<tr><td colspan='2' class='empty-state'>Нет данных</td></tr>"}</tbody></table></div>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_analytics = require_auth("view_overview")(handle_analytics)
+
+async def handle_admins(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    sessions = _get_active_sessions()
+    rows = "".join(
+        f"<tr><td><code style='font-size:12px;'>{s['ip']}</code></td>"
+        f"<td style='font-size:12px;'>{s.get('current','')[:40]}</td>"
+        f"<td style='font-size:12px;color:var(--t2);'>{int((time.time()-s['last_seen'])//60)}м назад</td>"
+        f"<td>{s.get('pages',0)}</td></tr>"
+        for s in sessions)
+    body = navbar(sess, "admins") + f"""
+    <div class="container">
+      <div class="page-title">👑 Администраторы</div>
+      <div class="section">
+        <div class="section-header">👁 Активные сессии ({len(sessions)})</div>
+        <table><thead><tr><th>IP</th><th>Страница</th><th>Активность</th><th>Стр.</th></tr></thead>
+        <tbody>{rows or "<tr><td colspan='4' class='empty-state'>Нет активных сессий</td></tr>"}</tbody></table>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_admins = require_auth("view_overview")(handle_admins)
+
+
+
+async def handle_economy(request: web.Request):
+    sess = _get_session(request)
+    _track_session(request)
+    conn = db.get_conn()
+    try:
+        top_rep = conn.execute("SELECT uid, cid, score FROM reputation ORDER BY score DESC LIMIT 20").fetchall()
+    except: top_rep = []
+    conn.close()
+    rows = "".join(
+        f"<tr><td><code>{r['uid']}</code></td>"
+        f"<td><code>{r['cid']}</code></td>"
+        f"<td style='font-family:Space Mono,monospace;color:var(--green);font-weight:700;'>{r['score']:+d}</td></tr>"
+        for r in top_rep)
+    body = navbar(sess, "economy") + f"""
+    <div class="container">
+      <div class="page-title">💰 Экономика</div>
+      <div class="section">
+        <div class="section-header">🌟 Топ по репутации</div>
+        <table><thead><tr><th>User ID</th><th>Чат ID</th><th>Репутация</th></tr></thead>
+        <tbody>{rows or "<tr><td colspan='3' class='empty-state'>Нет данных</td></tr>"}</tbody></table>
+      </div>
+    </div>""" + close_main()
+    return web.Response(text=page(body), content_type="text/html")
+handle_economy = require_auth("view_economy")(handle_economy)
+
+
 async def start_dashboard():
     _init_admin_db()
     app = web.Application()
