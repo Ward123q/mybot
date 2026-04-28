@@ -7551,13 +7551,18 @@ async def handle_tickets(request: web.Request):
         tickets = await db.get_all_tickets(limit=100)
     except: tickets = []
     status_color = {"open":"var(--green)","closed":"var(--t3)","pending":"var(--ylw)"}
-    rows = "".join(
-        f"<tr><td><b>#{t['id']}</b></td>"
-        f"<td>{t.get('subject','—')[:40]}</td>"
-        f"<td>{t.get('user_name','—')}</td>"
-        f"<td><span style='color:{status_color.get(t.get("status","open"),"var(--t2)")};font-weight:600;'>{t.get('status','—')}</span></td>"
-        f"<td><a href='/dashboard/tickets/{t["id"]}' class='btn btn-xs btn-ghost'>→</a></td></tr>"
-        for t in tickets)
+    rows = ""
+    for t in tickets:
+        _st = t.get("status", "open")
+        _sc = status_color.get(_st, "var(--t2)")
+        _id = t["id"]
+        rows += (
+            f"<tr><td><b>#{_id}</b></td>"
+            f"<td>{t.get('subject','—')[:40]}</td>"
+            f"<td>{t.get('user_name','—')}</td>"
+            f"<td><span style='color:{_sc};font-weight:600;'>{_st}</span></td>"
+            f"<td><a href='/dashboard/tickets/{_id}' class='btn btn-xs btn-ghost'>→</a></td></tr>"
+        )
     body = navbar(sess, "tickets") + f"""
     <div class="container">
       <div class="page-title">🎫 Тикеты</div>
