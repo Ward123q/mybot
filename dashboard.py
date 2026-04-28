@@ -7656,11 +7656,15 @@ async def handle_alerts(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
     level_color = {"danger":"var(--red)","warn":"var(--ylw)","info":"var(--acc)"}
-    rows = "".join(
-        f"<tr><td style='font-size:11px;color:var(--t3);white-space:nowrap;'>{a['time']}</td>"
-        f"<td><span style='color:{level_color.get(a["level"],"var(--t2)")};font-weight:700;'>{a['title']}</span></td>"
-        f"<td style='font-size:12px;'>{a['desc'][:60]}</td></tr>"
-        for a in shared.alerts)
+    rows = ""
+    for a in shared.alerts:
+        _lv = a.get("level", "info")
+        _lc = level_color.get(_lv, "var(--t2)")
+        rows += (
+            f"<tr><td style='font-size:11px;color:var(--t3);white-space:nowrap;'>{a['time']}</td>"
+            f"<td><span style='color:{_lc};font-weight:700;'>{a['title']}</span></td>"
+            f"<td style='font-size:12px;'>{a['desc'][:60]}</td></tr>"
+        )
     body = navbar(sess, "alerts") + f"""
     <div class="container">
       <div class="page-title">🔴 Алерты <span style="font-size:14px;color:var(--t2);font-weight:400;">({len(shared.alerts)})</span>
