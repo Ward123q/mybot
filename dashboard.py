@@ -7630,13 +7630,17 @@ async def handle_reports(request: web.Request):
     _track_session(request)
     reports = shared.get_reports()
     status_color = {"new":"var(--red)","reviewed":"var(--ylw)","closed":"var(--t3)"}
-    rows = "".join(
-        f"<tr><td>{r.get('time','—')}</td>"
-        f"<td>{r.get('reporter_name','—')}</td>"
-        f"<td>{r.get('target_name','—')}</td>"
-        f"<td style='font-size:12px;'>{(r.get('reason','—'))[:40]}</td>"
-        f"<td><span style='color:{status_color.get(r.get("status","new"),"var(--t2)")};font-weight:600;'>{r.get('status','—')}</span></td></tr>"
-        for r in reports)
+    rows = ""
+    for r in reports:
+        _st = r.get("status", "new")
+        _sc = status_color.get(_st, "var(--t2)")
+        rows += (
+            f"<tr><td>{r.get('time','—')}</td>"
+            f"<td>{r.get('reporter_name','—')}</td>"
+            f"<td>{r.get('target_name','—')}</td>"
+            f"<td style='font-size:12px;'>{(r.get('reason','—'))[:40]}</td>"
+            f"<td><span style='color:{_sc};font-weight:600;'>{_st}</span></td></tr>"
+        )
     body = navbar(sess, "reports") + f"""
     <div class="container">
       <div class="page-title">🚨 Репорты</div>

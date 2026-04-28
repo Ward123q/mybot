@@ -2043,10 +2043,11 @@ async def send_captcha(message: Message, member):
     except: pass
 
     # Строим клавиатуру
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=opt, callback_data=f"captcha:{uid}:{opt}:{answer}")
-        for opt in options
-    ]])
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=opt, callback_data=f"captcha:{uid}:{opt}:{answer}")
+         for opt in options],
+        [InlineKeyboardButton(text="✅ Пропустить (только для админов)", callback_data=f"captcha_skip:{uid}")]
+    ])
 
     sent = await message.answer(
         f"🔐 <b>Проверка безопасности</b>\n"
@@ -2069,6 +2070,60 @@ async def send_captcha(message: Message, member):
         "name": name,
     }
 
+
+
+@dp.callback_query(F.data.startswith("captcha_skip:"))
+async def cb_captcha_skip(call: CallbackQuery):
+    """Администратор пропускает участника вручную"""
+    uid = int(call.data.split(":")[1])
+    cid = call.message.chat.id
+
+    # Проверяем что нажавший — администратор
+    try:
+        member = await bot.get_chat_member(cid, call.from_user.id)
+        if member.status not in ("administrator", "creator"):
+            await call.answer("🚫 Только администраторы могут пропускать.", show_alert=True)
+            return
+    except:
+        await call.answer("🚫 Ошибка проверки прав.", show_alert=True)
+        return
+
+    pending = _captcha_pending.get(cid, {}).get(uid)
+    if not pending:
+        await call.answer("⚠️ Капча уже завершена.", show_alert=True)
+        return
+
+    name = pending.get("name", str(uid))
+
+    # Отменяем таймер
+    pending["kick_task"].cancel()
+    _captcha_pending[cid].pop(uid, None)
+
+    # Снимаем ограничения
+    try:
+        await bot.restrict_chat_member(
+            cid, uid,
+            permissions=ChatPermissions(
+                can_send_messages=True,
+                can_send_media_messages=True,
+                can_send_polls=True,
+                can_send_other_messages=True,
+                can_add_web_page_previews=True
+            )
+        )
+    except: pass
+
+    try: await call.message.delete()
+    except: pass
+
+    note = await call.message.answer(
+        f"✅ <b>{name}</b> пропущен администратором {call.from_user.mention_html()}",
+        parse_mode="HTML"
+    )
+    await asyncio.sleep(5)
+    try: await note.delete()
+    except: pass
+    await call.answer("✅ Участник пропущен")
 
 @dp.callback_query(F.data.startswith("captcha:"))
 async def cb_captcha(call: CallbackQuery):
@@ -9932,10 +9987,11 @@ async def send_captcha(message: Message, member):
     except: pass
 
     # Строим клавиатуру
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=opt, callback_data=f"captcha:{uid}:{opt}:{answer}")
-        for opt in options
-    ]])
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=opt, callback_data=f"captcha:{uid}:{opt}:{answer}")
+         for opt in options],
+        [InlineKeyboardButton(text="✅ Пропустить (только для админов)", callback_data=f"captcha_skip:{uid}")]
+    ])
 
     sent = await message.answer(
         f"🔐 <b>Проверка безопасности</b>\n"
@@ -9958,6 +10014,60 @@ async def send_captcha(message: Message, member):
         "name": name,
     }
 
+
+
+@dp.callback_query(F.data.startswith("captcha_skip:"))
+async def cb_captcha_skip(call: CallbackQuery):
+    """Администратор пропускает участника вручную"""
+    uid = int(call.data.split(":")[1])
+    cid = call.message.chat.id
+
+    # Проверяем что нажавший — администратор
+    try:
+        member = await bot.get_chat_member(cid, call.from_user.id)
+        if member.status not in ("administrator", "creator"):
+            await call.answer("🚫 Только администраторы могут пропускать.", show_alert=True)
+            return
+    except:
+        await call.answer("🚫 Ошибка проверки прав.", show_alert=True)
+        return
+
+    pending = _captcha_pending.get(cid, {}).get(uid)
+    if not pending:
+        await call.answer("⚠️ Капча уже завершена.", show_alert=True)
+        return
+
+    name = pending.get("name", str(uid))
+
+    # Отменяем таймер
+    pending["kick_task"].cancel()
+    _captcha_pending[cid].pop(uid, None)
+
+    # Снимаем ограничения
+    try:
+        await bot.restrict_chat_member(
+            cid, uid,
+            permissions=ChatPermissions(
+                can_send_messages=True,
+                can_send_media_messages=True,
+                can_send_polls=True,
+                can_send_other_messages=True,
+                can_add_web_page_previews=True
+            )
+        )
+    except: pass
+
+    try: await call.message.delete()
+    except: pass
+
+    note = await call.message.answer(
+        f"✅ <b>{name}</b> пропущен администратором {call.from_user.mention_html()}",
+        parse_mode="HTML"
+    )
+    await asyncio.sleep(5)
+    try: await note.delete()
+    except: pass
+    await call.answer("✅ Участник пропущен")
 
 @dp.callback_query(F.data.startswith("captcha:"))
 async def cb_captcha(call: CallbackQuery):
