@@ -27,7 +27,14 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
-DASHBOARD_TOKEN = os.getenv("DASHBOARD_TOKEN", "changeme123")
+_raw_token = os.getenv("DASHBOARD_TOKEN", "")
+if not _raw_token:
+    raise RuntimeError(
+        "[SECURITY] DASHBOARD_TOKEN не задан! "
+        "Установи переменную окружения: export DASHBOARD_TOKEN='ваш_токен' "
+        "или добавь в .env файл. Запуск без токена запрещён."
+    )
+DASHBOARD_TOKEN = _raw_token
 OWNER_TG_ID = 7823802800  # Единственный владелец
 OWNER_RANK   = 15           # Ранг владельца
 
@@ -221,6 +228,44 @@ DASHBOARD_RANKS = {
 _dashboard_sessions: dict = {}
 # Трекер сессий {ip: {"last_seen": float, "current": str, "pages": int}}
 _active_sessions: dict = {}
+# CSRF токены {session_token: csrf_token}
+_csrf_tokens: dict = {}
+
+
+def _csrf_generate(session_token: str) -> str:
+    """Генерирует или возвращает существующий CSRF-токен для сессии."""
+    if session_token not in _csrf_tokens:
+        _csrf_tokens[session_token] = secrets.token_hex(32)
+    return _csrf_tokens[session_token]
+
+
+def _csrf_validate(request, sess_token: str) -> bool:
+    """Проверяет CSRF-токен из заголовка (AJAX) или query-param (форма)."""
+    expected = _csrf_tokens.get(sess_token)
+    if not expected:
+        return False
+    provided = (
+        request.headers.get("X-CSRF-Token") or
+        request.rel_url.query.get("_csrf")
+    )
+    if not provided:
+        return False
+    return secrets.compare_digest(expected, provided)
+
+
+async def _csrf_validate_form(request, sess_token: str) -> bool:
+    """Для обычных POST-форм: берёт _csrf из тела формы."""
+    expected = _csrf_tokens.get(sess_token)
+    if not expected:
+        return False
+    try:
+        data = await request.post()
+        provided = data.get("_csrf", "")
+    except Exception:
+        provided = ""
+    if not provided:
+        return False
+    return secrets.compare_digest(expected, provided)
 
 
 def _init_admin_db():
@@ -1231,6 +1276,9 @@ def page(body: str) -> str:
 def navbar(sess: dict | None = None, active: str = "") -> str:
     if not sess:
         return ""
+    # Генерируем CSRF-токен для этой сессии
+    _sess_token = sess.get("_token", "")
+    _csrf = _csrf_generate(_sess_token) if _sess_token else ""
     rank = sess.get("rank", 1)
     rank_info = DASHBOARD_RANKS.get(rank, DASHBOARD_RANKS[1])
     uname = sess.get("name", "Аноним")
@@ -1321,6 +1369,7 @@ def navbar(sess: dict | None = None, active: str = "") -> str:
         <a href="/dashboard/logout" class="btn btn-xs" style="background:rgba(239,68,68,.1);color:var(--danger);">Выход</a>
       </div>
     </div>
+    <meta name="csrf-token" content="{_csrf}">
     <div class="main">
     <div class="topbar">
       <div class="topbar-left">
@@ -1357,6 +1406,13 @@ def close_main() -> str:
     if(a.href && path===new URL(a.href,location).pathname) a.style.color='var(--accent)';
   }});
 }})();
+// CSRF helper для AJAX
+window._csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
+function csrfFetch(url, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({"X-CSRF-Token": window._csrf, "X-Requested-With": "XMLHttpRequest"}, opts.headers || {});
+  return fetch(url, opts);
+}
 </script>"""
 
 
@@ -2039,6 +2095,8 @@ async def api_modaction(request: web.Request):
     token = request.cookies.get("dsess_token")
     if not token or token not in _dashboard_sessions:
         return web.json_response({"ok": False, "error": "Unauthorized"}, status=401)
+    if not _csrf_validate(request, token):
+        return web.json_response({"ok": False, "error": "CSRF validation failed"}, status=403)
 
     data = await request.json()
     action = data.get("action")
@@ -2088,6 +2146,21 @@ async def api_stats(request: web.Request):
     conn.close()
     t_stats = await db.ticket_stats_all()
     return web.json_response({"chats": len(await db.get_all_chats()), "users": total_users, "messages": total_msgs, "bans": total_bans, "tickets": t_stats})
+
+
+async def api_reveal_token(request: web.Request):
+    """POST /api/reveal_token — отдаёт токен только авторизованному владельцу, никогда через HTML."""
+    if request.method != "POST":
+        return web.json_response({"error": "Method not allowed"}, status=405)
+    if request.headers.get("X-Requested-With") != "XMLHttpRequest":
+        return web.json_response({"error": "Forbidden"}, status=403)
+    sess_token = request.cookies.get("dsess_token", "")
+    sess = _dashboard_sessions.get(sess_token)
+    if not sess or sess.get("rank", 0) < OWNER_RANK:
+        return web.json_response({"error": "Insufficient privileges"}, status=403)
+    ip = request.headers.get("X-Forwarded-For", request.remote or "").split(",")[0].strip()
+    _log_admin_db(sess.get("uid", 0), "REVEAL_TOKEN", f"Токен просмотрен с IP {ip}", ip)
+    return web.json_response({"token": DASHBOARD_TOKEN})
 
 
 # ══════════════════════════════════════════
@@ -7003,12 +7076,19 @@ async def handle_owner_panel(request: web.Request):
       var el=document.getElementById('ow-chats');
       if(el&&d.chats) el.textContent=d.chats.length;
     }}).catch(()=>{{}});
-    // Показать/скрыть токен
+    // Показать/скрыть токен — токен получается с сервера, не из HTML
     var _tokVisible=false;
+    var _tokFetched=null;
     function toggleToken(){{
       var el=document.getElementById('tok-val');
-      _tokVisible=!_tokVisible;
-      el.textContent=_tokVisible?'{DASHBOARD_TOKEN}':'••••••••••••••••';
+      if(_tokVisible){{ el.textContent='••••••••••••••••'; _tokVisible=false; return; }}
+      if(_tokFetched){{ el.textContent=_tokFetched; _tokVisible=true; return; }}
+      fetch('/api/reveal_token',{{method:'POST',headers:{{'X-Requested-With':'XMLHttpRequest'}}}})
+        .then(function(r){{return r.json();}})
+        .then(function(d){{
+          if(d.token){{ _tokFetched=d.token; el.textContent=d.token; _tokVisible=true; }}
+          else{{ el.textContent='Нет доступа'; }}
+        }}).catch(function(){{ el.textContent='Ошибка'; }});
     }}
     </script>
     """ + close_main()
@@ -7762,11 +7842,15 @@ async def handle_chat_settings(request: web.Request):
     saved_ok = False
     save_error = ""
     if request.method == "POST" and selected_cid:
-        try:
-            data = await request.post()
-            s = cs.get_settings(selected_cid)
+        sess_token = request.cookies.get("dsess_token", "")
+        if not _csrf_validate(request, sess_token):
+            save_error = "CSRF ошибка — обновите страницу и попробуйте снова"
+        if not save_error:
+            try:
+                data = await request.post()
+                s = cs.get_settings(selected_cid)
 
-            bool_keys = [
+                bool_keys = [
                 "schedule_enabled", "quiet_enabled",
                 "welcome_enabled", "welcome_delete_prev", "verify_enabled",
                 "antispam_enabled", "antimat_enabled", "antilink_enabled",
@@ -7775,8 +7859,8 @@ async def handle_chat_settings(request: web.Request):
                 "xp_enabled", "rep_enabled", "games_enabled", "economy_enabled",
                 "polls_enabled", "anon_enabled", "clans_enabled",
                 "announce_enabled", "rules_remind_enabled",
-            ]
-            int_keys = [
+                ]
+                int_keys = [
                 ("max_warns", 1, 20),
                 ("warn_expiry_days", 1, 365),
                 ("mute_duration", 1, 10080),
@@ -7792,30 +7876,30 @@ async def handle_chat_settings(request: web.Request):
                 ("flood_msgs", 3, 100),
                 ("verify_timeout_mins", 1, 60),
                 ("welcome_delete_mins", 0, 1440),
-            ]
-            str_keys = [
+                ]
+                str_keys = [
                 "close_time", "open_time", "quiet_start", "quiet_end",
                 "flood_action", "welcome_text", "verify_question",
                 "verify_answer", "announce_text",
-            ]
+                ]
 
-            for k in bool_keys:
-                s[k] = data.get(k) == "1"
-            for k, mn, mx in int_keys:
-                try:
-                    s[k] = max(mn, min(mx, int(data.get(k, s.get(k, mn)))))
-                except:
-                    pass
-            for k in str_keys:
-                if k in data:
-                    s[k] = data[k][:500]
+                for k in bool_keys:
+                    s[k] = data.get(k) == "1"
+                for k, mn, mx in int_keys:
+                    try:
+                        s[k] = max(mn, min(mx, int(data.get(k, s.get(k, mn)))))
+                    except:
+                        pass
+                for k in str_keys:
+                    if k in data:
+                        s[k] = data[k][:500]
 
-            cs.save_settings(selected_cid, s)
-            _log_admin_db(sess.get("uid", 0) if sess else 0, "CHAT_SETTINGS",
+                cs.save_settings(selected_cid, s)
+                _log_admin_db(sess.get("uid", 0) if sess else 0, "CHAT_SETTINGS",
                           f"Настройки чата {selected_cid} обновлены")
-            saved_ok = True
-        except Exception as e:
-            save_error = str(e)
+                saved_ok = True
+            except Exception as e:
+                save_error = str(e)
 
     # Загружаем текущие настройки выбранного чата
     s = cs.get_settings(selected_cid) if selected_cid else {}
@@ -7901,8 +7985,11 @@ async def handle_chat_settings(request: web.Request):
         </div>""" + close_main()
         return web.Response(text=page(body), content_type="text/html")
 
+    _cs_sess_token = request.cookies.get("dsess_token", "")
+    _cs_csrf = _csrf_generate(_cs_sess_token) if _cs_sess_token else ""
     form_html = f'''
     <form method="POST" action="/dashboard/chat_settings/{selected_cid}">
+      <input type="hidden" name="_csrf" value="{_cs_csrf}">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
 
         <div>
@@ -8147,6 +8234,7 @@ async def start_dashboard():
     app.router.add_get("/api/search", api_search)
     app.router.add_post("/api/modaction", api_modaction)
     app.router.add_get("/api/stats", api_stats)
+    app.router.add_post("/api/reveal_token", api_reveal_token)
 
     # ── Новые фичи v3.0 ──
     app.router.add_get("/dashboard/activity_map",  handle_activity_map)
