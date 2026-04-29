@@ -1792,78 +1792,58 @@ async def handle_overview(request: web.Request):
       <a href="/dashboard/command_center" class="btn btn-primary btn-sm">🎮 Command Center</a>
     </div>"""
 
-    # ── Status bar ────────────────────────────────────────────────────────────
-    status_bar = f"""
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px;">
-      </div>
-      """
+    # ── Build final body ──────────────────────────────────────────────────────
+    no_chats_html = ""
+    if not chat_rows_html:
+        no_chats_html = '<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:20px;">Нет подключённых чатов</td></tr>'
 
-    alerts_section = card("🚨 Алерты и мониторинг", f"""
-      {tog("alerts_enabled","Алерты включены","Детектор спама и флуда","⚡")}
-      {tog("alert_on_mass_ban","Алерт при массовом бане","5+ банов за 1 минуту = тревога","🔴")}
-      {tog("alert_on_raid","Алерт при рейде","Массовый вход новых аккаунтов","⚠️")}
-      {tog("alert_on_new_member","Алерт на нового участника","Каждый вход = запись в алертах","👤")}
-      {num_input("spam_threshold","Порог спама",s.get("spam_threshold",10),5,60,"сообщений/мин")}
-      {num_input("flood_threshold","Порог флуда",s.get("flood_threshold",15),5,100,"сообщений/мин")}
-    """)
+    no_acts_html = ""
+    if not act_rows_html:
+        no_acts_html = '<tr><td colspan="4" style="text-align:center;color:var(--t3);padding:20px;">Нет действий</td></tr>'
 
-    logs_section = card("📋 Логирование событий", f"""
-      {tog("log_bans","Логировать баны","","")}
-      {tog("log_mutes","Логировать муты","","")}
-      {tog("log_warns","Логировать варны","","")}
-      {tog("log_kicks","Логировать кики","","")}
-      {tog("log_joins","Логировать входы","Может быть много записей","👋")}
-      {tog("log_leaves","Логировать выходы","","")}
-      {tog("log_edited_messages","Логировать редактирование","Сохранять исходный текст","✏️")}
-      {tog("log_deleted_messages","Логировать удалённые","Сохранять удалённые сообщения","🗑")}
-      {tog("media_log_enabled","Медиа-лог","Логировать фото/видео/файлы","🖼")}
-    """)
+    no_mods_html = ""
+    if not mod_rows_html:
+        no_mods_html = '<tr><td colspan="3" style="text-align:center;color:var(--t3);padding:20px;">Нет данных</td></tr>'
 
-    display_section = card("🎨 Интерфейс дашборда", f"""
-      {tog("show_user_ids","Показывать ID пользователей","","")}
-      {tog("auto_refresh","Авто-обновление каждые 30с","","")}
-      {tog("compact_view","Компактный вид","Меньше отступов, больше данных","📦")}
-      {tog("show_avatars","Показывать аватары","","")}
-      {num_input("items_per_page","Записей на странице",s.get("items_per_page",20),5,100,"")}
-    """)
+    sessions_block = sessions_html or '<div style="padding:20px;text-align:center;color:var(--t3);">Нет активных сессий</div>'
 
-    body = navbar(sess, "settings") + f"""
+    body = navbar(sess, "overview") + f"""
     <div class="container">
-      <div class="page-title">🔧 Настройки</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="page-title">📊 Обзор</div>
+      {quick_actions}
+      {cards_html}
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:16px;">
         <div>
-{alerts_section}
-          <div style="padding:8px 16px 4px;font-size:13px;color:var(--text2);">
-              Всего заблокировано каналов: <b style="color:var(--text)">{total_blocked}</b>
-            </div>
+          <div class="section">
+            <div class="section-header">💬 Топ чатов</div>
             <table>
-              <thead><tr><th>Чат ID</th><th>Последний блок</th><th>Всего</th></tr></thead>
-              <tbody>{blocks_html}</tbody>
+              <thead><tr><th>Чат</th><th>Участники</th><th>Сообщения</th><th>Баны</th><th></th></tr></thead>
+              <tbody>{chat_rows_html}{no_chats_html}</tbody>
             </table>
           </div>
-          <div class="section" style="margin-bottom:16px;">
-            <div class="section-header">📥 Экспорт данных</div>
-            <div style="padding:16px;display:flex;flex-direction:column;gap:8px;">
-              <a href="/dashboard/export/stats" class="btn btn-outline">📊 Статистика (.csv)</a>
-              <a href="/dashboard/export/bans" class="btn btn-outline">🔨 Список банов (.csv)</a>
-              <a href="/dashboard/export/modhistory" class="btn btn-outline">📋 История модерации (.csv)</a>
-            </div>
+          <div class="section" style="margin-top:16px;">
+            <div class="section-header">🛡 Последние действия модерации</div>
+            <table>
+              <thead><tr><th>Время</th><th>Действие</th><th>Причина</th><th>Мод</th></tr></thead>
+              <tbody>{act_rows_html}{no_acts_html}</tbody>
+            </table>
           </div>
         </div>
         <div>
-          {logs_section}
-          {display_section}
           <div class="section">
-            <div class="section-header">📜 Лог действий администраторов</div>
+            <div class="section-header">🏆 Топ модераторов</div>
             <table>
-              <thead><tr><th>Время</th><th>Действие</th></tr></thead>
-              <tbody>{log_html}</tbody>
+              <thead><tr><th></th><th>Модератор</th><th>Действий</th></tr></thead>
+              <tbody>{mod_rows_html}{no_mods_html}</tbody>
             </table>
+          </div>
+          <div class="section" style="margin-top:16px;">
+            <div class="section-header">🟢 Активные сессии</div>
+            {sessions_block}
           </div>
         </div>
       </div>
     </div>
-    {'<script>setTimeout(function(){location.reload()},30000)</script>' if s.get("auto_refresh") else ""}
     """ + close_main()
     return web.Response(text=page(body), content_type="text/html")
 
