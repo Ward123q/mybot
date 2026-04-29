@@ -7745,10 +7745,267 @@ handle_plugins = require_auth("manage_plugins")(handle_plugins)
 async def handle_chat_settings(request: web.Request):
     sess = _get_session(request)
     _track_session(request)
-    body = navbar(sess, "chat_settings") + """
+    import chat_settings as cs
+
+    # Получаем список чатов
+    chats = [dict(r) for r in await db.get_all_chats()]
+
+    # Определяем выбранный чат
+    cid_str = request.match_info.get("cid") or request.rel_url.query.get("cid", "")
+    selected_cid = None
+    try:
+        selected_cid = int(cid_str) if cid_str else (chats[0]["cid"] if chats else None)
+    except:
+        selected_cid = chats[0]["cid"] if chats else None
+
+    # Сохранение настроек (POST)
+    saved_ok = False
+    save_error = ""
+    if request.method == "POST" and selected_cid:
+        try:
+            data = await request.post()
+            s = cs.get_settings(selected_cid)
+
+            bool_keys = [
+                "schedule_enabled", "quiet_enabled",
+                "welcome_enabled", "welcome_delete_prev", "verify_enabled",
+                "antispam_enabled", "antimat_enabled", "antilink_enabled",
+                "antisticker_enabled", "anticaps_enabled",
+                "auto_mute_newcomers", "auto_kick_inactive", "ban_on_max_warns",
+                "xp_enabled", "rep_enabled", "games_enabled", "economy_enabled",
+                "polls_enabled", "anon_enabled", "clans_enabled",
+                "announce_enabled", "rules_remind_enabled",
+            ]
+            int_keys = [
+                ("max_warns", 1, 20),
+                ("warn_expiry_days", 1, 365),
+                ("mute_duration", 1, 10080),
+                ("newcomer_mute_hours", 0, 168),
+                ("inactive_days", 1, 365),
+                ("caps_percent", 10, 100),
+                ("xp_per_msg", 1, 100),
+                ("rep_cooldown_hours", 0, 168),
+                ("daily_bonus", 0, 10000),
+                ("newcomer_bonus", 0, 10000),
+                ("announce_interval", 10, 10000),
+                ("rules_remind_interval", 10, 10000),
+                ("flood_msgs", 3, 100),
+                ("verify_timeout_mins", 1, 60),
+                ("welcome_delete_mins", 0, 1440),
+            ]
+            str_keys = [
+                "close_time", "open_time", "quiet_start", "quiet_end",
+                "flood_action", "welcome_text", "verify_question",
+                "verify_answer", "announce_text",
+            ]
+
+            for k in bool_keys:
+                s[k] = data.get(k) == "1"
+            for k, mn, mx in int_keys:
+                try:
+                    s[k] = max(mn, min(mx, int(data.get(k, s.get(k, mn)))))
+                except:
+                    pass
+            for k in str_keys:
+                if k in data:
+                    s[k] = data[k][:500]
+
+            cs.save_settings(selected_cid, s)
+            _log_admin_db(sess.get("uid", 0) if sess else 0, "CHAT_SETTINGS",
+                          f"Настройки чата {selected_cid} обновлены")
+            saved_ok = True
+        except Exception as e:
+            save_error = str(e)
+
+    # Загружаем текущие настройки выбранного чата
+    s = cs.get_settings(selected_cid) if selected_cid else {}
+
+    # ── Вспомогательные рендереры ─────────────────────────────────────────────
+    def tog(key, label, desc=""):
+        val = s.get(key, False)
+        checked = "checked" if val else ""
+        desc_html = f'<small style="color:var(--t3);display:block;margin-top:2px;">{desc}</small>' if desc else ""
+        return f'''<label style="display:flex;align-items:flex-start;justify-content:space-between;
+                   padding:10px 0;border-bottom:1px solid var(--br0);cursor:pointer;gap:12px;">
+          <div><span style="font-weight:500;color:var(--t1);">{label}</span>{desc_html}</div>
+          <input type="hidden" name="{key}" value="0">
+          <input type="checkbox" name="{key}" value="1" {checked}
+            style="width:18px;height:18px;cursor:pointer;accent-color:var(--acc);flex-shrink:0;margin-top:2px;">
+        </label>'''
+
+    def num(key, label, mn, mx, desc=""):
+        val = s.get(key, 0)
+        desc_html = f'<small style="color:var(--t3);margin-left:6px;">{desc}</small>' if desc else ""
+        return f'''<div style="display:flex;justify-content:space-between;align-items:center;
+                   padding:10px 0;border-bottom:1px solid var(--br0);gap:12px;">
+          <div><span style="font-weight:500;color:var(--t1);">{label}</span>{desc_html}</div>
+          <input type="number" name="{key}" value="{val}" min="{mn}" max="{mx}"
+            style="width:80px;padding:6px 10px;border-radius:8px;border:1px solid var(--br1);
+            background:var(--bg3);color:var(--t1);font-size:14px;text-align:center;">
+        </div>'''
+
+    def txt(key, label, placeholder="", big=False):
+        val = s.get(key, "").replace('"', '&quot;')
+        if big:
+            return f'''<div style="padding:10px 0;border-bottom:1px solid var(--br0);">
+              <label style="font-weight:500;color:var(--t1);display:block;margin-bottom:6px;">{label}</label>
+              <textarea name="{key}" rows="3" placeholder="{placeholder}"
+                style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--br1);
+                background:var(--bg3);color:var(--t1);font-size:13px;resize:vertical;box-sizing:border-box;">{val}</textarea>
+            </div>'''
+        return f'''<div style="display:flex;justify-content:space-between;align-items:center;
+                   padding:10px 0;border-bottom:1px solid var(--br0);gap:12px;">
+          <label style="font-weight:500;color:var(--t1);">{label}</label>
+          <input type="text" name="{key}" value="{val}" placeholder="{placeholder}"
+            style="width:180px;padding:6px 10px;border-radius:8px;border:1px solid var(--br1);
+            background:var(--bg3);color:var(--t1);font-size:13px;">
+        </div>'''
+
+    def sel(key, label, options):
+        val = s.get(key, options[0][0])
+        opts = "".join(f'<option value="{v}" {"selected" if v==val else ""}>{l}</option>' for v, l in options)
+        return f'''<div style="display:flex;justify-content:space-between;align-items:center;
+                   padding:10px 0;border-bottom:1px solid var(--br0);gap:12px;">
+          <span style="font-weight:500;color:var(--t1);">{label}</span>
+          <select name="{key}"
+            style="padding:6px 10px;border-radius:8px;border:1px solid var(--br1);
+            background:var(--bg3);color:var(--t1);font-size:13px;">{opts}</select>
+        </div>'''
+
+    def section(title, icon, content):
+        return f'''<div class="section" style="margin-bottom:16px;">
+          <div class="section-header">{icon} {title}</div>
+          <div style="padding:0 16px;">{content}</div>
+        </div>'''
+
+    # ── Чат-селектор ─────────────────────────────────────────────────────────
+    chat_opts = "".join(
+        f'<option value="{c["cid"]}" {"selected" if c["cid"]==selected_cid else ""}>'
+        f'{(c.get("title") or str(c["cid"]))[:40]} ({c["cid"]})</option>'
+        for c in chats
+    )
+    no_chats_msg = "" if chats else '<div class="empty-state" style="padding:40px;">Нет подключённых чатов. Добавьте бота в чат.</div>'
+
+    # ── Уведомление об успехе ─────────────────────────────────────────────────
+    notif = ""
+    if saved_ok:
+        notif = '<div style="background:var(--green);color:#fff;padding:10px 16px;border-radius:10px;margin-bottom:16px;font-weight:600;">✅ Настройки сохранены!</div>'
+    elif save_error:
+        notif = f'<div style="background:var(--red);color:#fff;padding:10px 16px;border-radius:10px;margin-bottom:16px;">❌ Ошибка: {save_error}</div>'
+
+    if not selected_cid or not chats:
+        body = navbar(sess, "chat_settings") + f"""
+        <div class="container">
+          <div class="page-title">⚙️ Настройки чатов</div>
+          {no_chats_msg}
+        </div>""" + close_main()
+        return web.Response(text=page(body), content_type="text/html")
+
+    form_html = f'''
+    <form method="POST" action="/dashboard/chat_settings/{selected_cid}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+        <div>
+          {section("Расписание чата", "⏰", 
+            tog("schedule_enabled","Авто-открытие/закрытие чата","Закрывать и открывать по расписанию") +
+            txt("close_time","Время закрытия","00:00") +
+            txt("open_time","Время открытия","08:00") +
+            tog("quiet_enabled","Тихий час","Чат в режиме чтения") +
+            txt("quiet_start","Начало тихого часа","23:00") +
+            txt("quiet_end","Конец тихого часа","07:00")
+          )}
+
+          {section("Модерация", "🛡",
+            num("max_warns","Максимум варнов",1,20,"перед баном") +
+            num("warn_expiry_days","Срок варна",1,365,"дней") +
+            num("mute_duration","Мут по умолчанию",1,10080,"минут") +
+            tog("ban_on_max_warns","Банить при макс. варнах") +
+            tog("auto_mute_newcomers","Мут новичкам","Автоматически замьютить новых участников") +
+            num("newcomer_mute_hours","Мут новичка на",0,168,"часов") +
+            tog("auto_kick_inactive","Кикать неактивных") +
+            num("inactive_days","Неактивность",1,365,"дней")
+          )}
+
+          {section("Приветствие", "👋",
+            tog("welcome_enabled","Включить приветствие") +
+            txt("welcome_text","Текст приветствия","👋 Добро пожаловать, {name}!",big=True) +
+            tog("welcome_delete_prev","Удалять предыдущее приветствие") +
+            num("welcome_delete_mins","Удалить через",0,1440,"минут (0 = не удалять)") +
+            tog("verify_enabled","Верификация при входе","Капча-вопрос для новых участников") +
+            txt("verify_question","Вопрос верификации","Сколько будет 2+2?") +
+            txt("verify_answer","Правильный ответ","4") +
+            num("verify_timeout_mins","Время на ответ",1,60,"минут")
+          )}
+
+          {section("Авто-объявления", "📢",
+            tog("announce_enabled","Авто-объявление","Сообщение каждые N сообщений") +
+            txt("announce_text","Текст объявления","",big=True) +
+            num("announce_interval","Интервал объявления",10,10000,"сообщений") +
+            tog("rules_remind_enabled","Напоминать правила") +
+            num("rules_remind_interval","Интервал напоминания",10,10000,"сообщений")
+          )}
+        </div>
+
+        <div>
+          {section("Антиспам", "🤖",
+            tog("antispam_enabled","Антиспам включён") +
+            tog("antimat_enabled","Антимат (фильтр слов)") +
+            tog("antilink_enabled","Запрет ссылок") +
+            tog("antisticker_enabled","Запрет стикеров") +
+            tog("anticaps_enabled","Антикапс") +
+            num("caps_percent","Порог капса",10,100,"%") +
+            num("flood_msgs","Флуд: сообщений",3,100,"в минуту") +
+            sel("flood_action","Действие при флуде",[
+              ("mute","🔇 Мут"),("warn","⚠️ Варн"),("kick","🦵 Кик"),("ban","🔨 Бан")
+            ])
+          )}
+
+          {section("Функции", "🎮",
+            tog("xp_enabled","Система XP/Уровней") +
+            tog("rep_enabled","Репутация") +
+            tog("games_enabled","Игры в чате") +
+            tog("economy_enabled","Экономика (монеты)") +
+            tog("polls_enabled","Опросы") +
+            tog("anon_enabled","Анонимные сообщения") +
+            tog("clans_enabled","Кланы")
+          )}
+
+          {section("Экономика", "💰",
+            num("xp_per_msg","XP за сообщение",1,100) +
+            num("rep_cooldown_hours","Кулдаун репутации",0,168,"часов") +
+            num("daily_bonus","Ежедневный бонус",0,10000,"монет") +
+            num("newcomer_bonus","Бонус новичку",0,10000,"монет")
+          )}
+
+          <div style="position:sticky;top:16px;">
+            <button type="submit" class="btn btn-primary" style="width:100%;padding:14px;font-size:16px;margin-bottom:8px;">
+              💾 Сохранить настройки
+            </button>
+            <a href="/dashboard/chats/{selected_cid}" class="btn btn-outline" style="width:100%;text-align:center;display:block;padding:10px;">
+              📊 Статистика чата →
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </form>'''
+
+    body = navbar(sess, "chat_settings") + f"""
     <div class="container">
       <div class="page-title">⚙️ Настройки чатов</div>
-      <div class="section"><div class="empty-state" style="padding:40px;">Настройки чатов доступны через /settings в боте</div></div>
+      {notif}
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+        <span style="font-weight:600;color:var(--t2);">Чат:</span>
+        <form method="GET" style="display:flex;gap:8px;align-items:center;">
+          <select name="cid" onchange="this.form.submit()"
+            style="padding:8px 14px;border-radius:10px;border:1px solid var(--br1);
+            background:var(--bg3);color:var(--t1);font-size:14px;min-width:280px;">
+            {chat_opts}
+          </select>
+        </form>
+        <span style="font-size:12px;color:var(--t3);">ID: <code>{selected_cid}</code></span>
+      </div>
+      {form_html}
     </div>""" + close_main()
     return web.Response(text=page(body), content_type="text/html")
 handle_chat_settings = require_auth("manage_chat_settings")(handle_chat_settings)
