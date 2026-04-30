@@ -7843,11 +7843,21 @@ async def handle_chat_settings(request: web.Request):
     save_error = ""
     if request.method == "POST" and selected_cid:
         sess_token = request.cookies.get("dsess_token", "")
-        if not _csrf_validate(request, sess_token):
-            save_error = "CSRF ошибка — обновите страницу и попробуйте снова"
+        try:
+            data = await request.post()
+        except Exception as _e:
+            data = {}
+            save_error = f"Ошибка чтения формы: {_e}"
+        # CSRF: проверяем токен из тела формы или заголовка
+        if not save_error:
+            _expected_csrf = _csrf_tokens.get(sess_token, "")
+            _provided_csrf = (
+                data.get("_csrf", "") if hasattr(data, "get") else ""
+            ) or request.headers.get("X-CSRF-Token", "")
+            if not _expected_csrf or not _provided_csrf or not secrets.compare_digest(_expected_csrf, _provided_csrf):
+                save_error = "CSRF ошибка — обновите страницу и попробуйте снова"
         if not save_error:
             try:
-                data = await request.post()
                 s = cs.get_settings(selected_cid)
 
                 bool_keys = [
