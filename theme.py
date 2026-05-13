@@ -1,276 +1,322 @@
 # -*- coding: utf-8 -*-
 """
-shared.py — Общее состояние между bot.py, tickets.py и dashboard.py
-Импортируй в каждом модуле: import shared
+theme.py — 🎨 Design System «Modern Dark»
+═════════════════════════════════════════════════════════════════
+Единая дизайн-система для всех сообщений бота.
+
+Принципы:
+  • Жирные разделители ━━━━━━━━━━
+  • Умеренное использование эмодзи (1–2 на блок, не больше)
+  • Заголовки UPPERCASE для акцента
+  • Прогресс-бары и визуальные показатели
+  • Единые иконки для одинаковых действий
+
+Использование:
+  import theme as T
+
+  await message.answer(
+      T.header("ПРОФИЛЬ") +
+      T.line("Уровень", "12 · Бриллиант") +
+      T.line("XP", T.progress(842, 1000) + " 842/1000") +
+      T.footer("Изменить: /setbio")
+  )
 """
-import time
-import asyncio
-import logging
-from typing import Optional
 
-log = logging.getLogger(__name__)
+# ══════════════════════════════════════════════════════════════
+#  СИМВОЛЫ И ИКОНКИ
+# ══════════════════════════════════════════════════════════════
 
-# ══════════════════════════════════════════
-#  ГЛОБАЛЬНЫЕ ССЫЛКИ
-# ══════════════════════════════════════════
+# ─── разделители ───
+DIV       = "━━━━━━━━━━━━━━━━━━━"   # жирный разделитель (главный)
+DIV_SHORT = "━━━━━━━━━"             # короткий
+DIV_THIN  = "─────────────────"     # тонкий (для подсекций)
+DIV_DOT   = "· · · · · · · · · · ·" # пунктир
 
-bot = None          # aiogram Bot instance
-admin_ids: set = set()
-owner_id: int = 0
-log_channel_id: int = -1003832428474
+# ─── ветвление списков ───
+BRANCH      = "┃"   # вертикальная линия для секций
+ITEM        = "├"   # элемент списка
+LAST        = "└"   # последний элемент
+ARROW       = "→"
+RIGHT       = "›"
+BULLET      = "•"
 
+# ─── прогресс-бар ───
+PROG_FULL   = "▰"   # заполненный
+PROG_EMPTY  = "▱"   # пустой
 
-def init(bot_instance, admin_ids_set: set, owner: int, log_channel: int = -1003832428474):
-    global bot, admin_ids, owner_id, log_channel_id
-    bot = bot_instance
-    admin_ids = admin_ids_set
-    owner_id = owner
-    log_channel_id = log_channel
-    log.info("✅ shared.py инициализирован")
+# ─── символы статусов ───
+OK          = "✓"
+FAIL        = "✗"
+WARN        = "⚠"
+INFO        = "ⓘ"
 
+# ─── общие иконки (одна на действие, всегда одна и та же) ───
+class Icons:
+    # Действия модерации
+    BAN     = "🔨"
+    UNBAN   = "🔓"
+    MUTE    = "🔇"
+    UNMUTE  = "🔊"
+    KICK    = "👞"
+    WARN    = "⚠️"
+    UNWARN  = "✅"
+    CLEAR   = "🧹"
+    LOCK    = "🔒"
+    UNLOCK  = "🔓"
 
-# ══════════════════════════════════════════
-#  КЭШИ В ПАМЯТИ (синхронизация)
-# ══════════════════════════════════════════
+    # Профиль
+    PROFILE   = "👤"
+    LEVEL     = "📊"
+    XP        = "✨"
+    REP       = "💎"
+    MOOD      = "🎭"
+    BIO       = "📝"
+    FRIENDS   = "👥"
+    STREAK    = "🔥"
+    BIRTHDAY  = "🎂"
 
-# Онлайн пользователи {uid: {"name": str, "cid": int, "ts": float}}
-online_users: dict = {}
+    # Социальное
+    GIFT     = "🎁"
+    LOVE     = "💝"
+    SHIP     = "💞"
+    CROWN    = "👑"
 
-# Медиа лог [{"cid", "uid", "name", "chat", "type", "file_id", "time"}]
-media_log: list = []
+    # Игры/фан
+    DICE      = "🎲"
+    GAME      = "🎮"
+    SHOP      = "🛒"
+    CASINO    = "🎰"
+    TROPHY    = "🏆"
 
-# Алерты [{"level", "title", "desc", "cid", "uid", "time"}]
-alerts: list = []
+    # Утилиты
+    HELP      = "📋"
+    SETTINGS  = "⚙️"
+    STATS     = "📈"
+    TIME      = "🕐"
+    CALENDAR  = "📅"
+    MUSIC     = "🎵"
+    IMAGE     = "🖼"
+    TRANSLATE = "🌐"
 
-# Спам трекер {f"{cid}:{uid}": [timestamps]}
-spam_tracker: dict = {}
+    # Безопасность / админ
+    SHIELD    = "🛡"
+    GUARD     = "🛡"
+    ALERT     = "🚨"
+    AUDIT     = "📜"
+    FROZEN    = "🧊"
+    SUPPORT   = "🎫"
+    BACK      = "◀️"
+    FORWARD   = "▶️"
+    HOME      = "🏠"
+    CLOSE     = "✖️"
+    REFRESH   = "🔄"
 
-# Настройки дашборда
-dashboard_settings: dict = {
-    "alerts_enabled":     True,
-    "media_log_enabled":  True,
-    "spam_threshold":     10,
-    "flood_threshold":    15,
-    "show_user_ids":      True,
-    "auto_refresh":       False,
-    "items_per_page":     20,
-}
+    # Каналы / связь
+    CHAT      = "💬"
+    BOT       = "🤖"
+    LINK      = "🔗"
 
-# Лог действий в дашборде
-admin_action_log: list = []
-
-# SSE клиенты для уведомлений в браузере
-sse_clients: list = []
-
-
-# ══════════════════════════════════════════
-#  ФУНКЦИИ
-# ══════════════════════════════════════════
-
-def update_online(uid: int, name: str, cid: int):
-    online_users[uid] = {"name": name, "cid": cid, "ts": time.time()}
-
-
-def get_online_count() -> int:
-    now = time.time()
-    return sum(1 for d in online_users.values() if now - d["ts"] < 300)
-
-
-def get_online_list() -> list:
-    now = time.time()
-    return [
-        {"uid": uid, "name": d["name"]}
-        for uid, d in online_users.items()
-        if now - d["ts"] < 300
-    ]
-
-
-def log_media(cid: int, uid: int, name: str, chat_title: str,
-              media_type: str, file_id: str = ""):
-    if not dashboard_settings.get("media_log_enabled", True):
-        return
-    from datetime import datetime
-    media_log.insert(0, {
-        "cid": cid, "uid": uid, "name": name,
-        "chat": chat_title, "type": media_type,
-        "file_id": file_id,
-        "time": datetime.now().strftime("%d.%m %H:%M")
-    })
-    if len(media_log) > 500:
-        media_log.pop()
-
-
-def add_alert(level: str, title: str, desc: str, cid: int = 0, uid: int = 0):
-    from datetime import datetime
-    alerts.insert(0, {
-        "level": level, "title": title, "desc": desc,
-        "cid": cid, "uid": uid,
-        "time": datetime.now().strftime("%d.%m %H:%M")
-    })
-    if len(alerts) > 200:
-        alerts.pop()
+    # Состояния
+    ONLINE    = "🟢"
+    AWAY      = "🟡"
+    OFFLINE   = "⚪"
+    DANGER    = "🔴"
 
 
-async def check_spam(uid: int, cid: int, name: str, chat_title: str):
-    if not dashboard_settings.get("alerts_enabled", True):
-        return
-    now = time.time()
-    key = f"{cid}:{uid}"
-    if key not in spam_tracker:
-        spam_tracker[key] = []
-    spam_tracker[key].append(now)
-    spam_tracker[key] = [t for t in spam_tracker[key] if now - t < 60]
-    count = len(spam_tracker[key])
-    threshold_flood = dashboard_settings.get("flood_threshold", 15)
-    threshold_spam  = dashboard_settings.get("spam_threshold", 10)
-    if count >= threshold_flood:
-        add_alert("danger", "Флуд обнаружен",
-                  f"{name} отправил {count} сообщений за минуту в {chat_title}",
-                  cid, uid)
-    elif count >= threshold_spam:
-        add_alert("warn", "Подозрительная активность",
-                  f"{name} отправил {count} сообщений за минуту в {chat_title}",
-                  cid, uid)
+# ══════════════════════════════════════════════════════════════
+#  ХЕЛПЕРЫ — БЛОКИ ТЕКСТА
+# ══════════════════════════════════════════════════════════════
+
+def header(title: str, icon: str = "") -> str:
+    """
+    Жирный заголовок секции с двойным разделителем.
+
+        ━━━━━━━━━━━━━━━━━━━
+        🛡  ЗАГОЛОВОК
+        ━━━━━━━━━━━━━━━━━━━
+    """
+    prefix = f"{icon}  " if icon else ""
+    return f"{DIV}\n{prefix}<b>{title.upper()}</b>\n{DIV}\n\n"
 
 
-def log_admin_action(action: str):
-    from datetime import datetime
-    admin_action_log.insert(0, {
-        "action": action,
-        "time": datetime.now().strftime("%d.%m.%Y %H:%M")
-    })
-    if len(admin_action_log) > 200:
-        admin_action_log.pop()
+def section(title: str, icon: str = "") -> str:
+    """
+    Подзаголовок секции — без разделителей.
+
+        🔧 <b>НАСТРОЙКИ</b>
+    """
+    prefix = f"{icon} " if icon else ""
+    return f"{prefix}<b>{title}</b>\n"
 
 
-async def notify_sse(data: dict):
-    """Уведомляет все открытые браузеры через SSE"""
-    import json
-    msg = json.dumps(data)
-    for q in sse_clients:
-        try:
-            await q.put(msg)
-        except:
-            pass
+def divider(thin: bool = False) -> str:
+    """Разделитель внутри сообщения."""
+    return f"\n{DIV_THIN if thin else DIV}\n\n"
 
 
-async def notify_new_ticket(ticket_id: int, user_name: str, subject: str,
-                             chat_title: str, priority: str):
-    """Вызывается при создании нового тикета"""
-    # SSE уведомление в браузер
-    await notify_sse({
-        "type": "new_ticket",
-        "id": ticket_id,
-        "user": user_name,
-        "subject": subject
-    })
+def footer(text: str = "") -> str:
+    """
+    Серая подпись внизу сообщения (italic).
 
-    # Уведомление в Telegram всем админам
-    if not bot:
-        return
+        ━━━━━━━━━━━━━━━━━━━
+        <i>💡 Подсказка...</i>
+    """
+    if not text:
+        return ""
+    return f"\n{DIV}\n<i>{text}</i>"
 
-    from tickets import PRIORITY_EMOJI, kb_mod_ticket
-    pri_emoji = PRIORITY_EMOJI.get(priority, "🟡")
 
-    text = (
-        f"━━━━━━━━━━━━━━━\n"
-        f"🎫 <b>НОВЫЙ ТИКЕТ #{ticket_id}</b>\n"
-        f"━━━━━━━━━━━━━━━\n\n"
-        f"👤 {user_name}\n"
-        f"💬 {chat_title}\n"
-        f"📝 {subject}\n"
-        f"{pri_emoji} Приоритет: {priority}"
+def kv(key: str, value, icon: str = "", last: bool = False) -> str:
+    """
+    Строка key-value с ветвлением.
+
+        ├ 📊 Уровень: 12
+
+    last=True даёт └ вместо ├
+    """
+    branch = LAST if last else ITEM
+    prefix = f"{icon} " if icon else ""
+    return f"{branch} {prefix}{key}: <b>{value}</b>\n"
+
+
+def line(text: str, icon: str = "", last: bool = False) -> str:
+    """
+    Простая строка с ветвлением (без key:value).
+
+        ├ 🔨 Бан пользователя
+    """
+    branch = LAST if last else ITEM
+    prefix = f"{icon} " if icon else ""
+    return f"{branch} {prefix}{text}\n"
+
+
+def progress(current: int, total: int, length: int = 12) -> str:
+    """
+    Прогресс-бар.
+
+        ▰▰▰▰▰▰▰▰▱▱▱▱  842/1000
+
+    Возвращает только полоску — число добавляй сам.
+    """
+    if total <= 0:
+        return PROG_EMPTY * length
+    filled = min(length, int(round(length * current / total)))
+    return PROG_FULL * filled + PROG_EMPTY * (length - filled)
+
+
+def progress_line(label: str, current: int, total: int,
+                  length: int = 10, last: bool = False) -> str:
+    """
+    Готовая строка с прогрессом.
+
+        ├ XP: ▰▰▰▰▰▰▱▱▱▱  842/1000  (84%)
+    """
+    branch = LAST if last else ITEM
+    bar = progress(current, total, length)
+    pct = int(100 * current / total) if total else 0
+    return f"{branch} {label}: {bar}  <b>{current}/{total}</b>  ({pct}%)\n"
+
+
+def card(title: str, lines: list, icon: str = "", footer_text: str = "") -> str:
+    """
+    Полная «карточка» — заголовок + список + опц. футер.
+
+    lines — список строк (уже отформатированных через kv/line)
+    """
+    body = header(title, icon) + "".join(lines)
+    if footer_text:
+        body += footer(footer_text)
+    return body
+
+
+def big_value(label: str, value, icon: str = "") -> str:
+    """
+    Большая центральная строка для важных значений.
+
+        💎  УРОВЕНЬ
+        ━━━━━━━━━━━
+        Бриллиант · 50
+    """
+    prefix = f"{icon}  " if icon else ""
+    return f"{prefix}<b>{label.upper()}</b>\n{DIV_SHORT}\n<b>{value}</b>\n"
+
+
+def alert(level: str, title: str, body: str) -> str:
+    """
+    Алерт-сообщение трёх уровней: info / warn / danger.
+    """
+    icons = {
+        "info":    Icons.INFO,
+        "warn":    Icons.ALERT,
+        "danger":  Icons.DANGER,
+        "success": Icons.ONLINE,
+    }
+    icon = icons.get(level, Icons.INFO)
+    return (
+        f"{DIV}\n"
+        f"{icon}  <b>{title.upper()}</b>\n"
+        f"{DIV}\n\n"
+        f"{body}"
     )
 
-    for admin_id in admin_ids:
-        try:
-            await bot.send_message(
-                admin_id, text,
-                parse_mode="HTML",
-                reply_markup=kb_mod_ticket(ticket_id)
-            )
-        except:
-            pass
 
-    # Лог-канал
-    try:
-        await bot.send_message(log_channel_id, text, parse_mode="HTML")
-    except:
-        pass
-
-
-async def send_log(text: str):
-    """Отправить сообщение в лог-канал"""
-    if not bot:
-        return
-    try:
-        await bot.send_message(log_channel_id, text, parse_mode="HTML")
-    except Exception as e:
-        log.warning(f"Лог-канал недоступен: {e}")
+def confirm_block(action: str, target: str, reason: str = "") -> str:
+    """
+    Блок подтверждения действия.
+    """
+    out = (
+        f"{Icons.WARN}  <b>ПОДТВЕРДИТЕ ДЕЙСТВИЕ</b>\n"
+        f"{DIV_SHORT}\n\n"
+        f"{ITEM} Действие: <b>{action}</b>\n"
+        f"{LAST} Цель: <b>{target}</b>\n"
+    )
+    if reason:
+        out += f"\n{Icons.BIO} Причина: <i>{reason}</i>\n"
+    return out
 
 
-# ══════════════════════════════════════════
-#  РЕПОРТЫ — синхронизация с дашбордом
-# ══════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════
+#  УТИЛИТЫ
+# ══════════════════════════════════════════════════════════════
 
-# Список репортов для дашборда
-# [{cid, cid_title, reporter_id, reporter_name, target_id, target_name,
-#   reason, category, priority, status, ts, idx}]
-reports_cache: list = []
-
-
-def sync_report(cid: int, cid_title: str, idx: int, report: dict):
-    """Добавляет или обновляет репорт в кэше для дашборда"""
-    import time as _t
-    key = f"{cid}:{idx}"
-    # Удаляем старую запись если есть
-    for i, r in enumerate(reports_cache):
-        if r.get("key") == key:
-            reports_cache[i] = {
-                "key": key, "cid": cid, "cid_title": cid_title,
-                "reporter_id": report.get("reporter"),
-                "reporter_name": report.get("reporter_name", "—"),
-                "target_id": report.get("target"),
-                "target_name": report.get("target_name", "—"),
-                "reason": report.get("text", "—"),
-                "category": report.get("category", "—"),
-                "priority": report.get("priority", "NORMAL"),
-                "status": report.get("status", "new"),
-                "ts": report.get("ts", _t.time()),
-                "idx": idx,
-            }
-            return
-
-    # Добавляем новую
-    reports_cache.insert(0, {
-        "key": key, "cid": cid, "cid_title": cid_title,
-        "reporter_id": report.get("reporter"),
-        "reporter_name": report.get("reporter_name", "—"),
-        "target_id": report.get("target"),
-        "target_name": report.get("target_name", "—"),
-        "reason": report.get("text", "—"),
-        "category": report.get("category", "—"),
-        "priority": report.get("priority", "NORMAL"),
-        "status": report.get("status", "new"),
-        "ts": report.get("ts", _t.time()),
-        "idx": idx,
-    })
-
-    # Максимум 200 репортов
-    if len(reports_cache) > 200:
-        reports_cache.pop()
+def fmt_time_ago(seconds: int) -> str:
+    """Форматирует «N секунд/минут/часов/дней назад» компактно."""
+    if seconds < 60:
+        return f"{seconds}с"
+    if seconds < 3600:
+        return f"{seconds // 60}м"
+    if seconds < 86400:
+        return f"{seconds // 3600}ч"
+    if seconds < 86400 * 7:
+        return f"{seconds // 86400}д"
+    return f"{seconds // (86400 * 7)}н"
 
 
-def update_report_status(cid: int, idx: int, status: str):
-    """Обновляет статус репорта"""
-    key = f"{cid}:{idx}"
-    for r in reports_cache:
-        if r.get("key") == key:
-            r["status"] = status
-            return
+def fmt_uptime(seconds: int) -> str:
+    """Аптайм бота: «3д 4ч 12м» или «5ч 23м» или «12м»."""
+    d = seconds // 86400
+    h = (seconds % 86400) // 3600
+    m = (seconds % 3600) // 60
+    parts = []
+    if d: parts.append(f"{d}д")
+    if h: parts.append(f"{h}ч")
+    if m or not parts: parts.append(f"{m}м")
+    return " ".join(parts)
 
 
-def get_reports(status: str = None) -> list:
-    if status:
-        return [r for r in reports_cache if r.get("status") == status]
-    return reports_cache
+def fmt_number(n: int) -> str:
+    """1234567 → '1.2M', 1234 → '1.2K', 999 → '999'."""
+    if n >= 1_000_000:
+        return f"{n/1_000_000:.1f}M".replace(".0M", "M")
+    if n >= 1_000:
+        return f"{n/1_000:.1f}K".replace(".0K", "K")
+    return str(n)
+
+
+def status_dot(online: bool, away: bool = False) -> str:
+    """Статус кружок."""
+    if online:
+        return Icons.ONLINE
+    if away:
+        return Icons.AWAY
+    return Icons.OFFLINE
