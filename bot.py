@@ -33,6 +33,7 @@ import chat_settings as cs
 import antiraid
 import night_mode
 import security_features as sf
+import admin_guardian as ag
 
 DB_FILE_MAIN = "skinvault.db"
 
@@ -1138,6 +1139,19 @@ async def is_admin_by_id(chat_id: int, user_id: int) -> bool:
         return False
 
 async def require_admin(message: Message) -> bool:
+    # 🧊 Admin Guardian: заморожен?
+    if ag.is_frozen(message.from_user.id):
+        info = ag.get_freeze_info(message.from_user.id)
+        try:
+            await message.reply(
+                f"🧊 Твоя админка <b>заморожена</b> владельцем.\n"
+                f"📝 Причина: {info.get('reason') or '—'}\n\n"
+                f"Свяжись с владельцем для разблокировки.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+        return False
     if not await check_admin(message):
         await reply_auto_delete(message, "⛔ Команда доступна только администраторам.", parse_mode="HTML")
         return False
@@ -3638,6 +3652,13 @@ async def cmd_ban(message: Message, command: CommandObject):
     await reply_auto_delete(message, reply, parse_mode="HTML")
     await log_action(f"🔨 <b>БАН</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     add_mod_history(cid, target.id, "🔨 Бан", reason, message.from_user.full_name)
+    await ag.record_action(
+        message.from_user.id, "ban",
+        admin_name=message.from_user.full_name,
+        target_id=target.id, target_name=target.full_name,
+        cid=cid, reason=reason,
+        extra={"chat_title": message.chat.title}
+    )
     ban_list[cid][target.id] = {
         "name": target.full_name, "reason": reason,
         "by": message.from_user.full_name,
@@ -3653,6 +3674,13 @@ async def cmd_unban(message: Message):
     target = message.reply_to_message.from_user
     await bot.unban_chat_member(message.chat.id, target.id, only_if_banned=True)
     add_mod_history(message.chat.id, target.id, "🕊 Разбан", "—", message.from_user.full_name)
+    await ag.record_action(
+        message.from_user.id, "unban",
+        admin_name=message.from_user.full_name,
+        target_id=target.id, target_name=target.full_name,
+        cid=message.chat.id, reason="—",
+        extra={"chat_title": message.chat.title}
+    )
     ban_list[message.chat.id].pop(target.id, None); save_data()
     await reply_auto_delete(message, f"👤 Цель: {target.mention_html()}\n<i>Блокировка снята.</i>", parse_mode="HTML")
     await log_action(f"🕊️ <b>Разбан</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
@@ -3684,6 +3712,13 @@ async def cmd_mute(message: Message, command: CommandObject):
     await reply_auto_delete(message, reply, parse_mode="HTML")
     await log_action(f"🔇 <b>МУТ</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     add_mod_history(cid, target.id, f"🔇 Мут {label}", command.args or "—", message.from_user.full_name)
+    await ag.record_action(
+        message.from_user.id, "mute",
+        admin_name=message.from_user.full_name,
+        target_id=target.id, target_name=target.full_name,
+        cid=cid, reason=command.args or "—",
+        extra={"minutes": mins, "chat_title": message.chat.title}
+    )
     mod_reasons[cid][target.id]["mute"] = f"{label} — {command.args or 'Нарушение правил'}"
     # 🔄 Запуск автоснятия мута
     schedule_unmute(cid, target.id, mins, target.full_name)
@@ -3697,6 +3732,13 @@ async def cmd_unmute(message: Message):
         permissions=ChatPermissions(can_send_messages=True, can_send_media_messages=True,
             can_send_polls=True, can_send_other_messages=True, can_add_web_page_previews=True))
     add_mod_history(message.chat.id, target.id, "🔊 Размут", "—", message.from_user.full_name)
+    await ag.record_action(
+        message.from_user.id, "unmute",
+        admin_name=message.from_user.full_name,
+        target_id=target.id, target_name=target.full_name,
+        cid=message.chat.id, reason="—",
+        extra={"chat_title": message.chat.title}
+    )
     await reply_auto_delete(message, f"👤 Цель: {target.mention_html()}\n<i>Голос восстановлен.</i>", parse_mode="HTML")
     await log_action(f"🔊 <b>Размут</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
@@ -3739,6 +3781,13 @@ async def cmd_warn(message: Message, command: CommandObject):
             name=target.mention_html(), count=count, max=MAX_WARNINGS, reason=reason)
         await log_action(f"⚠️ <b>Предупреждение</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n⚠️ <b>Варнов:</b> {warnings[message.chat.id][target.id]}/{MAX_WARNINGS}\n⏳ <b>Сгорит через:</b> {WARN_EXPIRY_DAYS} дн.\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         add_mod_history(cid, target.id, f"⚡ Варн {count}/{MAX_WARNINGS}", reason, message.from_user.full_name)
+        await ag.record_action(
+            message.from_user.id, "warn",
+            admin_name=message.from_user.full_name,
+            target_id=target.id, target_name=target.full_name,
+            cid=cid, reason=reason,
+            extra={"count": count, "max": MAX_WARNINGS, "chat_title": message.chat.title}
+        )
         # 📨 ЛС нарушителю
         dm_ok = await dm_warn_user(target.id, target.full_name, reason,
                                     message.chat.title, f"⚡ Варн {count}/{MAX_WARNINGS}",
@@ -14819,6 +14868,7 @@ async def main():
     await antiraid.init(bot, dp, ADMIN_IDS, LOG_CHANNEL_ID)
     await night_mode.init(bot)
     await sf.init(bot, dp, ADMIN_IDS, LOG_CHANNEL_ID)
+    await ag.init(bot, dp)   # 🛡️ Admin Guardian
 
     # ── Инициализация систем ───────────
     _triggers_db_init()
