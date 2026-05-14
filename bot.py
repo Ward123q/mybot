@@ -3325,15 +3325,18 @@ async def cmd_rules(message: Message):
 
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
-    is_adm  = await check_admin(message)
+    is_adm   = await check_admin(message)
     is_owner = message.from_user.id in OWNERS
 
-    # ── ПОЛЬЗОВАТЕЛЬ ──
+    # ══════════════════════════════════════════════════════════
+    #  ПОЛЬЗОВАТЕЛЬ
+    # ══════════════════════════════════════════════════════════
     text_user = (
-        "🛡 <b>CHAT GUARD</b> · Справка\n"
-        "<code>────────────────────</code>\n\n"
+        "🛡 <b>[~] system.init :: CHAT GUARD</b>\n"
+        "<code>────────────────────</code>\n"
+        "<i>$ help --user</i>\n\n"
 
-        "👤 <b>[~] profile.load :: USER</b>\n"
+        "👤 <b>profile.load</b>\n"
         "├ /me — моя карточка\n"
         "├ /myprofile — полный профиль\n"
         "├ /setbio текст — установить био\n"
@@ -3343,7 +3346,7 @@ async def cmd_help(message: Message):
         "├ /stats — статистика чата\n"
         "└ /daily — ежедневный бонус XP\n\n"
 
-        "👥 <b>Социальное</b>\n"
+        "👥 <b>social.network</b>\n"
         "├ /addfriend — добавить друга <i>(реплай)</i>\n"
         "├ /friends — список друзей\n"
         "├ /unfriend — удалить из друзей <i>(реплай)</i>\n"
@@ -3353,7 +3356,7 @@ async def cmd_help(message: Message):
         "├ /follow — подписаться <i>(реплай)</i>\n"
         "└ /followers — мои подписчики\n\n"
 
-        "🎮 <b>Игры и развлечения</b>\n"
+        "🎮 <b>games.run</b>\n"
         "├ /casino — 🎰 казино (слоты, рулетка, монетка)\n"
         "├ /roll [N] — бросить кубик\n"
         "├ /flip — монетка орёл/решка\n"
@@ -3369,14 +3372,14 @@ async def cmd_help(message: Message):
         "├ /совместимость — совместимость <i>(реплай)</i>\n"
         "└ /coinflip — подбросить монетку\n\n"
 
-        "🔮 <b>Гадания и судьба</b>\n"
+        "🔮 <b>fortune.read</b>\n"
         "├ /horoscope — случайный гороскоп\n"
         "├ /zodiac — гороскоп по знаку зодиака\n"
         "├ /predict — предсказание <i>(реплай или себе)</i>\n"
         "├ /fortune — предсказание судьбы\n"
         "└ /ask вопрос — ответ вселенной\n\n"
 
-        "🛠 <b>Утилиты</b>\n"
+        "🛠 <b>utils.run</b>\n"
         "├ /calc выражение — калькулятор\n"
         "├ /password [длина] — генератор паролей\n"
         "├ /qr текст — создать QR-код\n"
@@ -3391,17 +3394,17 @@ async def cmd_help(message: Message):
         "├ /remind 30m текст — напоминание\n"
         "└ /rules — правила чата\n\n"
 
-        "🏰 <b>Кланы</b>\n"
+        "🏰 <b>clan.system</b>\n"
         "├ /clan — информация о клане\n"
         "├ /clan_create ТЕГ Название — создать клан\n"
         "├ /clan_join ТЕГ — вступить в клан\n"
         "└ /clan_leave — покинуть клан\n\n"
 
-        "📨 <b>Жалобы и апелляции</b>\n"
+        "📨 <b>reports.send</b>\n"
         "├ /report — пожаловаться <i>(реплай)</i>\n"
         "└ /appeal причина — апелляция на бан\n\n"
 
-        "🔒 <b>Приватность</b>\n"
+        "🔒 <b>privacy.config</b>\n"
         "├ /privacy — политика конфиденциальности\n"
         "└ /deleteme — удалить свои данные\n\n"
 
@@ -3409,13 +3412,16 @@ async def cmd_help(message: Message):
         "💡 <i>аутист поженить / казнить / диагноз / дуэль / похитить / подарить 🌹</i>"
     )
 
-    # ── АДМИНИСТРАТОР ─
+    # ══════════════════════════════════════════════════════════
+    #  АДМИНИСТРАТОР
+    # ══════════════════════════════════════════════════════════
     text_admin = (
         "\n\n"
-        "\n\n👮 <b>АДМИНИСТРАТОР</b>\n"
-        "<code>────────────────────</code>\n\n"
+        "👮 <b>[~] role.grant :: ADMINISTRATOR</b>\n"
+        "<code>────────────────────</code>\n"
+        "<i>$ help --admin</i>\n\n"
 
-        "⚖️ <b>Модерация</b>\n"
+        "⚖️ <b>mod.execute</b>\n"
         "├ /warn · /unwarn — варн / снять <i>(реплай)</i>\n"
         "├ /ban · /unban — бан / разбан <i>(реплай)</i>\n"
         "├ /mute · /unmute — мут / размут <i>(реплай)</i>\n"
@@ -3423,10 +3429,20 @@ async def cmd_help(message: Message):
         "├ /banid ID причина — бан по ID\n"
         "├ /muteid ID 60m — мут по ID\n"
         "├ /kick — кик <i>(реплай)</i>\n"
-        "├ /warn24 — предупреждение с автоснятием <i>(реплай)</i>\n"
+        "├ /warn24 — варн с автоснятием <i>(реплай)</i>\n"
         "└ /warnmenu — шаблоны варнов <i>(реплай)</i>\n\n"
 
-        "📋 <b>Информация</b>\n"
+        "🎙️ <b>autist.execute</b> · <i>текстовые команды (любой регистр, реплай)</i>\n"
+        "├ Аутист бан [причина] — бан\n"
+        "├ Аутист разбан — разбан\n"
+        "├ Аутист мут [время] [причина] — мут\n"
+        "├ Аутист размут — снять мут\n"
+        "├ Аутист варн [причина] — варн\n"
+        "├ Аутист снять варн — минус варн\n"
+        "├ Аутист удали — удалить сообщение\n"
+        "└ Аутист фриз — мут на 24 ч.\n\n"
+
+        "📋 <b>info.fetch</b>\n"
         "├ /info — досье пользователя <i>(реплай)</i>\n"
         "├ /warnings — варны <i>(реплай)</i>\n"
         "├ /modhistory — история нарушений <i>(реплай)</i>\n"
@@ -3436,17 +3452,17 @@ async def cmd_help(message: Message):
         "├ /modtop — рейтинг модераторов\n"
         "└ /violators — топ нарушителей\n\n"
 
-        "🚨 <b>Алерты и инциденты</b>\n"
+        "🚨 <b>alerts.monitor</b>\n"
         "├ /alerts — текущие алерты\n"
         "├ /alertsclear — очистить алерты\n"
         "└ /incidents — критические инциденты\n\n"
 
-        "📨 <b>Апелляции</b>\n"
+        "📨 <b>appeals.review</b>\n"
         "├ /appeals — список ожидающих апелляций\n"
         "├ /appealapprove ID — одобрить апелляцию\n"
         "└ /appealdeny ID причина — отклонить\n\n"
 
-        "⚙️ <b>Управление чатом</b>\n"
+        "⚙️ <b>chat.config</b>\n"
         "├ /chatsettings — настройки чата (инлайн-меню)\n"
         "├ /lock · /unlock — закрыть / открыть чат\n"
         "├ /slowmode N — режим замедления\n"
@@ -3463,13 +3479,13 @@ async def cmd_help(message: Message):
         "├ /surveillance — режим наблюдения\n"
         "└ /deletedlog — лог удалённых сообщений\n\n"
 
-        "📊 <b>Аналитика</b>\n"
+        "📊 <b>analytics.dump</b>\n"
         "├ /botstats — общая статистика бота\n"
         "├ /heatmap — тепловая карта активности\n"
         "├ /calendar — события чата\n"
         "└ /vip @user — выдать VIP статус <i>(реплай)</i>\n\n"
 
-        "⚡ <b>Быстрые инструменты</b>\n"
+        "⚡ <b>quick.tools</b>\n"
         "├ /addreply ключ текст — шаблон ответа\n"
         "├ /replies — список шаблонов\n"
         "├ !ключ — отправить шаблон\n"
@@ -3478,43 +3494,53 @@ async def cmd_help(message: Message):
         "├ /note set/get/del — заметки чата\n"
         "└ /modexport — экспорт истории модерации\n\n"
 
-        "🔧 <b>Тех. работы</b>\n"
+        "🔧 <b>maintenance.run</b>\n"
         "├ /techwork [время] — запустить тех. работы\n"
         "└ /techstatus — статус тех. работ"
     )
 
-    # ── ВЛАДЕЛЕЦ ────────────────────
+    # ══════════════════════════════════════════════════════════
+    #  ВЛАДЕЛЕЦ
+    # ══════════════════════════════════════════════════════════
     text_owner = (
         "\n\n"
-        "\n\n👑 <b>ВЛАДЕЛЕЦ</b>\n"
-        "<code>────────────────────</code>\n\n"
+        "👑 <b>[~] role.grant :: OWNER</b>\n"
+        "<code>────────────────────</code>\n"
+        "<i>$ help --owner</i>\n\n"
 
-        "📢 <b>Рассылка</b>\n"
+        "🛡 <b>guardian.system</b> · <i>защита от взлома/злоупотребления админов</i>\n"
+        "├ /freeze ID [причина] — заморозить админа (с выбором режима)\n"
+        "├ /unfreeze ID — разморозить админа\n"
+        "├ /frozen — список замороженных\n"
+        "├ /undo ID [N] — откатить N последних действий админа\n"
+        "└ /gaudit [N] — журнал аудита Guardian\n\n"
+
+        "📢 <b>broadcast.send</b>\n"
         "└ /broadcast текст — рассылка во все чаты\n\n"
 
-        "🚨 <b>Экстренные меры</b>\n"
+        "🚨 <b>emergency.exec</b>\n"
         "├ /evacuation — кик новых участников за 1ч\n"
         "├ /quarantine — автомут новых на 24ч\n"
         "└ /cleanup — удалить неактивных\n\n"
 
-        "🛡 <b>Безопасность</b>\n"
+        "🛡 <b>security.config</b>\n"
         "├ /blacklist ID — глобальный чёрный список\n"
         "├ /unblacklist ID — убрать из ЧС\n"
         "├ /giverole @user роль — выдать роль мода\n"
         "├ /takerole @user — забрать роль\n"
         "└ /setperm команда роль — права доступа\n\n"
 
-        "💾 <b>База данных</b>\n"
+        "💾 <b>database.ops</b>\n"
         "├ /backupnow — создать бэкап прямо сейчас\n"
         "└ /restoredb — восстановить <i>(реплай на .db файл)</i>\n\n"
 
-        "👮 <b>Управление модераторами</b>\n"
+        "👮 <b>moderators.manage</b>\n"
         "├ /task текст [часы] — поставить задачу\n"
         "├ /tasks — все задачи\n"
         "├ /setshift 9 21 — назначить смену\n"
         "└ /createqr [XP] — создать QR-код\n\n"
 
-        "🎭 <b>Команды «аутист» (владелец)</b>\n"
+        "🎭 <b>autist.owner</b> · <i>команды владельца</i>\n"
         "├ аутист ядерка / молния / взрыв / хаос\n"
         "├ аутист локдаун / локдаун выкл\n"
         "├ аутист тишина 10м\n"
@@ -3524,15 +3550,20 @@ async def cmd_help(message: Message):
         "⚙️ <i>/panel — панель управления · /ownersettings — настройки</i>"
     )
 
+    # ══════════════════════════════════════════════════════════
+    #  ОТПРАВКА
+    # ══════════════════════════════════════════════════════════
     if is_owner:
         full = text_user + text_admin + text_owner
         chunks = [full[i:i+4000] for i in range(0, len(full), 4000)]
         for chunk in chunks:
-            try: await bot.send_message(OWNER_ID, chunk, parse_mode="HTML")
+            try: await bot.send_message(message.from_user.id, chunk, parse_mode="HTML")
             except: pass
         await reply_auto_delete(message,
-            "📬 <b>Справка</b>\n<code>─</code>\n"
-            "<i>Полная справка отправлена в личные сообщения.</i>", parse_mode="HTML")
+            "📬 <b>[~] help.send :: PRIVATE</b>\n"
+            "<code>────────────────────</code>\n"
+            "<i>$ Полная справка отправлена в личные сообщения.</i>",
+            parse_mode="HTML")
     elif is_adm:
         full = text_user + text_admin
         chunks = [full[i:i+4000] for i in range(0, len(full), 4000)]
@@ -3540,8 +3571,10 @@ async def cmd_help(message: Message):
             try: await bot.send_message(message.from_user.id, chunk, parse_mode="HTML")
             except: pass
         await reply_auto_delete(message,
-            "📬 <b>Справка</b>\n<code>─</code>\n"
-            "<i>Справка отправлена в личные сообщения.</i>", parse_mode="HTML")
+            "📬 <b>[~] help.send :: PRIVATE</b>\n"
+            "<code>────────────────────</code>\n"
+            "<i>$ Справка отправлена в личные сообщения.</i>",
+            parse_mode="HTML")
     else:
         await reply_auto_delete(message, text_user, parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -8174,7 +8207,7 @@ async def cmd_start_ref(message: Message, command: CommandObject):
         )
         return
 
-    # ── В ЛС — красивое главное меню ───
+    # ── В ЛС — terminal-стиль главное меню ───
     import time as _ts
     uptime = int(_ts.time() - bot_start_time)
     h, m = uptime // 3600, (uptime % 3600) // 60
@@ -8186,37 +8219,33 @@ async def cmd_start_ref(message: Message, command: CommandObject):
     _, lvl_title = get_level_title(user_lvl)
 
     await message.answer(
-        f"╔────────────────────╗\n"
-        
-        f"╚────────────────────╝\n"
+        f"🛡 <b>[~] system.init :: CHAT GUARD</b>\n"
+        f"<code>────────────────────</code>\n"
+        f"<i>$ welcome --user={name}</i>\n"
         f"\n"
-        f"👋 Привет, <b>{name}</b>!\n"
-        f"────────────────────\n"
+        f"👤 <b>profile.status</b>\n"
+        f"├ &gt; level    = <b>{user_lvl}</b> · {lvl_title}\n"
+        f"├ &gt; xp       = <b>{user_xp}</b>\n"
+        f"└ &gt; warns    = <b>{user_warns}</b>\n"
         f"\n"
-        f"🎖 <b>Твой статус</b>\n"
-        f"├ 📊 Уровень: <b>{user_lvl}</b> · {lvl_title}\n"
-        f"├ ✨ Опыт: <b>{user_xp} XP</b>\n"
-        f"└ ⚠️ Предупреждений: <b>{user_warns}</b>\n"
+        f"⚙️ <b>features.list</b>\n"
+        f"├ 🛡 mod.system — модерация чата\n"
+        f"├ 📈 progression — XP · уровни · репутация\n"
+        f"├ 👥 social — друзья · отношения · подарки\n"
+        f"├ 🎫 support — тикеты поддержки\n"
+        f"└ 🌐 web — дашборд админа\n"
         f"\n"
-        f"────────────────────\n"
-        f"🔧 <b>Возможности</b>\n"
-        f"├ 🛡 Модерация чата\n"
-        f"├ 📈 XP · Уровни · Репутация\n"
-        f"├ 👥 Друзья · Отношения · Подарки\n"
-        f"├ 🎫 Тикеты поддержки\n"
-        f"└ 🌐 Веб-дашборд админа\n"
-        f"\n"
-        f"────────────────────\n"
-        f"<i>⏱ Аптайм: {h}ч {m}м</i>",
+        f"<code>────────────────────</code>\n"
+        f"<i>$ uptime = {h}h {m}m · status = ONLINE</i>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📋 Команды",        callback_data="start:help"),
-             InlineKeyboardButton(text="👤 Профиль",        callback_data="start:profile")],
-            [InlineKeyboardButton(text="🎫 Тикет",          callback_data="start:ticket"),
-             InlineKeyboardButton(text="📜 Правила",         callback_data="start:rules")],
-            [InlineKeyboardButton(text="👥 Друзья",          callback_data="start:friends"),
-             InlineKeyboardButton(text="💌 Комплимент",      callback_data="start:compliment")],
-            [InlineKeyboardButton(text="🌐 Веб-дашборд",
+            [InlineKeyboardButton(text="📋 help",        callback_data="start:help"),
+             InlineKeyboardButton(text="👤 profile",     callback_data="start:profile")],
+            [InlineKeyboardButton(text="🎫 ticket",      callback_data="start:ticket"),
+             InlineKeyboardButton(text="📜 rules",       callback_data="start:rules")],
+            [InlineKeyboardButton(text="👥 friends",     callback_data="start:friends"),
+             InlineKeyboardButton(text="💌 compliment",  callback_data="start:compliment")],
+            [InlineKeyboardButton(text="🌐 web-dashboard",
              url=f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME','mybot.onrender.com')}/")],
         ])
     )
@@ -8382,37 +8411,33 @@ async def cb_start_menu(call: CallbackQuery):
         _, lvl_title2 = get_level_title(user_lvl2)
         user_warns2 = sum(warnings[c].get(uid, 0) for c in warnings)
         await call.message.edit_text(
-            f"╔────────────────────╗\n"
-            
-            f"╚────────────────────╝\n"
+            f"🛡 <b>[~] system.init :: CHAT GUARD</b>\n"
+            f"<code>────────────────────</code>\n"
+            f"<i>$ welcome --user={name}</i>\n"
             f"\n"
-            f"👋 Привет, <b>{name}</b>!\n"
-            f"────────────────────\n"
+            f"👤 <b>profile.status</b>\n"
+            f"├ &gt; level    = <b>{user_lvl2}</b> · {lvl_title2}\n"
+            f"├ &gt; xp       = <b>{user_xp2}</b>\n"
+            f"└ &gt; warns    = <b>{user_warns2}</b>\n"
             f"\n"
-            f"🎖 <b>Твой статус</b>\n"
-            f"├ 📊 Уровень: <b>{user_lvl2}</b> · {lvl_title2}\n"
-            f"├ ✨ Опыт: <b>{user_xp2} XP</b>\n"
-            f"└ ⚠️ Предупреждений: <b>{user_warns2}</b>\n"
+            f"⚙️ <b>features.list</b>\n"
+            f"├ 🛡 mod.system — модерация чата\n"
+            f"├ 📈 progression — XP · уровни · репутация\n"
+            f"├ 👥 social — друзья · отношения · подарки\n"
+            f"├ 🎫 support — тикеты поддержки\n"
+            f"└ 🌐 web — дашборд админа\n"
             f"\n"
-            f"────────────────────\n"
-            f"🔧 <b>Возможности</b>\n"
-            f"├ 🛡 Модерация чата\n"
-            f"├ 📈 XP · Уровни · Репутация\n"
-            f"├ 👥 Друзья · Отношения · Подарки\n"
-            f"├ 🎫 Тикеты поддержки\n"
-            f"└ 🌐 Веб-дашборд админа\n"
-            f"\n"
-            f"────────────────────\n"
-            f"<i>⏱ Аптайм: {h}ч {m}м</i>",
+            f"<code>────────────────────</code>\n"
+            f"<i>$ uptime = {h}h {m}m · status = ONLINE</i>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📋 Команды",        callback_data="start:help"),
-                 InlineKeyboardButton(text="👤 Профиль",        callback_data="start:profile")],
-                [InlineKeyboardButton(text="🎫 Тикет",          callback_data="start:ticket"),
-                 InlineKeyboardButton(text="📜 Правила",         callback_data="start:rules")],
-                [InlineKeyboardButton(text="👥 Друзья",          callback_data="start:friends"),
-                 InlineKeyboardButton(text="💌 Комплимент",      callback_data="start:compliment")],
-                [InlineKeyboardButton(text="🌐 Веб-дашборд",
+                [InlineKeyboardButton(text="📋 help",        callback_data="start:help"),
+                 InlineKeyboardButton(text="👤 profile",     callback_data="start:profile")],
+                [InlineKeyboardButton(text="🎫 ticket",      callback_data="start:ticket"),
+                 InlineKeyboardButton(text="📜 rules",       callback_data="start:rules")],
+                [InlineKeyboardButton(text="👥 friends",     callback_data="start:friends"),
+                 InlineKeyboardButton(text="💌 compliment",  callback_data="start:compliment")],
+                [InlineKeyboardButton(text="🌐 web-dashboard",
                  url=f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME','mybot.onrender.com')}/")],
             ])
         )
