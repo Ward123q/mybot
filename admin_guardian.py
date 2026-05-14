@@ -1083,11 +1083,13 @@ async def cb_details(call: CallbackQuery):
 # ══════════════════════════════════════════════════════════════
 
 def _register_handlers(dp: Dispatcher):
-    dp.message.register(cmd_undo,     Command("undo"))
-    dp.message.register(cmd_freeze,   Command("freeze"))
-    dp.message.register(cmd_unfreeze, Command("unfreeze"))
-    dp.message.register(cmd_frozen,   Command("frozen"))
-    dp.message.register(cmd_audit,    Command("audit"))
+    # Основные команды (с префиксом /g чтобы не конфликтовать с другими хэндлерами)
+    dp.message.register(cmd_undo,     Command("undo", "gundo"))
+    dp.message.register(cmd_freeze,   Command("freeze", "gfreeze"))
+    dp.message.register(cmd_unfreeze, Command("unfreeze", "gunfreeze"))
+    dp.message.register(cmd_frozen,   Command("frozen", "gfrozen"))
+    # /audit уже занят в bot.py под "аудит чата" — используем /gaudit
+    dp.message.register(cmd_audit,    Command("gaudit"))
 
     dp.callback_query.register(cb_undo_confirm, F.data.startswith("ag_undo_ok:"))
     dp.callback_query.register(cb_undo_cancel,  F.data.startswith("ag_undo_no:"))
