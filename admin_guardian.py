@@ -854,19 +854,40 @@ async def cb_freeze_mode(call: CallbackQuery):
 
     if mode == "tg":
         # Пытаемся снять админку во всех известных чатах
+        chats = []
         try:
             import database as db
-            if hasattr(db, "get_known_chats"):
+            # У тебя в database.py есть async get_all_chats() возвращает rows с cid,title
+            if hasattr(db, "get_all_chats"):
+                rows = await db.get_all_chats()
+                chats = [r["cid"] if hasattr(r, "keys") else r[0] for r in rows]
+            elif hasattr(db, "get_known_chats"):
                 chats = db.get_known_chats()
-            else:
-                chats = []
-        except Exception:
+        except Exception as e:
+            log.warning(f"freeze: get chats list: {e}")
             chats = []
 
+        # Если БД пуста — попробуем взять из живых данных bot.py
+        if not chats:
+            try:
+                import sys
+                main = sys.modules.get("__main__") or sys.modules.get("bot")
+                if main:
+                    # ban_list / warnings / chat_stats — defaultdict с cid как ключом
+                    for attr in ("chat_stats", "warnings", "ban_list", "xp_data"):
+                        d = getattr(main, attr, None)
+                        if d:
+                            chats.extend(list(d.keys()))
+                    chats = list(set(chats))
+            except Exception as e:
+                log.warning(f"freeze: live chats fallback: {e}")
+
+        log.info(f"freeze tg: пытаюсь снять админку в {len(chats)} чатах")
+
+        # Проверяем — бот сам должен быть creator или иметь can_promote_members
         for cid in chats:
             try:
-                # Не каждый бот может снимать админку (надо быть creator),
-                # но попытка через promote с пустыми правами
+                # Сначала пробуем сделать пустой promote (снимает все права)
                 await _bot.promote_chat_member(
                     cid, admin_id,
                     can_manage_chat=False,
@@ -877,10 +898,24 @@ async def cb_freeze_mode(call: CallbackQuery):
                     can_change_info=False,
                     can_invite_users=False,
                     can_pin_messages=False,
+                    can_manage_topics=False,
                 )
+                # Сбрасываем кастомный титул админа если есть
+                try:
+                    await _bot.set_chat_administrator_custom_title(cid, admin_id, "")
+                except Exception:
+                    pass
                 affected.append(cid)
+                log.info(f"freeze: cid={cid} → админка снята с {admin_id}")
             except Exception as e:
-                log.warning(f"freeze tg cid={cid}: {e}")
+                err_msg = str(e)
+                log.warning(f"freeze tg cid={cid}: {err_msg}")
+                # Типичные причины — фиксируем в audit
+                if "not enough rights" in err_msg.lower() or "can't be promoted" in err_msg.lower():
+                    log.warning(
+                        f"⚠️ Для снятия админки в cid={cid} боту нужно право "
+                        f"'Add new admins' (can_promote_members) или быть creator"
+                    )
 
     # Сохраняем в БД
     conn = _db()
@@ -897,7 +932,17 @@ async def cb_freeze_mode(call: CallbackQuery):
     mode_label = "🤖 Только бот" if mode == "bot" else "🚫 Снято в Telegram"
     extra = ""
     if mode == "tg":
-        extra = f"\n📍 Затронуто чатов: <b>{len(affected)}</b>"
+        if affected:
+            extra = f"\n📍 Админка снята в чатах: <b>{len(affected)}</b>"
+        else:
+            extra = (
+                f"\n\n⚠️ <b>Админка НЕ снята ни в одном чате.</b>\n"
+                f"Возможные причины:\n"
+                f"• Бот не имеет права <code>can_promote_members</code>\n"
+                f"• Бот ниже этого админа по иерархии\n"
+                f"• Список известных чатов пуст (нужно подождать активности)\n\n"
+                f"<i>Запись о заморозке сохранена — бот будет игнорить его команды.</i>"
+            )
 
     txt = (
         f"✅ <b>Админ заморожен</b>\n\n"
