@@ -3743,6 +3743,110 @@ async def cmd_unmute(message: Message):
     await reply_auto_delete(message, f"👤 Цель: {target.mention_html()}\n<i>Голос восстановлен.</i>", parse_mode="HTML")
     await log_action(f"🔊 <b>Размут</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
+# ══════════════════════════════════════════════════════════════
+#  🎙️ ТЕКСТОВЫЕ КОМАНДЫ «Аутист ...»
+#     Реплай на сообщение + "Аутист фриз" (любой регистр) → мут на 24ч.
+#     Доступно ВСЕМ админам чата.
+# ══════════════════════════════════════════════════════════════
+import re as _autist_re
+_AUTIST_FREEZE_RE = _autist_re.compile(r"^\s*аутист\s+фриз\b", _autist_re.IGNORECASE)
+
+@dp.message(F.text.regexp(r"^\s*[АаAa][уyУY][тtТT][иiИI][сcСsC][тtТT]\s+фриз\b").as_("autist_match"))
+async def cmd_autist_freeze(message: Message, autist_match):
+    """Текстовая команда «Аутист фриз» (реплай) → мут на 24 часа."""
+    # Только в группах
+    if message.chat.type not in ("group", "supergroup"):
+        return
+    # Только админ может
+    if not await require_admin(message):
+        return
+    # Только по реплаю
+    if not message.reply_to_message:
+        await reply_auto_delete(message, "⚠️ Реплайни на сообщение пользователя, которого нужно заморозить.")
+        return
+
+    target = message.reply_to_message.from_user
+    cid = message.chat.id
+
+    # Защита от самозаморозки и заморозки бота
+    if target.id == message.from_user.id:
+        await reply_auto_delete(message, "🤨 Сам себя заморозить хочешь?")
+        return
+    if target.is_bot:
+        await reply_auto_delete(message, "🤖 Ботов фризить нельзя.")
+        return
+
+    # Защита от заморозки админа
+    if await is_admin_by_id(cid, target.id):
+        await reply_auto_delete(message, "⛔ Нельзя заморозить администратора.")
+        return
+
+    # ─── Сама заморозка: мут на 24 часа ───
+    try:
+        await bot.restrict_chat_member(
+            cid, target.id,
+            permissions=ChatPermissions(can_send_messages=False),
+            until_date=datetime.now() + timedelta(hours=24)
+        )
+    except Exception as e:
+        await reply_auto_delete(message, f"❌ Не удалось заморозить: <code>{e}</code>", parse_mode="HTML")
+        return
+
+    label = "24 ч."
+    reason = "🎙️ Аутист фриз"
+
+    # 📸 Скриншот нарушения
+    if message.reply_to_message.text:
+        await log_violation_screenshot(
+            cid, target.id, target.full_name,
+            message.reply_to_message.text,
+            f"🧊 Аутист фриз {label}", reason,
+            message.from_user.full_name, message.chat.title
+        )
+
+    # 📨 ЛС нарушителю
+    dm_ok = await dm_warn_user(
+        target.id, target.full_name, reason,
+        message.chat.title, f"🧊 Аутист фриз на {label}",
+        message.from_user.full_name
+    )
+
+    # ─── Ответ в чат ───
+    reply = (
+        f"🧊  <b>АУТИСТ ФРИЗ</b>\n"
+        f"━━━━━━━━━━━━━━━━━\n"
+        f"├ 👤 Цель: {target.mention_html()}\n"
+        f"├ ⏱ Срок: <b>{label}</b>\n"
+        f"└ 👮 От: {message.from_user.mention_html()}"
+    )
+    if dm_ok:
+        reply += "\n\n<i>Пользователь уведомлён в личные сообщения.</i>"
+    await reply_auto_delete(message, reply, parse_mode="HTML")
+
+    # ─── Лог в канал ───
+    await log_action(
+        f"🧊 <b>АУТИСТ ФРИЗ</b>\n\n"
+        f"👤 <b>Кто:</b> {message.from_user.mention_html()}\n"
+        f"🎯 <b>Кого:</b> {target.mention_html()}\n"
+        f"⏱ <b>Срок:</b> {label}\n"
+        f"💬 <b>Чат:</b> {message.chat.title}\n"
+        f"🕐 <b>Время:</b> {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    )
+
+    # ─── Mod history + Guardian record ───
+    add_mod_history(cid, target.id, f"🧊 Аутист фриз {label}", reason, message.from_user.full_name)
+    await ag.record_action(
+        message.from_user.id, "mute",
+        admin_name=message.from_user.full_name,
+        target_id=target.id, target_name=target.full_name,
+        cid=cid, reason=reason,
+        extra={"minutes": 1440, "chat_title": message.chat.title, "trigger": "autist_freeze"}
+    )
+
+    mod_reasons[cid][target.id]["mute"] = f"{label} — {reason}"
+    schedule_unmute(cid, target.id, 1440, target.full_name)
+
+
 @dp.message(Command("warn"))
 async def cmd_warn(message: Message, command: CommandObject):
     if not await require_admin(message): return
