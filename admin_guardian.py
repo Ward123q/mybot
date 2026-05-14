@@ -305,12 +305,25 @@ async def _raise_anomaly_alert(admin_id: int, admin_name: str,
         [InlineKeyboardButton(text="📋 Подробнее", callback_data=f"ag_details:{admin_id}")],
     ])
 
-    # Owner DM
-    if _bot and shared.owner_id:
+    # Owner DM (всем владельцам)
+    if _bot:
+        # Собираем множество владельцев
+        owners = set()
         try:
-            await _bot.send_message(shared.owner_id, txt, parse_mode="HTML", reply_markup=kb)
-        except Exception as e:
-            log.warning(f"alert owner DM: {e}")
+            import sys
+            main = sys.modules.get("__main__") or sys.modules.get("bot")
+            if main and hasattr(main, "OWNERS"):
+                owners = set(main.OWNERS)
+        except Exception:
+            pass
+        if not owners and shared.owner_id:
+            owners = {shared.owner_id}
+
+        for ow_id in owners:
+            try:
+                await _bot.send_message(ow_id, txt, parse_mode="HTML", reply_markup=kb)
+            except Exception as e:
+                log.warning(f"alert owner DM ({ow_id}): {e}")
 
     # Лог-канал
     try:
@@ -372,6 +385,20 @@ async def _audit_log_to_channel(event: str, text: str):
 # ══════════════════════════════════════════════════════════════
 
 def _is_owner(uid: int) -> bool:
+    """Проверка: является ли юзер владельцем.
+
+    Поддерживает множество владельцев (если в bot.py определена переменная OWNERS)
+    или одиночного владельца (shared.owner_id).
+    """
+    # Пробуем достать множество владельцев из основного модуля
+    try:
+        import sys
+        main = sys.modules.get("__main__") or sys.modules.get("bot")
+        if main and hasattr(main, "OWNERS"):
+            return uid in main.OWNERS
+    except Exception:
+        pass
+    # Фолбэк: одиночный владелец из shared
     return uid == shared.owner_id
 
 

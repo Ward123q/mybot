@@ -584,7 +584,8 @@ def get_xp_for_next(level: int) -> int:
 LOG_CHANNEL_ID   = -1003832428474
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
-OWNER_ID         = 7823802800,  7412821596
+OWNER_ID         = 7823802800                       # основной владелец (для обратной совместимости)
+OWNERS           = {7823802800, 7412821596}          # все владельцы — все проверки идут через "in OWNERS"
 ADMIN_IDS        = {7823802800, 8046083268, 7397338777, 7991589995, 7412821596 }
 MAX_WARNINGS     = 3
 ANTI_MAT_ENABLED  = False
@@ -2737,7 +2738,7 @@ async def cb_panelset(call: CallbackQuery):
 # ── ПАНЕЛЬ ВЛАДЕЛЬЦА ──────
 @dp.callback_query(F.data.startswith("owner:"))
 async def cb_owner_panel(call: CallbackQuery):
-    if call.from_user.id != OWNER_ID:
+    if call.from_user.id not in OWNERS:
         await call.answer("🚫 Только для владельца!", show_alert=True); return
     parts = call.data.split(":")
     action = parts[1]
@@ -3325,7 +3326,7 @@ async def cmd_rules(message: Message):
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
     is_adm  = await check_admin(message)
-    is_owner = message.from_user.id == OWNER_ID
+    is_owner = message.from_user.id in OWNERS
 
     # ── ПОЛЬЗОВАТЕЛЬ ──
     text_user = (
@@ -3557,7 +3558,7 @@ async def cmd_panel(message: Message):
     uid = message.from_user.id
 
     # Владелец видит свою панель
-    if uid == OWNER_ID:
+    if uid in OWNERS:
         import time as _tp2
         uptime = int(_tp2.time() - bot_start_time)
         h, m = uptime // 3600, (uptime % 3600) // 60
@@ -4605,7 +4606,7 @@ async def autist_commands(message: Message):
                 "ревнивый", "обиженный", "счастливый", "грустный", "бешеный",
                 "фанат", "хейтер", "критик", "защитник", "провокатор",
                 "шутник", "серьёзный", "рандом", "легаси", "ноунейм"]
-    is_owner = message.from_user.id == OWNER_ID
+    is_owner = message.from_user.id in OWNERS
     is_admin = is_owner or await check_admin(message)
     is_fun = any(f in text_lower for f in fun_only)
     if not is_admin and not is_fun: return
@@ -5473,7 +5474,7 @@ async def autist_commands(message: Message):
                 f"👤 <b>{target.full_name}</b>:\n{text}", parse_mode="HTML")
 
         elif action == "клоун":
-            if not await check_admin(message) and message.from_user.id != OWNER_ID:
+            if not await check_admin(message) and message.from_user.id not in OWNERS:
                 await reply_auto_delete(message, "🚫 Только для администраторов!"); return
             clown_targets[f"{cid}_{target.id}"] = __import__('time').time() + 600
             await reply_auto_delete(message,
@@ -5675,7 +5676,7 @@ async def autist_commands(message: Message):
                 f"⚡ <b>МОЛНИЯ!</b>\nУдалено ~{deleted} сообщений {tname} за сегодня.", parse_mode="HTML")
 
         elif action == "магнит":
-            if not await check_admin(message) and message.from_user.id != OWNER_ID:
+            if not await check_admin(message) and message.from_user.id not in OWNERS:
                 await reply_auto_delete(message, "🚫 Только для администраторов!"); return
             magnet_targets[f"{cid}_{target.id}"] = __import__('time').time() + 600
             await reply_auto_delete(message,
@@ -9306,7 +9307,7 @@ async def cmd_take_role(message: Message):
 
 @dp.message(Command("roles"))
 async def cmd_roles(message: Message):
-    if message.from_user.id != OWNER_ID and not await is_admin_by_id(message.chat.id, message.from_user.id):
+    if message.from_user.id not in OWNERS and not await is_admin_by_id(message.chat.id, message.from_user.id):
         return
     cid = message.chat.id
     roles_in_chat = mod_roles.get(cid, {})
@@ -9357,7 +9358,7 @@ async def cmd_plugins(message: Message):
 
 @dp.callback_query(F.data.startswith("plugin:"))
 async def cb_plugin(call: CallbackQuery):
-    if call.from_user.id != OWNER_ID:
+    if call.from_user.id not in OWNERS:
         await call.answer("🚫 Только для владельца.", show_alert=True); return
     parts = call.data.split(":")
     action, key, cid_str = parts[1], parts[2], parts[3]
@@ -9434,7 +9435,7 @@ async def cmd_appeal(message: Message):
 
 @dp.callback_query(F.data.startswith("appeal:"))
 async def cb_appeal(call: CallbackQuery):
-    if call.from_user.id != OWNER_ID:
+    if call.from_user.id not in OWNERS:
         await call.answer("🚫 Только для владельца.", show_alert=True); return
     parts = call.data.split(":")
     action, uid = parts[1], int(parts[2])
@@ -9551,7 +9552,7 @@ async def cmd_mypanel(message: Message):
 
 @dp.callback_query(F.data.startswith("mypanel:"))
 async def cb_mypanel(call: CallbackQuery):
-    if call.from_user.id != OWNER_ID:
+    if call.from_user.id not in OWNERS:
         await call.answer("🚫 Только для владельца.", show_alert=True); return
     parts = call.data.split(":")
     action, val = parts[1], parts[2]
@@ -9861,7 +9862,7 @@ async def cmd_reset_chat(message: Message):
 
 @dp.callback_query(F.data.startswith("resetchat:"))
 async def cb_reset_chat(call: CallbackQuery):
-    if call.from_user.id != OWNER_ID:
+    if call.from_user.id not in OWNERS:
         await call.answer("🚫", show_alert=True); return
     parts = call.data.split(":")
     action, cid = parts[1], int(parts[2])
@@ -10258,7 +10259,7 @@ async def cmd_cleanup(message: Message):
 
 @dp.callback_query(F.data.startswith("cleanup:"))
 async def cb_cleanup(call: CallbackQuery):
-    if call.from_user.id != OWNER_ID:
+    if call.from_user.id not in OWNERS:
         await call.answer("🚫", show_alert=True); return
     parts = call.data.split(":")
     action = parts[1]
@@ -10563,7 +10564,7 @@ async def cmd_done_task(message: Message):
 @dp.message(Command("tasks"))
 async def cmd_tasks(message: Message):
     uid = message.from_user.id
-    is_owner = uid == OWNER_ID
+    is_owner = uid in OWNERS
     cid = message.chat.id
     conn = db_connect()
     if is_owner:
@@ -10591,7 +10592,7 @@ mod_chat_active = set()  # {uid} — кто сейчас в чате модов
 async def cmd_modchat(message: Message):
     uid = message.from_user.id
     cid = message.chat.id
-    is_mod = uid == OWNER_ID or uid in mod_roles.get(cid, {}) or await is_admin_by_id(cid, uid)
+    is_mod = uid in OWNERS or uid in mod_roles.get(cid, {}) or await is_admin_by_id(cid, uid)
     if not is_mod:
         await reply_auto_delete(message, "🚫 Только для модераторов"); return
     if uid in mod_chat_active:
@@ -11014,7 +11015,7 @@ ASSISTANT_COMMANDS = {
     "чаты": "chats_summary",
 }
 
-@dp.message(F.chat.type == "private", F.from_user.id == OWNER_ID)
+@dp.message(F.chat.type == "private", F.from_user.id.in_(OWNERS))
 async def owner_assistant(message: Message):
     if not message.text or message.text.startswith("/"): return
     if message.from_user.id in mod_chat_active: return
@@ -11962,7 +11963,7 @@ async def _notify_mods_ticket(ticket_id, uid, user_name, chat_title, subject, pr
 @dp.message(Command("botupdate"))
 async def cmd_botupdate(message: Message, command: CommandObject):
     """Рассылает сообщение об обновлении во все чаты. Только владелец."""
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in OWNERS:
         await reply_auto_delete(message, "🚫 Только для владельца")
         return
 
@@ -12528,7 +12529,7 @@ techwork_active = False  # флаг активных тех.работ
 @dp.message(Command("techwork"))
 async def cmd_techwork(message: Message):
     """Включить/выключить режим тех.работ в текущем чате"""
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in OWNERS: return
     global techwork_active
 
     cid = message.chat.id
@@ -12564,7 +12565,7 @@ async def cmd_techwork(message: Message):
 @dp.message(Command("techstatus"))
 async def cmd_techstatus(message: Message):
     """Статус тех.работ"""
-    if message.from_user.id != OWNER_ID: return
+    if message.from_user.id not in OWNERS: return
     if techwork_active:
         await reply_auto_delete(message,
             "🔧 <b>Тех.работы активны</b>\n"
@@ -13631,7 +13632,7 @@ async def cmd_muteid(message: Message, command: CommandObject):
 
 @dp.message(Command("broadcast"))
 async def cmd_broadcast(message: Message, command: CommandObject):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in OWNERS:
         await reply_auto_delete(message, "⛔ Только для владельца."); return
     if not command.args:
         await reply_auto_delete(message,
@@ -15104,7 +15105,7 @@ def kb_os_features(s: dict) -> InlineKeyboardMarkup:
 # ── Команда /ownersettings ────────────────
 @dp.message(Command("ownersettings", "settings"))
 async def cmd_owner_settings(message: Message):
-    if message.from_user.id != OWNER_ID:
+    if message.from_user.id not in OWNERS:
         await reply_auto_delete(message, "🚫 Только для владельца!")
         return
     s = _owner_settings_get()
@@ -15126,7 +15127,7 @@ _os_pending: dict = {}  # {uid: {key, menu}}
 
 @dp.callback_query(F.data.startswith("os:"))
 async def cb_owner_settings(call: CallbackQuery):
-    if call.from_user.id != OWNER_ID:
+    if call.from_user.id not in OWNERS:
         await call.answer("🚫 Только для владельца!", show_alert=True)
         return
 
@@ -15371,7 +15372,7 @@ async def cb_owner_settings(call: CallbackQuery):
 @dp.message(F.chat.type == "private")
 async def handle_os_input(message: Message):
     uid = message.from_user.id
-    if uid != OWNER_ID or uid not in _os_pending:
+    if uid not in OWNERS or uid not in _os_pending:
         return
 
     state = _os_pending.pop(uid)
