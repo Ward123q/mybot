@@ -1639,83 +1639,131 @@ class PendingInputMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 class StatsMiddleware(BaseMiddleware):
-    # Трекер флуда: {cid: {uid: [timestamps]}}
+    # ⛓ CASCADE LOCK — нарастающее наказание за флуд
+    # Трекер сообщений: {cid: {uid: [timestamps]}}
     _flood_tracker: dict = {}
 
+    # Лестница нарушений: {cid: {uid: {"step": N, "last_violation": ts}}}
+    # step = 1..5 (с какого наказания начинаем при следующем срабатывании)
+    _cascade_state: dict = {}
+
+    # 🪜 Лестница наказаний — индекс соответствует "счётчику нарушений" (1..5+)
+    CASCADE_STEPS = [
+        # (action, duration_min, label, emoji)
+        ("warn",  0,    "предупреждение",     "🍃"),   # 1-е
+        ("mute",  5,    "мут 5 минут",         "🌙"),   # 2-е
+        ("mute",  30,   "мут 30 минут",        "🌙"),   # 3-е
+        ("mute",  1440, "мут 24 часа",         "🌙"),   # 4-е
+        ("mute",  2880, "мут 48 часов",        "❄️"),   # 5-е и далее
+    ]
+
+    # Сброс лестницы если нет нарушений N часов
+    CASCADE_RESET_HOURS = 24
+
     async def _check_flood(self, uid: int, cid: int, name: str) -> bool:
-        """Проверяет флуд по настройкам чата. Возвращает True если флуд обнаружен."""
+        """
+        ⛓ CASCADE LOCK
+        Проверяет флуд и применяет нарастающее наказание:
+          1-е нарушение  — предупреждение
+          2-е            — мут 5 минут
+          3-е            — мут 30 минут
+          4-е            — мут 24 часа
+          5-е и далее    — мут 48 часов
+        Сброс счётчика — через 24ч без нарушений.
+        """
         try:
             chat_cfg = cs.get_settings(cid)
             if not chat_cfg.get("antispam_enabled", True):
                 return False
 
             threshold = chat_cfg.get("flood_msgs", 10)
-            action    = chat_cfg.get("flood_action", "mute")
-
             now = _time_module.time()
+
+            # ─── Трекер сообщений в скользящем окне 60с ───
             if cid not in self._flood_tracker:
                 self._flood_tracker[cid] = {}
             if uid not in self._flood_tracker[cid]:
                 self._flood_tracker[cid][uid] = []
 
-            # Оставляем только последние 60 секунд
             self._flood_tracker[cid][uid] = [
                 t for t in self._flood_tracker[cid][uid] if now - t < 60
             ]
             self._flood_tracker[cid][uid].append(now)
             count = len(self._flood_tracker[cid][uid])
 
-            if count >= threshold:
-                # Сбрасываем счётчик
-                self._flood_tracker[cid][uid] = []
+            if count < threshold:
+                return False
 
-                # Применяем действие
-                if action == "mute":
-                    mins = chat_cfg.get("mute_duration", 10)
-                    try:
-                        from aiogram.types import ChatPermissions
-                        await bot.restrict_chat_member(
-                            cid, uid,
-                            permissions=ChatPermissions(can_send_messages=False),
-                            until_date=datetime.now() + timedelta(minutes=mins)
-                        )
-                        await bot.send_message(
-                            cid,
-                            f"🔇 <a href='tg://user?id={uid}'>{name}</a> замучен на {mins} мин. за флуд ({count} сообщ/мин)",
-                            parse_mode="HTML"
-                        )
-                        add_mod_history(cid, uid, f"🔇 Мут {mins}м (флуд)", f"{count} сообщений за минуту", "AutoMod")
-                    except: pass
+            # ─── Флуд обнаружен — лестница ───
+            self._flood_tracker[cid][uid] = []  # сброс трекера
 
-                elif action == "warn":
-                    warnings[cid][uid] += 1
-                    save_data()
-                    add_mod_history(cid, uid, f"⚡ Варн (флуд)", f"{count} сообщений за минуту", "AutoMod")
-                    try:
-                        await bot.send_message(
-                            cid,
-                            f"⚡ <a href='tg://user?id={uid}'>{name}</a> получил варн за флуд ({count} сообщ/мин) "
-                            f"— {warnings[cid][uid]}/{cs.get_settings(cid).get('max_warns', MAX_WARNINGS)}",
-                            parse_mode="HTML"
-                        )
-                        if warnings[cid][uid] >= chat_cfg.get("max_warns", MAX_WARNINGS):
-                            await bot.ban_chat_member(cid, uid)
-                            add_mod_history(cid, uid, "🔨 Автобан (варны)", "Лимит варнов", "AutoMod")
-                    except: pass
+            if cid not in self._cascade_state:
+                self._cascade_state[cid] = {}
 
-                elif action == "kick":
-                    try:
-                        await bot.ban_chat_member(cid, uid)
-                        await bot.unban_chat_member(cid, uid)
-                        add_mod_history(cid, uid, "👟 Кик (флуд)", f"{count} сообщений за минуту", "AutoMod")
-                        await bot.send_message(
-                            cid,
-                            f"👟 <a href='tg://user?id={uid}'>{name}</a> кикнут за флуд ({count} сообщ/мин)",
-                            parse_mode="HTML"
-                        )
-                    except: pass
+            state = self._cascade_state[cid].get(uid, {"step": 0, "last_violation": 0})
 
-                return True
+            # Сброс лестницы если прошло > 24ч
+            if state["last_violation"] and (now - state["last_violation"]) > self.CASCADE_RESET_HOURS * 3600:
+                state["step"] = 0
+
+            # Переходим на следующую ступень (но не выше последней)
+            step_idx = min(state["step"], len(self.CASCADE_STEPS) - 1)
+            action, duration_min, label, emoji = self.CASCADE_STEPS[step_idx]
+
+            state["step"] = state["step"] + 1
+            state["last_violation"] = now
+            self._cascade_state[cid][uid] = state
+
+            human_step = state["step"]   # человеческий счёт нарушений (1-е, 2-е...)
+
+            # ─── Применяем наказание ───
+            try:
+                if action == "warn":
+                    # 1-е нарушение — только предупреждение
+                    await bot.send_message(
+                        cid,
+                        f"{emoji} <a href='tg://user?id={uid}'>{name}</a>, помедленнее ‧ "
+                        f"{count} сообщ. за минуту\n"
+                        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                        f"🌿 это первое предупреждение — следующее будет мут",
+                        parse_mode="HTML"
+                    )
+                    add_mod_history(cid, uid, "🍃 Предупреждение (флуд)",
+                                    f"{count} сообщений за минуту", "AutoMod · Cascade")
+
+                else:  # mute
+                    from aiogram.types import ChatPermissions
+                    await bot.restrict_chat_member(
+                        cid, uid,
+                        permissions=ChatPermissions(can_send_messages=False),
+                        until_date=datetime.now() + timedelta(minutes=duration_min)
+                    )
+                    # Эстетичное сообщение
+                    suffix_lines = []
+                    if human_step < len(self.CASCADE_STEPS):
+                        # Подсказка о следующей ступени
+                        next_action, next_dur, next_label, _ = self.CASCADE_STEPS[step_idx + 1] if step_idx + 1 < len(self.CASCADE_STEPS) else (None, None, None, None)
+                        if next_label:
+                            suffix_lines.append(f"🌿 при следующем нарушении — {next_label}")
+                    else:
+                        suffix_lines.append(f"❄️ это максимальная ступень")
+
+                    suffix_lines.append(f"🕊 сброс лестницы через 24 часа без нарушений")
+
+                    await bot.send_message(
+                        cid,
+                        f"{emoji} <a href='tg://user?id={uid}'>{name}</a> · {label}\n"
+                        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                        f"🌸 нарушение №{human_step} ‧ {count} сообщ/мин\n"
+                        + "\n".join(suffix_lines),
+                        parse_mode="HTML"
+                    )
+                    add_mod_history(cid, uid, f"🔇 Мут {duration_min}м (флуд · ступень {human_step})",
+                                    f"{count} сообщений за минуту", "AutoMod · Cascade")
+            except Exception as _e:
+                pass
+
+            return True
         except Exception as _e:
             pass
         return False
@@ -4505,6 +4553,93 @@ async def cmd_info(message: Message):
         f"💬 Сообщений: <b>{chat_stats[message.chat.id].get(user.id,0)}</b>\n"
         f"",
         parse_mode="HTML")
+
+@dp.message(Command("cascade"))
+async def cmd_cascade(message: Message, command: CommandObject):
+    """⛓ Показать текущую ступень cascade lock у пользователя."""
+    if not await require_admin(message): return
+
+    target = None
+    if message.reply_to_message:
+        target = message.reply_to_message.from_user
+    elif command.args:
+        try:
+            target_id = int(command.args.split()[0])
+            target = await bot.get_chat(target_id)
+        except: pass
+
+    if not target:
+        await reply_auto_delete(message,
+            "🌿 Ответь на сообщение участника или укажи его ID",
+            parse_mode="HTML")
+        return
+
+    cid = message.chat.id
+    state = StatsMiddleware._cascade_state.get(cid, {}).get(target.id, None)
+
+    if not state or state.get("step", 0) == 0:
+        await reply_auto_delete(message,
+            f"🤍 <b>{target.first_name}</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"✨ нарушений нет ‧ чистая лестница",
+            parse_mode="HTML")
+        return
+
+    step = state["step"]
+    last = state["last_violation"]
+    ago_sec = int(_time_module.time() - last)
+    hours_left = max(0, StatsMiddleware.CASCADE_RESET_HOURS - ago_sec // 3600)
+
+    # Что будет на следующей ступени
+    next_idx = min(step, len(StatsMiddleware.CASCADE_STEPS) - 1)
+    _, _, next_label, next_emoji = StatsMiddleware.CASCADE_STEPS[next_idx]
+
+    # Что было на текущей ступени
+    cur_idx = min(step - 1, len(StatsMiddleware.CASCADE_STEPS) - 1)
+    _, _, cur_label, cur_emoji = StatsMiddleware.CASCADE_STEPS[cur_idx]
+
+    await reply_auto_delete(message,
+        f"⛓ <b>{target.first_name}</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🌸 нарушений — <b>{step}</b>\n"
+        f"{cur_emoji} последнее — {cur_label}\n"
+        f"🌿 следующее будет — {next_emoji} {next_label}\n"
+        f"🕊 до сброса лестницы — {hours_left} ч",
+        parse_mode="HTML")
+
+
+@dp.message(Command("cascadereset"))
+async def cmd_cascade_reset(message: Message, command: CommandObject):
+    """⛓ Сбросить лестницу cascade lock у пользователя."""
+    if not await require_admin(message): return
+
+    target = None
+    if message.reply_to_message:
+        target = message.reply_to_message.from_user
+    elif command.args:
+        try:
+            target_id = int(command.args.split()[0])
+            target = await bot.get_chat(target_id)
+        except: pass
+
+    if not target:
+        await reply_auto_delete(message,
+            "🌿 Ответь на сообщение участника или укажи его ID",
+            parse_mode="HTML")
+        return
+
+    cid = message.chat.id
+    if cid in StatsMiddleware._cascade_state:
+        StatsMiddleware._cascade_state[cid].pop(target.id, None)
+
+    await reply_auto_delete(message,
+        f"✨ <b>Лестница сброшена</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🤍 у {target.first_name} снова чистая история\n"
+        f"🍃 модератор — {message.from_user.first_name}",
+        parse_mode="HTML")
+    add_mod_history(cid, target.id, "⛓ Сброс cascade lock", "—", message.from_user.full_name)
+
 
 @dp.message(Command("warnings"))
 async def cmd_warnings(message: Message):
