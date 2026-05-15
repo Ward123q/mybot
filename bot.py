@@ -1676,7 +1676,7 @@ class StatsMiddleware(BaseMiddleware):
             if not chat_cfg.get("antispam_enabled", True):
                 return False
 
-            threshold = chat_cfg.get("flood_msgs", 10)
+            threshold = chat_cfg.get("flood_msgs", 5)
             now = _time_module.time()
 
             # ─── Трекер сообщений в скользящем окне 60с ───
@@ -14391,7 +14391,7 @@ def kb_cs_mod(cid: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=f"🌿 Макс варнов: {s.get('max_warns',3)}", callback_data=f"cs_set:{cid}:max_warns")],
         [InlineKeyboardButton(text=f"⏳ Срок варна: {s.get('warn_expiry_days',30)} дн.", callback_data=f"cs_set:{cid}:warn_expiry_days")],
         [InlineKeyboardButton(text=f"🔇 Мут по умолч.: {s.get('mute_duration',60)} мин.", callback_data=f"cs_set:{cid}:mute_duration")],
-        [InlineKeyboardButton(text=f"💬 Флуд порог: {s.get('flood_msgs',10)} msg/мин", callback_data=f"cs_set:{cid}:flood_msgs")],
+        [InlineKeyboardButton(text=f"💬 Флуд порог: {s.get('flood_msgs',5)} msg/мин", callback_data=f"cs_set:{cid}:flood_msgs")],
         [InlineKeyboardButton(text="◀️ Назад", callback_data=f"cs_main:{cid}")],
     ])
 
