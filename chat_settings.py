@@ -75,7 +75,7 @@ DEFAULT_SETTINGS = {
     # 🤖 Антиспам
     "antispam_enabled":   True,
     "antimat_enabled":    True,
-    "flood_msgs":         5,         # сообщений в минуту (cascade lock)
+    "flood_msgs":         10,        # сообщений в минуту (cascade lock)
     "flood_action":       "mute",    # mute/warn/kick
     "antilink_enabled":   False,
     "antisticker_enabled":False,
