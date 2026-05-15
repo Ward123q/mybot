@@ -1647,7 +1647,7 @@ class StatsMiddleware(BaseMiddleware):
     # step = 1..5 (с какого наказания начинаем при следующем срабатывании)
     _cascade_state: dict = {}
 
-    # 🪜 Лестница наказаний — индекс соответствует "счётчику нарушений" (1..10+)
+    # 🪜 Лестница наказаний — индекс соответствует "счётчику нарушений" (1..11+)
     CASCADE_STEPS = [
         # (action, duration_min, label, emoji)
         ("warn",  0,     "предупреждение",      "🍃"),   # 1-е
@@ -1657,9 +1657,10 @@ class StatsMiddleware(BaseMiddleware):
         ("mute",  30,    "мут 30 минут",         "🌙"),   # 5-е
         ("mute",  60,    "мут 1 час",            "🌙"),   # 6-е
         ("mute",  180,   "мут 3 часа",           "🌙"),   # 7-е
-        ("mute",  720,   "мут 12 часов",         "🌙"),   # 8-е
-        ("mute",  1440,  "мут 24 часа",          "❄️"),   # 9-е
-        ("mute",  2880,  "мут 48 часов",         "❄️"),   # 10-е и далее
+        ("mute",  360,   "мут 6 часов",          "🌙"),   # 8-е
+        ("mute",  720,   "мут 12 часов",         "❄️"),   # 9-е
+        ("mute",  1380,  "мут 23 часа",          "❄️"),   # 10-е
+        ("ban",   720,   "бан 12 часов",         "🍂"),   # 11-е и далее
     ]
 
     # Сброс лестницы если нет нарушений N часов
@@ -1743,7 +1744,7 @@ class StatsMiddleware(BaseMiddleware):
                     add_mod_history(cid, uid, f"🍃 Предупреждение (флуд · ступень {human_step})",
                                     f"{count} сообщений за минуту", "AutoMod · Cascade")
 
-                else:  # mute
+                elif action == "mute":
                     from aiogram.types import ChatPermissions
                     await bot.restrict_chat_member(
                         cid, uid,
@@ -1771,6 +1772,24 @@ class StatsMiddleware(BaseMiddleware):
                         parse_mode="HTML"
                     )
                     add_mod_history(cid, uid, f"🔇 Мут {duration_min}м (флуд · ступень {human_step})",
+                                    f"{count} сообщений за минуту", "AutoMod · Cascade")
+
+                elif action == "ban":
+                    # Временный бан на duration_min минут
+                    await bot.ban_chat_member(
+                        cid, uid,
+                        until_date=datetime.now() + timedelta(minutes=duration_min)
+                    )
+                    await bot.send_message(
+                        cid,
+                        f"{emoji} <a href='tg://user?id={uid}'>{name}</a> · {label}\n"
+                        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                        f"🌸 нарушение №{human_step} ‧ {count} сообщ/мин\n"
+                        f"🍂 это максимальная ступень — превышен лимит терпения\n"
+                        f"🕊 сброс лестницы через 24 часа без нарушений",
+                        parse_mode="HTML"
+                    )
+                    add_mod_history(cid, uid, f"🍂 Бан {duration_min}м (флуд · ступень {human_step})",
                                     f"{count} сообщений за минуту", "AutoMod · Cascade")
             except Exception as _e:
                 pass
