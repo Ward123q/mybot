@@ -1647,14 +1647,19 @@ class StatsMiddleware(BaseMiddleware):
     # step = 1..5 (с какого наказания начинаем при следующем срабатывании)
     _cascade_state: dict = {}
 
-    # 🪜 Лестница наказаний — индекс соответствует "счётчику нарушений" (1..5+)
+    # 🪜 Лестница наказаний — индекс соответствует "счётчику нарушений" (1..10+)
     CASCADE_STEPS = [
         # (action, duration_min, label, emoji)
-        ("warn",  0,    "предупреждение",     "🍃"),   # 1-е
-        ("mute",  5,    "мут 5 минут",         "🌙"),   # 2-е
-        ("mute",  30,   "мут 30 минут",        "🌙"),   # 3-е
-        ("mute",  1440, "мут 24 часа",         "🌙"),   # 4-е
-        ("mute",  2880, "мут 48 часов",        "❄️"),   # 5-е и далее
+        ("warn",  0,     "предупреждение",      "🍃"),   # 1-е
+        ("warn",  0,     "второе предупреждение","🌿"),   # 2-е
+        ("mute",  5,     "мут 5 минут",          "🌙"),   # 3-е
+        ("mute",  15,    "мут 15 минут",         "🌙"),   # 4-е
+        ("mute",  30,    "мут 30 минут",         "🌙"),   # 5-е
+        ("mute",  60,    "мут 1 час",            "🌙"),   # 6-е
+        ("mute",  180,   "мут 3 часа",           "🌙"),   # 7-е
+        ("mute",  720,   "мут 12 часов",         "🌙"),   # 8-е
+        ("mute",  1440,  "мут 24 часа",          "❄️"),   # 9-е
+        ("mute",  2880,  "мут 48 часов",         "❄️"),   # 10-е и далее
     ]
 
     # Сброс лестницы если нет нарушений N часов
@@ -1676,7 +1681,7 @@ class StatsMiddleware(BaseMiddleware):
             if not chat_cfg.get("antispam_enabled", True):
                 return False
 
-            threshold = chat_cfg.get("flood_msgs", 5)
+            threshold = chat_cfg.get("flood_msgs", 10)
             now = _time_module.time()
 
             # ─── Трекер сообщений в скользящем окне 60с ───
@@ -1719,16 +1724,23 @@ class StatsMiddleware(BaseMiddleware):
             # ─── Применяем наказание ───
             try:
                 if action == "warn":
-                    # 1-е нарушение — только предупреждение
+                    # Предупреждение — без мута
+                    # Узнаем что будет на следующей ступени
+                    next_idx = step_idx + 1
+                    next_hint = ""
+                    if next_idx < len(self.CASCADE_STEPS):
+                        _, _, next_lbl, _ = self.CASCADE_STEPS[next_idx]
+                        next_hint = f"🌿 следующее нарушение — {next_lbl}"
                     await bot.send_message(
                         cid,
                         f"{emoji} <a href='tg://user?id={uid}'>{name}</a>, помедленнее ‧ "
                         f"{count} сообщ. за минуту\n"
                         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                        f"🌿 это первое предупреждение — следующее будет мут",
+                        f"🌸 нарушение №{human_step}\n"
+                        f"{next_hint}",
                         parse_mode="HTML"
                     )
-                    add_mod_history(cid, uid, "🍃 Предупреждение (флуд)",
+                    add_mod_history(cid, uid, f"🍃 Предупреждение (флуд · ступень {human_step})",
                                     f"{count} сообщений за минуту", "AutoMod · Cascade")
 
                 else:  # mute
@@ -14391,7 +14403,7 @@ def kb_cs_mod(cid: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=f"🌿 Макс варнов: {s.get('max_warns',3)}", callback_data=f"cs_set:{cid}:max_warns")],
         [InlineKeyboardButton(text=f"⏳ Срок варна: {s.get('warn_expiry_days',30)} дн.", callback_data=f"cs_set:{cid}:warn_expiry_days")],
         [InlineKeyboardButton(text=f"🔇 Мут по умолч.: {s.get('mute_duration',60)} мин.", callback_data=f"cs_set:{cid}:mute_duration")],
-        [InlineKeyboardButton(text=f"💬 Флуд порог: {s.get('flood_msgs',5)} msg/мин", callback_data=f"cs_set:{cid}:flood_msgs")],
+        [InlineKeyboardButton(text=f"💬 Флуд порог: {s.get('flood_msgs',10)} msg/мин", callback_data=f"cs_set:{cid}:flood_msgs")],
         [InlineKeyboardButton(text="◀️ Назад", callback_data=f"cs_main:{cid}")],
     ])
 
