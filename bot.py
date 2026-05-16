@@ -2192,17 +2192,77 @@ async def on_new_member(message: Message):
                 await bot.ban_chat_member(cid, member.id)
                 await bot.unban_chat_member(cid, member.id)
                 sent = await message.answer(
-                    f"🤖 Бот <b>{member.full_name}</b> автоматически удалён.", parse_mode="HTML")
+                    f"🌿 бот <b>{member.full_name}</b> удалён из чата\n"
+                    f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                    f"🤍 здесь живут только люди",
+                    parse_mode="HTML")
                 await asyncio.sleep(5)
                 try: await sent.delete()
                 except: pass
             except: pass
             continue
 
-        # Приветствие из настроек
+        # ── Aesthetic приветствие ──
         if chat_cfg.get("welcome_enabled", True):
-            welcome_text = chat_cfg.get("welcome_text", "👋 Добро пожаловать, {name}!")
-            welcome_text = welcome_text.replace("{name}", f"<b>{member.full_name}</b>")
+            # Если задан кастомный текст — используем его
+            custom_text = chat_cfg.get("welcome_text", "")
+            if custom_text and custom_text != "👋 Добро пожаловать, {name}!":
+                welcome_text = custom_text.replace("{name}", f"<b>{member.full_name}</b>")
+            else:
+                # Рандомные aesthetic-варианты
+                templates = [
+                    # 1. Морское
+                    (
+                        f"🌊 на берег вышел кто-то новый\n"
+                        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                        f"🐚 это <b>{member.full_name}</b>\n"
+                        f"🪸 волны принесли тебя к нам — оставайся\n"
+                        f"🤍 /rules — карта берега"
+                    ),
+                    # 2. Книжное / литературное
+                    (
+                        f"📖 в наш текст вписалось новое имя\n"
+                        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                        f"🪶 <b>{member.full_name}</b> — добро пожаловать в нашу историю\n"
+                        f"🕯 первая страница — /rules\n"
+                        f"🤍 пиши свою главу"
+                    ),
+                    # 3. Тихое ночное
+                    (
+                        f"🌃 ночью в чат тихо зашёл человек\n"
+                        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                        f"🌙 это <b>{member.full_name}</b>\n"
+                        f"⭐ располагайся — здесь не спят и не торопят\n"
+                        f"🤍 правила — /rules"
+                    ),
+                    # 4. Музыкальное
+                    (
+                        f"🎐 кто-то взял новую ноту в нашей мелодии\n"
+                        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                        f"🎵 <b>{member.full_name}</b>\n"
+                        f"🪞 настройся ‧ найди свой ритм\n"
+                        f"🤍 партитура — /rules"
+                    ),
+                    # 5. Утреннее / лёгкое
+                    (
+                        f"☕ кто-то пришёл на утренний кофе\n"
+                        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                        f"🌅 это <b>{member.full_name}</b>\n"
+                        f"🥐 устраивайся — у нас тепло\n"
+                        f"🤍 правила в меню — /rules"
+                    ),
+                    # 6. Дождевое / меланхоличное
+                    (
+                        f"🌧 в дверь постучали\n"
+                        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                        f"☂ за порогом — <b>{member.full_name}</b>\n"
+                        f"🪟 заходи, переждём вместе\n"
+                        f"🤍 /rules — пока сушим зонты"
+                    ),
+                ]
+                import random as _r
+                welcome_text = _r.choice(templates)
+
             sent = await message.answer(welcome_text, parse_mode="HTML")
 
             # Удаляем предыдущее приветствие
@@ -2215,8 +2275,9 @@ async def on_new_member(message: Message):
                 asyncio.create_task(_del_welcome(sent, mins))
         else:
             sent = await message.answer(
-                f"👋 Добро пожаловать, <b>{member.full_name}</b>!\n"
-                f"📋 Ознакомься с правилами чата.",
+                f"🌸 <b>{member.full_name}</b> с нами\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"📜 загляни в /rules",
                 parse_mode="HTML"
             )
 
@@ -13595,6 +13656,716 @@ async def cmd_rate(message: Message):
         f"<b>{score}/10</b> — {comment}\n"
         f"",
         parse_mode="HTML")
+
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+#  📜 ФЕЙК-ДОКС — абсурдное досье (фановая команда)
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+_DOX_NAMES = [
+    "Виталий Анатольевич", "Аркадий Эдуардович", "Сёма Петрович",
+    "Геннадий Сигизмундович", "Эльвира Игнатьевна", "Боря Лукич",
+    "Мирослава Гертруда", "Капитон Спартакович", "Епифан Артурович",
+    "Звенислава Робертовна", "Архип Кондратьевич",
+]
+_DOX_PROFESSIONS = [
+    "промышленный лизатель окон", "сертифицированный собиратель крышек от пива",
+    "владелец нелегальной фермы по выращиванию хомяков",
+    "продавец воздуха в супермаркете", "инженер по подсчёту облаков",
+    "профессиональный нюхатель носков", "дежурный по запиранию калитки в 03:00",
+    "тестер диванов методом лежания", "официальный кормилец голубей",
+    "консультант по разговорам с холодильником",
+    "штатный пугатель ворон", "техник по ловле мух руками",
+    "лаборант в отделе изучения сглаза",
+    "ночной охранник кладбища домашних тапочек",
+]
+_DOX_ADDRESSES = [
+    "Зажопинск, ул. Бесконечная, д. 0/0, кв. под лестницей",
+    "г. Мухосранск, переулок Тупиковый, барак №13",
+    "пгт. Большие Жопищи, овраг им. Тёти Гали",
+    "д. Кукуево, изба слева от пьяного петуха",
+    "Урюпинск, ул. Развалин, угол с забором соседа Толика",
+    "снт «Радость алкоголика», участок №404",
+    "пос. Гавнокваково, дом с покосившейся антенной",
+    "г. Залупинск, проспект Лысого Гены, дом без крыши",
+]
+_DOX_GROUP_BLOOD = [
+    "0(I) Rh+ ‧ группа дегенерат-резус положительный",
+    "разбавленный квас",
+    "энергетик «Ягуар» 2017 года розлива",
+    "не определена ‧ медики разводят руками",
+    "AB(IV) Rh− ‧ с примесью пельменного бульона",
+    "B(III) Rh+ ‧ редкая разновидность «после трёх банок»",
+]
+_DOX_PHONES = [
+    "+7 (000) 666-13-37", "+7 (228) 322-22-28",
+    "+7 (911) 005-66-13", "+7 (777) 420-69-69",
+    "+7 (000) 111-22-33", "+7 (666) 777-88-99",
+]
+_DOX_PASSPORTS = [
+    "9999 №000000 ‧ выдан собакой 31.02.1900",
+    "1488 №228322 ‧ выдан барменом «Три бутылки»",
+    "0001 №000001 ‧ выдан тётей Любой в 2008",
+    "6969 №420420 ‧ выдан охранником из ТЦ «Радуга»",
+    "0000 №111111 ‧ нарисован на коленке",
+]
+_DOX_INN = [
+    "777666555444 ‧ не платил налоги с прошлого ледникового",
+    "228322228322 ‧ подозревается в неуплате за чупа-чупс в 2003",
+    "000000000000 ‧ налоговая сама ему должна",
+    "133713371337 ‧ долг — 3 копейки и совесть",
+]
+_DOX_HABITS = [
+    "спит с открытым ртом ‧ ловит мух подсознательно",
+    "разговаривает с микроволновкой",
+    "плачет под рекламу майонеза",
+    "верит что собаки могут читать мысли",
+    "по утрам поёт гимн СССР в душе ‧ забыл слова со второго куплета",
+    "хранит чеки с 2014 года в обувной коробке",
+    "ест борщ без хлеба ‧ еретик",
+    "пьёт чай в 4 утра под сериал «Богатые тоже плачут»",
+    "ходит за хлебом в тапочках и шубе одновременно",
+    "коллекционирует пустые контейнеры от глазированных сырков",
+]
+_DOX_FEARS = [
+    "соседки Раисы Павловны со второго этажа",
+    "звонков с незнакомых номеров",
+    "что родители найдут его историю поиска",
+    "звука открывающегося пакетика чипсов в тишине",
+    "момента когда закончится туалетная бумага",
+    "взгляда кота в 3 часа ночи",
+    "женщины с авоськой в автобусе",
+    "что мама зайдёт без стука",
+]
+_DOX_SECRETS = [
+    "плачет когда ставит лайки на грустные видео ‧ потом отрицает",
+    "тайно пишет стихи в заметках про бывшую",
+    "украл ложку в кафе в 2019 и до сих пор боится туда зайти",
+    "однажды съел чужой обед на работе и обвинил уборщицу",
+    "знает все слова из песен Стаса Михайлова но не признаётся",
+    "хранит дома 47 пакетов с пакетами ‧ говорит «пригодится»",
+    "однажды нассал в кусты у Pyaterochki и видел как его снимают",
+    "втайне болеет за «Спартак» хотя называет себя цска-болельщиком",
+]
+_DOX_DIAGNOSES = [
+    "ОРВИ души",
+    "хронический пиздабол в стадии обострения",
+    "клинический ленивец",
+    "тревожный нарциссист с уклоном в булки",
+    "синдром «всё пропало» 3-й степени",
+    "острая жопоболь по средам",
+    "дефицит подзатыльников в детстве",
+    "обыкновенный долбоёб ‧ не лечится",
+]
+
+@dp.message(Command("dox"))
+async def cmd_dox_slash(message: Message, command: CommandObject):
+    """📜 Фейк-докс по команде /dox"""
+    await _do_fake_dox(message)
+
+
+@dp.message(F.text.regexp(r"^\s*\.dox(\s|$)"))
+async def cmd_dox_dot(message: Message):
+    """📜 Фейк-докс по триггеру .dox"""
+    await _do_fake_dox(message)
+
+
+async def _do_fake_dox(message: Message):
+    """Генерация абсурдного фейк-досье на цель."""
+    if message.chat.type not in ("group", "supergroup"):
+        return
+
+    # Определяем цель: реплай или сам
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target = message.reply_to_message.from_user
+    else:
+        target = message.from_user
+
+    import random as _r
+    import hashlib as _h
+
+    # Сидируем рандом по uid+дате — у одного юзера в один день одинаковое досье
+    seed_str = f"{target.id}_{datetime.now().strftime('%Y%m%d')}"
+    seed = int(_h.md5(seed_str.encode()).hexdigest(), 16)
+    rng = _r.Random(seed)
+
+    # Достаём рандомные значения (стабильные на день)
+    fake_name = rng.choice(_DOX_NAMES)
+    profession = rng.choice(_DOX_PROFESSIONS)
+    address = rng.choice(_DOX_ADDRESSES)
+    blood = rng.choice(_DOX_GROUP_BLOOD)
+    phone = rng.choice(_DOX_PHONES)
+    passport = rng.choice(_DOX_PASSPORTS)
+    inn = rng.choice(_DOX_INN)
+    habit = rng.choice(_DOX_HABITS)
+    fear = rng.choice(_DOX_FEARS)
+    secret = rng.choice(_DOX_SECRETS)
+    diagnosis = rng.choice(_DOX_DIAGNOSES)
+
+    # Фейк-айди в "слитом" формате
+    fake_ip = f"{rng.randint(1,255)}.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(0,255)}"
+    fake_imei = ''.join(str(rng.randint(0,9)) for _ in range(15))
+    soul_price = rng.randint(50, 999)
+    iq = rng.choice([-5, 0, 13, 42, 69, 88, 95, 228])
+
+    # Считаем "толщину досье" — стёб
+    file_size = rng.randint(666, 9999)
+
+    text = (
+        f"📜 <b>ДОСЬЕ ‧ DOX REPORT</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🎯 цель — {target.mention_html()}\n"
+        f"🌫 toлщина дела — <b>{file_size} стр.</b>\n"
+        f"📂 классификация — <i>совершенно несекретно</i>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n\n"
+
+        f"🪪 <b>Личные данные</b>\n"
+        f"├ настоящее имя — <i>{fake_name}</i>\n"
+        f"├ профессия — <i>{profession}</i>\n"
+        f"├ группа крови — <i>{blood}</i>\n"
+        f"└ диагноз — <i>{diagnosis}</i>\n\n"
+
+        f"🏠 <b>Контакты и адрес</b>\n"
+        f"├ прописка — <i>{address}</i>\n"
+        f"├ телефон — <code>{phone}</code>\n"
+        f"├ IP — <code>{fake_ip}</code>\n"
+        f"└ IMEI — <code>{fake_imei}</code>\n\n"
+
+        f"📑 <b>Документы</b>\n"
+        f"├ паспорт — <i>{passport}</i>\n"
+        f"└ ИНН — <i>{inn}</i>\n\n"
+
+        f"🧠 <b>Психопрофиль</b>\n"
+        f"├ привычка — {habit}\n"
+        f"├ страх — боится {fear}\n"
+        f"└ IQ по тесту от тёти Любы — <b>{iq}</b>\n\n"
+
+        f"🔒 <b>Грязный секрет</b>\n"
+        f"└ <i>{secret}</i>\n\n"
+
+        f"💵 <b>Оценка</b>\n"
+        f"├ цена души — <b>{soul_price} ₽</b>\n"
+        f"└ статус — <i>можно сдать на металлолом</i>\n\n"
+
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"<i>🤍 данные сгенерированы случайно ‧ совпадения вымышленны</i>\n"
+        f"<i>🍂 досье обнуляется каждый день</i>"
+    )
+
+    await message.answer(text, parse_mode="HTML")
+
+
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+#  🔥 НАБОР ФАНОВЫХ КОМАНД 18+ ‧ маты, рандом, треш
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+#
+#  Команды: .gp .kill .ubili .pidor .gay .ebanat .dolboeb .pizdezh
+#           .huesos .naebka .zaeb .huinya .battle
+#
+#  Цель определяется как:
+#    1. Реплай → юзер реплая
+#    2. Фразы "кто меня заебал/бесит/раздражает сегодня" → рандом из активных
+#    3. Иначе → сам автор
+
+import re as _fun_re
+
+# Ключевые фразы которые включают «угадай кого мне выбрать»
+_FUN_PICK_RANDOM = [
+    r"кто\s+меня\s+(заебал|заёбывает|бесит|раздражает|выбесил|зае.|заколебал)",
+    r"кто\s+(заебал|бесит|раздражает)\s+меня",
+    r"угадай",
+    r"наугад",
+    r"кого\s+нибудь",
+    r"любого",
+    r"рандом",
+    r"кто-?то\s+из\s+чата",
+]
+_FUN_PICK_RE = _fun_re.compile("|".join(_FUN_PICK_RANDOM), _fun_re.IGNORECASE)
+
+
+def _fun_pick_random_user(cid: int, exclude_uid: int = 0):
+    """
+    Выбирает случайного юзера из недавно активных в чате.
+    Использует xp_data как индикатор активности.
+    Возвращает (uid, name) или (None, None).
+    """
+    import random as _r
+    active = []
+    try:
+        if cid in xp_data:
+            for uid in xp_data[cid].keys():
+                if uid != exclude_uid and uid > 0:
+                    active.append(uid)
+    except Exception:
+        pass
+    if not active:
+        return None, None
+    uid = _r.choice(active)
+    try:
+        # Попробуем найти имя из user_profiles или просто ID
+        conn = db_connect()
+        row = conn.execute("SELECT name FROM user_profiles WHERE uid=?", (uid,)).fetchone()
+        conn.close()
+        name = row["name"] if row and row["name"] else f"уебан #{uid % 10000}"
+    except Exception:
+        name = f"уебан #{uid % 10000}"
+    return uid, name
+
+
+async def _fun_resolve_target(message: Message):
+    """
+    Определяет цель команды.
+    Возвращает (uid, name, mention_html, is_random).
+    """
+    # 1. Реплай — приоритет
+    if message.reply_to_message and message.reply_to_message.from_user:
+        u = message.reply_to_message.from_user
+        return u.id, u.full_name, u.mention_html(), False
+
+    # 2. Текст содержит «кто меня заебал/бесит» и т.п.
+    if message.text and _FUN_PICK_RE.search(message.text):
+        uid, name = _fun_pick_random_user(message.chat.id, exclude_uid=message.from_user.id)
+        if uid:
+            mention = f"<a href='tg://user?id={uid}'>{name}</a>"
+            return uid, name, mention, True
+
+    # 3. Иначе — сам автор
+    u = message.from_user
+    return u.id, u.full_name, u.mention_html(), False
+
+
+def _fun_seed(uid: int, salt: str = ""):
+    """Дает стабильный рандом на день — у одного юзера одинаковый результат в течение дня."""
+    import hashlib, random
+    seed = int(hashlib.md5(f"{uid}_{datetime.now().strftime('%Y%m%d')}_{salt}".encode()).hexdigest(), 16)
+    return random.Random(seed)
+
+
+# ─── ПУЛЫ ФРАЗ ───
+
+_GP_VERDICTS = [
+    "вынюхать дорожку из мела перед всей школой",
+    "съесть свои носки и сказать что вкусно",
+    "написать бывшей в 4 утра «как ты»",
+    "купить чай по акции в Пятёрочке а там просрочка",
+    "лайкнуть фотку 2014 года у крашихи",
+    "случайно отправить голосовое маме вместо кореша",
+    "застрять в чате с риелтором",
+    "подскользнуться на собственной слюне",
+    "проиграть в шахматы голубю в парке",
+    "разбить телефон ровно за день до зарплаты",
+    "облить кипятком яйца и заорать на весь подъезд",
+    "забыть пароль от Wi-Fi в собственной квартире",
+    "оказаться в одном лифте с тёщей и пукнуть",
+    "проспать на свидание которого ждал 3 года",
+    "случайно отправить нюдсы маме",
+]
+
+_KILL_METHODS = [
+    "выкинул в окно с балкона тёти Любы",
+    "удушил подвальной крысой",
+    "затолкал в стиральную машину на режиме 90°",
+    "размазал по асфальту инсульт-методом",
+    "забил насмерть пакетом с пакетами",
+    "утопил в ведре с борщом",
+    "перерезал зубочисткой",
+    "запихал в микроволновку и нажал «попкорн»",
+    "разрезал на пельмени пополам",
+    "забил ногами в кедах за 1500 с рынка",
+    "отравил просрочкой из Магнита",
+    "выпустил из окна сосиской",
+    "распилил болгаркой на сувениры",
+    "впихал в банку с огурцами на зиму",
+]
+
+_KILL_REASONS = [
+    "за то что писал «ало» в 6 утра",
+    "за то что жрал чипсы в подъезде",
+    "за неудачный мем",
+    "за плохой выбор стикеров",
+    "потому что задолбал",
+    "просто захотелось",
+    "за то что не выключил Caps Lock",
+    "за то что слушал Шамана на полную",
+    "за то что слил планы в чате",
+    "за то что не вернул долг 50 рублей",
+    "за то что назвал борщ супом",
+    "за неуместный кринж",
+]
+
+_HUESOS_TITLES = [
+    "Хуесос дня",
+    "Главный хуесос недели",
+    "Чемпион по хуесосству",
+    "Магистр хуесосологии",
+    "Народный хуесос",
+    "Хуесос месяца",
+    "Заслуженный хуесос республики",
+]
+
+_HUESOS_REASONS = [
+    "за то что не вернул кружку из офиса",
+    "за то что слушает Инстасамку без иронии",
+    "за то что ест пельмени без сметаны",
+    "за то что лайкает свои же сторис",
+    "за то что пишет «спс» вместо «спасибо»",
+    "за то что троит в каждой игре",
+    "за то что носит белые носки с шортами",
+    "за то что пьёт кофе 3в1 в 30 лет",
+    "за то что коллекционирует кепки",
+    "за то что говорит «давай давай» в трубку",
+]
+
+_NAEBKA_NEWS = [
+    "был замечен на рынке в халате с сосиской в руке",
+    "продал свой телефон за дошик и пожалел",
+    "залез на крышу гаража и провалился сквозь шифер",
+    "пытался влюбить в себя кассиршу в Дикси и получил банкой шпрот",
+    "сегодня плакал в лифте под Меладзе",
+    "уебал ногой по дивану и сломал палец",
+    "потерял ключи в третий раз за неделю и матерился во дворе",
+    "пытался открыть пиво ложкой ‧ сломал ложку",
+    "проиграл 500 рублей в наперстки у метро",
+    "залип на 4 часа в шортсах про котов и опоздал на работу",
+    "уебался лбом о косяк и сел плакать",
+    "купил весы и стало хуже",
+    "написал бывшей в 3 ночи длинное письмо ‧ утром удалил аккаунт",
+    "пошёл за хлебом ‧ вернулся через 2 дня и без хлеба",
+]
+
+_HUINYA_TIPS = [
+    "просто забей. на всё. на работу, маму, бывшую",
+    "купи пельменей и пожри ‧ остальное само рассосётся",
+    "не отвечай ‧ пусть думают что ты помер",
+    "сделай татуху на жопе ‧ потом разберёшься",
+    "ляг спать в обуви ‧ это бунт",
+    "позвони бабушке и поори",
+    "выйди из чата с одноклассниками ‧ освободись",
+    "съешь майонез ложкой ‧ почувствуй мужика",
+    "переезжай в деревню ‧ заводи козу",
+    "ничего не делай ‧ ты и так заебался",
+    "удали все приложения и стань шаманом",
+    "наори на холодильник ‧ полегчает",
+    "выпей квас вместо воды ‧ почувствуй родину",
+    "сожги все носки и купи новые ‧ катарсис",
+]
+
+
+# ─── .gp — приговор ───
+
+@dp.message(F.text.regexp(r"^\s*[\.\/]gp(\s|$)"))
+async def cmd_fun_gp(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    uid, name, mention, is_random = await _fun_resolve_target(message)
+    rng = _fun_seed(uid, "gp")
+    verdict = rng.choice(_GP_VERDICTS)
+
+    prefix = "🎯 рандом из чата ‧ " if is_random else ""
+    await message.answer(
+        f"⚖️ <b>ПРИГОВОР ВЫНЕСЕН</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🔨 жертва — {prefix}{mention}\n"
+        f"📜 наказание — <b>{verdict}</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"<i>🤍 решение окончательное и обжалованию не подлежит</i>",
+        parse_mode="HTML"
+    )
+
+
+# ─── .kill / .ubili — фейк-убийство ───
+
+@dp.message(F.text.regexp(r"^\s*[\.\/](kill|ubili|убил)(\s|$)"))
+async def cmd_fun_kill(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    uid, name, mention, is_random = await _fun_resolve_target(message)
+    if uid == message.from_user.id and not is_random:
+        # Сам себя — суицидальная шутка нежелательна, перенаправляем
+        await message.answer("🌿 реплайни на жертву или скажи «убей кого-нибудь»", parse_mode="HTML")
+        return
+
+    import random as _r
+    method = _r.choice(_KILL_METHODS)
+    reason = _r.choice(_KILL_REASONS)
+    killer = message.from_user.mention_html()
+    prefix = "🎲 жертва выбрана наугад ‧ " if is_random else ""
+
+    await message.answer(
+        f"💀 <b>УБИЙСТВО ЗАФИКСИРОВАНО</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🩸 жертва — {prefix}{mention}\n"
+        f"🔪 убийца — {killer}\n"
+        f"📜 как — <i>{method}</i>\n"
+        f"❓ за что — <i>{reason}</i>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"<i>🍂 тело уже остыло</i>",
+        parse_mode="HTML"
+    )
+
+
+# ─── .pidor / .gay — уровень пидарастии ───
+
+@dp.message(F.text.regexp(r"^\s*[\.\/](pidor|gay|гей|пидор)(\s|$)"))
+async def cmd_fun_pidor(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    uid, name, mention, is_random = await _fun_resolve_target(message)
+    rng = _fun_seed(uid, "pidor")
+    pct = rng.randint(0, 100)
+
+    if pct < 20:
+        verdict = "✨ натурал на максималках ‧ хоть медаль вешай"
+    elif pct < 40:
+        verdict = "🍃 в норме ‧ можно расслабиться"
+    elif pct < 60:
+        verdict = "🌫 серая зона ‧ есть над чем подумать"
+    elif pct < 80:
+        verdict = "🌷 ну такое, бывает хуже"
+    else:
+        verdict = "🦄 короля гей-парада возьмут с радостью"
+
+    prefix = "🎯 рандом ‧ " if is_random else ""
+    bar = "▰" * (pct // 10) + "▱" * (10 - pct // 10)
+
+    await message.answer(
+        f"🌈 <b>УРОВЕНЬ ПИДАРАСТИИ</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"👤 субъект — {prefix}{mention}\n"
+        f"📊 {bar} <b>{pct}%</b>\n"
+        f"📜 вердикт — {verdict}",
+        parse_mode="HTML"
+    )
+
+
+# ─── .ebanat / .dolboeb — диагноз ───
+
+@dp.message(F.text.regexp(r"^\s*[\.\/](ebanat|dolboeb|долбоеб|ебанат)(\s|$)"))
+async def cmd_fun_ebanat(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    uid, name, mention, is_random = await _fun_resolve_target(message)
+    rng = _fun_seed(uid, "ebanat")
+    pct = rng.randint(0, 100)
+
+    if pct < 25:
+        verdict = "🧠 умный, гладит кота правильно"
+    elif pct < 50:
+        verdict = "🌿 средний дегенерат, ничего страшного"
+    elif pct < 75:
+        verdict = "🌫 уже подозрительно ‧ держим под наблюдением"
+    elif pct < 90:
+        verdict = "🥀 клинический случай ‧ психбольница ждёт"
+    else:
+        verdict = "💀 запущенная стадия ‧ лечение бессмысленно"
+
+    prefix = "🎲 рандом ‧ " if is_random else ""
+    bar = "▰" * (pct // 10) + "▱" * (10 - pct // 10)
+
+    await message.answer(
+        f"🩺 <b>ДИАГНОЗ: ДОЛБОЁБ</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"👤 пациент — {prefix}{mention}\n"
+        f"📊 {bar} <b>{pct}%</b>\n"
+        f"📜 заключение — {verdict}",
+        parse_mode="HTML"
+    )
+
+
+# ─── .pizdezh — измеритель пиздежа ───
+
+@dp.message(F.text.regexp(r"^\s*[\.\/](pizdezh|пиздёж|пиздеж)(\s|$)"))
+async def cmd_fun_pizdezh(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    uid, name, mention, is_random = await _fun_resolve_target(message)
+    rng = _fun_seed(uid, "pizdezh")
+    pct = rng.randint(0, 100)
+
+    if pct < 30:
+        verdict = "🤍 в основном правда ‧ редкий вид"
+    elif pct < 60:
+        verdict = "🌿 пиздит как все ‧ умеренно"
+    elif pct < 85:
+        verdict = "🥀 пиздит даже когда спит"
+    else:
+        verdict = "💀 живой генератор пиздежа ‧ профессионал"
+
+    prefix = "🎯 рандом ‧ " if is_random else ""
+    bar = "▰" * (pct // 10) + "▱" * (10 - pct // 10)
+
+    await message.answer(
+        f"📢 <b>ИЗМЕРИТЕЛЬ ПИЗДЕЖА</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"👤 объект — {prefix}{mention}\n"
+        f"📊 {bar} <b>{pct}%</b>\n"
+        f"📜 вердикт — {verdict}",
+        parse_mode="HTML"
+    )
+
+
+# ─── .huesos — хуесос дня ───
+
+@dp.message(F.text.regexp(r"^\s*[\.\/](huesos|хуесос)(\s|$)"))
+async def cmd_fun_huesos(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    # Эта команда ВСЕГДА рандомная, имя выбирается из чата
+    cid = message.chat.id
+    target_uid, _ = _fun_pick_random_user(cid, exclude_uid=0)
+    if not target_uid:
+        await message.answer("🌿 в чате пока некого назначить ‧ ждём активности", parse_mode="HTML")
+        return
+
+    import random as _r
+    title = _r.choice(_HUESOS_TITLES)
+    reason = _r.choice(_HUESOS_REASONS)
+    mention = f"<a href='tg://user?id={target_uid}'>избранник</a>"
+
+    await message.answer(
+        f"👑 <b>{title.upper()}</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🎯 жребий пал на — {mention}\n"
+        f"📜 за что — <i>{reason}</i>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"<i>🍂 поздравляем с заслуженным титулом</i>",
+        parse_mode="HTML"
+    )
+
+
+# ─── .naebka — фейк-новость ───
+
+@dp.message(F.text.regexp(r"^\s*[\.\/](naebka|наебка|наёбка)(\s|$)"))
+async def cmd_fun_naebka(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    uid, name, mention, is_random = await _fun_resolve_target(message)
+
+    import random as _r
+    news = _r.choice(_NAEBKA_NEWS)
+    prefix = "🎲 рандом из чата ‧ " if is_random else ""
+
+    await message.answer(
+        f"📰 <b>СВЕЖАЯ НОВОСТЬ</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🌫 источник — анонимный пиздабол\n"
+        f"📍 герой — {prefix}{mention}\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"💬 <i>{news}</i>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"<i>🤍 за достоверность не отвечаем</i>",
+        parse_mode="HTML"
+    )
+
+
+# ─── .zaeb — индекс кринжа ───
+
+@dp.message(F.text.regexp(r"^\s*[\.\/](zaeb|заёб|заеб|cringe|кринж)(\s|$)"))
+async def cmd_fun_zaeb(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    uid, name, mention, is_random = await _fun_resolve_target(message)
+    rng = _fun_seed(uid, "zaeb")
+    pct = rng.randint(0, 100)
+    tox = rng.randint(0, 100)
+
+    if pct < 25 and tox < 25:
+        verdict = "🤍 норм пацан/тян ‧ можно дружить"
+    elif pct < 50:
+        verdict = "🌿 терпимо ‧ но иногда хочется заклеить рот"
+    elif pct < 75:
+        verdict = "🥀 заёбывает каждый день"
+    else:
+        verdict = "💀 от него выходят люди из чата"
+
+    prefix = "🎯 рандом ‧ " if is_random else ""
+    bar_z = "▰" * (pct // 10) + "▱" * (10 - pct // 10)
+    bar_t = "▰" * (tox // 10) + "▱" * (10 - tox // 10)
+
+    await message.answer(
+        f"📈 <b>ИНДЕКС КРИНЖА И ТОКСА</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"👤 объект — {prefix}{mention}\n"
+        f"🥀 кринж — {bar_z} <b>{pct}%</b>\n"
+        f"☠️ токс — {bar_t} <b>{tox}%</b>\n"
+        f"📜 итог — {verdict}",
+        parse_mode="HTML"
+    )
+
+
+# ─── .huinya — совет дня ───
+
+@dp.message(F.text.regexp(r"^\s*[\.\/](huinya|хуйня|совет)(\s|$)"))
+async def cmd_fun_huinya(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    uid = message.from_user.id
+    rng = _fun_seed(uid, "huinya")
+    tip = rng.choice(_HUINYA_TIPS)
+
+    await message.answer(
+        f"🌫 <b>ХУЁВЫЙ СОВЕТ ДНЯ</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"👤 для — {message.from_user.mention_html()}\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"💬 <i>{tip}</i>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"<i>🍂 обновляется раз в сутки</i>",
+        parse_mode="HTML"
+    )
+
+
+# ─── .battle — фейк-баттл ───
+
+@dp.message(F.text.regexp(r"^\s*[\.\/](battle|баттл|бой)(\s|$)"))
+async def cmd_fun_battle(message: Message):
+    if message.chat.type not in ("group", "supergroup"): return
+    cid = message.chat.id
+
+    fighter1 = message.from_user
+    fighter1_mention = fighter1.mention_html()
+
+    # Цель: реплай или рандом из чата
+    if message.reply_to_message and message.reply_to_message.from_user:
+        fighter2 = message.reply_to_message.from_user
+        fighter2_mention = fighter2.mention_html()
+        fighter2_id = fighter2.id
+    else:
+        uid2, name2 = _fun_pick_random_user(cid, exclude_uid=fighter1.id)
+        if not uid2:
+            await message.answer("🌿 в чате некого вызвать на бой", parse_mode="HTML")
+            return
+        fighter2_mention = f"<a href='tg://user?id={uid2}'>избранник</a>"
+        fighter2_id = uid2
+
+    import random as _r
+    # Раунды
+    rounds = []
+    actions = [
+        "уебал с ноги",
+        "плюнул в ебало",
+        "тыкнул вилкой",
+        "обозвал «лошком»",
+        "уронил банкой шпрот",
+        "ткнул пальцем в глаз",
+        "ударил пакетом с кефиром",
+        "съебал из боя на 5 минут",
+        "достал телефон и снял на видео",
+        "выпил энергетик и стал быстрее",
+        "слил инфу мамке другого",
+        "поскользнулся на бананке",
+    ]
+    for i in range(3):
+        attacker, defender = (fighter1_mention, fighter2_mention) if i % 2 == 0 else (fighter2_mention, fighter1_mention)
+        act = _r.choice(actions)
+        rounds.append(f"⚔️ раунд {i+1} ‧ {attacker} {act} {defender}")
+
+    # Победитель — рандом
+    winner_mention = _r.choice([fighter1_mention, fighter2_mention])
+    loser_mention = fighter2_mention if winner_mention == fighter1_mention else fighter1_mention
+
+    await message.answer(
+        f"🥊 <b>БАТТЛ НАЧАЛСЯ</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🔴 {fighter1_mention}\n"
+        f"🔵 {fighter2_mention}\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        + "\n".join(rounds) +
+        f"\n<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"👑 победил — {winner_mention}\n"
+        f"🍂 проиграл — {loser_mention}",
+        parse_mode="HTML"
+    )
+
 
 @dp.message(Command("ship"))
 async def cmd_ship(message: Message):
