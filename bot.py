@@ -1661,13 +1661,80 @@ class StatsMiddleware(BaseMiddleware):
             chat_stats[event.chat.id][event.from_user.id] += 1
             known_chats[event.chat.id] = event.chat.title or str(event.chat.id)
             uid, cid = event.from_user.id, event.chat.id
+
+            # ═══ 🛡 ЗАЩИТНЫЕ ПРОВЕРКИ ═══
+            # whitelist — пропускаем без проверок
+            is_wl = is_in_whitelist(cid, uid)
+            is_adm = await is_admin_by_id(cid, uid) if not is_wl else True
+
+            # 🌑 ТЕНЬ — невидимый бан
+            if not is_adm and not is_wl and is_shadowbanned(cid, uid):
+                try: await event.delete()
+                except: pass
+                return  # не обрабатываем дальше
+
+            # 🌫 ТИШИНА — общий мут чата
+            silence_until = _silence_active.get(cid, 0)
+            if silence_until > 0:
+                if silence_until > time.time():
+                    if not is_adm and not is_wl:
+                        try: await event.delete()
+                        except: pass
+                        return
+                else:
+                    _silence_active.pop(cid, None)
+
+            # 🌫 ФИЛЬТР — стоп-слова
+            if not is_adm and not is_wl and event.text and _chat_filters.get(cid):
+                text_lower = event.text.lower()
+                for word in _chat_filters[cid]:
+                    if word in text_lower:
+                        try: await event.delete()
+                        except: pass
+                        try:
+                            sent = await bot.send_message(cid,
+                                f"🌫 <b>стоп-слово</b>\n"
+                                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                                f"🌿 {event.from_user.mention_html()} ‧ это слово запрещено в чате",
+                                parse_mode="HTML")
+                            async def _del_filter(m):
+                                await asyncio.sleep(8)
+                                try: await m.delete()
+                                except: pass
+                            asyncio.create_task(_del_filter(sent))
+                        except: pass
+                        return
+
+            # 🔐 КАПЧА — мягкое напоминание непрошедшим
+            if not is_adm and not is_wl:
+                if (cid, uid) in _pending_captcha and (cid, uid) not in _captcha_passed:
+                    # Раз в 5 минут напоминаем
+                    key = f"capr_{cid}_{uid}"
+                    last_reminder = xp_cooldowns.get(key, 0)
+                    if time.time() - last_reminder > 300:
+                        xp_cooldowns[key] = time.time()
+                        pending = _pending_captcha[(cid, uid)]
+                        try:
+                            sent = await event.reply(
+                                f"🔐 {event.from_user.mention_html()}, не забудь пройти капчу\n"
+                                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                                f"🌷 нажми эмодзи <b>{pending['correct']}</b> в сообщении выше",
+                                parse_mode="HTML")
+                            async def _del_rem(m):
+                                await asyncio.sleep(30)
+                                try: await m.delete()
+                                except: pass
+                            asyncio.create_task(_del_rem(sent))
+                        except: pass
+
+            # ═══════════════════════════════
             # Сохраняем чат в БД
             try:
                 await db.upsert_chat(cid, event.chat.title or str(cid))
             except: pass
             # Проверка флуда по настройкам чата
             try:
-                if not await is_admin_by_id(cid, uid):
+                if not is_adm and not is_wl:
                     flooded = await self._check_flood(uid, cid, event.from_user.full_name)
                     if flooded:
                         return  # не обрабатываем сообщение если флуд
@@ -2140,6 +2207,272 @@ async def cb_captcha(call: CallbackQuery):
         try: await note.delete()
         except: pass
 
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+#  🛡 СИСТЕМА ЗАЩИТЫ ‧ КАПЧА + ЗАЩИТНЫЕ КОМАНДЫ АУТИСТА
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+
+# ─── КАПЧА ───
+_CAPTCHA_EMOJI_POOL = ["🌸", "🍃", "🌿", "🦋", "🌷", "🌱", "🤍", "🌙", "✨", "🌊", "🍂", "🪻"]
+_pending_captcha: Dict[tuple, dict] = {}
+_captcha_passed: Set[tuple] = set()
+CAPTCHA_TIMEOUT = 1000
+
+
+def _captcha_init_db():
+    conn = sqlite3.connect("captcha_state.db")
+    conn.execute("CREATE TABLE IF NOT EXISTS passed (cid INTEGER NOT NULL, uid INTEGER NOT NULL, passed_at REAL NOT NULL, PRIMARY KEY (cid, uid))")
+    conn.execute("CREATE TABLE IF NOT EXISTS shadowbans (cid INTEGER NOT NULL, uid INTEGER NOT NULL, expires_at REAL NOT NULL, PRIMARY KEY (cid, uid))")
+    conn.execute("CREATE TABLE IF NOT EXISTS chat_filter_words (cid INTEGER NOT NULL, word TEXT NOT NULL, added_at REAL NOT NULL, added_by INTEGER, PRIMARY KEY (cid, word))")
+    conn.execute("CREATE TABLE IF NOT EXISTS chat_whitelist (cid INTEGER NOT NULL, uid INTEGER NOT NULL, added_at REAL NOT NULL, added_by INTEGER, PRIMARY KEY (cid, uid))")
+    conn.commit()
+    conn.close()
+
+
+def _captcha_load_passed():
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        for cid, uid in conn.execute("SELECT cid, uid FROM passed"):
+            _captcha_passed.add((cid, uid))
+        conn.close()
+    except Exception as e:
+        log.warning(f"captcha load: {e}")
+
+
+def _captcha_mark_passed(cid: int, uid: int):
+    _captcha_passed.add((cid, uid))
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        conn.execute("INSERT OR REPLACE INTO passed (cid, uid, passed_at) VALUES (?, ?, ?)", (cid, uid, time.time()))
+        conn.commit()
+        conn.close()
+    except: pass
+
+
+async def _captcha_send(cid: int, member, message_to_reply=None):
+    import random as _r
+    correct = _r.choice(_CAPTCHA_EMOJI_POOL)
+    options = _r.sample([e for e in _CAPTCHA_EMOJI_POOL if e != correct], 3) + [correct]
+    _r.shuffle(options)
+
+    _pending_captcha[(cid, member.id)] = {
+        "correct": correct, "options": options,
+        "expires_at": time.time() + CAPTCHA_TIMEOUT,
+        "name": member.full_name,
+    }
+
+    text = (
+        f"🔐 <b>Капча для {member.mention_html()}</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🌷 нажми кнопку с эмодзи <b>{correct}</b>\n"
+        f"🕊 у тебя <b>{CAPTCHA_TIMEOUT // 60} минут</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"<i>🤍 если бот ты — просто не нажимай</i>"
+    )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=options[i], callback_data=f"cap:try:{cid}:{member.id}:{options[i]}") for i in range(4)],
+        [
+            InlineKeyboardButton(text="🌿 Зайти через админа", callback_data=f"cap:askadmin:{cid}:{member.id}"),
+            InlineKeyboardButton(text="🍂 Удалить юзера",       callback_data=f"cap:kick:{cid}:{member.id}"),
+        ],
+    ])
+
+    try:
+        if message_to_reply:
+            sent = await message_to_reply.answer(text, parse_mode="HTML", reply_markup=kb)
+        else:
+            sent = await bot.send_message(cid, text, parse_mode="HTML", reply_markup=kb)
+        _pending_captcha[(cid, member.id)]["msg_id"] = sent.message_id
+    except Exception as e:
+        log.warning(f"captcha send: {e}")
+        return
+
+    asyncio.create_task(_captcha_timeout_task(cid, member.id, member.full_name))
+
+
+async def _captcha_timeout_task(cid: int, uid: int, name: str):
+    await asyncio.sleep(CAPTCHA_TIMEOUT + 5)
+    pending = _pending_captcha.get((cid, uid))
+    if not pending: return
+    if (cid, uid) in _captcha_passed:
+        _pending_captcha.pop((cid, uid), None)
+        return
+    _pending_captcha.pop((cid, uid), None)
+    try:
+        await bot.ban_chat_member(cid, uid)
+        await bot.unban_chat_member(cid, uid)
+    except: pass
+    try:
+        await bot.send_message(cid,
+            f"🌫 <b>Капча не пройдена</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🍂 <b>{name}</b> удалён ‧ не прошёл капчу за {CAPTCHA_TIMEOUT // 60} минут",
+            parse_mode="HTML")
+    except: pass
+    msg_id = pending.get("msg_id")
+    if msg_id:
+        try: await bot.delete_message(cid, msg_id)
+        except: pass
+
+
+@dp.callback_query(F.data.startswith("cap:try:"))
+async def cb_captcha_try(call: CallbackQuery):
+    parts = call.data.split(":")
+    cid, target_uid, choice = int(parts[2]), int(parts[3]), parts[4]
+    if call.from_user.id != target_uid:
+        await call.answer("🌫 капча не для тебя", show_alert=True); return
+    pending = _pending_captcha.get((cid, target_uid))
+    if not pending:
+        await call.answer("✨ уже не актуально", show_alert=True); return
+    if choice == pending["correct"]:
+        _pending_captcha.pop((cid, target_uid), None)
+        _captcha_mark_passed(cid, target_uid)
+        try:
+            await call.message.edit_text(
+                f"✨ <b>{pending['name']}</b> прошёл капчу\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"🤍 добро пожаловать", parse_mode="HTML")
+        except: pass
+        await call.answer("🌷 проверка пройдена")
+    else:
+        await call.answer(f"🌫 не та кнопка ‧ нажми {pending['correct']}", show_alert=True)
+
+
+@dp.callback_query(F.data.startswith("cap:askadmin:"))
+async def cb_captcha_askadmin(call: CallbackQuery):
+    parts = call.data.split(":")
+    cid, target_uid = int(parts[2]), int(parts[3])
+    if call.from_user.id == target_uid:
+        pending = _pending_captcha.get((cid, target_uid))
+        if not pending:
+            await call.answer("✨ уже не актуально", show_alert=True); return
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✨ одобрить", callback_data=f"cap:approve:{cid}:{target_uid}"),
+            InlineKeyboardButton(text="🍂 отклонить", callback_data=f"cap:deny:{cid}:{target_uid}"),
+        ]])
+        try:
+            await call.message.edit_text(
+                f"🌿 <b>{pending['name']}</b> просит зайти через админа\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"🤍 админы — решите пускать или нет",
+                parse_mode="HTML", reply_markup=kb)
+            await call.answer("🌿 заявка отправлена админам")
+        except: pass
+    else:
+        await call.answer("🌫 только новый юзер может попросить", show_alert=True)
+
+
+@dp.callback_query(F.data.startswith("cap:approve:"))
+async def cb_captcha_approve(call: CallbackQuery):
+    parts = call.data.split(":")
+    cid, target_uid = int(parts[2]), int(parts[3])
+    is_admin = await is_admin_by_id(cid, call.from_user.id) or call.from_user.id in OWNERS
+    if not is_admin:
+        await call.answer("🌫 только админ может одобрить", show_alert=True); return
+    pending = _pending_captcha.get((cid, target_uid))
+    if not pending:
+        await call.answer("✨ уже не актуально", show_alert=True); return
+    _pending_captcha.pop((cid, target_uid), None)
+    _captcha_mark_passed(cid, target_uid)
+    try:
+        await call.message.edit_text(
+            f"✨ <b>{pending['name']}</b> допущен в чат\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🤍 решение принял — {call.from_user.mention_html()}",
+            parse_mode="HTML")
+    except: pass
+    await call.answer("✨ юзер допущен")
+
+
+@dp.callback_query(F.data.startswith("cap:deny:"))
+async def cb_captcha_deny(call: CallbackQuery):
+    parts = call.data.split(":")
+    cid, target_uid = int(parts[2]), int(parts[3])
+    is_admin = await is_admin_by_id(cid, call.from_user.id) or call.from_user.id in OWNERS
+    if not is_admin:
+        await call.answer("🌫 только админ может отклонить", show_alert=True); return
+    pending = _pending_captcha.get((cid, target_uid))
+    if not pending:
+        await call.answer("✨ уже не актуально", show_alert=True); return
+    _pending_captcha.pop((cid, target_uid), None)
+    try:
+        await bot.ban_chat_member(cid, target_uid)
+        await bot.unban_chat_member(cid, target_uid)
+    except: pass
+    try:
+        await call.message.edit_text(
+            f"🍂 <b>{pending['name']}</b> отклонён администрацией\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌫 решение принял — {call.from_user.mention_html()}",
+            parse_mode="HTML")
+    except: pass
+    await call.answer("🍂 юзер удалён")
+
+
+@dp.callback_query(F.data.startswith("cap:kick:"))
+async def cb_captcha_kick(call: CallbackQuery):
+    parts = call.data.split(":")
+    cid, target_uid = int(parts[2]), int(parts[3])
+    is_admin = await is_admin_by_id(cid, call.from_user.id) or call.from_user.id in OWNERS
+    if not is_admin:
+        await call.answer("🌫 только админ может удалить юзера", show_alert=True); return
+    pending = _pending_captcha.get((cid, target_uid))
+    name = pending["name"] if pending else f"ID {target_uid}"
+    _pending_captcha.pop((cid, target_uid), None)
+    try:
+        await bot.ban_chat_member(cid, target_uid)
+        await bot.unban_chat_member(cid, target_uid)
+    except: pass
+    try:
+        await call.message.edit_text(
+            f"🍂 <b>{name}</b> удалён из чата\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌫 удалил — {call.from_user.mention_html()}",
+            parse_mode="HTML")
+    except: pass
+    await call.answer("🍂 юзер удалён")
+
+
+# ─── СОСТОЯНИЯ ЗАЩИТЫ ───
+_silence_active: Dict[int, float] = {}
+_shadowbans: Dict[int, Dict[int, float]] = defaultdict(dict)
+_chat_filters: Dict[int, Set[str]] = defaultdict(set)
+_chat_whitelist: Dict[int, Set[int]] = defaultdict(set)
+
+
+def _defense_load_state():
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        for cid, uid, expires in conn.execute("SELECT cid, uid, expires_at FROM shadowbans"):
+            if expires > time.time(): _shadowbans[cid][uid] = expires
+        for cid, word in conn.execute("SELECT cid, word FROM chat_filter_words"):
+            _chat_filters[cid].add(word.lower())
+        for cid, uid in conn.execute("SELECT cid, uid FROM chat_whitelist"):
+            _chat_whitelist[cid].add(uid)
+        conn.close()
+    except Exception as e:
+        log.warning(f"defense load: {e}")
+
+
+def is_in_whitelist(cid: int, uid: int) -> bool:
+    return uid in _chat_whitelist.get(cid, set())
+
+
+def is_shadowbanned(cid: int, uid: int) -> bool:
+    if uid not in _shadowbans.get(cid, {}): return False
+    if _shadowbans[cid][uid] < time.time():
+        _shadowbans[cid].pop(uid, None); return False
+    return True
+
+
+try:
+    _captcha_init_db()
+    _captcha_load_passed()
+    _defense_load_state()
+except Exception as _e:
+    log.warning(f"defense init: {_e}")
+
+
 @dp.message(F.new_chat_members)
 async def on_new_member(message: Message):
     cid = message.chat.id
@@ -2239,6 +2572,10 @@ async def on_new_member(message: Message):
                 f"📜 загляни в /rules",
                 parse_mode="HTML"
             )
+
+        # 🔐 Капча для нового юзера (если ещё не проходил)
+        if (cid, member.id) not in _captcha_passed:
+            asyncio.create_task(_captcha_send(cid, member, message))
 
         # Автомут новичков
         if chat_cfg.get("auto_mute_newcomers", False):
@@ -3796,6 +4133,17 @@ _AUTIST_ACTIONS = {
     "unwarn":["снять варн", "снять предупреждение", "анварн", "unwarn"],
     "del":   ["удали", "удалить", "удаление", "снести", "удли", "del", "delete"],
     "freeze":["фриз", "заморозь", "заморозить", "freeze"],
+
+    # ── ЗАЩИТА ──
+    "silence":   ["тишина", "молчание", "silence"],
+    "shadow":    ["тень", "невидимка", "shadow"],
+    "amnesty":   ["амнистия", "амнистируй", "прощение", "amnesty"],
+    "filter":    ["фильтр", "стопслово", "filter"],
+    "unfilter":  ["анфильтр", "снять фильтр", "unfilter"],
+    "verify":    ["проверка", "капча", "проверь", "verify"],
+    "wave":      ["волна", "чистка", "wave", "clean"],
+    "whitelist": ["белый", "вайтлист", "доверенный", "whitelist"],
+    "unwhitelist":["небелый", "анвайтлист", "снять белый", "unwhitelist"],
 }
 
 def _autist_match_action(text: str):
@@ -3856,25 +4204,31 @@ async def cmd_autist_router(message: Message):
             pass
         return
 
+    # Действия которые НЕ требуют реплай на конкретного юзера
+    _NO_REPLY_ACTIONS = {"silence", "amnesty", "filter", "unfilter", "wave"}
+    # Действия которые могут работать без реплая (показывают список / помощь)
+    _MAYBE_REPLY_ACTIONS = {"whitelist"}
+
     # Все остальные действия требуют реплая на пользователя
-    if not message.reply_to_message:
+    if not message.reply_to_message and action not in _NO_REPLY_ACTIONS and action not in _MAYBE_REPLY_ACTIONS:
         await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя.")
         return
-    target = message.reply_to_message.from_user
+
+    # Если есть реплай — берём target
+    target = message.reply_to_message.from_user if message.reply_to_message else None
     cid = message.chat.id
 
-    # Защита от самодействий и ботов
-    if target.id == message.from_user.id and action not in ("unban", "unmute", "unwarn"):
-        await reply_auto_delete(message, "🤨 Сам себя? Серьёзно?")
-        return
-    if target.is_bot:
-        await reply_auto_delete(message, "🤖 С ботами так нельзя.")
-        return
-
-    # Нельзя применять к админам (кроме unban/unmute/unwarn — те безопасны)
-    if action in ("ban", "mute", "warn", "freeze") and await is_admin_by_id(cid, target.id):
-        await reply_auto_delete(message, "🤍 К администратору так нельзя")
-        return
+    # Защиты от самодействий — только если есть target
+    if target:
+        if target.id == message.from_user.id and action not in ("unban", "unmute", "unwarn"):
+            await reply_auto_delete(message, "🤨 Сам себя? Серьёзно?")
+            return
+        if target.is_bot:
+            await reply_auto_delete(message, "🤖 С ботами так нельзя.")
+            return
+        if action in ("ban", "mute", "warn", "freeze", "shadow", "verify") and await is_admin_by_id(cid, target.id):
+            await reply_auto_delete(message, "🤍 К администратору так нельзя")
+            return
 
     reason = remainder or "Нарушение правил"
 
@@ -4086,6 +4440,268 @@ async def cmd_autist_router(message: Message):
             f"🎯 <b>Кого:</b> {target.mention_html()}\n⚡ <b>Осталось:</b> {count}/{MAX_WARNINGS}\n"
             f"💬 <b>Чат:</b> {message.chat.title}")
         add_mod_history(cid, target.id, "✨ Аутист снят варн", "—", message.from_user.full_name)
+        return
+
+    # ───── 🌑 ТЕНЬ — невидимый бан ─────
+    if action == "shadow":
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌿 Реплайни на участника, кого скрыть."); return
+        if await is_admin_by_id(cid, target.id):
+            await reply_auto_delete(message, "🤍 К администратору так нельзя."); return
+        expires = time.time() + 3600  # 1 час
+        _shadowbans[cid][target.id] = expires
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("INSERT OR REPLACE INTO shadowbans (cid, uid, expires_at) VALUES (?, ?, ?)",
+                         (cid, target.id, expires))
+            conn.commit(); conn.close()
+        except: pass
+        try: await message.delete()
+        except: pass
+        # Уведомление приходит только админу в ЛС
+        try:
+            await bot.send_message(message.from_user.id,
+                f"🌑 <b>Тень накинута</b>\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"👤 цель — {target.full_name} (<code>{target.id}</code>)\n"
+                f"🕊 длительность — 1 час\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"<i>🌿 он думает что пишет в чат, но никто его не видит</i>",
+                parse_mode="HTML")
+        except: pass
+        add_mod_history(cid, target.id, "🌑 Аутист тень (1ч)", "—", message.from_user.full_name)
+        return
+
+    # ───── 🌫 ТИШИНА — общий мут чата ─────
+    if action == "silence":
+        # Парсим длительность из remainder ("5м", "1ч" или просто "5")
+        mins = 5
+        if remainder:
+            mins_parsed, _ = parse_duration(remainder)
+            if mins_parsed: mins = mins_parsed
+            else:
+                try: mins = int(remainder.split()[0])
+                except: pass
+        mins = max(1, min(mins, 1440))  # 1 мин — 24ч
+        _silence_active[cid] = time.time() + mins * 60
+        await message.answer(
+            f"🌫 <b>Тишина накрыла чат</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🕊 длительность — <b>{mins} минут</b>\n"
+            f"🤍 только админы и доверенные могут писать\n"
+            f"🌿 объявил — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, 0, f"🌫 Аутист тишина ({mins}м)", "—", message.from_user.full_name)
+        return
+
+    # ───── 🍃 АМНИСТИЯ — разбан жертв автоматики за 24ч ─────
+    if action == "amnesty":
+        unbanned = 0
+        # Достаём из mod_history последние 24ч записи где "AutoMod"
+        try:
+            conn = db_connect()
+            since = (datetime.now() - timedelta(hours=24)).isoformat()
+            rows = conn.execute(
+                "SELECT DISTINCT uid FROM mod_history WHERE cid=? AND moderator LIKE '%AutoMod%' AND ts >= ?",
+                (cid, since)
+            ).fetchall()
+            conn.close()
+            for r in rows:
+                uid_to_unban = r["uid"] if hasattr(r, "keys") else r[0]
+                try:
+                    await bot.unban_chat_member(cid, uid_to_unban, only_if_banned=True)
+                except: pass
+                try:
+                    from aiogram.types import ChatPermissions
+                    await bot.restrict_chat_member(cid, uid_to_unban,
+                        permissions=ChatPermissions(
+                            can_send_messages=True, can_send_media_messages=True,
+                            can_send_polls=True, can_send_other_messages=True,
+                            can_add_web_page_previews=True))
+                except: pass
+                # Сброс cascade лестницы
+                try: StatsMiddleware._cascade_state.get(cid, {}).pop(uid_to_unban, None)
+                except: pass
+                unbanned += 1
+        except Exception as e:
+            log.warning(f"amnesty: {e}")
+        await message.answer(
+            f"🍃 <b>Амнистия объявлена</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🤍 разморожено / разбанено — <b>{unbanned}</b> юзеров\n"
+            f"🌿 объявил — {message.from_user.mention_html()}\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"<i>✨ затронуты те кого автоматика наказала за последние 24ч</i>",
+            parse_mode="HTML")
+        return
+
+    # ───── 🌫 ФИЛЬТР — добавить стоп-слово ─────
+    if action == "filter":
+        if not remainder:
+            words = sorted(_chat_filters.get(cid, set()))
+            if not words:
+                await reply_auto_delete(message,
+                    "🌫 В чате нет стоп-слов\n"
+                    "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                    "🌿 добавить — <code>аутист фильтр слово</code>",
+                    parse_mode="HTML")
+                return
+            lines = "\n".join(f"🌿 {w}" for w in words[:30])
+            await reply_auto_delete(message,
+                f"🌫 <b>Стоп-слова чата</b>\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n{lines}",
+                parse_mode="HTML")
+            return
+        word = remainder.lower().strip()
+        _chat_filters[cid].add(word)
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("INSERT OR REPLACE INTO chat_filter_words (cid, word, added_at, added_by) VALUES (?, ?, ?, ?)",
+                         (cid, word, time.time(), message.from_user.id))
+            conn.commit(); conn.close()
+        except: pass
+        await message.answer(
+            f"🌫 <b>Слово добавлено в фильтр</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌿 слово — <code>{word}</code>\n"
+            f"🤍 сообщения с этим словом будут удаляться",
+            parse_mode="HTML")
+        add_mod_history(cid, 0, f"🌫 Фильтр + '{word}'", "—", message.from_user.full_name)
+        return
+
+    # ───── 🌫 АНФИЛЬТР — убрать стоп-слово ─────
+    if action == "unfilter":
+        if not remainder:
+            await reply_auto_delete(message, "🌿 Укажи слово: <code>аутист анфильтр слово</code>", parse_mode="HTML")
+            return
+        word = remainder.lower().strip()
+        if word not in _chat_filters.get(cid, set()):
+            await reply_auto_delete(message, f"🤍 слово '{word}' не было в фильтре")
+            return
+        _chat_filters[cid].discard(word)
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("DELETE FROM chat_filter_words WHERE cid=? AND word=?", (cid, word))
+            conn.commit(); conn.close()
+        except: pass
+        await message.answer(
+            f"✨ <b>Слово убрано из фильтра</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌿 слово — <code>{word}</code>",
+            parse_mode="HTML")
+        add_mod_history(cid, 0, f"🌫 Фильтр - '{word}'", "—", message.from_user.full_name)
+        return
+
+    # ───── 🪪 ПРОВЕРКА — повторная капча ─────
+    if action == "verify":
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌿 Реплайни на участника для повторной проверки."); return
+        if await is_admin_by_id(cid, target.id):
+            await reply_auto_delete(message, "🤍 К администратору так нельзя."); return
+        # Удаляем флаг "прошёл капчу"
+        _captcha_passed.discard((cid, target.id))
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("DELETE FROM passed WHERE cid=? AND uid=?", (cid, target.id))
+            conn.commit(); conn.close()
+        except: pass
+        await _captcha_send(cid, target, message)
+        await message.answer(
+            f"🪪 <b>{target.mention_html()} ‧ повторная проверка</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🤍 капча выслана выше\n"
+            f"🌫 проверку запросил — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "🪪 Аутист проверка", "—", message.from_user.full_name)
+        return
+
+    # ───── 🌊 ВОЛНА — массовое удаление сообщений ─────
+    if action == "wave":
+        n = 50
+        if remainder:
+            try: n = int(remainder.split()[0])
+            except: pass
+        n = max(1, min(n, 500))  # лимит 500
+        deleted = 0
+        # Используем кэш user_msg_ids чтобы найти ID для удаления
+        all_msgs = []
+        try:
+            for u_msgs in user_msg_ids.get(cid, {}).values():
+                all_msgs.extend(u_msgs)
+            all_msgs.sort(key=lambda x: -x[1])  # новейшие первыми
+            for msg_id, _ts in all_msgs[:n]:
+                try:
+                    await bot.delete_message(cid, msg_id)
+                    deleted += 1
+                except: pass
+        except Exception as e:
+            log.warning(f"wave: {e}")
+        sent = await message.answer(
+            f"🌊 <b>Волна прошла</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🍂 удалено — <b>{deleted}</b> из {n}\n"
+            f"🤍 объявил — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        async def _del_self(m):
+            await asyncio.sleep(10)
+            try: await m.delete()
+            except: pass
+        asyncio.create_task(_del_self(sent))
+        add_mod_history(cid, 0, f"🌊 Аутист волна ({deleted})", "—", message.from_user.full_name)
+        return
+
+    # ───── 🌿 БЕЛЫЙ СПИСОК — добавить ─────
+    if action == "whitelist":
+        if not message.reply_to_message:
+            # Если без реплая — показываем текущий whitelist
+            wl = _chat_whitelist.get(cid, set())
+            if not wl:
+                await reply_auto_delete(message,
+                    "🌿 Белый список пуст\n"
+                    "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                    "🤍 добавить — реплай + <code>аутист белый</code>",
+                    parse_mode="HTML")
+                return
+            lines = "\n".join(f"🌿 <code>{u}</code>" for u in list(wl)[:30])
+            await reply_auto_delete(message,
+                f"🌿 <b>Белый список</b>\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n{lines}",
+                parse_mode="HTML")
+            return
+        _chat_whitelist[cid].add(target.id)
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("INSERT OR REPLACE INTO chat_whitelist (cid, uid, added_at, added_by) VALUES (?, ?, ?, ?)",
+                         (cid, target.id, time.time(), message.from_user.id))
+            conn.commit(); conn.close()
+        except: pass
+        await message.answer(
+            f"🌿 <b>В белом списке</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🤍 кто — {target.mention_html()}\n"
+            f"✨ автоматика его больше не трогает (cascade, фильтр, флуд)\n"
+            f"🌷 добавил — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "🌿 Аутист белый", "—", message.from_user.full_name)
+        return
+
+    # ───── 🌿 НЕБЕЛЫЙ — убрать из whitelist ─────
+    if action == "unwhitelist":
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌿 Реплайни на участника, кого убрать из белого."); return
+        _chat_whitelist[cid].discard(target.id)
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("DELETE FROM chat_whitelist WHERE cid=? AND uid=?", (cid, target.id))
+            conn.commit(); conn.close()
+        except: pass
+        await message.answer(
+            f"🍂 <b>Убран из белого</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🤍 кто — {target.mention_html()}\n"
+            f"🌫 теперь под общими правилами",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "🍂 Аутист небелый", "—", message.from_user.full_name)
         return
 
 
