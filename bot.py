@@ -2213,8 +2213,8 @@ async def cb_captcha(call: CallbackQuery):
 
 # ─── КАПЧА ───
 _CAPTCHA_EMOJI_POOL = ["🌸", "🍃", "🌿", "🦋", "🌷", "🌱", "🤍", "🌙", "✨", "🌊", "🍂", "🪻"]
-_pending_captcha: Dict[tuple, dict] = {}
-_captcha_passed: Set[tuple] = set()
+_pending_captcha: dict = {}
+_captcha_passed: set = set()
 CAPTCHA_TIMEOUT = 1000
 
 
@@ -2434,10 +2434,10 @@ async def cb_captcha_kick(call: CallbackQuery):
 
 
 # ─── СОСТОЯНИЯ ЗАЩИТЫ ───
-_silence_active: Dict[int, float] = {}
-_shadowbans: Dict[int, Dict[int, float]] = defaultdict(dict)
-_chat_filters: Dict[int, Set[str]] = defaultdict(set)
-_chat_whitelist: Dict[int, Set[int]] = defaultdict(set)
+_silence_active: dict = {}
+_shadowbans: dict = defaultdict(dict)
+_chat_filters: dict = defaultdict(set)
+_chat_whitelist: dict = defaultdict(set)
 
 
 def _defense_load_state():
