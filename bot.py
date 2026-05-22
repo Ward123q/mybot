@@ -4144,6 +4144,8 @@ _AUTIST_ACTIONS = {
     "wave":      ["волна", "чистка", "wave", "clean"],
     "whitelist": ["белый", "вайтлист", "доверенный", "whitelist"],
     "unwhitelist":["небелый", "анвайтлист", "снять белый", "unwhitelist"],
+    "banchannel":["канал", "забань канал", "бан канал", "channel", "banchannel"],
+    "unbanchannel":["разбань канал", "анканал", "unbanchannel"],
 }
 
 def _autist_match_action(text: str):
@@ -4203,6 +4205,92 @@ async def cmd_autist_router(message: Message):
         except Exception:
             pass
         return
+
+    # ───── 🌫 БАН/РАЗБАН КАНАЛА ─────
+    # Канал = sender_chat (когда юзер пишет от имени канала)
+    # Нужен реплай на сообщение от канала
+    if action in ("banchannel", "unbanchannel"):
+        cid = message.chat.id
+        if not message.reply_to_message:
+            await reply_auto_delete(message,
+                "🌿 Реплайни на сообщение которое канал написал в чат",
+                parse_mode="HTML")
+            return
+        sender_chat = message.reply_to_message.sender_chat
+        if not sender_chat:
+            await reply_auto_delete(message,
+                "🌫 Это сообщение не от канала ‧ обычный юзер не подходит\n"
+                "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                "🤍 для бана юзера используй <code>аутист бан</code>",
+                parse_mode="HTML")
+            return
+        # Нельзя забанить сам чат
+        if sender_chat.id == cid:
+            await reply_auto_delete(message,
+                "🤨 Это собственный чат ‧ его забанить нельзя",
+                parse_mode="HTML")
+            return
+
+        ch_title = sender_chat.title or f"канал {sender_chat.id}"
+        ch_username = f"@{sender_chat.username}" if sender_chat.username else f"<code>{sender_chat.id}</code>"
+
+        if action == "banchannel":
+            try:
+                await bot.ban_chat_sender_chat(cid, sender_chat.id)
+            except Exception as e:
+                await reply_auto_delete(message,
+                    f"🥀 Не удалось забанить канал\n"
+                    f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                    f"🌫 причина — <code>{str(e)[:120]}</code>\n"
+                    f"<i>🤍 убедись что бот — админ с правом «Ban users»</i>",
+                    parse_mode="HTML")
+                return
+
+            # Также удаляем само сообщение канала
+            try: await message.reply_to_message.delete()
+            except: pass
+
+            await message.answer(
+                f"🍂 <b>Канал забанен</b>\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"📢 канал — <b>{ch_title}</b> ‧ {ch_username}\n"
+                f"🌿 теперь от его имени никто не сможет писать в чат\n"
+                f"🤍 забанил — {message.from_user.mention_html()}",
+                parse_mode="HTML"
+            )
+            await log_action(
+                f"🍂 <b>Аутист · Бан канала</b>\n\n"
+                f"📢 <b>Канал:</b> {ch_title} ({ch_username})\n"
+                f"👤 <b>Кто:</b> {message.from_user.mention_html()}\n"
+                f"💬 <b>Чат:</b> {message.chat.title}\n"
+                f"🕐 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+            )
+            add_mod_history(cid, sender_chat.id, "🍂 Бан канала", ch_title, message.from_user.full_name)
+            return
+
+        if action == "unbanchannel":
+            try:
+                await bot.unban_chat_sender_chat(cid, sender_chat.id)
+            except Exception as e:
+                await reply_auto_delete(message,
+                    f"🥀 Не удалось разбанить\n"
+                    f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                    f"🌫 причина — <code>{str(e)[:120]}</code>",
+                    parse_mode="HTML")
+                return
+            await message.answer(
+                f"✨ <b>Канал разбанен</b>\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"📢 канал — <b>{ch_title}</b> ‧ {ch_username}\n"
+                f"🤍 разбанил — {message.from_user.mention_html()}",
+                parse_mode="HTML"
+            )
+            await log_action(
+                f"✨ <b>Аутист · Разбан канала</b>\n\n"
+                f"📢 <b>Канал:</b> {ch_title}\n"
+                f"👤 <b>Кто:</b> {message.from_user.mention_html()}"
+            )
+            return
 
     # Действия которые НЕ требуют реплай на конкретного юзера
     _NO_REPLY_ACTIONS = {"silence", "amnesty", "filter", "unfilter", "wave"}
