@@ -2235,7 +2235,7 @@ def _captcha_load_passed():
             _captcha_passed.add((cid, uid))
         conn.close()
     except Exception as e:
-        log.warning(f"captcha load: {e}")
+        logging.warning(f"captcha load: {e}")
 
 
 def _captcha_mark_passed(cid: int, uid: int):
@@ -2284,7 +2284,7 @@ async def _captcha_send(cid: int, member, message_to_reply=None):
             sent = await bot.send_message(cid, text, parse_mode="HTML", reply_markup=kb)
         _pending_captcha[(cid, member.id)]["msg_id"] = sent.message_id
     except Exception as e:
-        log.warning(f"captcha send: {e}")
+        logging.warning(f"captcha send: {e}")
         return
 
     asyncio.create_task(_captcha_timeout_task(cid, member.id, member.full_name))
@@ -2451,7 +2451,7 @@ def _defense_load_state():
             _chat_whitelist[cid].add(uid)
         conn.close()
     except Exception as e:
-        log.warning(f"defense load: {e}")
+        logging.warning(f"defense load: {e}")
 
 
 def is_in_whitelist(cid: int, uid: int) -> bool:
@@ -2470,7 +2470,7 @@ try:
     _captcha_load_passed()
     _defense_load_state()
 except Exception as _e:
-    log.warning(f"defense init: {_e}")
+    logging.warning(f"defense init: {_e}")
 
 
 @dp.message(F.new_chat_members)
@@ -4612,7 +4612,7 @@ async def cmd_autist_router(message: Message):
                 except: pass
                 unbanned += 1
         except Exception as e:
-            log.warning(f"amnesty: {e}")
+            logging.warning(f"amnesty: {e}")
         await message.answer(
             f"🍃 <b>Амнистия объявлена</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
@@ -4723,7 +4723,7 @@ async def cmd_autist_router(message: Message):
                     deleted += 1
                 except: pass
         except Exception as e:
-            log.warning(f"wave: {e}")
+            logging.warning(f"wave: {e}")
         sent = await message.answer(
             f"🌊 <b>Волна прошла</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
@@ -7696,48 +7696,92 @@ ADMIN_REMOVE_REMINDER = (
 )
 
 
+async def _collect_known_chats() -> set:
+    """Собрать все известные чаты — из БД и живых структур."""
+    chats = set()
+
+    # 1. Из основной БД через known_chats
+    try:
+        rows = await db.get_all_chats()
+        for r in rows:
+            cid = r["cid"] if hasattr(r, "keys") else r[0]
+            chats.add(cid)
+        logging.info(f"reminder: db.get_all_chats() → {len(chats)} чатов")
+    except Exception as e:
+        logging.warning(f"reminder: db.get_all_chats() failed: {e}")
+
+    # 2. Из живой структуры known_chats (модуль bot.py)
+    try:
+        if "known_chats" in globals():
+            for cid in globals()["known_chats"].keys():
+                chats.add(cid)
+            logging.info(f"reminder: + known_chats → итого {len(chats)}")
+    except Exception as e:
+        logging.warning(f"reminder: known_chats: {e}")
+
+    # 3. Резерв — chat_stats, warnings, xp_data
+    for attr in ("chat_stats", "warnings", "ban_list", "xp_data", "reputation"):
+        try:
+            d = globals().get(attr)
+            if d:
+                chats.update(d.keys())
+        except: pass
+    logging.info(f"reminder: финально {len(chats)} чатов")
+
+    return chats
+
+
+async def _do_send_admin_reminder():
+    """Отправляет рассылку прямо сейчас. Возвращает (sent, failed)."""
+    chats = await _collect_known_chats()
+    sent = 0
+    failed = 0
+    skipped = 0
+    for cid in chats:
+        if cid > 0:
+            skipped += 1
+            continue
+        try:
+            await bot.send_message(cid, ADMIN_REMOVE_REMINDER, parse_mode="HTML",
+                                   disable_web_page_preview=True)
+            sent += 1
+            await asyncio.sleep(0.5)
+        except Exception as e:
+            failed += 1
+            logging.warning(f"reminder fail cid={cid}: {e}")
+    logging.info(f"📢 admin reminder DONE: sent={sent} failed={failed} skipped_private={skipped}")
+    return sent, failed
+
+
 async def admin_reminder_broadcaster():
     """Раз в 4 часа шлёт напоминание о админах во все известные чаты."""
-    # Стартовая задержка чтоб не флудить сразу при старте
-    await asyncio.sleep(60)
+    await asyncio.sleep(60)  # стартовая задержка
     while True:
         try:
-            # Собираем все чаты в которых бот активен
-            chats = set()
-            try:
-                rows = await db.get_all_chats()
-                for r in rows:
-                    cid = r["cid"] if hasattr(r, "keys") else r[0]
-                    chats.add(cid)
-            except Exception as e:
-                log.warning(f"admin reminder: get_all_chats: {e}")
-
-            # Резерв — берём из живых структур (на случай если БД пустая)
-            if not chats:
-                for attr in ("chat_stats", "warnings", "xp_data"):
-                    d = globals().get(attr)
-                    if d:
-                        chats.update(d.keys())
-
-            sent = 0
-            failed = 0
-            for cid in chats:
-                # Пропускаем приватные чаты с ботом — не нужны там
-                if cid > 0:
-                    continue
-                try:
-                    await bot.send_message(cid, ADMIN_REMOVE_REMINDER, parse_mode="HTML",
-                                           disable_web_page_preview=True)
-                    sent += 1
-                    # Защита от rate-limit TG (30 msgs/sec)
-                    await asyncio.sleep(0.5)
-                except Exception:
-                    failed += 1
-            log.info(f"admin reminder: sent={sent} failed={failed}")
+            await _do_send_admin_reminder()
         except Exception as e:
-            log.warning(f"admin reminder loop: {e}")
-        # 4 часа до следующей рассылки
+            logging.warning(f"admin reminder loop: {e}")
         await asyncio.sleep(4 * 3600)
+
+
+@dp.message(Command("sendreminder"))
+async def cmd_send_reminder_now(message: Message):
+    """Принудительная рассылка прямо сейчас. Только владелец."""
+    if message.from_user.id not in OWNERS:
+        await reply_auto_delete(message, "👑 только владелец")
+        return
+    sent_msg = await message.answer("📢 запускаю рассылку…")
+    sent, failed = await _do_send_admin_reminder()
+    try:
+        await sent_msg.edit_text(
+            f"📢 <b>Рассылка завершена</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"✨ отправлено — <b>{sent}</b>\n"
+            f"🥀 ошибок — <b>{failed}</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"<i>🤍 следующая автоматическая — через 4 часа</i>",
+            parse_mode="HTML")
+    except: pass
 
 # ===== ШАБЛОНЫ ПРЕДУПРЕЖДЕНИЙ =====
 WARN_TEMPLATES = {
