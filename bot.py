@@ -7732,25 +7732,16 @@ async def _collect_known_chats() -> set:
 
 
 async def _do_send_admin_reminder():
-    """Отправляет рассылку прямо сейчас. Возвращает (sent, failed)."""
-    chats = await _collect_known_chats()
-    sent = 0
-    failed = 0
-    skipped = 0
-    for cid in chats:
-        if cid > 0:
-            skipped += 1
-            continue
-        try:
-            await bot.send_message(cid, ADMIN_REMOVE_REMINDER, parse_mode="HTML",
-                                   disable_web_page_preview=True)
-            sent += 1
-            await asyncio.sleep(0.5)
-        except Exception as e:
-            failed += 1
-            logging.warning(f"reminder fail cid={cid}: {e}")
-    logging.info(f"📢 admin reminder DONE: sent={sent} failed={failed} skipped_private={skipped}")
-    return sent, failed
+    """Отправляет рассылку прямо сейчас в один указанный чат."""
+    target_cid = -1003018474298  # 🎯 целевой чат для рассылки
+    try:
+        await bot.send_message(target_cid, ADMIN_REMOVE_REMINDER, parse_mode="HTML",
+                               disable_web_page_preview=True)
+        logging.info(f"📢 admin reminder DONE: sent to {target_cid}")
+        return 1, 0
+    except Exception as e:
+        logging.warning(f"📢 admin reminder FAIL cid={target_cid}: {e}")
+        return 0, 1
 
 
 async def admin_reminder_broadcaster():
