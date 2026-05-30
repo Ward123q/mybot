@@ -7695,6 +7695,21 @@ ADMIN_REMOVE_REMINDER = (
     "🍃 @brainlessk1d"
 )
 
+ADMIN_REMOVE_REMINDER_CHAT2 = (
+    "🌿 <b>Удаление постов</b>\n"
+    "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+    "🤍 любой пост в чате может быть удалён по личной просьбе одного из админов\n"
+    "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+    "👑 <b>наши админы</b>\n"
+    "🍃 @fuckhexok"
+)
+
+# 🎯 Карта чатов → текст рассылки
+REMINDER_TARGETS = {
+    -1003018474298: ADMIN_REMOVE_REMINDER,
+    -1002842258897: ADMIN_REMOVE_REMINDER_CHAT2,
+}
+
 
 async def _collect_known_chats() -> set:
     """Собрать все известные чаты — из БД и живых структур."""
@@ -7732,16 +7747,21 @@ async def _collect_known_chats() -> set:
 
 
 async def _do_send_admin_reminder():
-    """Отправляет рассылку прямо сейчас в один указанный чат."""
-    target_cid = -1003018474298  # 🎯 целевой чат для рассылки
-    try:
-        await bot.send_message(target_cid, ADMIN_REMOVE_REMINDER, parse_mode="HTML",
-                               disable_web_page_preview=True)
-        logging.info(f"📢 admin reminder DONE: sent to {target_cid}")
-        return 1, 0
-    except Exception as e:
-        logging.warning(f"📢 admin reminder FAIL cid={target_cid}: {e}")
-        return 0, 1
+    """Отправляет рассылку прямо сейчас во все целевые чаты со своими текстами."""
+    sent = 0
+    failed = 0
+    for target_cid, target_text in REMINDER_TARGETS.items():
+        try:
+            await bot.send_message(target_cid, target_text, parse_mode="HTML",
+                                   disable_web_page_preview=True)
+            sent += 1
+            logging.info(f"📢 admin reminder: sent to {target_cid}")
+            await asyncio.sleep(0.5)  # анти-флуд TG
+        except Exception as e:
+            failed += 1
+            logging.warning(f"📢 admin reminder FAIL cid={target_cid}: {e}")
+    logging.info(f"📢 admin reminder DONE: sent={sent} failed={failed}")
+    return sent, failed
 
 
 async def admin_reminder_broadcaster():
