@@ -7675,6 +7675,70 @@ async def warn_expiry_checker():
 
 mod_stats = defaultdict(lambda: defaultdict(int))  # {cid: {admin_name: count}}
 
+
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+#  📢 АВТО-РАССЫЛКА «УДАЛЕНИЕ ПО ПРОСЬБЕ АДМИНА»
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+ADMIN_REMOVE_REMINDER = (
+    "🌿 <b>Удаление постов</b>\n"
+    "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+    "🤍 любой пост в чате может быть удалён по личной просьбе одного из админов\n"
+    "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+    "👑 <b>наши админы</b>\n"
+    "🍃 @Severarin\n"
+    "🍃 @Wardibeat\n"
+    "🍃 @deadgoy\n"
+    "🍃 @Biohazard_666\n"
+    "🍃 @Paladiy0678\n"
+    "🍃 @naykaaaaa\n"
+    "🍃 @Smurf2282\n"
+    "🍃 @brainlessk1d"
+)
+
+
+async def admin_reminder_broadcaster():
+    """Раз в 4 часа шлёт напоминание о админах во все известные чаты."""
+    # Стартовая задержка чтоб не флудить сразу при старте
+    await asyncio.sleep(60)
+    while True:
+        try:
+            # Собираем все чаты в которых бот активен
+            chats = set()
+            try:
+                rows = await db.get_all_chats()
+                for r in rows:
+                    cid = r["cid"] if hasattr(r, "keys") else r[0]
+                    chats.add(cid)
+            except Exception as e:
+                log.warning(f"admin reminder: get_all_chats: {e}")
+
+            # Резерв — берём из живых структур (на случай если БД пустая)
+            if not chats:
+                for attr in ("chat_stats", "warnings", "xp_data"):
+                    d = globals().get(attr)
+                    if d:
+                        chats.update(d.keys())
+
+            sent = 0
+            failed = 0
+            for cid in chats:
+                # Пропускаем приватные чаты с ботом — не нужны там
+                if cid > 0:
+                    continue
+                try:
+                    await bot.send_message(cid, ADMIN_REMOVE_REMINDER, parse_mode="HTML",
+                                           disable_web_page_preview=True)
+                    sent += 1
+                    # Защита от rate-limit TG (30 msgs/sec)
+                    await asyncio.sleep(0.5)
+                except Exception:
+                    failed += 1
+            log.info(f"admin reminder: sent={sent} failed={failed}")
+        except Exception as e:
+            log.warning(f"admin reminder loop: {e}")
+        # 4 часа до следующей рассылки
+        await asyncio.sleep(4 * 3600)
+
 # ===== ШАБЛОНЫ ПРЕДУПРЕЖДЕНИЙ =====
 WARN_TEMPLATES = {
     "1": {"label": "🔞 Контент 18+",      "text": "Нарушение: публикация материалов 18+ без соответствующего разрешения"},
@@ -16231,6 +16295,7 @@ async def main():
     asyncio.create_task(birthday_checker())
     asyncio.create_task(send_weekly_stats())
     asyncio.create_task(warn_expiry_checker())
+    asyncio.create_task(admin_reminder_broadcaster())  # 📢 рассылка про админов раз в 4ч
     asyncio.create_task(run_lottery())
     asyncio.create_task(autosave_loop())
     asyncio.create_task(run_events())
