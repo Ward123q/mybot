@@ -27,6 +27,45 @@ import database as db
 import tickets as tkt
 import dashboard
 import features
+
+ZODIAC_SIGNS = {
+    "♈ Овен":    ["Сегодня твой день — действуй смело.", "Не спеши с решениями, удача любит терпеливых."],
+    "♉ Телец":   ["Финансы наладятся, если не лениться.", "Хороший день для отдыха и вкусной еды."],
+    "♊ Близнецы":["Общение принесёт приятные сюрпризы.", "Не распыляйся — выбери одно дело."],
+    "♋ Рак":     ["Дом и семья дадут опору.", "Доверься интуиции — она не подведёт."],
+    "♌ Лев":     ["Ты в центре внимания — пользуйся.", "Гордость не должна мешать дружбе."],
+    "♍ Дева":    ["Порядок в делах принесёт спокойствие.", "Не критикуй себя слишком строго."],
+    "♎ Весы":    ["Баланс найдётся сам собой.", "Хороший день для важного разговора."],
+    "♏ Скорпион":["Твоя энергия сегодня на пике.", "Отпусти старые обиды — станет легче."],
+    "♐ Стрелец": ["Приключение ждёт за углом.", "Мечты ближе, чем кажутся."],
+    "♑ Козерог": ["Труд окупится сполна.", "Сделай паузу — ты заслужил."],
+    "♒ Водолей": ["Свежая идея изменит день.", "Друзья поддержат в нужный момент."],
+    "♓ Рыбы":    ["Творчество бьёт ключом.", "Прислушайся к снам — в них подсказка."],
+}
+
+daily_claimed = {}  # {(cid,uid): date_str}
+
+def _casino_get(cid: int, uid: int) -> int:
+    """Баланс казино. Совместимость — возвращает стартовый баланс."""
+    try:
+        g = globals().get("_casino_balance")
+        if g is not None:
+            return g[cid].get(uid, 100)
+    except Exception:
+        pass
+    return 100
+
+
+def is_vip(uid: int, cid: int = 0) -> bool:
+    """Проверка VIP-статуса из БД."""
+    try:
+        conn = db_connect()
+        row = conn.execute("SELECT 1 FROM vip_users WHERE uid=? AND cid=?", (uid, cid)).fetchone()
+        conn.close()
+        return row is not None
+    except Exception:
+        return False
+
 import notifications as notif
 import shared
 import chat_settings as cs
@@ -1918,25 +1957,6 @@ class SpecialEffectsMiddleware(BaseMiddleware):
 class AntiMatMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data):
         if not isinstance(event, Message): return await handler(event, data)
-        if event.chat.type not in ("group","supergroup"): return await handler(event, data)
-        if not event.text or event.text.startswith("/"): return await handler(event, data)
-        if not event.from_user: return await handler(event, data)
-        if event.new_chat_members or event.left_chat_member: return await handler(event, data)
-        uid, cid = event.from_user.id, event.chat.id
-        # Проверяем настройки чата
-        try:
-            chat_cfg = cs.get_settings(cid)
-            if not chat_cfg.get("antimat_enabled", True):
-                return await handler(event, data)
-        except: pass
-        if not ANTI_MAT_ENABLED: return await handler(event, data)
-        try:
-            m = await bot.get_chat_member(cid, uid)
-            if m.status in ("administrator","creator"): return await handler(event, data)
-        except: pass
-        return await handler(event, data)
-    async def __call__(self, handler, event: Message, data):
-        if not isinstance(event, Message): return await handler(event, data)
         uid = event.from_user.id if event.from_user else None
         if uid and uid in pending and not (event.text and event.text.startswith("/")):
             p = pending.pop(uid)
@@ -2820,9 +2840,9 @@ async def on_new_member(message: Message):
                 conn.close()
             except: pass
 
-        # 🔐 Капча
-        if cs.get_settings(cid).get("captcha_enabled", False):
-            asyncio.create_task(send_captcha(message, member))
+        # 🔐 Капча (старая математическая отключена — используется новая эмодзи-капча в on_new_member)
+        # if cs.get_settings(cid).get("captcha_enabled", False):
+        #     asyncio.create_task(send_captcha(message, member))
         # 🌐 АнтиVPN проверка
         asyncio.create_task(_process_new_member_vpn(message, member))
         # 📸 Аватар + вотчлист
@@ -2931,7 +2951,6 @@ async def cb_panel(call: CallbackQuery):
                 f"🔗 {'@'+u.username if u.username else 'нет'}\n🪪 <code>{u.id}</code>\n"
                 f"📌 {smap.get(tm2.status, tm2.status)}\n"
                 f"⚡ Варнов: <b>{warnings[cid].get(tid,0)}/{MAX_WARNINGS}</b>\n"
-                f"🌟 Репутация: <b>{reputation[cid].get(tid,0):+d}</b>\n"
                 f"💬 Сообщений: <b>{chat_stats[cid].get(tid,0)}</b>",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[kb_back(tid)]))
         elif action == "fun":
@@ -3743,19 +3762,7 @@ async def cb_game(call: CallbackQuery):
         [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]])
 
     if action == "casino":
-        uid = call.from_user.id
-        bal = _casino_get(cid, uid)
-        jackpot = _casino_jackpot[cid]
-        text = (
-            f""
-            f"👤 {call.from_user.mention_html()}\n"
-            f"💰 Баланс: <b>{bal}</b> монет\n"
-            f"🏆 Джекпот: <b>{jackpot}</b> монет\n"
-            f""
-            f"<i>Выбери игру:</i>"
-        )
-        await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb_casino(cid, uid))
-        await call.answer()
+        await call.answer("🌫 Казино отключено", show_alert=True)
         return
     if action == "roll":
         await call.message.edit_text(
@@ -3882,7 +3889,6 @@ async def cmd_help(message: Message):
         "<i>летние команды для участников 🌴</i>\n\n"
 
         "🎀 <b>Игры и развлечения</b>\n"
-        "├ /casino — 🎰 казино (слоты, рулетка, монетка)\n"
         "├ /roll [N] — бросить кубик\n"
         "├ /flip — монетка орёл/решка\n"
         "├ /rps к/н/б — камень ножницы бумага\n"
@@ -5454,7 +5460,6 @@ async def cmd_info(message: Message):
         f"📌 {smap.get(member.status, member.status)}\n"
         f""
         f"⚡ Варнов: <b>{warnings[message.chat.id].get(user.id,0)}/{MAX_WARNINGS}</b>\n"
-        f"🌟 Репутация: <b>{reputation[message.chat.id].get(user.id,0):+d}</b>\n"
         f"💬 Сообщений: <b>{chat_stats[message.chat.id].get(user.id,0)}</b>\n"
         f"",
         parse_mode="HTML")
@@ -5749,11 +5754,10 @@ async def cb_warn_template(call: CallbackQuery):
     await call.answer(f"✨ {tmpl['label']}")
 
 async def cmd_rep(message: Message):
-    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
-    target = message.reply_to_message.from_user
-    score  = reputation[message.chat.id].get(target.id, 0)
-    await reply_auto_delete(message, 
-        f"👤 {target.mention_html()}\n📈 Счёт: <b>{score:+d}</b>\n",
+    await reply_auto_delete(message,
+        "🌫 <b>Система отключена</b>\n"
+        "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        "🌻 репутация больше не работает",
         parse_mode="HTML")
 
 # ── ВЕРИФИКАЦИЯ ПО КОДУ — только 6-значные числа, не глотает чужие сообщения ──
@@ -5792,20 +5796,14 @@ async def handle_verify_code_input(message: Message):
 
 @dp.message(F.text.in_({"+1", "+", "👍"}))
 async def rep_plus(message: Message):
-    if target.id == message.from_user.id: await reply_auto_delete(message, "😏 Себе репу не накручивай!"); return
-    key = (message.chat.id, message.from_user.id, target.id); now = time()
-    if key in rep_cooldown and now - rep_cooldown[key] < 3600:
-        await reply_auto_delete(message, f"⏳ Подожди ещё {int(3600-(now-rep_cooldown[key]))//60} мин."); return
-    rep_cooldown[key] = now
-    reputation[message.chat.id][target.id] += 1
-    save_data()
-    await reply_auto_delete(message, 
-        f"👤 {target.mention_html()}\n📈 Итого: <b>{reputation[message.chat.id][target.id]:+d}</b>\n",
-        parse_mode="HTML")
+    # 🌻 Репутация выпилена — команда отключена (тихо игнорим чтобы не флудить)
+    return
 
 @dp.message(F.text.in_({"-1", "👎"}))
 async def rep_minus(message: Message):
     if not message.reply_to_message: return
+    # 🌻 Репутация выпилена
+    return
     target = message.reply_to_message.from_user
     if target.id == message.from_user.id: await reply_auto_delete(message, "😏 Себе репу не снижай!"); return
     key = (message.chat.id, message.from_user.id, target.id); now = time()
@@ -6213,7 +6211,6 @@ async def autist_commands(message: Message):
                 f"🔍 <b>Инфо:</b>\n{tname}\n🔗 Юзернейм: <b>{username}</b>\n"
                 f"🪪 ID: <code>{target.id}</code>\n📌 {smap.get(member.status, member.status)}\n"
                 f"⚡ Варнов: <b>{warnings[cid].get(target.id,0)}/{MAX_WARNINGS}</b>\n"
-                f"🌟 Репутация: <b>{reputation[cid].get(target.id,0):+d}</b>\n"
                 f"💬 Сообщений: <b>{chat_stats[cid].get(target.id,0)}</b>", parse_mode="HTML")
         elif action == "варны":
             count = warnings[cid].get(target.id, 0)
@@ -7773,18 +7770,11 @@ async def cmd_streak(message: Message):
         parse_mode="HTML")
 
 async def cmd_toprep(message: Message):
-    rep = reputation[message.chat.id]
-    if not rep:
-        await reply_auto_delete(message, "📊 Репутация пока пуста!"); return
-    sorted_u = sorted(rep.items(), key=lambda x: x[1], reverse=True)[:10]
-    medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
-    lines = ["🌟 <b>Топ по репутации:</b>\n"]
-    for i, (uid, score) in enumerate(sorted_u):
-        try: m = await bot.get_chat_member(message.chat.id, uid); uname = m.user.full_name
-        except: uname = f"ID {uid}"
-        icon = "⬆️" if score >= 0 else "⬇️"
-        lines.append(f"{medals[i]} <b>{uname}</b> — {icon} <b>{score:+d}</b>")
-    await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
+    await reply_auto_delete(message,
+        "🌫 <b>Система отключена</b>\n"
+        "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        "🌻 топ по репутации больше не работает",
+        parse_mode="HTML")
 
 @dp.message(Command("profile"))
 async def cmd_profile(message: Message):
@@ -16428,148 +16418,21 @@ def kb_casino(cid: int, uid: int) -> InlineKeyboardMarkup:
 
 @dp.message(Command("casino"))
 async def cmd_casino(message: Message):
-    cid = message.chat.id
-    uid = message.from_user.id
-    rep = reputation[cid].get(uid, 0)
-    jackpot = _casino_jackpot[cid]
-    text = (
-            f"💛 <b>Профиль</b>\n"
-            f"💛 <b>Профиль</b>\n"
-        f""
-        f"👤 {message.from_user.mention_html()}\n"
-        f"💰 Репутация: <b>{rep:+d}</b> 🌟\n"
-        f"🏆 Джекпот: <b>{jackpot}</b> 🌟\n"
-        f""
-        f"<i>Ставки идут из репутации.\n"
-        f"Три 💎 — сорвёшь джекпот!</i>"
+    # 🌫 Казино отключено
+    await message.answer(
+        "🌫 <b>Казино отключено</b>\n"
+        "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        "🌻 азартные игры больше не работают\n"
+        "💛 чат стал спокойнее",
+        parse_mode="HTML"
     )
-    await message.answer(text, parse_mode="HTML", reply_markup=kb_casino(cid, uid))
 
 
 @dp.callback_query(F.data.startswith("casino:"))
 async def cb_casino(call: CallbackQuery):
-    parts  = call.data.split(":")
-    action = parts[1]
-    cid    = call.message.chat.id
-    uid    = call.from_user.id
+    # 🌫 Казино отключено
+    await call.answer("🌫 Казино отключено", show_alert=True)
 
-    if action in ("noop", "info"):
-        rep = reputation[cid].get(uid, 0)
-        jackpot = _casino_jackpot[cid]
-        await call.answer(f"💰 Репутация: {rep:+d}\n🏆 Джекпот: {jackpot}", show_alert=True)
-        return
-
-    if action == "close":
-        try: await call.message.delete()
-        except: pass
-        await call.answer(); return
-
-    target_uid = int(parts[2])
-    if uid != target_uid:
-        await call.answer("🌵 Это не твоё казино!", show_alert=True); return
-
-    rep = reputation[cid].get(uid, 0)
-
-    # ── СЛОТЫ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
-    if action == "slots":
-        bet = int(parts[3])
-        if rep < bet:
-            await call.answer(f"🌵 Нужно {bet} 🌟, есть {rep}", show_alert=True); return
-
-        symbols = _spin_slots()
-        win, desc = _slots_payout(symbols, bet, _casino_jackpot[cid])
-
-        if win >= _casino_jackpot[cid] and "ДЖЕКПОТ" in desc:
-            _casino_jackpot[cid] = 500
-        elif win == 0:
-            _casino_jackpot[cid] += max(1, bet // 10)
-
-        delta = win - bet
-        reputation[cid][uid] = rep - bet + win
-        save_data()
-
-        new_rep = reputation[cid][uid]
-        sign = "+" if delta >= 0 else ""
-        slot_line = f"[ {' | '.join(symbols)} ]"
-
-        text = (
-            f""
-            f"{slot_line}\n\n"
-            f"{'🎉' if delta > 0 else ('↩️' if delta == 0 else '😭')} {desc}\n"
-            f""
-            f"{'🏆' if win > 0 else '💸'}: <b>{sign}{delta} 🌟</b>\n"
-            f"💰 Репутация: <b>{new_rep:+d}</b>\n"
-            f"🏆 Джекпот: <b>{_casino_jackpot[cid]}</b>"
-        )
-        try: await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb_casino(cid, uid))
-        except: pass
-        await call.answer()
-
-    # ── РУЛЕТКА ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
-    elif action == "roulette":
-        bet_type = parts[3]
-        bet = int(parts[4])
-        if rep < bet:
-            await call.answer(f"🌵 Нужно {bet} 🌟, есть {rep}", show_alert=True); return
-
-        number = random.randint(0, 36)
-        is_even = number != 0 and number % 2 == 0
-        color = "🟢" if number == 0 else ("🔴" if number % 2 != 0 else "⚫")
-
-        if bet_type == "zero":
-            won = number == 0; multiplier = 35
-        elif bet_type == "even":
-            won = is_even; multiplier = 2
-        else:
-            won = not is_even and number != 0; multiplier = 2
-
-        delta = bet * (multiplier - 1) if won else -bet
-        reputation[cid][uid] = rep + delta
-        save_data()
-
-        new_rep = reputation[cid][uid]
-        sign = "+" if delta >= 0 else ""
-
-        text = (
-            f""
-            f"{color} Выпало: <b>{number}</b>\n\n"
-            f"{'✨ Победа!' if won else '🌵 Проигрыш.'}\n"
-            f""
-            f"{'🏆' if won else '💸'}: <b>{sign}{delta} 🌟</b>\n"
-            f"💰 Репутация: <b>{new_rep:+d}</b>"
-        )
-        try: await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb_casino(cid, uid))
-        except: pass
-        await call.answer()
-
-    # ── МОНЕТКА ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
-    elif action == "coin":
-        side = parts[3]
-        bet  = int(parts[4])
-        if rep < bet:
-            await call.answer(f"🌵 Нужно {bet} 🌟, есть {rep}", show_alert=True); return
-
-        result = random.choice(["heads", "tails"])
-        won = result == side
-        delta = bet if won else -bet
-        reputation[cid][uid] = rep + delta
-        save_data()
-
-        new_rep = reputation[cid][uid]
-        sign = "+" if delta >= 0 else ""
-        icon = "🦅 Орёл" if result == "heads" else "🪙 Решка"
-
-        text = (
-            f""
-            f"{icon}!\n\n"
-            f"{'✨ Угадал!' if won else '🌵 Не угадал.'}\n"
-            f""
-            f"{'🏆' if won else '💸'}: <b>{sign}{delta} 🌟</b>\n"
-            f"💰 Репутация: <b>{new_rep:+d}</b>"
-        )
-        try: await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb_casino(cid, uid))
-        except: pass
-        await call.answer()
 
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 
