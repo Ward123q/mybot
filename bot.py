@@ -385,19 +385,19 @@ LEVEL_TITLES = {
     # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
     1:   ("🌱", "Росток"),
     5:   ("🍃", "Листок"),
-    10:  ("🌿", "Веточка"),
+    10:  ("🌴", "Веточка"),
     20:  ("💧", "Роса"),
-    35:  ("🌷", "Цветок"),
+    35:  ("🌺", "Цветок"),
     55:  ("🦋", "Мотылёк"),
     80:  ("🕊", "Птенец"),
-    110: ("🍂", "Осенний ветер"),
-    150: ("☁️", "Облако"),
+    110: ("🌻", "Осенний ветер"),
+    150: ("☀️", "Облако"),
     200: ("✨", "Сияние"),
-    260: ("🌙", "Лунный свет"),
+    260: ("🌅", "Лунный свет"),
     330: ("🌟", "Звезда"),
-    400: ("🌌", "Туманность"),
-    460: ("💫", "Космос"),
-    500: ("🤍", "Душа чата"),
+    400: ("🏝", "Туманность"),
+    460: ("🌞", "Космос"),
+    500: ("💛", "Душа чата"),
 }
 
 def get_level_title(level: int) -> tuple:
@@ -579,7 +579,7 @@ RULES_TEXT = (
     "Повторное нарушение — бан.\n\n"
 
     "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-    "🌿 <b>Система наказаний</b>\n"
+    "🌴 <b>Система наказаний</b>\n"
     "1️⃣ Первое нарушение → предупреждение (варн)\n"
     "2️⃣ Повторное → мут или бан\n\n"
     "<i>Соблюдай правила — будь частью комьюнити 🤝</i>\n"
@@ -596,9 +596,9 @@ BAN_MESSAGES = [
     "⛔ {name} удалён из чата\n📝 Причина: <b>{reason}</b>",
 ]
 WARN_MESSAGES = [
-    "🌿 <b>Предупреждение</b>\n<code>─</code>\n👤 {name}\n📋 Причина: <b>{reason}</b>\n⚡ Варнов: <b>{count}/{max}</b>\n\n<i>При достижении лимита — бан.</i>",
+    "🌴 <b>Предупреждение</b>\n<code>─</code>\n👤 {name}\n📋 Причина: <b>{reason}</b>\n⚡ Варнов: <b>{count}/{max}</b>\n\n<i>При достижении лимита — бан.</i>",
     "⚡ {name} получил варн\n📋 <b>{reason}</b> · <b>{count}/{max}</b>",
-    "🌿 Варн #{count} · {name}\n📝 <b>{reason}</b>\n<i>Осталось: {max} — {count}</i>",
+    "🌴 Варн #{count} · {name}\n📝 <b>{reason}</b>\n<i>Осталось: {max} — {count}</i>",
 ]
 AUTOBAN_MESSAGES = [
     "🤖 <b>Автобан</b>\n<code>─</code>\n👤 {name}\n⚡ Лимит варнов достигнут: <b>{max}/{max}</b>\n\n<i>Заблокирован автоматически.</i>",
@@ -637,14 +637,14 @@ QUOTES = [
 ]
 BALL_ANSWERS = [
     "🌟 Определённо да!", "🔥 Без сомнений!", "🌈 Скорее всего да.",
-    "🌫 Трудно сказать.", "⏳ Спроси потом.", "🌀 Пока неясно.",
-    "🌑 хз", "❄️ Нет.", "🪨 Определённо нет",
+    "🌊 Трудно сказать.", "⏳ Спроси потом.", "🌀 Пока неясно.",
+    "🌑 хз", "🍉 Нет.", "🪨 Определённо нет",
     "✨ Да, и ещё раз да!", "💯 Абсолютно точно!", "🎯 Попал в точку — да!",
     "😂 Смешной вопрос. Нет.", "🤔 Мои источники говорят — нет.",
     "🧿 Картина неоднозначная.", "🌊 Спроси у моря — оно знает.",
     "🦋 Вселенная говорит да, но осторожно.", "💀 Даже не надейся.",
     "🎲 Подбрось монетку — результат тот же.", "🤖 Ответ вычислен: нет.",
-    "⚡ Знаки говорят да!", "🌙 Луна на твоей стороне.",
+    "⚡ Знаки говорят да!", "🌅 Луна на твоей стороне.",
     "🐉 Дракон внутри тебя говорит: иди на риск.",
     "😴 Проснись и переспроси.", "🎪 Шоу продолжается — ответ да!",
 ]
@@ -742,7 +742,7 @@ COMPLIMENTS = [
     "Ты как редкий метеорит — очень ценный! 🌠", "Интеллект зашкаливает! 🧬",
     "Твоё чувство юмора — настоящее сокровище! 😂",
     "Ты из тех людей с которыми приятно общаться! 🤝",
-    "Твои сообщения всегда поднимают настроение! 💫",
+    "Твои сообщения всегда поднимают настроение! 🌞",
     "Ты как глоток свежего воздуха в этом чате! 🌬️",
     "Общение с тобой — одно удовольствие! ✨",
     "Ты умеешь видеть то что другие не замечают! 👁",
@@ -776,7 +776,7 @@ PREDICTIONS = [
     "⚡ Сегодня ты на пике — используй этот день.",
     "🧹 Время убраться — в доме и в голове.",
     "🎵 Включи любимую музыку — станет лучше.",
-    "🌙 Ночь принесёт ответы на вопросы которые мучают.",
+    "🌅 Ночь принесёт ответы на вопросы которые мучают.",
     "🦋 Маленькое изменение сегодня даст большой результат.",
     "🏆 Ты ближе к цели чем думаешь — не останавливайся.",
     "👀 Кто-то тайно восхищается тобой прямо сейчас.",
@@ -788,7 +788,7 @@ PREDICTIONS = [
     "🌺 Скажи кому-нибудь что они важны для тебя — не пожалеешь.",
     "🚀 Большая возможность появится неожиданно — не пропусти.",
     "🧿 Доверяй только тем кого знаешь давно.",
-    "💫 Сегодня твой день — просто поверь в это.",
+    "🌞 Сегодня твой день — просто поверь в это.",
     "🎪 Жизнь подкинет что-то неожиданное — прими с юмором.",
 ]
 
@@ -943,7 +943,7 @@ async def handle_verify_result(request):
                 # Уведомляем юзера
                 await bot.send_message(uid,
                     f""
-                    f"🥀 Обнаружен: <b>{reason}</b>\n"
+                    f"🌵 Обнаружен: <b>{reason}</b>\n"
                     f"Отключи VPN/прокси и попробуй зайти снова.",
                     parse_mode="HTML")
             except: pass
@@ -997,12 +997,12 @@ async def is_admin_by_id(chat_id: int, user_id: int) -> bool:
         return False
 
 async def require_admin(message: Message) -> bool:
-    # 🧊 Admin Guardian: заморожен?
+    # 🧃 Admin Guardian: заморожен?
     if ag.is_frozen(message.from_user.id):
         info = ag.get_freeze_info(message.from_user.id)
         try:
             await message.reply(
-                f"🧊 Твоя админка <b>заморожена</b> владельцем.\n"
+                f"🧃 Твоя админка <b>заморожена</b> владельцем.\n"
                 f"📝 Причина: {info.get('reason') or '—'}\n\n"
                 f"Свяжись с владельцем для разблокировки.",
                 parse_mode="HTML"
@@ -1221,7 +1221,7 @@ async def dm_warn_user(uid: int, uname: str, reason: str, chat_title: str,
     try:
         await bot.send_message(
             uid,
-            f"🌿 <b>Уведомление — {chat_title}</b>\n\n"
+            f"🌴 <b>Уведомление — {chat_title}</b>\n\n"
             f"· Действие: <b>{action}</b>\n"
             f"· Причина: <b>{reason}</b>\n"
             f"· Модератор: <b>{by_name}</b>\n\n"
@@ -1233,7 +1233,7 @@ async def dm_warn_user(uid: int, uname: str, reason: str, chat_title: str,
 
 async def get_weather(city: str) -> str:
     if not WEATHER_API_KEY:
-        return "🌧 Weather API ключ не настроен."
+        return "🌞 Weather API ключ не настроен."
     try:
         async with aiohttp.ClientSession() as s:
             async with s.get(
@@ -1242,12 +1242,12 @@ async def get_weather(city: str) -> str:
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as r:
                 d = await r.json()
-                if d.get("cod") != 200: return f"🌧 Город <b>{city}</b> не найден."
+                if d.get("cod") != 200: return f"🌞 Город <b>{city}</b> не найден."
                 temp  = round(d["main"]["temp"]); feels = round(d["main"]["feels_like"])
                 desc  = d["weather"][0]["description"].capitalize()
                 humid = d["main"]["humidity"]; wind = round(d["wind"]["speed"])
                 dl    = desc.lower()
-                emoji = "☀️" if "ясно" in dl else ("🌧" if "дождь" in dl else ("❄️" if "снег" in dl else "⛅"))
+                emoji = "☀️" if "ясно" in dl else ("🌞" if "дождь" in dl else ("🍉" if "снег" in dl else "⛅"))
                 return (f"{emoji} <b>Погода в {d['name']}</b>\n\n"
                         f"🌡 Температура: <b>{temp}°C</b> (ощущается {feels}°C)\n"
                         f"📋 {desc}\n💧 Влажность: <b>{humid}%</b>\n🌬 Ветер: <b>{wind} м/с</b>")
@@ -1282,7 +1282,7 @@ def kb_user_panel(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔇  Мут",               callback_data=f"panel:mute:{tid}"),
          InlineKeyboardButton(text="🔊  Размут",             callback_data=f"panel:unmute:{tid}")],
-        [InlineKeyboardButton(text="🌿  Варн",              callback_data=f"panel:warn:{tid}"),
+        [InlineKeyboardButton(text="🌴  Варн",              callback_data=f"panel:warn:{tid}"),
          InlineKeyboardButton(text="✨  Снять варн",         callback_data=f"panel:unwarn:{tid}")],
         [InlineKeyboardButton(text="🔨  Бан",                callback_data=f"panel:ban:{tid}"),
          InlineKeyboardButton(text="🕊️  Разбан",             callback_data=f"panel:unban:{tid}")],
@@ -1366,7 +1366,7 @@ def kb_fun(tid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎲 Шуточный бан",     callback_data=f"fun:rban:{tid}"),
          InlineKeyboardButton(text="🔮 Предсказание",      callback_data=f"fun:predict:{tid}")],
-        [InlineKeyboardButton(text="🌌 Гороскоп",          callback_data=f"fun:horoscope:{tid}"),
+        [InlineKeyboardButton(text="🏝 Гороскоп",          callback_data=f"fun:horoscope:{tid}"),
          InlineKeyboardButton(text="🌸 Комплимент",         callback_data=f"fun:compliment:{tid}")],
         kb_back(tid),
     ])
@@ -1391,7 +1391,7 @@ def kb_members(tid: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📈  Топ XP",             callback_data=f"members:topxp:{tid}"),
          InlineKeyboardButton(text="🥇  Топ МВП",            callback_data=f"members:mvpstats:{tid}")],
         [InlineKeyboardButton(text="🔇  Мут 24ч реклама",    callback_data=f"members:warn24:{tid}"),
-         InlineKeyboardButton(text="🌿  Варны участника",    callback_data=f"members:warninfo:{tid}")],
+         InlineKeyboardButton(text="🌴  Варны участника",    callback_data=f"members:warninfo:{tid}")],
         [InlineKeyboardButton(text="🚫  Список банов",       callback_data=f"members:banlist:{tid}"),
          InlineKeyboardButton(text="📋  Отчёт модератора",   callback_data=f"members:modreport:{tid}")],
         [InlineKeyboardButton(text="‹ Назад",               callback_data=f"panel:mainmenu:0")],
@@ -1409,7 +1409,7 @@ def kb_chat(tid: int) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="🐇 Выкл slowmode",       callback_data=f"chat:slow:0:{tid}")],
         [InlineKeyboardButton(text=f"🧼 Антимат {ms}",       callback_data=f"chat:antimat:{tid}"),
          InlineKeyboardButton(text=f"🤖 Автокик {ks}",       callback_data=f"chat:autokick:{tid}")],
-        [InlineKeyboardButton(text="📜 Правила чата",         callback_data=f"chat:rules:{tid}"),
+        [InlineKeyboardButton(text="🗺 Правила чата",         callback_data=f"chat:rules:{tid}"),
          InlineKeyboardButton(text="📈 Статистика бота",      callback_data=f"chat:botstats:{tid}")],
         [InlineKeyboardButton(text="🎪 Турнир старт",         callback_data=f"chat:tournament_start:{tid}"),
          InlineKeyboardButton(text="🏁 Турнир стоп",          callback_data=f"chat:tournament_stop:{tid}")],
@@ -1456,7 +1456,7 @@ class PendingInputMiddleware(BaseMiddleware):
                             until_date=datetime.now() + timedelta(minutes=mins))
                         await event.answer(random.choice(MUTE_MESSAGES).format(
                             name=f"<b>{target_name}</b>", time=label), parse_mode="HTML")
-                    else: await event.reply("🌿 Примеры: 10, 30m, 2h, 1d")
+                    else: await event.reply("🌴 Примеры: 10, 30m, 2h, 1d")
                 elif action == "warn_custom":
                     reason = text.strip() or "Нарушение правил"
                     warnings[chat_id][target_id] += 1; count = warnings[chat_id][target_id]
@@ -1481,7 +1481,7 @@ class PendingInputMiddleware(BaseMiddleware):
                     if len(parts) >= 3:
                         await bot.send_poll(chat_id, question=parts[0], options=parts[1:], is_anonymous=False)
                     else:
-                        await event.reply("🌿 Формат: Вопрос|Вариант1|Вариант2")
+                        await event.reply("🌴 Формат: Вопрос|Вариант1|Вариант2")
                 elif action == "weather_city":
                     await event.answer(await get_weather(text.strip()), parse_mode="HTML")
                 elif action == "mypanel_announce":
@@ -1489,7 +1489,7 @@ class PendingInputMiddleware(BaseMiddleware):
                         f"📢 <b>Объявление</b>\n\n{text}\n\n— <b>Администрация</b>", parse_mode="HTML")
                     await event.answer("✨ Объявление отправлено!")
             except Exception as e:
-                await event.reply(f"🌿 Ошибка: {e}")
+                await event.reply(f"🌴 Ошибка: {e}")
             try: await event.delete()
             except: pass
             return
@@ -1508,16 +1508,16 @@ class StatsMiddleware(BaseMiddleware):
     CASCADE_STEPS = [
         # (action, duration_min, label, emoji)
         ("warn",  0,     "предупреждение",      "🍃"),   # 1-е
-        ("warn",  0,     "второе предупреждение","🌿"),   # 2-е
-        ("mute",  5,     "мут 5 минут",          "🌙"),   # 3-е
-        ("mute",  15,    "мут 15 минут",         "🌙"),   # 4-е
-        ("mute",  30,    "мут 30 минут",         "🌙"),   # 5-е
-        ("mute",  60,    "мут 1 час",            "🌙"),   # 6-е
-        ("mute",  180,   "мут 3 часа",           "🌙"),   # 7-е
-        ("mute",  360,   "мут 6 часов",          "🌙"),   # 8-е
-        ("mute",  720,   "мут 12 часов",         "❄️"),   # 9-е
-        ("mute",  1380,  "мут 23 часа",          "❄️"),   # 10-е
-        ("ban",   720,   "бан 12 часов",         "🍂"),   # 11-е и далее
+        ("warn",  0,     "второе предупреждение","🌴"),   # 2-е
+        ("mute",  5,     "мут 5 минут",          "🌅"),   # 3-е
+        ("mute",  15,    "мут 15 минут",         "🌅"),   # 4-е
+        ("mute",  30,    "мут 30 минут",         "🌅"),   # 5-е
+        ("mute",  60,    "мут 1 час",            "🌅"),   # 6-е
+        ("mute",  180,   "мут 3 часа",           "🌅"),   # 7-е
+        ("mute",  360,   "мут 6 часов",          "🌅"),   # 8-е
+        ("mute",  720,   "мут 12 часов",         "🍉"),   # 9-е
+        ("mute",  1380,  "мут 23 часа",          "🍉"),   # 10-е
+        ("ban",   720,   "бан 12 часов",         "🌻"),   # 11-е и далее
     ]
 
     # Сброс лестницы если нет нарушений N часов
@@ -1589,7 +1589,7 @@ class StatsMiddleware(BaseMiddleware):
                     next_hint = ""
                     if next_idx < len(self.CASCADE_STEPS):
                         _, _, next_lbl, _ = self.CASCADE_STEPS[next_idx]
-                        next_hint = f"🌿 следующее нарушение — {next_lbl}"
+                        next_hint = f"🌴 следующее нарушение — {next_lbl}"
                     await bot.send_message(
                         cid,
                         f"{emoji} <a href='tg://user?id={uid}'>{name}</a>, помедленнее ‧ "
@@ -1615,9 +1615,9 @@ class StatsMiddleware(BaseMiddleware):
                         # Подсказка о следующей ступени
                         next_action, next_dur, next_label, _ = self.CASCADE_STEPS[step_idx + 1] if step_idx + 1 < len(self.CASCADE_STEPS) else (None, None, None, None)
                         if next_label:
-                            suffix_lines.append(f"🌿 при следующем нарушении — {next_label}")
+                            suffix_lines.append(f"🌴 при следующем нарушении — {next_label}")
                     else:
-                        suffix_lines.append(f"❄️ это максимальная ступень")
+                        suffix_lines.append(f"🍉 это максимальная ступень")
 
                     suffix_lines.append(f"🕊 сброс лестницы через 24 часа без нарушений")
 
@@ -1643,11 +1643,11 @@ class StatsMiddleware(BaseMiddleware):
                         f"{emoji} <a href='tg://user?id={uid}'>{name}</a> · {label}\n"
                         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
                         f"🌸 нарушение №{human_step} ‧ {count} сообщ/{window_sec}с\n"
-                        f"🍂 это максимальная ступень — превышен лимит терпения\n"
+                        f"🌻 это максимальная ступень — превышен лимит терпения\n"
                         f"🕊 сброс лестницы через 24 часа без нарушений",
                         parse_mode="HTML"
                     )
-                    add_mod_history(cid, uid, f"🍂 Бан {duration_min}м (флуд · ступень {human_step})",
+                    add_mod_history(cid, uid, f"🌻 Бан {duration_min}м (флуд · ступень {human_step})",
                                     f"{count} сообщений за {window_sec}с", "AutoMod · Cascade")
             except Exception as _e:
                 pass
@@ -1673,7 +1673,49 @@ class StatsMiddleware(BaseMiddleware):
                 except: pass
                 return  # не обрабатываем дальше
 
-            # 🌫 ТИШИНА — общий мут чата
+            # 🛡 ЩИТ — антибуллинг: агрессия против защищённого юзера
+            if not is_adm and event.reply_to_message and event.reply_to_message.from_user:
+                victim_id = event.reply_to_message.from_user.id
+                if victim_id != uid and is_shielded(cid, victim_id):
+                    # Проверяем агрессивную лексику
+                    txt = (event.text or "").lower()
+                    _AGGRO_WORDS = [
+                        "сдохни", "убей себя", "ksebe", "кретин", "тупой", "тупая",
+                        "даун", "дебил", "идиот", "урод", "уродина", "тварь",
+                        "ничтожество", "никчём", "лох", "лошара", "пидор", "пидар",
+                        "шлюх", "сука", "мраз", "выпили", "повес", "иди нах",
+                        "заткнись", "молчи", "никому не нужен", "всем похуй на тебя",
+                        "ненавижу тебя", "ты ничто",
+                    ]
+                    if any(w in txt for w in _AGGRO_WORDS):
+                        victim = event.reply_to_message.from_user
+                        alert = (
+                            f"🛡 <b>Агрессия против защищённого</b>\n"
+                            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                            f"☀️ чат — «{event.chat.title}»\n"
+                            f"💛 под щитом — {victim.mention_html()}\n"
+                            f"🌵 пишет — {event.from_user.mention_html()} (<code>{uid}</code>)\n"
+                            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                            f"🌴 <i>сообщение:</i> {(event.text or '')[:200]}\n"
+                            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                            f"<i>🌺 загляни в чат — возможна травля</i>"
+                        )
+                        asyncio.create_task(_notify_admins(cid, alert, exclude_uid=uid))
+                        # Мягкое предупреждение в чат
+                        try:
+                            warn_msg = await event.reply(
+                                f"🌴 {event.from_user.mention_html()}, полегче ‧ "
+                                f"этот человек под защитой\n"
+                                f"<i>💛 админы уже в курсе</i>",
+                                parse_mode="HTML")
+                            async def _del_warn(m):
+                                await asyncio.sleep(20)
+                                try: await m.delete()
+                                except: pass
+                            asyncio.create_task(_del_warn(warn_msg))
+                        except: pass
+
+            # 🌊 ТИШИНА — общий мут чата
             silence_until = _silence_active.get(cid, 0)
             if silence_until > 0:
                 if silence_until > time.time():
@@ -1684,7 +1726,7 @@ class StatsMiddleware(BaseMiddleware):
                 else:
                     _silence_active.pop(cid, None)
 
-            # 🌫 ФИЛЬТР — стоп-слова
+            # 🌊 ФИЛЬТР — стоп-слова
             if not is_adm and not is_wl and event.text and _chat_filters.get(cid):
                 text_lower = event.text.lower()
                 for word in _chat_filters[cid]:
@@ -1693,9 +1735,9 @@ class StatsMiddleware(BaseMiddleware):
                         except: pass
                         try:
                             sent = await bot.send_message(cid,
-                                f"🌫 <b>стоп-слово</b>\n"
+                                f"🌊 <b>стоп-слово</b>\n"
                                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                                f"🌿 {event.from_user.mention_html()} ‧ это слово запрещено в чате",
+                                f"🌴 {event.from_user.mention_html()} ‧ это слово запрещено в чате",
                                 parse_mode="HTML")
                             async def _del_filter(m):
                                 await asyncio.sleep(8)
@@ -1718,7 +1760,7 @@ class StatsMiddleware(BaseMiddleware):
                             sent = await event.reply(
                                 f"🔐 {event.from_user.mention_html()}, не забудь пройти капчу\n"
                                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                                f"🌷 нажми эмодзи <b>{pending['correct']}</b> в сообщении выше",
+                                f"🌺 нажми эмодзи <b>{pending['correct']}</b> в сообщении выше",
                                 parse_mode="HTML")
                             async def _del_rem(m):
                                 await asyncio.sleep(30)
@@ -1799,7 +1841,7 @@ class StatsMiddleware(BaseMiddleware):
                 uid_str = str(uid)
                 b = boosters.get(uid_str, {})
                 if b.get("b1", 0) > now_ts or b.get("b4", 0) > now_ts: _xp = int(_xp * 2)
-                # 🌫 СИСТЕМА XP/УРОВНЕЙ/РЕПЫ ВЫПИЛЕНА
+                # 🌊 СИСТЕМА XP/УРОВНЕЙ/РЕПЫ ВЫПИЛЕНА
                 # xp_data[cid][uid] += _xp
                 pass
 
@@ -1909,7 +1951,7 @@ class AntiMatMiddleware(BaseMiddleware):
                             until_date=datetime.now() + timedelta(minutes=mins))
                         await event.answer(random.choice(MUTE_MESSAGES).format(
                             name=f"<b>{target_name}</b>", time=label), parse_mode="HTML")
-                    else: await event.reply("🌿 Примеры: 10, 30m, 2h, 1d")
+                    else: await event.reply("🌴 Примеры: 10, 30m, 2h, 1d")
                 elif action == "warn_custom":
                     reason = text.strip() or "Нарушение правил"
                     warnings[chat_id][target_id] += 1; count = warnings[chat_id][target_id]
@@ -1931,11 +1973,11 @@ class AntiMatMiddleware(BaseMiddleware):
                 elif action == "poll_text":
                     parts = [x.strip() for x in text.split("|") if x.strip()]
                     if len(parts) >= 3: await bot.send_poll(chat_id, question=parts[0], options=parts[1:], is_anonymous=False)
-                    else: await event.reply("🌿 Формат: Вопрос|Вариант1|Вариант2")
+                    else: await event.reply("🌴 Формат: Вопрос|Вариант1|Вариант2")
                 elif action == "weather_city":
                     await event.answer(await get_weather(text.strip()), parse_mode="HTML")
             except Exception as e:
-                await event.reply(f"🌿 Ошибка: {e}")
+                await event.reply(f"🌴 Ошибка: {e}")
             try: await event.delete()
             except: pass
             return
@@ -2101,7 +2143,7 @@ async def cb_captcha_skip(call: CallbackQuery):
 
     pending = _captcha_pending.get(cid, {}).get(uid)
     if not pending:
-        await call.answer("🌿 Капча уже завершена.", show_alert=True)
+        await call.answer("🌴 Капча уже завершена.", show_alert=True)
         return
 
     name = pending.get("name", str(uid))
@@ -2200,7 +2242,7 @@ async def cb_captcha(call: CallbackQuery):
         except: pass
 
         note = await call.message.answer(
-            f"🥀 <b>{name}</b> ввёл неверный ответ и был удалён.",
+            f"🌵 <b>{name}</b> ввёл неверный ответ и был удалён.",
             parse_mode="HTML"
         )
         await asyncio.sleep(8)
@@ -2212,7 +2254,7 @@ async def cb_captcha(call: CallbackQuery):
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 
 # ─── КАПЧА ───
-_CAPTCHA_EMOJI_POOL = ["🌸", "🍃", "🌿", "🦋", "🌷", "🌱", "🤍", "🌙", "✨", "🌊", "🍂", "🪻"]
+_CAPTCHA_EMOJI_POOL = ["🌸", "🍃", "🌴", "🦋", "🌺", "🌱", "💛", "🌅", "✨", "🌊", "🌻", "🥥"]
 _pending_captcha: dict = {}
 _captcha_passed: set = set()
 CAPTCHA_TIMEOUT = 1000
@@ -2263,17 +2305,17 @@ async def _captcha_send(cid: int, member, message_to_reply=None):
     text = (
         f"🔐 <b>Капча для {member.mention_html()}</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"🌷 нажми кнопку с эмодзи <b>{correct}</b>\n"
+        f"🌺 нажми кнопку с эмодзи <b>{correct}</b>\n"
         f"🕊 у тебя <b>{CAPTCHA_TIMEOUT // 60} минут</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"<i>🤍 если бот ты — просто не нажимай</i>"
+        f"<i>💛 если бот ты — просто не нажимай</i>"
     )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=options[i], callback_data=f"cap:try:{cid}:{member.id}:{options[i]}") for i in range(4)],
         [
-            InlineKeyboardButton(text="🌿 Зайти через админа", callback_data=f"cap:askadmin:{cid}:{member.id}"),
-            InlineKeyboardButton(text="🍂 Удалить юзера",       callback_data=f"cap:kick:{cid}:{member.id}"),
+            InlineKeyboardButton(text="🌴 Зайти через админа", callback_data=f"cap:askadmin:{cid}:{member.id}"),
+            InlineKeyboardButton(text="🌻 Удалить юзера",       callback_data=f"cap:kick:{cid}:{member.id}"),
         ],
     ])
 
@@ -2304,9 +2346,9 @@ async def _captcha_timeout_task(cid: int, uid: int, name: str):
     except: pass
     try:
         await bot.send_message(cid,
-            f"🌫 <b>Капча не пройдена</b>\n"
+            f"🌊 <b>Капча не пройдена</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🍂 <b>{name}</b> удалён ‧ не прошёл капчу за {CAPTCHA_TIMEOUT // 60} минут",
+            f"🌻 <b>{name}</b> удалён ‧ не прошёл капчу за {CAPTCHA_TIMEOUT // 60} минут",
             parse_mode="HTML")
     except: pass
     msg_id = pending.get("msg_id")
@@ -2320,7 +2362,7 @@ async def cb_captcha_try(call: CallbackQuery):
     parts = call.data.split(":")
     cid, target_uid, choice = int(parts[2]), int(parts[3]), parts[4]
     if call.from_user.id != target_uid:
-        await call.answer("🌫 капча не для тебя", show_alert=True); return
+        await call.answer("🌊 капча не для тебя", show_alert=True); return
     pending = _pending_captcha.get((cid, target_uid))
     if not pending:
         await call.answer("✨ уже не актуально", show_alert=True); return
@@ -2331,11 +2373,11 @@ async def cb_captcha_try(call: CallbackQuery):
             await call.message.edit_text(
                 f"✨ <b>{pending['name']}</b> прошёл капчу\n"
                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                f"🤍 добро пожаловать", parse_mode="HTML")
+                f"💛 добро пожаловать", parse_mode="HTML")
         except: pass
-        await call.answer("🌷 проверка пройдена")
+        await call.answer("🌺 проверка пройдена")
     else:
-        await call.answer(f"🌫 не та кнопка ‧ нажми {pending['correct']}", show_alert=True)
+        await call.answer(f"🌊 не та кнопка ‧ нажми {pending['correct']}", show_alert=True)
 
 
 @dp.callback_query(F.data.startswith("cap:askadmin:"))
@@ -2348,18 +2390,18 @@ async def cb_captcha_askadmin(call: CallbackQuery):
             await call.answer("✨ уже не актуально", show_alert=True); return
         kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="✨ одобрить", callback_data=f"cap:approve:{cid}:{target_uid}"),
-            InlineKeyboardButton(text="🍂 отклонить", callback_data=f"cap:deny:{cid}:{target_uid}"),
+            InlineKeyboardButton(text="🌻 отклонить", callback_data=f"cap:deny:{cid}:{target_uid}"),
         ]])
         try:
             await call.message.edit_text(
-                f"🌿 <b>{pending['name']}</b> просит зайти через админа\n"
+                f"🌴 <b>{pending['name']}</b> просит зайти через админа\n"
                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                f"🤍 админы — решите пускать или нет",
+                f"💛 админы — решите пускать или нет",
                 parse_mode="HTML", reply_markup=kb)
-            await call.answer("🌿 заявка отправлена админам")
+            await call.answer("🌴 заявка отправлена админам")
         except: pass
     else:
-        await call.answer("🌫 только новый юзер может попросить", show_alert=True)
+        await call.answer("🌊 только новый юзер может попросить", show_alert=True)
 
 
 @dp.callback_query(F.data.startswith("cap:approve:"))
@@ -2368,7 +2410,7 @@ async def cb_captcha_approve(call: CallbackQuery):
     cid, target_uid = int(parts[2]), int(parts[3])
     is_admin = await is_admin_by_id(cid, call.from_user.id) or call.from_user.id in OWNERS
     if not is_admin:
-        await call.answer("🌫 только админ может одобрить", show_alert=True); return
+        await call.answer("🌊 только админ может одобрить", show_alert=True); return
     pending = _pending_captcha.get((cid, target_uid))
     if not pending:
         await call.answer("✨ уже не актуально", show_alert=True); return
@@ -2378,7 +2420,7 @@ async def cb_captcha_approve(call: CallbackQuery):
         await call.message.edit_text(
             f"✨ <b>{pending['name']}</b> допущен в чат\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🤍 решение принял — {call.from_user.mention_html()}",
+            f"💛 решение принял — {call.from_user.mention_html()}",
             parse_mode="HTML")
     except: pass
     await call.answer("✨ юзер допущен")
@@ -2390,7 +2432,7 @@ async def cb_captcha_deny(call: CallbackQuery):
     cid, target_uid = int(parts[2]), int(parts[3])
     is_admin = await is_admin_by_id(cid, call.from_user.id) or call.from_user.id in OWNERS
     if not is_admin:
-        await call.answer("🌫 только админ может отклонить", show_alert=True); return
+        await call.answer("🌊 только админ может отклонить", show_alert=True); return
     pending = _pending_captcha.get((cid, target_uid))
     if not pending:
         await call.answer("✨ уже не актуально", show_alert=True); return
@@ -2401,12 +2443,12 @@ async def cb_captcha_deny(call: CallbackQuery):
     except: pass
     try:
         await call.message.edit_text(
-            f"🍂 <b>{pending['name']}</b> отклонён администрацией\n"
+            f"🌻 <b>{pending['name']}</b> отклонён администрацией\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🌫 решение принял — {call.from_user.mention_html()}",
+            f"🌊 решение принял — {call.from_user.mention_html()}",
             parse_mode="HTML")
     except: pass
-    await call.answer("🍂 юзер удалён")
+    await call.answer("🌻 юзер удалён")
 
 
 @dp.callback_query(F.data.startswith("cap:kick:"))
@@ -2415,7 +2457,7 @@ async def cb_captcha_kick(call: CallbackQuery):
     cid, target_uid = int(parts[2]), int(parts[3])
     is_admin = await is_admin_by_id(cid, call.from_user.id) or call.from_user.id in OWNERS
     if not is_admin:
-        await call.answer("🌫 только админ может удалить юзера", show_alert=True); return
+        await call.answer("🌊 только админ может удалить юзера", show_alert=True); return
     pending = _pending_captcha.get((cid, target_uid))
     name = pending["name"] if pending else f"ID {target_uid}"
     _pending_captcha.pop((cid, target_uid), None)
@@ -2425,12 +2467,12 @@ async def cb_captcha_kick(call: CallbackQuery):
     except: pass
     try:
         await call.message.edit_text(
-            f"🍂 <b>{name}</b> удалён из чата\n"
+            f"🌻 <b>{name}</b> удалён из чата\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🌫 удалил — {call.from_user.mention_html()}",
+            f"🌊 удалил — {call.from_user.mention_html()}",
             parse_mode="HTML")
     except: pass
-    await call.answer("🍂 юзер удалён")
+    await call.answer("🌻 юзер удалён")
 
 
 # ─── СОСТОЯНИЯ ЗАЩИТЫ ───
@@ -2473,6 +2515,182 @@ except Exception as _e:
     logging.warning(f"defense init: {_e}")
 
 
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+#  🛡 АНТИБУЛЛИНГ ‧ SOS · анон-жалоба · щит над юзером
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+
+# {cid: {uid: expires_at}} — юзеры под щитом
+_shield_users: dict = defaultdict(dict)
+# Кулдаун на SOS чтоб не спамили: {(cid, uid): last_ts}
+_sos_cooldown: dict = {}
+SOS_COOLDOWN_SEC = 120
+
+
+def _antibully_init_db():
+    conn = sqlite3.connect("captcha_state.db")
+    conn.execute("CREATE TABLE IF NOT EXISTS shields (cid INTEGER NOT NULL, uid INTEGER NOT NULL, expires_at REAL NOT NULL, PRIMARY KEY (cid, uid))")
+    conn.commit()
+    conn.close()
+
+
+def _antibully_load():
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        for cid, uid, expires in conn.execute("SELECT cid, uid, expires_at FROM shields"):
+            if expires > time.time():
+                _shield_users[cid][uid] = expires
+        conn.close()
+    except Exception as e:
+        logging.warning(f"antibully load: {e}")
+
+
+def is_shielded(cid: int, uid: int) -> bool:
+    if uid not in _shield_users.get(cid, {}):
+        return False
+    if _shield_users[cid][uid] < time.time():
+        _shield_users[cid].pop(uid, None)
+        return False
+    return True
+
+
+async def _notify_admins(cid: int, text: str, exclude_uid: int = 0):
+    """Шлёт текст всем админам чата в ЛС. Возвращает сколько получили."""
+    notified = 0
+    try:
+        admins = await bot.get_chat_administrators(cid)
+        for adm in admins:
+            if adm.user.is_bot:
+                continue
+            if adm.user.id == exclude_uid:
+                continue
+            try:
+                await bot.send_message(adm.user.id, text, parse_mode="HTML")
+                notified += 1
+                await asyncio.sleep(0.2)
+            except:
+                pass
+    except Exception as e:
+        logging.warning(f"notify admins: {e}")
+    return notified
+
+
+try:
+    _antibully_init_db()
+    _antibully_load()
+except Exception as _e:
+    logging.warning(f"antibully init: {_e}")
+
+
+# ─── 🆘 ТРЕВОЖНАЯ КНОПКА ───
+@dp.message(F.text.regexp(r"^\s*[\.\/](sos|помогите|спасите|sos911|тревога)(\s|$)"))
+async def cmd_sos(message: Message):
+    if message.chat.type not in ("group", "supergroup"):
+        return
+    cid = message.from_user.id and message.chat.id
+    uid = message.from_user.id
+
+    # Кулдаун
+    last = _sos_cooldown.get((cid, uid), 0)
+    if time.time() - last < SOS_COOLDOWN_SEC:
+        wait = int(SOS_COOLDOWN_SEC - (time.time() - last))
+        await reply_auto_delete(message, f"🌊 подожди ещё {wait}с прежде чем звать снова")
+        return
+    _sos_cooldown[(cid, uid)] = time.time()
+
+    # Контекст — на что реплай (если есть)
+    context = ""
+    link = ""
+    if message.reply_to_message:
+        rt = message.reply_to_message
+        offender = rt.from_user.full_name if rt.from_user else "неизвестно"
+        context = f"\n🌵 возможный обидчик — {rt.from_user.mention_html() if rt.from_user else offender}"
+        # Ссылка на сообщение
+        if message.chat.username:
+            link = f"\nhttps://t.me/{message.chat.username}/{rt.message_id}"
+
+    # Уведомление в чат (мягкое)
+    await message.answer(
+        f"🆘 <b>{message.from_user.mention_html()} зовёт на помощь</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"💛 админы уже получили сигнал\n"
+        f"🌴 держись, помощь рядом",
+        parse_mode="HTML"
+    )
+
+    # Алерт всем админам в ЛС
+    alert = (
+        f"🆘 <b>SOS в чате «{message.chat.title}»</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🌺 позвал — {message.from_user.mention_html()} (<code>{uid}</code>)"
+        f"{context}"
+        f"{link}\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"<i>🌴 загляни в чат — человеку нужна помощь</i>"
+    )
+    n = await _notify_admins(cid, alert)
+    add_mod_history(cid, uid, "🆘 SOS вызов", "Тревожная кнопка", message.from_user.full_name)
+
+
+# ─── 🤫 АНОНИМНАЯ ЖАЛОБА ───
+# Состояние: ждём текст жалобы от юзера в ЛС {uid: cid}
+_anon_complaint_pending: dict = {}
+
+@dp.message(F.text.regexp(r"^\s*[\.\/](анонжалоба|анонимка|жалоба|complaint)(\s|$)"))
+async def cmd_anon_complaint_start(message: Message):
+    if message.chat.type in ("group", "supergroup"):
+        # В группе — просим перейти в ЛС
+        cid = message.chat.id
+        _anon_complaint_pending[message.from_user.id] = cid
+        try:
+            await bot.send_message(
+                message.from_user.id,
+                f"🤫 <b>Анонимная жалоба</b>\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"🌺 опиши что происходит в чате «{message.chat.title}»\n"
+                f"💛 твоё имя админы НЕ увидят\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"🌴 просто напиши следующим сообщением что случилось",
+                parse_mode="HTML"
+            )
+            await reply_auto_delete(message,
+                "🤫 написал тебе в ЛС — опиши жалобу там анонимно 💛")
+        except:
+            await reply_auto_delete(message,
+                "🌵 напиши мне сначала в ЛС /start, потом сможешь подать анонимную жалобу")
+        try: await message.delete()
+        except: pass
+        return
+
+
+@dp.message(F.chat.type == "private", F.text, ~F.text.startswith("/"))
+async def handle_anon_complaint_text(message: Message):
+    """Ловит текст анонимной жалобы в ЛС."""
+    uid = message.from_user.id
+    if uid not in _anon_complaint_pending:
+        return  # не наш случай — пропускаем дальше (другие хендлеры)
+    cid = _anon_complaint_pending.pop(uid)
+    complaint = message.text[:1000]
+
+    # Шлём админам БЕЗ имени жалобщика
+    alert = (
+        f"🤫 <b>Анонимная жалоба</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"☀️ чат — <b>«{(await bot.get_chat(cid)).title}»</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🌴 <b>суть:</b>\n{complaint}\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"<i>🤫 имя отправителя скрыто</i>"
+    )
+    n = await _notify_admins(cid, alert)
+    await message.answer(
+        f"💛 <b>Жалоба отправлена</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🌺 получили — <b>{n}</b> админов\n"
+        f"🌴 твоё имя они не видят ‧ спасибо что сказал",
+        parse_mode="HTML"
+    )
+
+
 @dp.message(F.new_chat_members)
 async def on_new_member(message: Message):
     cid = message.chat.id
@@ -2484,9 +2702,9 @@ async def on_new_member(message: Message):
                 await bot.ban_chat_member(cid, member.id)
                 await bot.unban_chat_member(cid, member.id)
                 sent = await message.answer(
-                    f"🌿 бот <b>{member.full_name}</b> удалён из чата\n"
+                    f"🌴 бот <b>{member.full_name}</b> удалён из чата\n"
                     f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                    f"🤍 здесь живут только люди",
+                    f"💛 у нас отдыхают только люди",
                     parse_mode="HTML")
                 await asyncio.sleep(5)
                 try: await sent.delete()
@@ -2501,55 +2719,55 @@ async def on_new_member(message: Message):
             if custom_text and custom_text != "👋 Добро пожаловать, {name}!":
                 welcome_text = custom_text.replace("{name}", f"<b>{member.full_name}</b>")
             else:
-                # Рандомные aesthetic-варианты
+                # Рандомные летние варианты ☀️
                 templates = [
-                    # 1. Морское
+                    # 1. Пляжное
                     (
                         f"🌊 на берег вышел кто-то новый\n"
                         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
                         f"🐚 это <b>{member.full_name}</b>\n"
                         f"🪸 волны принесли тебя к нам — оставайся\n"
-                        f"🤍 /rules — карта берега"
+                        f"💛 /rules — карта берега"
                     ),
-                    # 2. Книжное / литературное
+                    # 2. Тропическое
                     (
-                        f"📖 в наш текст вписалось новое имя\n"
+                        f"🌴 новый турист в нашем оазисе\n"
                         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                        f"🪶 <b>{member.full_name}</b> — добро пожаловать в нашу историю\n"
-                        f"🕯 первая страница — /rules\n"
-                        f"🤍 пиши свою главу"
+                        f"🥥 <b>{member.full_name}</b> — располагайся под пальмой\n"
+                        f"🍹 у нас всегда лето\n"
+                        f"💛 /rules — путеводитель"
                     ),
-                    # 3. Тихое ночное
+                    # 3. Закатное
                     (
-                        f"🌃 ночью в чат тихо зашёл человек\n"
+                        f"🌅 пока солнце садится — в чат пришёл кто-то новый\n"
                         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                        f"🌙 это <b>{member.full_name}</b>\n"
-                        f"⭐ располагайся — здесь не спят и не торопят\n"
-                        f"🤍 правила — /rules"
+                        f"🦩 это <b>{member.full_name}</b>\n"
+                        f"✨ оставайся — вечера у нас тёплые\n"
+                        f"💛 правила — /rules"
                     ),
                     # 4. Музыкальное
                     (
-                        f"🎐 кто-то взял новую ноту в нашей мелодии\n"
+                        f"🎵 кто-то добавил свою ноту в наш плейлист\n"
                         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                        f"🎵 <b>{member.full_name}</b>\n"
-                        f"🪞 настройся ‧ найди свой ритм\n"
-                        f"🤍 партитура — /rules"
+                        f"🦩 <b>{member.full_name}</b>\n"
+                        f"🍹 поймай ритм лета вместе с нами\n"
+                        f"💛 партитура — /rules"
                     ),
-                    # 5. Утреннее / лёгкое
+                    # 5. Утреннее / морское
                     (
-                        f"☕ кто-то пришёл на утренний кофе\n"
+                        f"🌞 утро на берегу ‧ кто-то пришёл с нами завтракать\n"
                         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                        f"🌅 это <b>{member.full_name}</b>\n"
-                        f"🥐 устраивайся — у нас тепло\n"
-                        f"🤍 правила в меню — /rules"
+                        f"🍦 это <b>{member.full_name}</b>\n"
+                        f"🏖 устраивайся — у нас всегда тепло\n"
+                        f"💛 правила — /rules"
                     ),
-                    # 6. Дождевое / меланхоличное
+                    # 6. Каникулы / отпуск
                     (
-                        f"🌧 в дверь постучали\n"
+                        f"🕶 кто-то приехал на каникулы\n"
                         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                        f"☂ за порогом — <b>{member.full_name}</b>\n"
-                        f"🪟 заходи, переждём вместе\n"
-                        f"🤍 /rules — пока сушим зонты"
+                        f"🏝 встречайте — <b>{member.full_name}</b>\n"
+                        f"🌺 расслабься, тут все свои\n"
+                        f"💛 /rules — пока загораешь"
                     ),
                 ]
                 import random as _r
@@ -2569,7 +2787,7 @@ async def on_new_member(message: Message):
             sent = await message.answer(
                 f"🌸 <b>{member.full_name}</b> с нами\n"
                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                f"📜 загляни в /rules",
+                f"🗺 загляни в /rules",
                 parse_mode="HTML"
             )
 
@@ -2641,8 +2859,8 @@ async def cb_panel(call: CallbackQuery):
                 f"💬 Чат: <b>{call.message.chat.title}</b>\n"
                 f"📨 Сообщений: <b>{total_msgs}</b>\n"
                 f"⚡ Варнов: <b>{total_warns}</b>\n"
-                f"🧼 Антимат: <b>{'✨ вкл' if ANTI_MAT_ENABLED else '🥀 выкл'}</b>\n"
-                f"🤖 Автокик: <b>{'✨ вкл' if AUTO_KICK_BOTS else '🥀 выкл'}</b>\n\nВыбери раздел:",
+                f"🧼 Антимат: <b>{'✨ вкл' if ANTI_MAT_ENABLED else '🌵 выкл'}</b>\n"
+                f"🤖 Автокик: <b>{'✨ вкл' if AUTO_KICK_BOTS else '🌵 выкл'}</b>\n\nВыбери раздел:",
                 parse_mode="HTML", reply_markup=kb_main_menu())
         elif action == "select":
             await call.message.edit_text(
@@ -2665,7 +2883,7 @@ async def cb_panel(call: CallbackQuery):
                     f"👤 <b>Панель участника</b>\n\n🆔 {mention}{afk}\n"
                     f"🆔 ID: <code>{tid}</code>\n"
                     f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
-                    f"⭐ Репутация: <b>{rep:+d}</b>\n"
+                    f"✨ Репутация: <b>{rep:+d}</b>\n"
                     f"💬 Сообщений: <b>{msgs}</b>\n\n➡️ Выбери действие:",
                     parse_mode="HTML", reply_markup=kb_user_panel(tid))
             else:
@@ -2687,7 +2905,7 @@ async def cb_panel(call: CallbackQuery):
         elif action == "unwarn":
             if warnings[cid][tid] > 0: warnings[cid][tid] -= 1
             await call.message.edit_text(
-                f"🌿 С <b>{tname}</b> снят варн. Осталось: <b>{warnings[cid][tid]}/{MAX_WARNINGS}</b>",
+                f"🌴 С <b>{tname}</b> снят варн. Осталось: <b>{warnings[cid][tid]}/{MAX_WARNINGS}</b>",
                 parse_mode="HTML")
             asyncio.create_task(schedule_delete(call.message))
         elif action == "ban":
@@ -2728,8 +2946,8 @@ async def cb_panel(call: CallbackQuery):
         elif action == "chat":
             await call.message.edit_text(
                 f"⚙️ <b>Управление чатом</b>\n\n"
-                f"🧼 Антимат: <b>{'✨ вкл' if ANTI_MAT_ENABLED else '🥀 выкл'}</b>\n"
-                f"🤖 Автокик: <b>{'✨ вкл' if AUTO_KICK_BOTS else '🥀 выкл'}</b>\n\nВыбери:",
+                f"🧼 Антимат: <b>{'✨ вкл' if ANTI_MAT_ENABLED else '🌵 выкл'}</b>\n"
+                f"🤖 Автокик: <b>{'✨ вкл' if AUTO_KICK_BOTS else '🌵 выкл'}</b>\n\nВыбери:",
                 parse_mode="HTML", reply_markup=kb_chat(tid))
         elif action == "games":
             await call.message.edit_text("🎮 <b>Игры и команды</b>\n\nВыбери:",
@@ -2765,7 +2983,7 @@ async def cb_panel(call: CallbackQuery):
                 [InlineKeyboardButton(text="✨ Варн",    callback_data=f"rpt:warn:{queue[0]['target']}:0"),
                  InlineKeyboardButton(text="🔇 Мут",     callback_data=f"rpt:mute:{queue[0]['target']}:0")],
                 [InlineKeyboardButton(text="🔨 Бан",     callback_data=f"rpt:ban:{queue[0]['target']}:0"),
-                 InlineKeyboardButton(text="🥀 Отклонить", callback_data=f"rpt:reject:{queue[0]['target']}:0")],
+                 InlineKeyboardButton(text="🌵 Отклонить", callback_data=f"rpt:reject:{queue[0]['target']}:0")],
                 [InlineKeyboardButton(text="🔙 Назад",   callback_data="panel:mainmenu:0")]
             ])
             await call.message.edit_text("\n".join(text_lines), parse_mode="HTML", reply_markup=kb_rep)
@@ -2929,7 +3147,7 @@ async def cb_panel(call: CallbackQuery):
 
         elif action == "welcome":
             s = welcome_get(cid)
-            status = "✨ включён" if s["enabled"] else "🥀 выключен"
+            status = "✨ включён" if s["enabled"] else "🌵 выключен"
             await call.message.edit_text(
                 f"🔔 <b>Welcome экран</b>\n"
                 f"Статус: {status}\n"
@@ -2938,7 +3156,7 @@ async def cb_panel(call: CallbackQuery):
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✨ Вкл",    callback_data=f"panelset:welcomeon:{cid}"),
-                     InlineKeyboardButton(text="🥀 Выкл",   callback_data=f"panelset:welcomeoff:{cid}")],
+                     InlineKeyboardButton(text="🌵 Выкл",   callback_data=f"panelset:welcomeoff:{cid}")],
                     [InlineKeyboardButton(text="🧪 Тест",   callback_data=f"panelset:testwelcome:{cid}")],
                     [InlineKeyboardButton(text="◀️ Назад",  callback_data="panel:mainmenu:0")],
                 ]))
@@ -2991,7 +3209,7 @@ async def cb_panel(call: CallbackQuery):
             journal_add(cid, call.from_user.id, call.from_user.full_name, label_map[action], tid, tname)
 
     except Exception as e:
-        await call.answer(f"🌿 Ошибка: {e}", show_alert=True)
+        await call.answer(f"🌴 Ошибка: {e}", show_alert=True)
     await call.answer()
 
 # ── Вспомогательные колбэки настроек панели 
@@ -3008,7 +3226,7 @@ async def cb_panelset(call: CallbackQuery):
         await call.answer("✨ Welcome включён")
     elif action == "welcomeoff":
         s = welcome_get(cid); s["enabled"] = False; welcome_save(cid, s)
-        await call.answer("🥀 Welcome выключен")
+        await call.answer("🌵 Welcome выключен")
     elif action == "testwelcome":
         await send_welcome(cid, call.from_user, test=True)
         await call.answer("✨ Тест отправлен")
@@ -3016,16 +3234,16 @@ async def cb_panelset(call: CallbackQuery):
         enabled = surveillance_toggle(cid)
         await call.answer(f"👁 Наблюдение {'включено' if enabled else 'выключено'}")
     elif action == "autorules":
-        if cid in auto_rules_chats: auto_rules_chats.discard(cid); await call.answer("🥀 Авто-правила выкл")
+        if cid in auto_rules_chats: auto_rules_chats.discard(cid); await call.answer("🌵 Авто-правила выкл")
         else: auto_rules_chats.add(cid); await call.answer("✨ Авто-правила вкл")
     elif action == "quarantine":
-        if cid in quarantine_chats: quarantine_chats.discard(cid); await call.answer("🥀 Карантин выкл")
+        if cid in quarantine_chats: quarantine_chats.discard(cid); await call.answer("🌵 Карантин выкл")
         else: quarantine_chats.add(cid); await call.answer("✨ Карантин вкл")
     elif action == "lockdown":
         try:
             await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
             await call.answer("🔒 Чат закрыт")
-        except Exception as e: await call.answer(f"🥀 {e}", show_alert=True)
+        except Exception as e: await call.answer(f"🌵 {e}", show_alert=True)
     elif action == "deletedlog":
         logs = surveillance_log_get(cid)
         if not logs: await call.answer("Лог пуст", show_alert=True); return
@@ -3127,7 +3345,7 @@ async def cb_owner_panel(call: CallbackQuery):
             "📢 <b>Бродкаст</b>\nНапиши текст — отправится во все чаты:",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="🥀 Отмена", callback_data="owner:back:0")
+                InlineKeyboardButton(text="🌵 Отмена", callback_data="owner:back:0")
             ]]))
 
     elif action == "blacklist":
@@ -3211,7 +3429,7 @@ async def cb_owner_panel(call: CallbackQuery):
         await call.answer(f"🚁 Эвакуация: {kicked2} удалено", show_alert=True)
 
     elif action == "quarantine":
-        if cid in quarantine_chats: quarantine_chats.discard(cid); await call.answer("🥀 Карантин выкл")
+        if cid in quarantine_chats: quarantine_chats.discard(cid); await call.answer("🌵 Карантин выкл")
         else: quarantine_chats.add(cid); await call.answer("✨ Карантин вкл")
 
     elif action == "cleanup":
@@ -3264,7 +3482,7 @@ async def cb_mute(call: CallbackQuery):
         permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(minutes=mins))
     await call.message.edit_text(
         random.choice(MUTE_MESSAGES).format(name=f"<b>{tname}</b>", time=label), parse_mode="HTML")
-    await log_action(f"🌙 <b>Тишина настала</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    await log_action(f"🌅 <b>Море уснуло</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     await call.answer(f"Замутен на {label}!")
 
 @dp.callback_query(F.data.startswith("warn:"))
@@ -3287,7 +3505,7 @@ async def cb_warn(call: CallbackQuery):
     else:
         msg = random.choice(WARN_MESSAGES).format(
             name=f"<b>{tname}</b>", count=count, max=MAX_WARNINGS, reason=reason)
-        await log_action(f"🌿 <b>Предупреждение</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+        await log_action(f"🌴 <b>Предупреждение</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     await call.message.edit_text(msg, parse_mode="HTML")
     asyncio.create_task(schedule_delete(call.message))
     await call.answer("Варн выдан!")
@@ -3313,7 +3531,7 @@ async def cb_ban(call: CallbackQuery):
     await bot.ban_chat_member(cid, tid)
     await call.message.edit_text(
         random.choice(BAN_MESSAGES).format(name=f"<b>{tname}</b>", reason=reason), parse_mode="HTML")
-    await log_action(f"🍂 <b>Бан вынесен</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    await log_action(f"🌻 <b>Бан вынесен</b>\n\n👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     await call.answer("Забанен!")
 
 @dp.callback_query(F.data.startswith("fun:"))
@@ -3354,7 +3572,7 @@ async def cb_fun(call: CallbackQuery):
     elif action == "rate":
         score = random.randint(0, 10)
         await call.message.edit_text(
-            f"⭐ Оценка {mention}:\n{'🌟'*score+'☆'*(10-score)}\n<b>{score}/10</b>",
+            f"✨ Оценка {mention}:\n{'🌟'*score+'☆'*(10-score)}\n<b>{score}/10</b>",
             parse_mode="HTML", reply_markup=back_kb)
     elif action == "truth":
         await call.message.edit_text(
@@ -3374,13 +3592,13 @@ async def cb_msg(call: CallbackQuery):
     parts = call.data.split(":"); action = parts[1]; tid = int(parts[2]); cid = call.message.chat.id
     if action == "pin":
         try: await bot.pin_chat_message(cid, call.message.reply_to_message.message_id); await call.answer("📌 Закреплено!", show_alert=True)
-        except: await call.answer("🌿 Открой панель реплаем на нужное сообщение.", show_alert=True)
+        except: await call.answer("🌴 Открой панель реплаем на нужное сообщение.", show_alert=True)
     elif action == "unpin":
         try: await bot.unpin_chat_message(cid, call.message.reply_to_message.message_id); await call.answer("📍 Откреплено!", show_alert=True)
-        except: await call.answer("🌿 Нет сообщения.", show_alert=True)
+        except: await call.answer("🌴 Нет сообщения.", show_alert=True)
     elif action == "del":
         try: await call.message.reply_to_message.delete(); await call.answer("🗑 Удалено!", show_alert=True)
-        except: await call.answer("🌿 Нет сообщения.", show_alert=True)
+        except: await call.answer("🌴 Нет сообщения.", show_alert=True)
     elif action.startswith("clear"):
         n = int(action.replace("clear",""))
         deleted = 0
@@ -3444,7 +3662,7 @@ async def cb_members(call: CallbackQuery):
                 f"📵 <b>{tname}</b> — мут на <b>24 часа</b> за рекламу.", parse_mode="HTML")
             asyncio.create_task(schedule_delete(call.message))
             await log_action(f"👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кого:</b> <b>{tname}</b>\n⏱ <b>Время:</b> 24 часа\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
-        else: await call.answer("🌿 Открой панель реплаем на участника.", show_alert=True)
+        else: await call.answer("🌴 Открой панель реплаем на участника.", show_alert=True)
     elif action == "warninfo":
         if tid != 0:
             count = warnings[cid].get(tid, 0)
@@ -3452,7 +3670,7 @@ async def cb_members(call: CallbackQuery):
                 f"⚡ Варнов у <b>{tname}</b>: <b>{count}/{MAX_WARNINGS}</b>",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔙 Назад", callback_data="panel:mainmenu:0")]]))
-        else: await call.answer("🌿 Открой панель реплаем на участника.", show_alert=True)
+        else: await call.answer("🌴 Открой панель реплаем на участника.", show_alert=True)
     await call.answer()
 
 @dp.callback_query(F.data.startswith("chat:"))
@@ -3469,11 +3687,11 @@ async def cb_chat(call: CallbackQuery):
             label = f"Slowmode {delay}с включён!" if delay > 0 else "Slowmode выключен!"
             await call.answer(f"🐢 {label}", show_alert=True)
         except Exception as e:
-            await call.answer(f"🌿 Ошибка: {e}", show_alert=True)
+            await call.answer(f"🌴 Ошибка: {e}", show_alert=True)
         await call.message.edit_text(
             f"⚙️ <b>Управление чатом</b>\n\n"
-            f"🧼 Антимат: <b>{'✨ вкл' if ANTI_MAT_ENABLED else '🥀 выкл'}</b>\n"
-            f"🤖 Автокик: <b>{'✨ вкл' if AUTO_KICK_BOTS else '🥀 выкл'}</b>\n\nВыбери:",
+            f"🧼 Антимат: <b>{'✨ вкл' if ANTI_MAT_ENABLED else '🌵 выкл'}</b>\n"
+            f"🤖 Автокик: <b>{'✨ вкл' if AUTO_KICK_BOTS else '🌵 выкл'}</b>\n\nВыбери:",
             parse_mode="HTML", reply_markup=kb_chat(tid))
         return
     action = parts[1]; tid = int(parts[2])
@@ -3487,10 +3705,10 @@ async def cb_chat(call: CallbackQuery):
         await call.answer("🔓 Ограничения сняты. Чат открыт.", show_alert=True)
     elif action == "antimat":
         ANTI_MAT_ENABLED = not ANTI_MAT_ENABLED
-        await call.answer(f"🧼 Антимат {'✨ включён' if ANTI_MAT_ENABLED else '🥀 выключен'}!", show_alert=True)
+        await call.answer(f"🧼 Антимат {'✨ включён' if ANTI_MAT_ENABLED else '🌵 выключен'}!", show_alert=True)
     elif action == "autokick":
         AUTO_KICK_BOTS = not AUTO_KICK_BOTS
-        await call.answer(f"🤖 Автокик {'✨ включён' if AUTO_KICK_BOTS else '🥀 выключен'}!", show_alert=True)
+        await call.answer(f"🤖 Автокик {'✨ включён' if AUTO_KICK_BOTS else '🌵 выключен'}!", show_alert=True)
     elif action == "rules":
         await call.message.edit_text(RULES_TEXT, parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -3510,8 +3728,8 @@ async def cb_chat(call: CallbackQuery):
         await call.answer(); return
     await call.message.edit_text(
         f"⚙️ <b>Управление чатом</b>\n\n"
-        f"🧼 Антимат: <b>{'✨ вкл' if ANTI_MAT_ENABLED else '🥀 выкл'}</b>\n"
-        f"🤖 Автокик: <b>{'✨ вкл' if AUTO_KICK_BOTS else '🥀 выкл'}</b>\n\nВыбери:",
+        f"🧼 Антимат: <b>{'✨ вкл' if ANTI_MAT_ENABLED else '🌵 выкл'}</b>\n"
+        f"🤖 Автокик: <b>{'✨ вкл' if AUTO_KICK_BOTS else '🌵 выкл'}</b>\n\nВыбери:",
         parse_mode="HTML", reply_markup=kb_chat(tid))
     await call.answer()
 
@@ -3545,7 +3763,7 @@ async def cb_game(call: CallbackQuery):
     elif action == "flip":
         await call.message.edit_text(random.choice(["🦅 Орёл!", "🪙 Решка!"]), reply_markup=back_kb)
         asyncio.create_task(auto_delete(call.message))
-        symbols = ["🍒","🍋","🍊","🍇","⭐","7️⃣","💎"]
+        symbols = ["🍒","🍋","🍊","🍇","✨","7️⃣","💎"]
         s1,s2,s3 = random.choice(symbols),random.choice(symbols),random.choice(symbols)
         if s1==s2==s3=="💎":              res = "💰 ДЖЕКПОТ!!"
         elif s1==s2==s3:                  res = f"🎉 Три {s1}! Выиграл!"
@@ -3564,7 +3782,7 @@ async def cb_game(call: CallbackQuery):
         await call.message.edit_text(f"Ты: {pl}\nЯ: {bl}\n\n{res}", reply_markup=back_kb)
         asyncio.create_task(auto_delete(call.message))
     elif action == "quote":
-        await call.message.edit_text(f"📖 {random.choice(QUOTES)}", reply_markup=back_kb)
+        await call.message.edit_text(f"🌅 {random.choice(QUOTES)}", reply_markup=back_kb)
         asyncio.create_task(auto_delete(call.message))
     elif action.startswith("weather_"):
         city = action.replace("weather_","")
@@ -3604,7 +3822,7 @@ async def cb_start_ticket(call: CallbackQuery):
 @dp.callback_query(F.data == "start:help")
 async def cb_start_help(call: CallbackQuery):
     await call.message.answer(
-        "🤍 <b>Профиль</b>\n"
+        "💛 <b>Профиль</b>\n"
         "/myprofile — мой профиль\n"
         "/card — профиль-карточка\n"
         "/setbio — установить био\n\n"
@@ -3634,7 +3852,7 @@ async def cb_start_help(call: CallbackQuery):
         "📋 Полный список: /help",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📖 Политика бота", url="https://telegra.ph/politika-bota-03-15")],
+            [InlineKeyboardButton(text="🌅 Политика бота", url="https://telegra.ph/politika-bota-03-15")],
             [InlineKeyboardButton(text="Открыть тикет", callback_data="tkt:new")],
         ])
     )
@@ -3655,40 +3873,19 @@ async def cmd_help(message: Message):
     is_adm   = await check_admin(message)
     is_owner = message.from_user.id in OWNERS
 
-    # ══════════════════════════════════════════════════════════
+    # ☀️ ═══════════════════════════════════════════════════════
     #  ПОЛЬЗОВАТЕЛЬ
-    # ══════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════
     text_user = (
-        "🤍 <b>Chat Guard</b>\n"
+        "🌻 <b>Chat Guard</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "<i>команды для участников 🍃</i>\n\n"
+        "<i>летние команды для участников 🌴</i>\n\n"
 
-        "👤 🤍 <b>Профиль</b>\n"
-        "├ /me — моя карточка\n"
-        "├ /myprofile — полный профиль\n"
-        "├ /setbio текст — установить био\n"
-        "├ /setmood — настроение\n"
-        "├ /rank — мой уровень и XP\n"
-        "├ /top — топ чата по активности\n"
-        "├ /stats — статистика чата\n"
-        "└ /daily — ежедневный бонус XP\n\n"
-
-        "👥 🌸 <b>Социальное</b>\n"
-        "├ /addfriend — добавить друга <i>(реплай)</i>\n"
-        "├ /friends — список друзей\n"
-        "├ /unfriend — удалить из друзей <i>(реплай)</i>\n"
-        "├ /propose — предложить отношения <i>(реплай)</i>\n"
-        "├ /breakup — завершить отношения\n"
-        "├ /anonmsg текст — анонимное сообщение <i>(реплай)</i>\n"
-        "├ /follow — подписаться <i>(реплай)</i>\n"
-        "└ /followers — мои подписчики\n\n"
-
-        "🎮 🎀 <b>Игры и развлечения</b>\n"
+        "🎀 <b>Игры и развлечения</b>\n"
         "├ /casino — 🎰 казино (слоты, рулетка, монетка)\n"
         "├ /roll [N] — бросить кубик\n"
         "├ /flip — монетка орёл/решка\n"
         "├ /rps к/н/б — камень ножницы бумага\n"
-        "├ /ship — совместимость <i>(реплай или /ship Имя1 Имя2)</i>\n"
         "├ /rate текст — оценить от 0 до 10\n"
         "├ /8ball вопрос — магический шар\n"
         "├ /choose вар1|вар2|вар3 — выбор\n"
@@ -3696,17 +3893,29 @@ async def cmd_help(message: Message):
         "├ /dare — правда или действие (задание)\n"
         "├ /wyr — что бы ты выбрал?\n"
         "├ /iq — проверка IQ <i>(реплай или себе)</i>\n"
-        "├ /совместимость — совместимость <i>(реплай)</i>\n"
         "└ /coinflip — подбросить монетку\n\n"
 
-        "🔮 🔮 <b>Гадания и судьба</b>\n"
+        "🔮 <b>Гадания и судьба</b>\n"
         "├ /horoscope — случайный гороскоп\n"
         "├ /zodiac — гороскоп по знаку зодиака\n"
         "├ /predict — предсказание <i>(реплай или себе)</i>\n"
         "├ /fortune — предсказание судьбы\n"
         "└ /ask вопрос — ответ вселенной\n\n"
 
-        "🛠 ✨ <b>Утилиты</b>\n"
+        "🥥 <b>Фановые команды</b>\n"
+        "├ .dox / /dox — фейк-досье <i>(реплай или себе)</i>\n"
+        "├ .gp — приговор от вселенной\n"
+        "├ .kill / .ubili — фейк-убийство <i>(реплай)</i>\n"
+        "├ .pidor / .gay — % пидарастии\n"
+        "├ .ebanat / .dolboeb — % долбоёбства\n"
+        "├ .pizdezh — измеритель пиздежа\n"
+        "├ .huesos — хуесос дня (рандом из чата)\n"
+        "├ .naebka — фейк-новость про юзера\n"
+        "├ .zaeb — индекс кринжа и токса\n"
+        "├ .huinya — хуёвый совет дня\n"
+        "└ .battle — фейк-баттл двух юзеров\n\n"
+
+        "🍹 <b>Утилиты</b>\n"
         "├ /calc выражение — калькулятор\n"
         "├ /password [длина] — генератор паролей\n"
         "├ /qr текст — создать QR-код\n"
@@ -3721,34 +3930,28 @@ async def cmd_help(message: Message):
         "├ /remind 30m текст — напоминание\n"
         "└ /rules — правила чата\n\n"
 
-        "🏰 🏰 <b>Кланы</b>\n"
-        "├ /clan — информация о клане\n"
-        "├ /clan_create ТЕГ Название — создать клан\n"
-        "├ /clan_join ТЕГ — вступить в клан\n"
-        "└ /clan_leave — покинуть клан\n\n"
-
-        "📨 💌 <b>Жалобы и апелляции</b>\n"
+        "💌 <b>Жалобы и апелляции</b>\n"
         "├ /report — пожаловаться <i>(реплай)</i>\n"
         "└ /appeal причина — апелляция на бан\n\n"
 
-        "🔒 🌙 <b>Приватность</b>\n"
+        "🌅 <b>Приватность</b>\n"
         "├ /privacy — политика конфиденциальности\n"
         "└ /deleteme — удалить свои данные\n\n"
 
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "💡 <i>аутист поженить / казнить / диагноз / дуэль / похитить / подарить 🌹</i>"
+        "🌺 <i>пиши /start чтобы открыть главное меню</i>"
     )
 
-    # ══════════════════════════════════════════════════════════
+    # ☀️ ═══════════════════════════════════════════════════════
     #  АДМИНИСТРАТОР
-    # ══════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════
     text_admin = (
         "\n\n"
-        "🌿 <b>Раздел администратора</b>\n"
+        "🌴 <b>Раздел администратора</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "<i>команды для администраторов 🌿</i>\n\n"
+        "<i>команды для администраторов 🌺</i>\n\n"
 
-        "⚖️ 🍂 <b>Модерация</b>\n"
+        "🌻 <b>Модерация</b>\n"
         "├ /warn · /unwarn — варн / снять <i>(реплай)</i>\n"
         "├ /ban · /unban — бан / разбан <i>(реплай)</i>\n"
         "├ /mute · /unmute — мут / размут <i>(реплай)</i>\n"
@@ -3759,7 +3962,8 @@ async def cmd_help(message: Message):
         "├ /warn24 — варн с автоснятием <i>(реплай)</i>\n"
         "└ /warnmenu — шаблоны варнов <i>(реплай)</i>\n\n"
 
-        "🎙️ 🌿 <b>Команды «Аутист»</b> · <i>текстовые команды (любой регистр, реплай)</i>\n"
+        "🌴 <b>Команды «Аутист» · текстовые</b>\n"
+        "<i>любой регистр, реплай на сообщение</i>\n"
         "├ Аутист бан [причина] — бан\n"
         "├ Аутист разбан — разбан\n"
         "├ Аутист мут [время] [причина] — мут\n"
@@ -3767,29 +3971,41 @@ async def cmd_help(message: Message):
         "├ Аутист варн [причина] — варн\n"
         "├ Аутист снять варн — минус варн\n"
         "├ Аутист удали — удалить сообщение\n"
-        "└ Аутист фриз — мут на 24 ч.\n\n"
+        "├ Аутист фриз — холодный душ на 24ч\n"
+        "└ Аутист канал — бан канала <i>(реплай на сообщ. от канала)</i>\n\n"
 
-        "📋 ✨ <b>Информация</b>\n"
+        "🏝 <b>Защитные команды «Аутист»</b>\n"
+        "├ Аутист тишина 10м — штиль в чате\n"
+        "├ Аутист тень — невидимый бан 1ч <i>(реплай)</i>\n"
+        "├ Аутист амнистия — разбан жертв автоматики за 24ч\n"
+        "├ Аутист фильтр СЛОВО — добавить стоп-слово\n"
+        "├ Аутист анфильтр СЛОВО — убрать стоп-слово\n"
+        "├ Аутист проверка — повторная капча <i>(реплай)</i>\n"
+        "├ Аутист волна N — удалить N последних сообщений\n"
+        "├ Аутист белый — в whitelist <i>(реплай)</i>\n"
+        "└ Аутист небелый — убрать из whitelist <i>(реплай)</i>\n\n"
+
+        "✨ <b>Информация</b>\n"
         "├ /info — досье пользователя <i>(реплай)</i>\n"
         "├ /warnings — варны <i>(реплай)</i>\n"
         "├ /modhistory — история нарушений <i>(реплай)</i>\n"
         "├ /banlist — список банов\n"
         "├ /adminlist — список администраторов\n"
         "├ /modlog [N] — журнал модерации\n"
-        "├ /modtop — рейтинг модераторов\n"
-        "└ /violators — топ нарушителей\n\n"
+        "├ /cascade — текущая ступень флуда <i>(реплай)</i>\n"
+        "└ /cascadereset — сбросить лестницу <i>(реплай)</i>\n\n"
 
-        "🚨 🔔 <b>Алерты и инциденты</b>\n"
+        "🔔 <b>Алерты и инциденты</b>\n"
         "├ /alerts — текущие алерты\n"
         "├ /alertsclear — очистить алерты\n"
         "└ /incidents — критические инциденты\n\n"
 
-        "📨 💌 <b>Апелляции</b>\n"
+        "💌 <b>Апелляции</b>\n"
         "├ /appeals — список ожидающих апелляций\n"
         "├ /appealapprove ID — одобрить апелляцию\n"
         "└ /appealdeny ID причина — отклонить\n\n"
 
-        "⚙️ ☁️ <b>Управление чатом</b>\n"
+        "☀️ <b>Управление чатом</b>\n"
         "├ /chatsettings — настройки чата (инлайн-меню)\n"
         "├ /lock · /unlock — закрыть / открыть чат\n"
         "├ /slowmode N — режим замедления\n"
@@ -3806,13 +4022,12 @@ async def cmd_help(message: Message):
         "├ /surveillance — режим наблюдения\n"
         "└ /deletedlog — лог удалённых сообщений\n\n"
 
-        "📊 🌸 <b>Аналитика</b>\n"
+        "🌺 <b>Аналитика</b>\n"
         "├ /botstats — общая статистика бота\n"
         "├ /heatmap — тепловая карта активности\n"
-        "├ /calendar — события чата\n"
-        "└ /vip @user — выдать VIP статус <i>(реплай)</i>\n\n"
+        "└ /calendar — события чата\n\n"
 
-        "⚡ ✨ <b>Быстрые инструменты</b>\n"
+        "✨ <b>Быстрые инструменты</b>\n"
         "├ /addreply ключ текст — шаблон ответа\n"
         "├ /replies — список шаблонов\n"
         "├ !ключ — отправить шаблон\n"
@@ -3821,65 +4036,65 @@ async def cmd_help(message: Message):
         "├ /note set/get/del — заметки чата\n"
         "└ /modexport — экспорт истории модерации\n\n"
 
-        "🔧 🔧 <b>Тех. работы</b>\n"
+        "🔧 <b>Тех. работы</b>\n"
         "├ /techwork [время] — запустить тех. работы\n"
         "└ /techstatus — статус тех. работ"
     )
 
-    # ══════════════════════════════════════════════════════════
+    # ☀️ ═══════════════════════════════════════════════════════
     #  ВЛАДЕЛЕЦ
-    # ══════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════
     text_owner = (
         "\n\n"
         "👑 <b>Раздел владельца</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         "<i>команды владельца 👑</i>\n\n"
 
-        "🛡 🤍 <b>Защита от взлома админов</b> · <i>защита от взлома/злоупотребления админов</i>\n"
+        "💛 <b>Защита от взлома админов</b>\n"
         "├ /freeze ID [причина] — заморозить админа (с выбором режима)\n"
         "├ /unfreeze ID — разморозить админа\n"
         "├ /frozen — список замороженных\n"
         "├ /undo ID [N] — откатить N последних действий админа\n"
         "└ /gaudit [N] — журнал аудита Guardian\n\n"
 
-        "📢 📢 <b>Рассылка</b>\n"
-        "└ /broadcast текст — рассылка во все чаты\n\n"
+        "📢 <b>Рассылка</b>\n"
+        "├ /broadcast текст — рассылка во все чаты\n"
+        "└ /sendreminder — принудительная рассылка про админов\n\n"
 
-        "🚨 🔔 <b>Экстренные меры</b>\n"
+        "🔔 <b>Экстренные меры</b>\n"
         "├ /evacuation — кик новых участников за 1ч\n"
         "├ /quarantine — автомут новых на 24ч\n"
         "└ /cleanup — удалить неактивных\n\n"
 
-        "🛡 🛡 <b>Безопасность</b>\n"
+        "🛡 <b>Безопасность</b>\n"
         "├ /blacklist ID — глобальный чёрный список\n"
         "├ /unblacklist ID — убрать из ЧС\n"
         "├ /giverole @user роль — выдать роль мода\n"
         "├ /takerole @user — забрать роль\n"
         "└ /setperm команда роль — права доступа\n\n"
 
-        "💾 💾 <b>База данных</b>\n"
+        "💾 <b>База данных</b>\n"
         "├ /backupnow — создать бэкап прямо сейчас\n"
         "└ /restoredb — восстановить <i>(реплай на .db файл)</i>\n\n"
 
-        "👮 🌿 <b>Управление модераторами</b>\n"
+        "🌴 <b>Управление модераторами</b>\n"
         "├ /task текст [часы] — поставить задачу\n"
         "├ /tasks — все задачи\n"
         "├ /setshift 9 21 — назначить смену\n"
         "└ /createqr [XP] — создать QR-код\n\n"
 
-        "🎭 🎭 <b>Команды «Аутист» (владелец)</b> · <i>команды владельца</i>\n"
+        "🎭 <b>Команды «Аутист» (владелец)</b>\n"
         "├ аутист ядерка / молния / взрыв / хаос\n"
         "├ аутист локдаун / локдаун выкл\n"
-        "├ аутист тишина 10м\n"
         "└ аутист корона / анонс / сос / рестарт\n\n"
 
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "⚙️ <i>/panel — панель управления · /ownersettings — настройки</i>"
+        "☀️ <i>/panel — панель управления · /ownersettings — настройки</i>"
     )
 
-    # ══════════════════════════════════════════════════════════
+    # ☀️ ═══════════════════════════════════════════════════════
     #  ОТПРАВКА
-    # ══════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════
     if is_owner:
         full = text_user + text_admin + text_owner
         chunks = [full[i:i+4000] for i in range(0, len(full), 4000)]
@@ -3889,7 +4104,7 @@ async def cmd_help(message: Message):
         await reply_auto_delete(message,
             "💌 <b>Справка отправлена</b>\n"
             "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            "<i>Полная справка отправлена в личные сообщения.</i>",
+            "<i>🏝 загляни в личные сообщения</i>",
             parse_mode="HTML")
     elif is_adm:
         full = text_user + text_admin
@@ -3900,14 +4115,14 @@ async def cmd_help(message: Message):
         await reply_auto_delete(message,
             "💌 <b>Справка отправлена</b>\n"
             "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            "<i>Справка отправлена в личные сообщения.</i>",
+            "<i>🏝 загляни в личные сообщения</i>",
             parse_mode="HTML")
     else:
         await reply_auto_delete(message, text_user, parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📜 Политика бота", url="https://telegra.ph/politika-bota-03-15")],
+                [InlineKeyboardButton(text="🗺 Политика бота", url="https://telegra.ph/politika-bota-03-15")],
                 [InlineKeyboardButton(text="🎫 Открыть тикет", callback_data="tkt:new")],
-                [InlineKeyboardButton(text="📨 Подать апелляцию", callback_data="appeal:new")],
+                [InlineKeyboardButton(text="💌 Подать апелляцию", callback_data="appeal:new")],
             ])
         )
 
@@ -3950,7 +4165,7 @@ async def cmd_panel(message: Message):
             f"{vip_badge}"
             f"🆔 <code>{target.id}</code>\n\n"
             f"⚡ Варнов: <b>{warns}/{MAX_WARNINGS}</b>\n"
-            f"⭐ XP: <b>{xp}</b>\n"
+            f"✨ XP: <b>{xp}</b>\n"
             f"💬 Сообщений: <b>{msgs}</b>\n"
             f"{role_label}",
             parse_mode="HTML",
@@ -3992,10 +4207,10 @@ async def cmd_captcha(message: Message):
 @dp.message(Command("ban"))
 async def cmd_ban(message: Message, command: CommandObject):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     if await is_admin_by_id(message.chat.id, target.id):
-        await reply_auto_delete(message, "🤍 К администратору так нельзя"); return
+        await reply_auto_delete(message, "💛 К администратору так нельзя"); return
     reason = command.args or "Нарушение правил"
     cid = message.chat.id
     # 📨 ЛС нарушителю ДО бана (после уже не получится)
@@ -4011,7 +4226,7 @@ async def cmd_ban(message: Message, command: CommandObject):
     reply = random.choice(BAN_MESSAGES).format(name=target.mention_html(), reason=reason)
     if dm_ok: reply += "\n<i>Пользователь уведомлён в личные сообщения.</i>"
     await reply_auto_delete(message, reply, parse_mode="HTML")
-    await log_action(f"🍂 <b>Бан вынесен</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    await log_action(f"🌻 <b>Бан вынесен</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     add_mod_history(cid, target.id, "🔨 Бан", reason, message.from_user.full_name)
     await ag.record_action(
         message.from_user.id, "ban",
@@ -4031,7 +4246,7 @@ async def cmd_ban(message: Message, command: CommandObject):
 @dp.message(Command("unban"))
 async def cmd_unban(message: Message):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     await bot.unban_chat_member(message.chat.id, target.id, only_if_banned=True)
     add_mod_history(message.chat.id, target.id, "🕊 Разбан", "—", message.from_user.full_name)
@@ -4049,10 +4264,10 @@ async def cmd_unban(message: Message):
 @dp.message(Command("mute"))
 async def cmd_mute(message: Message, command: CommandObject):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     if await is_admin_by_id(message.chat.id, target.id):
-        await reply_auto_delete(message, "🤍 К администратору так нельзя"); return
+        await reply_auto_delete(message, "💛 К администратору так нельзя"); return
     mins, label = parse_duration(command.args or "60m")
     if not mins: mins = 60; label = "1 ч."
     cid = message.chat.id
@@ -4071,7 +4286,7 @@ async def cmd_mute(message: Message, command: CommandObject):
     reply = random.choice(MUTE_MESSAGES).format(name=target.mention_html(), time=label)
     if dm_ok: reply += "\n<i>Пользователь уведомлён в личные сообщения.</i>"
     await reply_auto_delete(message, reply, parse_mode="HTML")
-    await log_action(f"🌙 <b>Тишина настала</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    await log_action(f"🌅 <b>Море уснуло</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     add_mod_history(cid, target.id, f"🔇 Мут {label}", command.args or "—", message.from_user.full_name)
     await ag.record_action(
         message.from_user.id, "mute",
@@ -4087,7 +4302,7 @@ async def cmd_mute(message: Message, command: CommandObject):
 @dp.message(Command("unmute"))
 async def cmd_unmute(message: Message):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     await bot.restrict_chat_member(message.chat.id, target.id,
         permissions=ChatPermissions(can_send_messages=True, can_send_media_messages=True,
@@ -4100,7 +4315,7 @@ async def cmd_unmute(message: Message):
         cid=message.chat.id, reason="—",
         extra={"chat_title": message.chat.title}
     )
-    await reply_auto_delete(message, f"👤 Цель: {target.mention_html()}\n<i>Голос восстановлен.</i>", parse_mode="HTML")
+    await reply_auto_delete(message, f"👤 Цель: {target.mention_html()}\n<i>Шум прибоя вернулся.</i>", parse_mode="HTML")
     await log_action(f"☀️ <b>Голос вернулся</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
 
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
@@ -4146,6 +4361,8 @@ _AUTIST_ACTIONS = {
     "unwhitelist":["небелый", "анвайтлист", "снять белый", "unwhitelist"],
     "banchannel":["канал", "забань канал", "бан канал", "channel", "banchannel"],
     "unbanchannel":["разбань канал", "анканал", "unbanchannel"],
+    "shield":    ["щит", "защита", "оберег", "shield"],
+    "unshield":  ["снять щит", "анщит", "unshield"],
 }
 
 def _autist_match_action(text: str):
@@ -4193,12 +4410,12 @@ async def cmd_autist_router(message: Message):
     # ───── УДАЛЕНИЕ СООБЩЕНИЯ ─────
     if action == "del":
         if not message.reply_to_message:
-            await reply_auto_delete(message, "🌿 Реплайни на сообщение которое нужно удалить.")
+            await reply_auto_delete(message, "🌴 Реплайни на сообщение которое нужно удалить.")
             return
         try:
             await message.reply_to_message.delete()
         except Exception as e:
-            await reply_auto_delete(message, f"🥀 Не удалось удалить: <code>{e}</code>", parse_mode="HTML")
+            await reply_auto_delete(message, f"🌵 Не удалось удалить: <code>{e}</code>", parse_mode="HTML")
             return
         try:
             await message.delete()
@@ -4206,22 +4423,22 @@ async def cmd_autist_router(message: Message):
             pass
         return
 
-    # ───── 🌫 БАН/РАЗБАН КАНАЛА ─────
+    # ───── 🌊 БАН/РАЗБАН КАНАЛА ─────
     # Канал = sender_chat (когда юзер пишет от имени канала)
     # Нужен реплай на сообщение от канала
     if action in ("banchannel", "unbanchannel"):
         cid = message.chat.id
         if not message.reply_to_message:
             await reply_auto_delete(message,
-                "🌿 Реплайни на сообщение которое канал написал в чат",
+                "🌴 Реплайни на сообщение которое канал написал в чат",
                 parse_mode="HTML")
             return
         sender_chat = message.reply_to_message.sender_chat
         if not sender_chat:
             await reply_auto_delete(message,
-                "🌫 Это сообщение не от канала ‧ обычный юзер не подходит\n"
+                "🌊 Это сообщение не от канала ‧ обычный юзер не подходит\n"
                 "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                "🤍 для бана юзера используй <code>аутист бан</code>",
+                "💛 для бана юзера используй <code>аутист бан</code>",
                 parse_mode="HTML")
             return
         # Нельзя забанить сам чат
@@ -4239,10 +4456,10 @@ async def cmd_autist_router(message: Message):
                 await bot.ban_chat_sender_chat(cid, sender_chat.id)
             except Exception as e:
                 await reply_auto_delete(message,
-                    f"🥀 Не удалось забанить канал\n"
+                    f"🌵 Не удалось забанить канал\n"
                     f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                    f"🌫 причина — <code>{str(e)[:120]}</code>\n"
-                    f"<i>🤍 убедись что бот — админ с правом «Ban users»</i>",
+                    f"🌊 причина — <code>{str(e)[:120]}</code>\n"
+                    f"<i>💛 убедись что бот — админ с правом «Ban users»</i>",
                     parse_mode="HTML")
                 return
 
@@ -4251,21 +4468,21 @@ async def cmd_autist_router(message: Message):
             except: pass
 
             await message.answer(
-                f"🍂 <b>Канал забанен</b>\n"
+                f"🌻 <b>Канал забанен</b>\n"
                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
                 f"📢 канал — <b>{ch_title}</b> ‧ {ch_username}\n"
-                f"🌿 теперь от его имени никто не сможет писать в чат\n"
-                f"🤍 забанил — {message.from_user.mention_html()}",
+                f"🌴 теперь от его имени никто не сможет писать в чат\n"
+                f"💛 забанил — {message.from_user.mention_html()}",
                 parse_mode="HTML"
             )
             await log_action(
-                f"🍂 <b>Аутист · Бан канала</b>\n\n"
+                f"🌻 <b>Аутист · Бан канала</b>\n\n"
                 f"📢 <b>Канал:</b> {ch_title} ({ch_username})\n"
                 f"👤 <b>Кто:</b> {message.from_user.mention_html()}\n"
                 f"💬 <b>Чат:</b> {message.chat.title}\n"
                 f"🕐 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
             )
-            add_mod_history(cid, sender_chat.id, "🍂 Бан канала", ch_title, message.from_user.full_name)
+            add_mod_history(cid, sender_chat.id, "🌻 Бан канала", ch_title, message.from_user.full_name)
             return
 
         if action == "unbanchannel":
@@ -4273,16 +4490,16 @@ async def cmd_autist_router(message: Message):
                 await bot.unban_chat_sender_chat(cid, sender_chat.id)
             except Exception as e:
                 await reply_auto_delete(message,
-                    f"🥀 Не удалось разбанить\n"
+                    f"🌵 Не удалось разбанить\n"
                     f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                    f"🌫 причина — <code>{str(e)[:120]}</code>",
+                    f"🌊 причина — <code>{str(e)[:120]}</code>",
                     parse_mode="HTML")
                 return
             await message.answer(
                 f"✨ <b>Канал разбанен</b>\n"
                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
                 f"📢 канал — <b>{ch_title}</b> ‧ {ch_username}\n"
-                f"🤍 разбанил — {message.from_user.mention_html()}",
+                f"💛 разбанил — {message.from_user.mention_html()}",
                 parse_mode="HTML"
             )
             await log_action(
@@ -4299,7 +4516,7 @@ async def cmd_autist_router(message: Message):
 
     # Все остальные действия требуют реплая на пользователя
     if not message.reply_to_message and action not in _NO_REPLY_ACTIONS and action not in _MAYBE_REPLY_ACTIONS:
-        await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя.")
+        await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя.")
         return
 
     # Если есть реплай — берём target
@@ -4315,7 +4532,7 @@ async def cmd_autist_router(message: Message):
             await reply_auto_delete(message, "🤖 С ботами так нельзя.")
             return
         if action in ("ban", "mute", "warn", "freeze", "shadow", "verify") and await is_admin_by_id(cid, target.id):
-            await reply_auto_delete(message, "🤍 К администратору так нельзя")
+            await reply_auto_delete(message, "💛 К администратору так нельзя")
             return
 
     reason = remainder or "Нарушение правил"
@@ -4325,7 +4542,7 @@ async def cmd_autist_router(message: Message):
         try:
             await bot.ban_chat_member(cid, target.id)
         except Exception as e:
-            await reply_auto_delete(message, f"🥀 Не удалось забанить: <code>{e}</code>", parse_mode="HTML")
+            await reply_auto_delete(message, f"🌵 Не удалось забанить: <code>{e}</code>", parse_mode="HTML")
             return
         if message.reply_to_message.text:
             await log_violation_screenshot(
@@ -4334,7 +4551,7 @@ async def cmd_autist_router(message: Message):
         dm_ok = await dm_warn_user(target.id, target.full_name, reason,
                                     message.chat.title, "🔨 Аутист бан", message.from_user.full_name)
         reply = (
-            f"🍂 <b>Аутист · Бан</b>\n"
+            f"🌻 <b>Аутист · Бан</b>\n"
             f"‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧\n"
             f"├ 👤 Цель: {target.mention_html()}\n"
             f"├ 📝 Причина: {reason}\n"
@@ -4343,7 +4560,7 @@ async def cmd_autist_router(message: Message):
         if dm_ok: reply += "\n\n<i>Пользователь уведомлён в ЛС.</i>"
         await reply_auto_delete(message, reply, parse_mode="HTML")
         await log_action(
-            f"🍂 <b>Аутист · Бан</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n"
+            f"🌻 <b>Аутист · Бан</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n"
             f"🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n"
             f"💬 <b>Чат:</b> {message.chat.title}\n🕐 {datetime.now().strftime('%d.%m.%Y %H:%M')}")
         add_mod_history(cid, target.id, "🔨 Аутист бан", reason, message.from_user.full_name)
@@ -4361,7 +4578,7 @@ async def cmd_autist_router(message: Message):
         try:
             await bot.unban_chat_member(cid, target.id, only_if_banned=True)
         except Exception as e:
-            await reply_auto_delete(message, f"🥀 Не удалось разбанить: <code>{e}</code>", parse_mode="HTML")
+            await reply_auto_delete(message, f"🌵 Не удалось разбанить: <code>{e}</code>", parse_mode="HTML")
             return
         await reply_auto_delete(message,
             f"✨ <b>Аутист · Разбан</b>\n‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧\n"
@@ -4393,10 +4610,10 @@ async def cmd_autist_router(message: Message):
                 permissions=ChatPermissions(can_send_messages=False),
                 until_date=datetime.now() + timedelta(minutes=mins))
         except Exception as e:
-            await reply_auto_delete(message, f"🥀 Не удалось замутить: <code>{e}</code>", parse_mode="HTML")
+            await reply_auto_delete(message, f"🌵 Не удалось замутить: <code>{e}</code>", parse_mode="HTML")
             return
         title = "АУТИСТ ФРИЗ" if action == "freeze" else "АУТИСТ МУТ"
-        icon = "🧊" if action == "freeze" else "🔇"
+        icon = "🧃" if action == "freeze" else "🔇"
         if message.reply_to_message.text:
             await log_violation_screenshot(
                 cid, target.id, target.full_name, message.reply_to_message.text,
@@ -4437,7 +4654,7 @@ async def cmd_autist_router(message: Message):
                     can_send_polls=True, can_send_other_messages=True,
                     can_add_web_page_previews=True))
         except Exception as e:
-            await reply_auto_delete(message, f"🥀 Не удалось размутить: <code>{e}</code>", parse_mode="HTML")
+            await reply_auto_delete(message, f"🌵 Не удалось размутить: <code>{e}</code>", parse_mode="HTML")
             return
         await reply_auto_delete(message,
             f"☀️ <b>Аутист · Размут</b>\n‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧\n"
@@ -4463,12 +4680,12 @@ async def cmd_autist_router(message: Message):
             try: await bot.ban_chat_member(cid, target.id)
             except Exception: pass
             await reply_auto_delete(message,
-                f"🍂 <b>Автобан</b>\n‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧\n"
+                f"🌻 <b>Автобан</b>\n‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧\n"
                 f"├ 👤 {target.mention_html()}\n"
                 f"├ ⚡ Варнов: <b>{count}/{MAX_WARNINGS}</b>\n"
                 f"└ 📝 {reason}", parse_mode="HTML")
             await log_action(
-                f"🍂 <b>Автобан</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n"
+                f"🌻 <b>Автобан</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n"
                 f"🎯 <b>Кого:</b> {target.mention_html()}\n⚡ <b>Варнов:</b> {count}/{MAX_WARNINGS}\n"
                 f"📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}")
             warnings[cid][target.id] = 0
@@ -4520,11 +4737,11 @@ async def cmd_autist_router(message: Message):
         warnings[cid][target.id] -= 1
         count = warnings[cid][target.id]
         await reply_auto_delete(message,
-            f"🤍 <b>Аутист · Варн снят</b>\n‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧\n"
+            f"💛 <b>Аутист · Варн снят</b>\n‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧\n"
             f"├ 👤 {target.mention_html()}\n"
             f"└ ⚡ Осталось: <b>{count}/{MAX_WARNINGS}</b>", parse_mode="HTML")
         await log_action(
-            f"🤍 <b>Аутист · Варн снят</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n"
+            f"💛 <b>Аутист · Варн снят</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n"
             f"🎯 <b>Кого:</b> {target.mention_html()}\n⚡ <b>Осталось:</b> {count}/{MAX_WARNINGS}\n"
             f"💬 <b>Чат:</b> {message.chat.title}")
         add_mod_history(cid, target.id, "✨ Аутист снят варн", "—", message.from_user.full_name)
@@ -4533,9 +4750,9 @@ async def cmd_autist_router(message: Message):
     # ───── 🌑 ТЕНЬ — невидимый бан ─────
     if action == "shadow":
         if not message.reply_to_message:
-            await reply_auto_delete(message, "🌿 Реплайни на участника, кого скрыть."); return
+            await reply_auto_delete(message, "🌴 Реплайни на участника, кого скрыть."); return
         if await is_admin_by_id(cid, target.id):
-            await reply_auto_delete(message, "🤍 К администратору так нельзя."); return
+            await reply_auto_delete(message, "💛 К администратору так нельзя."); return
         expires = time.time() + 3600  # 1 час
         _shadowbans[cid][target.id] = expires
         try:
@@ -4549,18 +4766,18 @@ async def cmd_autist_router(message: Message):
         # Уведомление приходит только админу в ЛС
         try:
             await bot.send_message(message.from_user.id,
-                f"🌑 <b>Тень накинута</b>\n"
+                f"🌑 <b>Тень от пальмы накрыла</b>\n"
                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
                 f"👤 цель — {target.full_name} (<code>{target.id}</code>)\n"
                 f"🕊 длительность — 1 час\n"
                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                f"<i>🌿 он думает что пишет в чат, но никто его не видит</i>",
+                f"<i>🌴 он думает что пишет в чат, но никто его не видит</i>",
                 parse_mode="HTML")
         except: pass
         add_mod_history(cid, target.id, "🌑 Аутист тень (1ч)", "—", message.from_user.full_name)
         return
 
-    # ───── 🌫 ТИШИНА — общий мут чата ─────
+    # ───── 🌊 ТИШИНА — общий мут чата ─────
     if action == "silence":
         # Парсим длительность из remainder ("5м", "1ч" или просто "5")
         mins = 5
@@ -4573,13 +4790,13 @@ async def cmd_autist_router(message: Message):
         mins = max(1, min(mins, 1440))  # 1 мин — 24ч
         _silence_active[cid] = time.time() + mins * 60
         await message.answer(
-            f"🌫 <b>Тишина накрыла чат</b>\n"
+            f"🌊 <b>Штиль накрыл чат</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
             f"🕊 длительность — <b>{mins} минут</b>\n"
-            f"🤍 только админы и доверенные могут писать\n"
-            f"🌿 объявил — {message.from_user.mention_html()}",
+            f"💛 только админы и доверенные могут писать\n"
+            f"🌴 объявил — {message.from_user.mention_html()}",
             parse_mode="HTML")
-        add_mod_history(cid, 0, f"🌫 Аутист тишина ({mins}м)", "—", message.from_user.full_name)
+        add_mod_history(cid, 0, f"🌊 Аутист тишина ({mins}м)", "—", message.from_user.full_name)
         return
 
     # ───── 🍃 АМНИСТИЯ — разбан жертв автоматики за 24ч ─────
@@ -4616,27 +4833,27 @@ async def cmd_autist_router(message: Message):
         await message.answer(
             f"🍃 <b>Амнистия объявлена</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🤍 разморожено / разбанено — <b>{unbanned}</b> юзеров\n"
-            f"🌿 объявил — {message.from_user.mention_html()}\n"
+            f"💛 разморожено / разбанено — <b>{unbanned}</b> юзеров\n"
+            f"🌴 объявил — {message.from_user.mention_html()}\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
             f"<i>✨ затронуты те кого автоматика наказала за последние 24ч</i>",
             parse_mode="HTML")
         return
 
-    # ───── 🌫 ФИЛЬТР — добавить стоп-слово ─────
+    # ───── 🌊 ФИЛЬТР — добавить стоп-слово ─────
     if action == "filter":
         if not remainder:
             words = sorted(_chat_filters.get(cid, set()))
             if not words:
                 await reply_auto_delete(message,
-                    "🌫 В чате нет стоп-слов\n"
+                    "🌊 В чате нет стоп-слов\n"
                     "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                    "🌿 добавить — <code>аутист фильтр слово</code>",
+                    "🌴 добавить — <code>аутист фильтр слово</code>",
                     parse_mode="HTML")
                 return
-            lines = "\n".join(f"🌿 {w}" for w in words[:30])
+            lines = "\n".join(f"🌴 {w}" for w in words[:30])
             await reply_auto_delete(message,
-                f"🌫 <b>Стоп-слова чата</b>\n"
+                f"🌊 <b>Стоп-слова чата</b>\n"
                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n{lines}",
                 parse_mode="HTML")
             return
@@ -4649,22 +4866,22 @@ async def cmd_autist_router(message: Message):
             conn.commit(); conn.close()
         except: pass
         await message.answer(
-            f"🌫 <b>Слово добавлено в фильтр</b>\n"
+            f"🌊 <b>Слово добавлено в фильтр</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🌿 слово — <code>{word}</code>\n"
-            f"🤍 сообщения с этим словом будут удаляться",
+            f"🌴 слово — <code>{word}</code>\n"
+            f"💛 сообщения с этим словом будут удаляться",
             parse_mode="HTML")
-        add_mod_history(cid, 0, f"🌫 Фильтр + '{word}'", "—", message.from_user.full_name)
+        add_mod_history(cid, 0, f"🌊 Фильтр + '{word}'", "—", message.from_user.full_name)
         return
 
-    # ───── 🌫 АНФИЛЬТР — убрать стоп-слово ─────
+    # ───── 🌊 АНФИЛЬТР — убрать стоп-слово ─────
     if action == "unfilter":
         if not remainder:
-            await reply_auto_delete(message, "🌿 Укажи слово: <code>аутист анфильтр слово</code>", parse_mode="HTML")
+            await reply_auto_delete(message, "🌴 Укажи слово: <code>аутист анфильтр слово</code>", parse_mode="HTML")
             return
         word = remainder.lower().strip()
         if word not in _chat_filters.get(cid, set()):
-            await reply_auto_delete(message, f"🤍 слово '{word}' не было в фильтре")
+            await reply_auto_delete(message, f"💛 слово '{word}' не было в фильтре")
             return
         _chat_filters[cid].discard(word)
         try:
@@ -4675,17 +4892,17 @@ async def cmd_autist_router(message: Message):
         await message.answer(
             f"✨ <b>Слово убрано из фильтра</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🌿 слово — <code>{word}</code>",
+            f"🌴 слово — <code>{word}</code>",
             parse_mode="HTML")
-        add_mod_history(cid, 0, f"🌫 Фильтр - '{word}'", "—", message.from_user.full_name)
+        add_mod_history(cid, 0, f"🌊 Фильтр - '{word}'", "—", message.from_user.full_name)
         return
 
     # ───── 🪪 ПРОВЕРКА — повторная капча ─────
     if action == "verify":
         if not message.reply_to_message:
-            await reply_auto_delete(message, "🌿 Реплайни на участника для повторной проверки."); return
+            await reply_auto_delete(message, "🌴 Реплайни на участника для повторной проверки."); return
         if await is_admin_by_id(cid, target.id):
-            await reply_auto_delete(message, "🤍 К администратору так нельзя."); return
+            await reply_auto_delete(message, "💛 К администратору так нельзя."); return
         # Удаляем флаг "прошёл капчу"
         _captcha_passed.discard((cid, target.id))
         try:
@@ -4697,8 +4914,8 @@ async def cmd_autist_router(message: Message):
         await message.answer(
             f"🪪 <b>{target.mention_html()} ‧ повторная проверка</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🤍 капча выслана выше\n"
-            f"🌫 проверку запросил — {message.from_user.mention_html()}",
+            f"💛 капча выслана выше\n"
+            f"🌊 проверку запросил — {message.from_user.mention_html()}",
             parse_mode="HTML")
         add_mod_history(cid, target.id, "🪪 Аутист проверка", "—", message.from_user.full_name)
         return
@@ -4727,8 +4944,8 @@ async def cmd_autist_router(message: Message):
         sent = await message.answer(
             f"🌊 <b>Волна прошла</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🍂 удалено — <b>{deleted}</b> из {n}\n"
-            f"🤍 объявил — {message.from_user.mention_html()}",
+            f"🌻 удалено — <b>{deleted}</b> из {n}\n"
+            f"💛 объявил — {message.from_user.mention_html()}",
             parse_mode="HTML")
         async def _del_self(m):
             await asyncio.sleep(10)
@@ -4738,21 +4955,21 @@ async def cmd_autist_router(message: Message):
         add_mod_history(cid, 0, f"🌊 Аутист волна ({deleted})", "—", message.from_user.full_name)
         return
 
-    # ───── 🌿 БЕЛЫЙ СПИСОК — добавить ─────
+    # ───── 🌴 БЕЛЫЙ СПИСОК — добавить ─────
     if action == "whitelist":
         if not message.reply_to_message:
             # Если без реплая — показываем текущий whitelist
             wl = _chat_whitelist.get(cid, set())
             if not wl:
                 await reply_auto_delete(message,
-                    "🌿 Белый список пуст\n"
+                    "🌴 Белый список пуст\n"
                     "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                    "🤍 добавить — реплай + <code>аутист белый</code>",
+                    "💛 добавить — реплай + <code>аутист белый</code>",
                     parse_mode="HTML")
                 return
-            lines = "\n".join(f"🌿 <code>{u}</code>" for u in list(wl)[:30])
+            lines = "\n".join(f"🌴 <code>{u}</code>" for u in list(wl)[:30])
             await reply_auto_delete(message,
-                f"🌿 <b>Белый список</b>\n"
+                f"🌴 <b>Белый список</b>\n"
                 f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n{lines}",
                 parse_mode="HTML")
             return
@@ -4764,19 +4981,19 @@ async def cmd_autist_router(message: Message):
             conn.commit(); conn.close()
         except: pass
         await message.answer(
-            f"🌿 <b>В белом списке</b>\n"
+            f"🌴 <b>В белом списке</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🤍 кто — {target.mention_html()}\n"
+            f"💛 кто — {target.mention_html()}\n"
             f"✨ автоматика его больше не трогает (cascade, фильтр, флуд)\n"
-            f"🌷 добавил — {message.from_user.mention_html()}",
+            f"🌺 добавил — {message.from_user.mention_html()}",
             parse_mode="HTML")
-        add_mod_history(cid, target.id, "🌿 Аутист белый", "—", message.from_user.full_name)
+        add_mod_history(cid, target.id, "🌴 Аутист белый", "—", message.from_user.full_name)
         return
 
-    # ───── 🌿 НЕБЕЛЫЙ — убрать из whitelist ─────
+    # ───── 🌴 НЕБЕЛЫЙ — убрать из whitelist ─────
     if action == "unwhitelist":
         if not message.reply_to_message:
-            await reply_auto_delete(message, "🌿 Реплайни на участника, кого убрать из белого."); return
+            await reply_auto_delete(message, "🌴 Реплайни на участника, кого убрать из белого."); return
         _chat_whitelist[cid].discard(target.id)
         try:
             conn = sqlite3.connect("captcha_state.db")
@@ -4784,19 +5001,61 @@ async def cmd_autist_router(message: Message):
             conn.commit(); conn.close()
         except: pass
         await message.answer(
-            f"🍂 <b>Убран из белого</b>\n"
+            f"🌻 <b>Убран из белого</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🤍 кто — {target.mention_html()}\n"
-            f"🌫 теперь под общими правилами",
+            f"💛 кто — {target.mention_html()}\n"
+            f"🌊 теперь под общими правилами",
             parse_mode="HTML")
-        add_mod_history(cid, target.id, "🍂 Аутист небелый", "—", message.from_user.full_name)
+        add_mod_history(cid, target.id, "🌻 Аутист небелый", "—", message.from_user.full_name)
+        return
+
+    # ───── 🛡 ЩИТ — антибуллинг защита юзера ─────
+    if action == "shield":
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌴 Реплайни на участника, кого защитить щитом."); return
+        # Щит на 24 часа
+        expires = time.time() + 24 * 3600
+        _shield_users[cid][target.id] = expires
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("INSERT OR REPLACE INTO shields (cid, uid, expires_at) VALUES (?, ?, ?)",
+                         (cid, target.id, expires))
+            conn.commit(); conn.close()
+        except: pass
+        await message.answer(
+            f"🛡 <b>Щит установлен</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"💛 под защитой — {target.mention_html()}\n"
+            f"🌴 любая агрессия в его сторону сразу позовёт админов\n"
+            f"🕊 щит держится 24 часа\n"
+            f"🌺 установил — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "🛡 Аутист щит (24ч)", "Антибуллинг", message.from_user.full_name)
+        return
+
+    # ───── 🛡 СНЯТЬ ЩИТ ─────
+    if action == "unshield":
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌴 Реплайни на участника, с кого снять щит."); return
+        _shield_users[cid].pop(target.id, None)
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("DELETE FROM shields WHERE cid=? AND uid=?", (cid, target.id))
+            conn.commit(); conn.close()
+        except: pass
+        await message.answer(
+            f"🌻 <b>Щит снят</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"💛 с кого — {target.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "🌻 Аутист снят щит", "—", message.from_user.full_name)
         return
 
 
 @dp.message(Command("warn"))
 async def cmd_warn(message: Message, command: CommandObject):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     if await is_admin_by_id(message.chat.id, target.id):
         await reply_auto_delete(message, "⛔ Невозможно выдать предупреждение администратору."); return
@@ -4830,7 +5089,7 @@ async def cmd_warn(message: Message, command: CommandObject):
     else:
         msg = random.choice(WARN_MESSAGES).format(
             name=target.mention_html(), count=count, max=MAX_WARNINGS, reason=reason)
-        await log_action(f"🌿 <b>Предупреждение</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n⚠️ <b>Варнов:</b> {warnings[message.chat.id][target.id]}/{MAX_WARNINGS}\n⏳ <b>Сгорит через:</b> {WARN_EXPIRY_DAYS} дн.\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+        await log_action(f"🌴 <b>Предупреждение</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n⚠️ <b>Варнов:</b> {warnings[message.chat.id][target.id]}/{MAX_WARNINGS}\n⏳ <b>Сгорит через:</b> {WARN_EXPIRY_DAYS} дн.\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         add_mod_history(cid, target.id, f"⚡ Варн {count}/{MAX_WARNINGS}", reason, message.from_user.full_name)
         await ag.record_action(
             message.from_user.id, "warn",
@@ -4850,10 +5109,10 @@ async def cmd_warn(message: Message, command: CommandObject):
 @dp.message(Command("unwarn"))
 async def cmd_unwarn(message: Message):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user; cid = message.chat.id
     if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1; save_data()
-    add_mod_history(cid, target.id, "🌿 Снят варн", "—", message.from_user.full_name)
+    add_mod_history(cid, target.id, "🌴 Снят варн", "—", message.from_user.full_name)
     await reply_auto_delete(message, 
         f"👤 Цель: {target.mention_html()}\n⚡ Остаток: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>\n<i>Предупреждение аннулировано.</i>",
         parse_mode="HTML")
@@ -4861,7 +5120,7 @@ async def cmd_unwarn(message: Message):
 @dp.message(Command("del"))
 async def cmd_del(message: Message):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     try: await message.reply_to_message.delete()
     except: pass
     try: await message.delete()
@@ -4871,7 +5130,7 @@ async def cmd_del(message: Message):
 async def cmd_clear(message: Message, command: CommandObject):
     if not await require_admin(message): return
     try: count = min(int(command.args or 10), 50)
-    except ValueError: await reply_auto_delete(message, "🌿 Использование: /clear [кол-во]"); return
+    except ValueError: await reply_auto_delete(message, "🌴 Использование: /clear [кол-во]"); return
     deleted = 0
     for i in range(message.message_id, message.message_id - count - 1, -1):
         try: await bot.delete_message(message.chat.id, i); deleted += 1
@@ -4897,7 +5156,7 @@ async def cmd_announce(message: Message, command: CommandObject):
 @dp.message(Command("unpin"))
 async def cmd_unpin(message: Message):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     await bot.unpin_chat_message(message.chat.id, message.reply_to_message.message_id)
     await reply_auto_delete(message, "📍 Откреплено!")
 
@@ -4921,9 +5180,9 @@ async def cmd_unlock(message: Message):
 async def cmd_slowmode(message: Message, command: CommandObject):
     if not await require_admin(message): return
     try: delay = int(command.args) if command.args else 10
-    except ValueError: await reply_auto_delete(message, "🌿 /slowmode 30"); return
+    except ValueError: await reply_auto_delete(message, "🌴 /slowmode 30"); return
     if delay < 0 or delay > 900:
-        await reply_auto_delete(message, "🌿 Значение от 0 до 900 секунд."); return
+        await reply_auto_delete(message, "🌴 Значение от 0 до 900 секунд."); return
     try:
         await bot.set_chat_slow_mode_delay(message.chat.id, delay)
         if delay == 0:
@@ -4932,18 +5191,18 @@ async def cmd_slowmode(message: Message, command: CommandObject):
             label = f"{delay} сек." if delay < 60 else f"{delay//60} мин. {delay%60} сек." if delay%60 else f"{delay//60} мин."
             await reply_auto_delete(message, f"⏱ Задержка: <b>{label}</b>\n<i>Режим замедления активирован.</i>", parse_mode="HTML")
     except Exception as e:
-        await reply_auto_delete(message, f"🌿 Не удалось установить slowmode: <code>{e}</code>", parse_mode="HTML")
+        await reply_auto_delete(message, f"🌴 Не удалось установить slowmode: <code>{e}</code>", parse_mode="HTML")
 
 @dp.message(Command("promote"))
 async def cmd_promote(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not message.reply_to_message:
-        await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+        await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     if not command.args:
-        await reply_auto_delete(message, "🌿 Пример: /promote Модератор"); return
+        await reply_auto_delete(message, "🌴 Пример: /promote Модератор"); return
     title = command.args.strip()
     if len(title) > 32:
-        await reply_auto_delete(message, "🌿 Тег максимум 32 символа."); return
+        await reply_auto_delete(message, "🌴 Тег максимум 32 символа."); return
     target = message.reply_to_message.from_user
     cid = message.chat.id
     try:
@@ -4972,7 +5231,7 @@ async def cmd_promote(message: Message, command: CommandObject):
                 parse_mode="HTML")
     except Exception as e:
         await reply_auto_delete(message,
-            f"🌿 Ошибка: <code>{e}</code>", parse_mode="HTML")
+            f"🌴 Ошибка: <code>{e}</code>", parse_mode="HTML")
 
 @dp.callback_query(F.data.startswith("panel:promote:"))
 async def cb_panel_promote(call: CallbackQuery):
@@ -4985,7 +5244,7 @@ async def cb_panel_promote(call: CallbackQuery):
             f"<code>/promote Название тега</code>\n\n"
             f"Или через аутист команду:\n"
             f"<code>аутист тег @username Название</code>\n\n"
-            f"🌿 Бот должен иметь право <b>can_manage_tags</b>",
+            f"🌴 Бот должен иметь право <b>can_manage_tags</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="◀️ Назад", callback_data=f"panel:back:{tid}")
@@ -4997,7 +5256,7 @@ async def cb_panel_promote(call: CallbackQuery):
 async def cmd_removetag(message: Message):
     if not await require_admin(message): return
     if not message.reply_to_message:
-        await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+        await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     cid = message.chat.id
     try:
@@ -5012,18 +5271,18 @@ async def cmd_removetag(message: Message):
                 f"🗑 Тег {target.mention_html()} удалён.", parse_mode="HTML")
         else:
             await reply_auto_delete(message,
-                f"🌿 {result.get('description', 'Ошибка')}", parse_mode="HTML")
+                f"🌴 {result.get('description', 'Ошибка')}", parse_mode="HTML")
     except Exception as e:
         await reply_auto_delete(message,
-            f"🌿 Ошибка: <code>{e}</code>", parse_mode="HTML")
+            f"🌴 Ошибка: <code>{e}</code>", parse_mode="HTML")
 
 @dp.message(Command("poll"))
 async def cmd_poll(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not command.args or "|" not in command.args:
-        await reply_auto_delete(message, "🌿 /poll Вопрос|Вар1|Вар2"); return
+        await reply_auto_delete(message, "🌴 /poll Вопрос|Вар1|Вар2"); return
     parts = [p.strip() for p in command.args.split("|")]
-    if len(parts) < 3: await reply_auto_delete(message, "🌿 Нужно минимум 2 варианта."); return
+    if len(parts) < 3: await reply_auto_delete(message, "🌴 Нужно минимум 2 варианта."); return
     try: await message.delete()
     except: pass
     await bot.send_poll(message.chat.id, question=parts[0], options=parts[1:], is_anonymous=False)
@@ -5054,10 +5313,10 @@ async def cmd_autokick(message: Message, command: CommandObject):
 @dp.message(Command("warn24"))
 async def cmd_warn24(message: Message):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     if await is_admin_by_id(message.chat.id, target.id):
-        await reply_auto_delete(message, "🤍 К администратору так нельзя"); return
+        await reply_auto_delete(message, "💛 К администратору так нельзя"); return
     await bot.restrict_chat_member(message.chat.id, target.id,
         permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(hours=24))
     await reply_auto_delete(message, f"📵 {target.mention_html()} замучен на <b>24 часа</b> за рекламу.", parse_mode="HTML")
@@ -5066,7 +5325,7 @@ async def cmd_warn24(message: Message):
 @dp.message(Command("rban"))
 async def cmd_rban(message: Message):
     if not await require_admin(message): return
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     await reply_auto_delete(message, 
         f"🎲 {target.mention_html()} получил <b>шуточный бан</b>!\n"
@@ -5091,19 +5350,19 @@ async def cmd_note(message: Message, command: CommandObject):
     parts = command.args.split(maxsplit=2); action = parts[0].lower(); cid = message.chat.id
     if action == "set":
         if not await require_admin(message): return
-        if len(parts) < 3: await reply_auto_delete(message, "🌿 /note set [имя] [текст]"); return
+        if len(parts) < 3: await reply_auto_delete(message, "🌴 /note set [имя] [текст]"); return
         notes[cid][parts[1]] = parts[2]; save_data()
         await reply_auto_delete(message, f"📝 Заметка <b>{parts[1]}</b> сохранена!", parse_mode="HTML")
     elif action == "get":
-        if len(parts) < 2: await reply_auto_delete(message, "🌿 /note get [имя]"); return
+        if len(parts) < 2: await reply_auto_delete(message, "🌴 /note get [имя]"); return
         t = notes[cid].get(parts[1])
-        await reply_auto_delete(message, f"📄 <b>{parts[1]}:</b>\n{t}" if t else "🥀 Заметка не найдена.", parse_mode="HTML")
+        await reply_auto_delete(message, f"📄 <b>{parts[1]}:</b>\n{t}" if t else "🌵 Заметка не найдена.", parse_mode="HTML")
     elif action == "del":
         if not await require_admin(message): return
         if len(parts) > 1 and parts[1] in notes[cid]:
             del notes[cid][parts[1]]; save_data()
             await reply_auto_delete(message, f"🗑 Заметка <b>{parts[1]}</b> удалена.", parse_mode="HTML")
-        else: await reply_auto_delete(message, "🥀 Не найдена.")
+        else: await reply_auto_delete(message, "🌵 Не найдена.")
     elif action == "list":
         keys = list(notes[cid].keys())
         await reply_auto_delete(message, "📋 <b>Заметки:</b>\n" + "\n".join(f"📌 {k}" for k in keys) if keys else "📭 Заметок нет.", parse_mode="HTML")
@@ -5115,7 +5374,7 @@ async def cmd_birthday(message: Message, command: CommandObject):
         day, month = map(int, command.args.strip().split("."))
         if not (1 <= day <= 31 and 1 <= month <= 12): raise ValueError
     except:
-        await reply_auto_delete(message, "🌿 Неверный формат. Пример: /birthday 25.03"); return
+        await reply_auto_delete(message, "🌴 Неверный формат. Пример: /birthday 25.03"); return
     uid = message.from_user.id
     birthdays[uid] = {"day": day, "month": month, "name": message.from_user.full_name, "chat_id": message.chat.id}
     await reply_auto_delete(message, 
@@ -5143,7 +5402,7 @@ async def cmd_remind(message: Message, command: CommandObject):
             "<code>/remind 2h Встреча</code>", parse_mode="HTML"); return
     parts = command.args.split(maxsplit=1)
     mins, label = parse_duration(parts[0])
-    if not mins: await reply_auto_delete(message, "🌿 Неверный формат времени. Примеры: 10m, 2h, 1d"); return
+    if not mins: await reply_auto_delete(message, "🌴 Неверный формат времени. Примеры: 10m, 2h, 1d"); return
     text = parts[1].strip()
     cid = message.chat.id
     await reply_auto_delete(message, f"⏰ Напомню через <b>{label}</b>!\n📝 {text}", parse_mode="HTML")
@@ -5181,7 +5440,7 @@ async def cmd_afk(message: Message, command: CommandObject):
 
 @dp.message(Command("info"))
 async def cmd_info(message: Message):
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     user = message.reply_to_message.from_user
     member = await bot.get_chat_member(message.chat.id, user.id)
     smap = {"creator":"👑 Создатель","administrator":"🛡 Администратор","member":"👤 Участник",
@@ -5216,7 +5475,7 @@ async def cmd_cascade(message: Message, command: CommandObject):
 
     if not target:
         await reply_auto_delete(message,
-            "🌿 Ответь на сообщение участника или укажи его ID",
+            "🌴 Ответь на сообщение участника или укажи его ID",
             parse_mode="HTML")
         return
 
@@ -5225,7 +5484,7 @@ async def cmd_cascade(message: Message, command: CommandObject):
 
     if not state or state.get("step", 0) == 0:
         await reply_auto_delete(message,
-            f"🤍 <b>{target.first_name}</b>\n"
+            f"💛 <b>{target.first_name}</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
             f"✨ нарушений нет ‧ чистая лестница",
             parse_mode="HTML")
@@ -5249,7 +5508,7 @@ async def cmd_cascade(message: Message, command: CommandObject):
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"🌸 нарушений — <b>{step}</b>\n"
         f"{cur_emoji} последнее — {cur_label}\n"
-        f"🌿 следующее будет — {next_emoji} {next_label}\n"
+        f"🌴 следующее будет — {next_emoji} {next_label}\n"
         f"🕊 до сброса лестницы — {hours_left} ч",
         parse_mode="HTML")
 
@@ -5270,7 +5529,7 @@ async def cmd_cascade_reset(message: Message, command: CommandObject):
 
     if not target:
         await reply_auto_delete(message,
-            "🌿 Ответь на сообщение участника или укажи его ID",
+            "🌴 Ответь на сообщение участника или укажи его ID",
             parse_mode="HTML")
         return
 
@@ -5281,7 +5540,7 @@ async def cmd_cascade_reset(message: Message, command: CommandObject):
     await reply_auto_delete(message,
         f"✨ <b>Лестница сброшена</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"🤍 у {target.first_name} снова чистая история\n"
+        f"💛 у {target.first_name} снова чистая история\n"
         f"🍃 модератор — {message.from_user.first_name}",
         parse_mode="HTML")
     add_mod_history(cid, target.id, "⛓ Сброс cascade lock", "—", message.from_user.full_name)
@@ -5289,7 +5548,7 @@ async def cmd_cascade_reset(message: Message, command: CommandObject):
 
 @dp.message(Command("warnings"))
 async def cmd_warnings(message: Message):
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     await reply_auto_delete(message, 
         f"👤 Цель: {target.mention_html()}\n⚡ Варнов: <b>{warnings[message.chat.id].get(target.id,0)}/{MAX_WARNINGS}</b>\n",
@@ -5331,9 +5590,9 @@ async def cmd_tempban(message: Message, command: CommandObject):
         days = int(args[0])
         reason = args[1] if len(args) > 1 else "Нарушение правил"
     except (ValueError, IndexError):
-        await reply_auto_delete(message, "🌿 Пример: /tempban 3 спам"); return
+        await reply_auto_delete(message, "🌴 Пример: /tempban 3 спам"); return
     if days < 1 or days > 365:
-        await reply_auto_delete(message, "🌿 Срок от 1 до 365 дней."); return
+        await reply_auto_delete(message, "🌴 Срок от 1 до 365 дней."); return
     cid = message.chat.id
     # ЛС до бана
     await dm_warn_user(target.id, target.full_name, reason,
@@ -5427,12 +5686,12 @@ async def cmd_modexport(message: Message, command: CommandObject):
 
 @dp.message(Command("modtop"))
 async def cmd_modtop(message: Message):
-    # 🌫 Команда /modtop отключена (система рейтинга выпилена)
+    # 🌊 Команда /modtop отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -5461,7 +5720,7 @@ async def cb_warn_template(call: CallbackQuery):
         await call.answer("🍃 Эта команда — для администраторов чата", show_alert=True); return
     tmpl = WARN_TEMPLATES.get(tid)
     if not tmpl:
-        await call.answer("🥀 Шаблон не найден!", show_alert=True); return
+        await call.answer("🌵 Шаблон не найден!", show_alert=True); return
     cid = call.message.chat.id
     reason = tmpl["text"]
     clean_expired_warns(cid, target_id)
@@ -5483,14 +5742,14 @@ async def cb_warn_template(call: CallbackQuery):
         await call.message.edit_text(
             f"⚡ <b>Варн выдан!</b> {tmpl['label']}\n"
             f"📝 {reason}\n"
-            f"🌿 Варнов: <b>{count}/{MAX_WARNINGS}</b>",
+            f"🌴 Варнов: <b>{count}/{MAX_WARNINGS}</b>",
             parse_mode="HTML")
         asyncio.create_task(schedule_delete(call.message))
         await log_action(f"👤 <b>Кто:</b> {call.from_user.mention_html()}\n🎯 <b>Кому:</b> <code>{target_id}</code>\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {call.message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
     await call.answer(f"✨ {tmpl['label']}")
 
 async def cmd_rep(message: Message):
-    if not message.reply_to_message: await reply_auto_delete(message, "🌿 Реплайни на сообщение пользователя."); return
+    if not message.reply_to_message: await reply_auto_delete(message, "🌴 Реплайни на сообщение пользователя."); return
     target = message.reply_to_message.from_user
     score  = reputation[message.chat.id].get(target.id, 0)
     await reply_auto_delete(message, 
@@ -5574,12 +5833,12 @@ async def cmd_rank(message: Message):
 
 @dp.message(Command("top"))
 async def cmd_top(message: Message):
-    # 🌫 Команда /top отключена (система рейтинга выпилена)
+    # 🌊 Команда /top отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -5600,7 +5859,7 @@ async def cmd_8ball(message: Message, command: CommandObject):
 
 @dp.message(Command("rate"))
 async def cmd_rate(message: Message, command: CommandObject):
-    if not command.args: await reply_auto_delete(message, "🌿 /rate [что]"); return
+    if not command.args: await reply_auto_delete(message, "🌴 /rate [что]"); return
     score = random.randint(0, 10)
     await reply_auto_delete(message, 
         f"📌 {command.args}\n{'🌟'*score+'☆'*(10-score)}\n<b>{score}/10</b>\n", parse_mode="HTML")
@@ -5647,9 +5906,9 @@ async def cmd_rps(message: Message, command: CommandObject):
 
 async def cmd_choose(message: Message, command: CommandObject):
     if not command.args or "|" not in command.args:
-        await reply_auto_delete(message, "🌿 /choose вар1|вар2|вар3"); return
+        await reply_auto_delete(message, "🌴 /choose вар1|вар2|вар3"); return
     options = [o.strip() for o in command.args.split("|") if o.strip()]
-    if len(options) < 2: await reply_auto_delete(message, "🌿 Минимум 2 варианта."); return
+    if len(options) < 2: await reply_auto_delete(message, "🌴 Минимум 2 варианта."); return
     await reply_auto_delete(message, f"✨ <b>{random.choice(options)}</b>\n", parse_mode="HTML")
 
 @dp.message(Command("horoscope"))
@@ -5844,7 +6103,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, f"🔨 {tname} забанен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
             add_mod_history(cid, target.id, "🔨 Бан", reason, message.from_user.full_name)
             ban_list[cid][target.id] = True; save_data()
-            await log_action(f"🍂 <b>Бан вынесен</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+            await log_action(f"🌻 <b>Бан вынесен</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         elif action == "захуесосить":
             await bot.ban_chat_member(cid, target.id)
             await bot.unban_chat_member(cid, target.id)
@@ -5861,7 +6120,7 @@ async def autist_commands(message: Message):
                 permissions=ChatPermissions(can_send_messages=False), until_date=datetime.now() + timedelta(minutes=mins))
             await reply_auto_delete(message, f"🔇 {tname} замучен на <b>{label}</b>!\n📝 Причина: {reason}", parse_mode="HTML")
             add_mod_history(cid, target.id, f"🔇 Мут {label}", reason, message.from_user.full_name)
-            await log_action(f"🌙 <b>Тишина настала</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+            await log_action(f"🌅 <b>Море уснуло</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n⏱ <b>Время:</b> {label}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         elif action == "мут навсегда":
             await bot.restrict_chat_member(cid, target.id, permissions=ChatPermissions(can_send_messages=False))
             await reply_auto_delete(message, f"🔇 {tname} замучен навсегда!\n📝 Причина: {reason}", parse_mode="HTML")
@@ -5888,11 +6147,11 @@ async def autist_commands(message: Message):
                 add_mod_history(cid, target.id, f"⚡ Варн {count}/{MAX_WARNINGS}", reason, message.from_user.full_name)
                 time_note = f"\n⏰ Автосброс через: <b>{duration_label}</b>" if duration_mins else ""
                 await reply_auto_delete(message, f"⚡ {tname} получил варн <b>{count}/{MAX_WARNINGS}</b>!\n📝 Причина: {reason}{time_note}", parse_mode="HTML")
-                await log_action(f"🌿 <b>Предупреждение</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+                await log_action(f"🌴 <b>Предупреждение</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n🎯 <b>Кого:</b> {tname}\n📝 <b>Причина:</b> {reason}\n💬 <b>Чат:</b> {message.chat.title}\n🕐 <b>Время:</b> {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
         elif action in ("снять варн", "разварн"):
             if warnings[cid][target.id] > 0: warnings[cid][target.id] -= 1; save_data()
-            add_mod_history(cid, target.id, "🌿 Снят варн", reason, message.from_user.full_name)
-            await reply_auto_delete(message, f"🌿 С {tname} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>", parse_mode="HTML")
+            add_mod_history(cid, target.id, "🌴 Снят варн", reason, message.from_user.full_name)
+            await reply_auto_delete(message, f"🌴 С {tname} снят варн. Осталось: <b>{warnings[cid][target.id]}/{MAX_WARNINGS}</b>", parse_mode="HTML")
         elif action == "разбан":
             await bot.unban_chat_member(cid, target.id, only_if_banned=True)
             ban_list[cid].pop(target.id, None); save_data()
@@ -5907,7 +6166,7 @@ async def autist_commands(message: Message):
         elif action == "тег":
             tag_text = rest.strip() or reason
             if not tag_text or tag_text == "Нарушение правил":
-                await reply_auto_delete(message, "🌿 Укажи название тега. Пример: <code>аутист тег @user Сигма</code>", parse_mode="HTML"); return
+                await reply_auto_delete(message, "🌴 Укажи название тега. Пример: <code>аутист тег @user Сигма</code>", parse_mode="HTML"); return
             import aiohttp
             async with aiohttp.ClientSession() as session:
                 url = f"https://api.telegram.org/bot{BOT_TOKEN}/setChatMemberTag"
@@ -5918,7 +6177,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, f"🏷 {tname} получил тег: <b>{tag_text}</b>", parse_mode="HTML")
             else:
                 err = result.get('description', 'Ошибка')
-                await reply_auto_delete(message, f"🌿 {err}\n\n<i>Убедись что у бота есть право can_manage_tags</i>", parse_mode="HTML")
+                await reply_auto_delete(message, f"🌴 {err}\n\n<i>Убедись что у бота есть право can_manage_tags</i>", parse_mode="HTML")
         elif action == "убрать тег":
             import aiohttp
             async with aiohttp.ClientSession() as session:
@@ -5929,16 +6188,16 @@ async def autist_commands(message: Message):
             if result.get("ok"):
                 await reply_auto_delete(message, f"🗑 Тег {tname} удалён.", parse_mode="HTML")
             else:
-                await reply_auto_delete(message, f"🌿 {result.get('description', 'Ошибка')}", parse_mode="HTML")
+                await reply_auto_delete(message, f"🌴 {result.get('description', 'Ошибка')}", parse_mode="HTML")
         elif action == "удалить":
             try: await message.reply_to_message.delete(); await reply_auto_delete(message, "🗑 Сообщение удалено!")
-            except: await reply_auto_delete(message, "🌿 Не удалось удалить сообщение.")
+            except: await reply_auto_delete(message, "🌴 Не удалось удалить сообщение.")
         elif action == "закрепить":
             try: await bot.pin_chat_message(cid, message.reply_to_message.message_id); await reply_auto_delete(message, "📌 Сообщение закреплено!")
-            except: await reply_auto_delete(message, "🌿 Не удалось закрепить сообщение.")
+            except: await reply_auto_delete(message, "🌴 Не удалось закрепить сообщение.")
         elif action == "предупредить":
             text_warn = rest.strip() or "Нарушение правил"
-            await reply_auto_delete(message, f"🌿 Внимание {tname}!\n📝 {text_warn}", parse_mode="HTML")
+            await reply_auto_delete(message, f"🌴 Внимание {tname}!\n📝 {text_warn}", parse_mode="HTML")
         elif action == "очистить":
             count = duration_mins or 10; deleted = 0
             for i in range(message.message_id, message.message_id - count - 1, -1):
@@ -6007,7 +6266,7 @@ async def autist_commands(message: Message):
                        "🔢 Назови простое число от 10 до 20.","🐘 Какое животное самое большое на суше?",
                        "🌊 Какой самый глубокий океан?","🎨 Смешай красный и синий — какой цвет получится?",
                        "⚡ Кто придумал лампочку?","🦁 Царь зверей — это?",
-                       "🌙 Как называется спутник Земли?","🍎 Какой фрукт упал на Ньютона?"]
+                       "🌅 Как называется спутник Земли?","🍎 Какой фрукт упал на Ньютона?"]
             await reply_auto_delete(message, 
                 f"📝 <b>ЭКЗАМЕН для {tname}!</b>\n\n{random.choice(вопросы)}\n\n⏰ У тебя <b>30 секунд</b>!",
                 parse_mode="HTML")
@@ -6028,7 +6287,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, "↩️ Реплайни на сообщение"); return
             proposals = [
                 f"💝 {message.from_user.full_name} опускается на одно колено перед {tname}...\n❤️ Ты будешь моей второй половинкой?",
-                f"🌹 {message.from_user.full_name} дарит {tname} красную розу...\n💫 Встречаемся?",
+                f"🌹 {message.from_user.full_name} дарит {tname} красную розу...\n🌞 Встречаемся?",
                 f"💌 {message.from_user.full_name} пишет записку {tname}:\n'Ты мне нравишься ❤️'",
             ]
             await reply_auto_delete(message, random.choice(proposals), parse_mode="HTML")
@@ -6038,7 +6297,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, "↩️ Реплайни на сообщение"); return
             breakups = [
                 f"💔 {message.from_user.full_name} и {tname} расстались...\nАнекдот закончился.",
-                f"🥀 {message.from_user.full_name} бросил(а) {tname} через сообщение\n😢 Это жестоко.",
+                f"🌵 {message.from_user.full_name} бросил(а) {tname} через сообщение\n😢 Это жестоко.",
                 f"📱 {message.from_user.full_name} разблокировал(а) {tname}...\nНет погоди — заблокировал(а).",
             ]
             await reply_auto_delete(message, random.choice(breakups), parse_mode="HTML")
@@ -6152,7 +6411,7 @@ async def autist_commands(message: Message):
                 extra += random.choice(extra_lines2)
 
             story = (
-                f"📖 <b>История</b>\n<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n\n"
+                f"🌅 <b>История</b>\n<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n\n"
                 f"{intro} {middle}{extra} {ending}"
             )
 
@@ -6214,7 +6473,7 @@ async def autist_commands(message: Message):
                 "умник":     [f"🧠 Самый умный сегодня — {chosen_mention}!",
                                f"📚 Умник дня: {chosen_mention}. ИИ нервно курит!"],
                 "дурак":     [f"🤡 Дурак дня — {chosen_mention}! Держи корону!",
-                               f"💫 {chosen_mention} сегодня отличился особой глупостью!"],
+                               f"🌞 {chosen_mention} сегодня отличился особой глупостью!"],
                 "богатый":   [f"💰 Богач дня — {chosen_mention}! Угощает всех!",
                                f"🤑 {chosen_mention} сегодня самый богатый в чате!"],
                 "бедный":    [f"😢 Бедняга дня — {chosen_mention}. Скинемся?",
@@ -6230,7 +6489,7 @@ async def autist_commands(message: Message):
                 "чемпион":   [f"🏅 Чемпион дня — {chosen_mention}!",
                                f"⚡ {chosen_mention} — чемпион этого чата!"],
                 "легенда":   [f"🌟 Легенда чата сегодня — {chosen_mention}!",
-                               f"💫 {chosen_mention} вошёл в историю!"],
+                               f"🌞 {chosen_mention} вошёл в историю!"],
                 "токсик":    [f"☠️ Токсик дня — {chosen_mention}. Берегитесь!",
                                f"🧪 {chosen_mention} сегодня максимально токсичен!"],
                 "няша":      [f"🥰 Няша дня — {chosen_mention}! Все обнимают!",
@@ -6266,7 +6525,7 @@ async def autist_commands(message: Message):
                                f"🕊 {chosen_mention} — чистая душа этого чата!",
                                f"😊 {chosen_mention} сегодня как ангел — ни одного мата!"],
                 "чистоуст":  [f"🧼 Чистоуст дня — {chosen_mention}!\n✅ Образец культурной речи.",
-                               f"📖 {chosen_mention} говорит как диктор на телевидении!"],
+                               f"🌅 {chosen_mention} говорит как диктор на телевидении!"],
                 "банщик":    [f"🔨 Банщик дня — {chosen_mention}!\n⚠️ Все боятся получить бан.",
                                f"🚫 {chosen_mention} сегодня банит направо и налево!"],
                 "цензор":    [f"📵 Цензор дня — {chosen_mention}!\n🔍 Следит за каждым словом.",
@@ -6298,7 +6557,7 @@ async def autist_commands(message: Message):
                                f"🏥 {chosen_mention} — дебил дня по заключению чата!"],
                 "идиот":     [f"🙃 Идиот дня — {chosen_mention}!\n📉 IQ в минус.",
                                f"🎓 {chosen_mention} окончил школу идиотов с отличием!"],
-                "придурок":  [f"🌀 Придурок дня — {chosen_mention}!\n💫 Диагноз очевиден.",
+                "придурок":  [f"🌀 Придурок дня — {chosen_mention}!\n🌞 Диагноз очевиден.",
                                f"😜 {chosen_mention} — придурок дня! Все поздравляют!"],
                 "тупица":    [f"🐢 Тупица дня — {chosen_mention}!\n🐌 Даже улитки обгоняют.",
                                f"📉 {chosen_mention} сегодня в режиме тупицы!"],
@@ -6323,7 +6582,7 @@ async def autist_commands(message: Message):
                                f"😵 {chosen_mention} — псих дня! Осторожно!"],
                 # 🆕 Профессии
                 "философ":   [f"🧘 Философ дня — {chosen_mention}!\n💭 Задаёт вопросы без ответов.",
-                               f"📜 {chosen_mention} сегодня рассуждает о смысле бытия!"],
+                               f"🗺 {chosen_mention} сегодня рассуждает о смысле бытия!"],
                 "поэт":      [f"🖊 Поэт дня — {chosen_mention}!\n🌹 Душа чата рифмует на лету.",
                                f"📝 {chosen_mention} сегодня пишет стихи в голове!"],
                 "художник":  [f"🎨 Художник дня — {chosen_mention}!\n🖼 Видит мир иначе.",
@@ -6356,10 +6615,10 @@ async def autist_commands(message: Message):
                                f"🔩 {chosen_mention} — самый механистичный участник дня!"],
                 "зомби":     [f"🧟 Зомби дня — {chosen_mention}!\n🧠 Ищет мозги в чате.",
                                f"☠️ {chosen_mention} сегодня бродит как зомби!"],
-                "вампир":    [f"🧛 Вампир дня — {chosen_mention}!\n🌙 Активен только ночью.",
+                "вампир":    [f"🧛 Вампир дня — {chosen_mention}!\n🌅 Активен только ночью.",
                                f"🩸 {chosen_mention} — граф Дракула этого чата!"],
                 "пришелец":  [f"👽 Пришелец дня — {chosen_mention}!\n🛸 Явно не с этой планеты.",
-                               f"🌌 {chosen_mention} прилетел из далёкой галактики!"],
+                               f"🏝 {chosen_mention} прилетел из далёкой галактики!"],
                 "ниндзя":    [f"🥷 Ниндзя дня — {chosen_mention}!\n⚡ Невидим и смертоносен.",
                                f"🗡 {chosen_mention} растворяется в тени чата!"],
                 "пират":     [f"🏴‍☠️ Пират дня — {chosen_mention}!\n⚓ Йо-хо-хо!",
@@ -6377,13 +6636,13 @@ async def autist_commands(message: Message):
                                f"💎 {chosen_mention} сегодня купается в деньгах!"],
                 "бездомный": [f"📦 Бездомный дня — {chosen_mention}!\n🏠 Ищет крышу над головой.",
                                f"🛒 {chosen_mention} сегодня живёт в картонной коробке!"],
-                "звезда":    [f"⭐ Звезда дня — {chosen_mention}!\n🎤 Все смотрят только на него.",
+                "звезда":    [f"✨ Звезда дня — {chosen_mention}!\n🎤 Все смотрят только на него.",
                                f"🌟 {chosen_mention} — настоящая суперзвезда чата!"],
                 "аутсайдер": [f"😶 Аутсайдер дня — {chosen_mention}!\n🚪 Стоит у входа.",
                                f"🌑 {chosen_mention} сегодня держится особняком!"],
                 "инфлюенсер":[f"📱 Инфлюенсер дня — {chosen_mention}!\n🤳 Всё фоткает и постит.",
                                f"✨ {chosen_mention} — лидер мнений этого чата!"],
-                "симпатяга": [f"😊 Симпатяга дня — {chosen_mention}!\n💫 Все рады его видеть.",
+                "симпатяга": [f"😊 Симпатяга дня — {chosen_mention}!\n🌞 Все рады его видеть.",
                                f"🤗 {chosen_mention} — самый приятный человек дня!"],
                 "мемлорд":   [f"😂 Мемлорд дня — {chosen_mention}!\n🖼 Поставляет мемы оптом.",
                                f"🃏 {chosen_mention} знает все мемы которые существуют!"],
@@ -6396,8 +6655,8 @@ async def autist_commands(message: Message):
                 # 🆕 Психотипы
                 "оптимист":  [f"☀️ Оптимист дня — {chosen_mention}!\n😁 Всё будет хорошо!",
                                f"🌈 {chosen_mention} видит только лучшее в жизни!"],
-                "пессимист": [f"🌧 Пессимист дня — {chosen_mention}!\n😞 Всё плохо и будет хуже.",
-                               f"☁️ {chosen_mention} ждёт только плохого!"],
+                "пессимист": [f"🌞 Пессимист дня — {chosen_mention}!\n😞 Всё плохо и будет хуже.",
+                               f"☀️ {chosen_mention} ждёт только плохого!"],
                 "параноик":  [f"👀 Параноик дня — {chosen_mention}!\n🔍 Везде заговор.",
                                f"🕵️ {chosen_mention} уверен что за ним следят!"],
                 "нарцисс":   [f"🪞 Нарцисс дня — {chosen_mention}!\n💅 Любит себя больше всех.",
@@ -6407,7 +6666,7 @@ async def autist_commands(message: Message):
                 # 🆕 Состояния
                 "везунчик":  [f"🍀 Везунчик дня — {chosen_mention}!\n🎰 Сегодня его день.",
                                f"✨ {chosen_mention} — баловень судьбы!"],
-                "невезучий": [f"🌧 Невезучий дня — {chosen_mention}!\n😬 Всё идёт не так.",
+                "невезучий": [f"🌞 Невезучий дня — {chosen_mention}!\n😬 Всё идёт не так.",
                                f"🪙 У {chosen_mention} сегодня всё падает из рук!"],
                 "сонный":    [f"😴 Сонный дня — {chosen_mention}!\n💤 Засыпает прямо в чате.",
                                f"🛌 {chosen_mention} — самый сонный участник дня!"],
@@ -6442,10 +6701,10 @@ async def autist_commands(message: Message):
                                f"🗿 {chosen_mention} серьёзен как никто другой!"],
                 "рандом":    [f"🎲 Рандом дня — {chosen_mention}!\n❓ Никто не знает что от него ждать.",
                                f"🌀 {chosen_mention} — самый непредсказуемый участник!"],
-                "легаси":    [f"👴 Легаси дня — {chosen_mention}!\n📜 Старожил, помнит всё.",
+                "легаси":    [f"👴 Легаси дня — {chosen_mention}!\n🗺 Старожил, помнит всё.",
                                f"🏛 {chosen_mention} — живая история этого чата!"],
                 "ноунейм":   [f"👤 Ноунейм дня — {chosen_mention}!\n❓ Кто это вообще?",
-                               f"🌫 {chosen_mention} — самый загадочный участник чата!"],
+                               f"🌊 {chosen_mention} — самый загадочный участник чата!"],
             }
 
             texts = IRIS_TEXTS.get(action, [f"🎯 {action.capitalize()} дня — {chosen_mention}!"])
@@ -6501,7 +6760,7 @@ async def autist_commands(message: Message):
                 f"🪪 ID: <code>{target.id}</code>",
                 f"🔗 @{target.username}" if target.username else "🔗 Юзернейм: нет",
                 f"⚡ Варнов: <b>{w}/{MAX_WARNINGS}</b>",
-                f"⭐ Репутация: <b>{r:+d}</b>",
+                f"✨ Репутация: <b>{r:+d}</b>",
                 f"📈 XP: <b>{xp}</b> | Уровень: <b>{lvl}</b>",
                 f"💬 Сообщений: <b>{msgs}</b>",
                 f"🔨 В бане: <b>{'да' if in_ban else 'нет'}</b>",
@@ -6530,7 +6789,7 @@ async def autist_commands(message: Message):
                     can_add_web_page_previews=True))
                 await reply_auto_delete(message, "✨ <b>Антиспам режим выключен!</b>", parse_mode="HTML")
             else:
-                await reply_auto_delete(message, "🌿 Укажи: <b>аутист антиспам вкл</b> или <b>выкл</b>", parse_mode="HTML")
+                await reply_auto_delete(message, "🌴 Укажи: <b>аутист антиспам вкл</b> или <b>выкл</b>", parse_mode="HTML")
 
         # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
         #  👑 OWNER ONLY КОМАНДЫ
@@ -6557,7 +6816,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             text = rest.strip()
             if not text:
-                await reply_auto_delete(message, "🌿 Укажи текст: <b>аутист анонс текст</b>", parse_mode="HTML"); return
+                await reply_auto_delete(message, "🌴 Укажи текст: <b>аутист анонс текст</b>", parse_mode="HTML"); return
             try: await message.delete()
             except: pass
             await bot.send_message(cid,
@@ -6585,7 +6844,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             text = rest.strip()
             if not text:
-                await reply_auto_delete(message, "🌿 Укажи текст после юзернейма", parse_mode="HTML"); return
+                await reply_auto_delete(message, "🌴 Укажи текст после юзернейма", parse_mode="HTML"); return
             try: await message.delete()
             except: pass
             await bot.send_message(cid,
@@ -6622,7 +6881,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             members = list(chat_stats[cid].keys())
             if not members:
-                await reply_auto_delete(message, "🌿 Нет участников!"); return
+                await reply_auto_delete(message, "🌴 Нет участников!"); return
             victim = random.choice(members)
             roll = random.choice(["варн","мут","ничего","ничего","разварн"])
             try: tm2 = await bot.get_chat_member(cid, victim); vname = tm2.user.mention_html()
@@ -6635,7 +6894,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 Жертва: {vname}\n🔇 Замучен на 5 мин!", parse_mode="HTML")
             elif roll == "разварн":
                 if warnings[cid][victim] > 0: warnings[cid][victim] -= 1; save_data()
-                await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 Счастливчик: {vname}\n🌿 Снят варн!", parse_mode="HTML")
+                await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 Счастливчик: {vname}\n🌴 Снят варн!", parse_mode="HTML")
             else:
                 await reply_auto_delete(message, f"🌪 <b>ХАОС!</b>\n🎲 {vname} отделался лёгким испугом!", parse_mode="HTML")
 
@@ -6764,7 +7023,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             members = [uid2 for uid2 in chat_stats[cid] if chat_stats[cid][uid2] > 0]
             if not members:
-                await reply_auto_delete(message, "🌿 Нет активных участников!"); return
+                await reply_auto_delete(message, "🌴 Нет активных участников!"); return
             chosen = random.choice(members)
             try: tm2 = await bot.get_chat_member(cid, chosen); cname = tm2.user.mention_html()
             except: cname = f"ID{chosen}"
@@ -6815,7 +7074,7 @@ async def autist_commands(message: Message):
             try: await message.delete()
             except: pass
             await bot.send_message(cid,
-                f"🌿 <b>ВНИМАНИЕ!</b>\n\n"
+                f"🌴 <b>ВНИМАНИЕ!</b>\n\n"
                 f"{text_alert}\n",
                 parse_mode="HTML")
 
@@ -6854,11 +7113,11 @@ async def autist_commands(message: Message):
                 until_date=datetime.now() + timedelta(hours=24))
             save_data()
             await reply_auto_delete(message,
-                f"🧊 <b>Заморозка</b>\n\n"
+                f"🧃 <b>Заморозка</b>\n\n"
                 f"👤 {tname}\n"
-                f"❄️ Замолчал на <b>24 часа</b>\n"
+                f"🍉 Замолчал на <b>24 часа</b>\n"
                 f"🕐 Размут автоматически через 24ч", parse_mode="HTML")
-            await log_action(f"🧊 <b>Заморозка</b>\n👤 {tname}\n⏱ 24ч\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
+            await log_action(f"🧃 <b>Заморозка</b>\n👤 {tname}\n⏱ 24ч\n👮 {message.from_user.mention_html()}\n🏠 {message.chat.title}")
 
         elif action == "объяви":
             violation = rest.strip() or "нарушение правил"
@@ -6868,7 +7127,7 @@ async def autist_commands(message: Message):
                 f"📣 <b>ВНИМАНИЕ ЧАТУ!</b>\n\n"
                 f"👤 Участник {tname}\n"
                 f"📝 Нарушение: <b>{violation}</b>\n\n"
-                f"🌿 Просим соблюдать правила чата → /rules\n"
+                f"🌴 Просим соблюдать правила чата → /rules\n"
                 f"", parse_mode="HTML")
 
         elif action == "история":
@@ -6889,7 +7148,7 @@ async def autist_commands(message: Message):
             import re as _re3
             m4 = _re3.match(r"^([+-]?\d+)", rest)
             if not m4:
-                await reply_auto_delete(message, "🌿 Формат: <b>аутист уровень @user +5</b> или <b>-3</b> или <b>10</b>", parse_mode="HTML"); return
+                await reply_auto_delete(message, "🌴 Формат: <b>аутист уровень @user +5</b> или <b>-3</b> или <b>10</b>", parse_mode="HTML"); return
             val = int(m4.group(1))
             if val > 0 and not rest.startswith("+") and not rest.startswith("-"):
                 levels[cid][target.id] = val  # установить абсолютно
@@ -7019,7 +7278,7 @@ async def autist_commands(message: Message):
             import re as _re4
             m5 = _re4.match(r"^(\d+)\s*(д|ч|м)\s*(.*)", rest)
             if not m5:
-                await reply_auto_delete(message, "🌿 Формат: <b>аутист напомни мод 1ч текст</b>", parse_mode="HTML"); return
+                await reply_auto_delete(message, "🌴 Формат: <b>аутист напомни мод 1ч текст</b>", parse_mode="HTML"); return
             num3, unit3, text3 = int(m5.group(1)), m5.group(2), m5.group(3).strip() or "Напоминание для модераторов!"
             if unit3 == "д":   mins3 = num3 * 1440; lbl3 = f"{num3} дн."
             elif unit3 == "ч": mins3 = num3 * 60;   lbl3 = f"{num3} ч."
@@ -7050,7 +7309,7 @@ async def autist_commands(message: Message):
             import re as _re2
             m3 = _re2.match(r"^(\d+)\s*(д|ч|м)\s*(.*)", rest)
             if not m3:
-                await reply_auto_delete(message, "🌿 Формат: <b>аутист напомни 30м текст</b>", parse_mode="HTML"); return
+                await reply_auto_delete(message, "🌴 Формат: <b>аутист напомни 30м текст</b>", parse_mode="HTML"); return
             num2, unit2, text2 = int(m3.group(1)), m3.group(2), m3.group(3).strip() or "Напоминание!"
             if unit2 == "д":   mins2 = num2 * 1440; lbl2 = f"{num2} дн."
             elif unit2 == "ч": mins2 = num2 * 60;   lbl2 = f"{num2} ч."
@@ -7067,7 +7326,7 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             text_pin = rest.strip()
             if not text_pin and not message.reply_to_message:
-                await reply_auto_delete(message, "🌿 Укажи текст или реплайни на сообщение", parse_mode="HTML"); return
+                await reply_auto_delete(message, "🌴 Укажи текст или реплайни на сообщение", parse_mode="HTML"); return
             try: await message.delete()
             except: pass
             if message.reply_to_message and not text_pin:
@@ -7086,7 +7345,7 @@ async def autist_commands(message: Message):
             parts_poll = rest.split("|")
             if len(parts_poll) < 3:
                 await reply_auto_delete(message,
-                    "🌿 Формат: <b>аутист голос Вопрос? | Вариант1 | Вариант2</b>", parse_mode="HTML"); return
+                    "🌴 Формат: <b>аутист голос Вопрос? | Вариант1 | Вариант2</b>", parse_mode="HTML"); return
             question_poll = parts_poll[0].strip()
             options_poll = [o.strip() for o in parts_poll[1:] if o.strip()]
             try: await message.delete()
@@ -7157,7 +7416,7 @@ async def autist_commands(message: Message):
             elif active_10 >= 15: temp = "🔥🔥 Горячо"
             elif active_10 >= 5:  temp = "🔥 Тепло"
             elif active_10 >= 1:  temp = "😐 Прохладно"
-            else:                 temp = "🧊 Мертво"
+            else:                 temp = "🧃 Мертво"
             await reply_auto_delete(message,
                 f"🌡 <b>Температура чата</b>\n\n"
                 f"За 10 мин: <b>{active_10}</b> сообщ. — {temp}\n"
@@ -7197,12 +7456,12 @@ async def autist_commands(message: Message):
                 await reply_auto_delete(message, "🚫 Только для владельца!"); return
             new_name = rest.strip()
             if not new_name:
-                await reply_auto_delete(message, "🌿 Укажи имя: <b>аутист режим Имя</b>", parse_mode="HTML"); return
+                await reply_auto_delete(message, "🌴 Укажи имя: <b>аутист режим Имя</b>", parse_mode="HTML"); return
             try:
                 await bot.set_my_name(new_name)
                 await reply_auto_delete(message, f"🤖 Имя бота изменено на: <b>{new_name}</b>", parse_mode="HTML")
             except Exception as ex:
-                await reply_auto_delete(message, f"🌿 Не удалось: {ex}", parse_mode="HTML")
+                await reply_auto_delete(message, f"🌴 Не удалось: {ex}", parse_mode="HTML")
 
         elif action == "лог":
             if message.from_user.id not in ADMIN_IDS:
@@ -7253,7 +7512,7 @@ async def autist_commands(message: Message):
             await reply_auto_delete(message, "🚨 SOS-отчёт отправлен в личку!", parse_mode="HTML")
 
     except Exception as e:
-        await reply_auto_delete(message, f"🌿 Ошибка: {e}")
+        await reply_auto_delete(message, f"🌴 Ошибка: {e}")
 
 # ===== УГАДАЙ ЧИСЛО =====
 guess_games = {}
@@ -7313,7 +7572,7 @@ async def cmd_askoff(message: Message):
         del ask_targets[message.from_user.id]
         await reply_auto_delete(message, "📭 АСК закрыт!")
     else:
-        await reply_auto_delete(message, "🥀 У тебя не открыт АСК.")
+        await reply_auto_delete(message, "🌵 У тебя не открыт АСК.")
 
 async def cmd_send_ask(message: Message, command: CommandObject):
     if message.chat.type != "private":
@@ -7322,7 +7581,7 @@ async def cmd_send_ask(message: Message, command: CommandObject):
         await reply_auto_delete(message, "❓ Формат: /send @юзернейм текст", parse_mode="HTML"); return
     parts = command.args.split(maxsplit=1)
     if len(parts) < 2:
-        await reply_auto_delete(message, "🌿 Укажи юзернейм и текст вопроса!"); return
+        await reply_auto_delete(message, "🌴 Укажи юзернейм и текст вопроса!"); return
     username = parts[0].replace("@", "").lower()
     text = parts[1].strip()
     target_id = None
@@ -7333,7 +7592,7 @@ async def cmd_send_ask(message: Message, command: CommandObject):
                 target_id = uid; break
         except: pass
     if not target_id:
-        await reply_auto_delete(message, "🥀 Этот пользователь не открыл АСК или не найден."); return
+        await reply_auto_delete(message, "🌵 Этот пользователь не открыл АСК или не найден."); return
     data = ask_targets[target_id]
     try:
         await bot.send_message(data["chat_id"],
@@ -7341,7 +7600,7 @@ async def cmd_send_ask(message: Message, command: CommandObject):
             parse_mode="HTML")
         await reply_auto_delete(message, "✨ Вопрос отправлен анонимно!")
     except:
-        await reply_auto_delete(message, "🌿 Не удалось отправить вопрос.")
+        await reply_auto_delete(message, "🌴 Не удалось отправить вопрос.")
 
 # ===== МВП =====
 mvp_votes = {}
@@ -7361,7 +7620,7 @@ async def cmd_mvp(message: Message):
     mvp_votes[cid][target.id] = mvp_votes[cid].get(target.id, 0) + 1
     votes = mvp_votes[cid][target.id]
     await reply_auto_delete(message, 
-        f"⭐ {voter.mention_html()} проголосовал за <b>МВП</b>!\n\n"
+        f"✨ {voter.mention_html()} проголосовал за <b>МВП</b>!\n\n"
         f"🏆 {target.mention_html()}\n👍 Голосов: <b>{votes}</b>", parse_mode="HTML")
 
 @dp.message(Command("mvpstats"))
@@ -7394,7 +7653,7 @@ async def cmd_confession(message: Message, command: CommandObject):
             parse_mode="HTML"); return
     text = command.args.strip()
     if len(text) < 5:
-        await reply_auto_delete(message, "🌿 Слишком короткое сообщение!"); return
+        await reply_auto_delete(message, "🌴 Слишком короткое сообщение!"); return
     try: await message.delete()
     except: pass
     await bot.send_message(message.chat.id,
@@ -7404,7 +7663,7 @@ async def cmd_confession(message: Message, command: CommandObject):
 # ===== SECRET =====
 async def cmd_secret(message: Message, command: CommandObject):
     if message.chat.type == "private":
-        await reply_auto_delete(message, "🥀 Эту команду используй в чате!"); return
+        await reply_auto_delete(message, "🌵 Эту команду используй в чате!"); return
     if not command.args or len(command.args.split(maxsplit=1)) < 2:
         await reply_auto_delete(message, 
             "📩 Формат: /secret @юзернейм текст\n"
@@ -7421,7 +7680,7 @@ async def cmd_secret(message: Message, command: CommandObject):
         if member.user.username and member.user.username.lower() == username:
             target = member.user; break
     if not target:
-        await reply_auto_delete(message, "🥀 Участник не найден в чате!"); return
+        await reply_auto_delete(message, "🌵 Участник не найден в чате!"); return
     try:
         try: await message.delete()
         except: pass
@@ -7430,7 +7689,7 @@ async def cmd_secret(message: Message, command: CommandObject):
             parse_mode="HTML")
         await bot.send_message(message.chat.id, "📩 Анонимное сообщение отправлено!")
     except:
-        await reply_auto_delete(message, "🌿 Не удалось отправить — участник должен написать боту в лс хотя бы раз!")
+        await reply_auto_delete(message, "🌴 Не удалось отправить — участник должен написать боту в лс хотя бы раз!")
 # ===== ДУЭЛИ =====
 duel_requests = {}
 
@@ -7458,17 +7717,17 @@ async def cmd_duel(message: Message, command: CommandObject):
         f"🔫 {challenger.mention_html()} вызывает {target.mention_html()}!\n"
         f"💰 Ставка: <b>{bet}</b> репутации\n\n"
         f"✨ {target.mention_html()}, напиши <b>/accept</b> чтобы принять!\n"
-        f"🥀 Или <b>/decline</b> чтобы отказаться!",
+        f"🌵 Или <b>/decline</b> чтобы отказаться!",
         parse_mode="HTML")
 
 @dp.message(Command("accept"))
 async def cmd_accept(message: Message):
     cid = message.chat.id; uid = message.from_user.id
     if cid not in duel_requests:
-        await reply_auto_delete(message, "🥀 Нет активных дуэлей!"); return
+        await reply_auto_delete(message, "🌵 Нет активных дуэлей!"); return
     duel = duel_requests[cid]
     if uid != duel["target_id"]:
-        await reply_auto_delete(message, "🥀 Это не твоя дуэль!"); return
+        await reply_auto_delete(message, "🌵 Это не твоя дуэль!"); return
     winner_id = random.choice([duel["challenger_id"], duel["target_id"]])
     loser_id = duel["target_id"] if winner_id == duel["challenger_id"] else duel["challenger_id"]
     winner_name = duel["challenger_name"] if winner_id == duel["challenger_id"] else duel["target_name"]
@@ -7494,10 +7753,10 @@ async def cmd_accept(message: Message):
 async def cmd_decline(message: Message):
     cid = message.chat.id; uid = message.from_user.id
     if cid not in duel_requests:
-        await reply_auto_delete(message, "🥀 Нет активных дуэлей!"); return
+        await reply_auto_delete(message, "🌵 Нет активных дуэлей!"); return
     duel = duel_requests[cid]
     if uid != duel["target_id"]:
-        await reply_auto_delete(message, "🥀 Это не твоя дуэль!"); return
+        await reply_auto_delete(message, "🌵 Это не твоя дуэль!"); return
     del duel_requests[cid]
     await reply_auto_delete(message, f"🏳 {message.from_user.mention_html()} отказался от дуэли!", parse_mode="HTML")
 
@@ -7529,23 +7788,23 @@ async def cmd_toprep(message: Message):
 
 @dp.message(Command("profile"))
 async def cmd_profile(message: Message):
-    # 🌫 Команда /profile отключена (система рейтинга выпилена)
+    # 🌊 Команда /profile отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
 @dp.message(Command("addrep"))
 async def cmd_addrep(message: Message, command: CommandObject):
-    # 🌫 Команда /addrep отключена (система рейтинга выпилена)
+    # 🌊 Команда /addrep отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -7579,7 +7838,7 @@ async def cmd_tournament(message: Message, command: CommandObject):
     sub = command.args.strip().lower() if command.args else ""
     if sub == "start":
         if cid in tournament_data and tournament_data[cid].get("active"):
-            await reply_auto_delete(message, "🌿 Турнир уже идёт!"); return
+            await reply_auto_delete(message, "🌴 Турнир уже идёт!"); return
         tournament_data[cid] = {"active": False, "registration": True, "participants": [], "round": 0}
         await reply_auto_delete(message, 
             f"🎪 <b>ТУРНИР ОТКРЫТ!</b>\n\n"
@@ -7588,10 +7847,10 @@ async def cmd_tournament(message: Message, command: CommandObject):
             parse_mode="HTML")
     elif sub == "begin":
         if cid not in tournament_data:
-            await reply_auto_delete(message, "🥀 Сначала открой регистрацию: /tournament start"); return
+            await reply_auto_delete(message, "🌵 Сначала открой регистрацию: /tournament start"); return
         parts = tournament_data[cid]["participants"]
         if len(parts) < 2:
-            await reply_auto_delete(message, "🌿 Нужно минимум 2 участника!"); return
+            await reply_auto_delete(message, "🌴 Нужно минимум 2 участника!"); return
         random.shuffle(parts)
         tournament_data[cid]["active"] = True
         tournament_data[cid]["registration"] = False
@@ -7602,7 +7861,7 @@ async def cmd_tournament(message: Message, command: CommandObject):
             f"⚔️ Запускаем первый раунд с /tournament next!", parse_mode="HTML")
     elif sub == "next":
         if cid not in tournament_data or not tournament_data[cid].get("active"):
-            await reply_auto_delete(message, "🥀 Нет активного турнира!"); return
+            await reply_auto_delete(message, "🌵 Нет активного турнира!"); return
         parts = tournament_data[cid]["participants"]
         if len(parts) == 1:
             winner = parts[0]
@@ -7646,7 +7905,7 @@ async def cmd_tournament(message: Message, command: CommandObject):
 async def cmd_join(message: Message):
     cid = message.chat.id; uid = message.from_user.id
     if cid not in tournament_data or not tournament_data[cid].get("registration"):
-        await reply_auto_delete(message, "🥀 Регистрация на турнир не открыта!"); return
+        await reply_auto_delete(message, "🌵 Регистрация на турнир не открыта!"); return
     parts = tournament_data[cid]["participants"]
     if any(p["id"] == uid for p in parts):
         await reply_auto_delete(message, "✨ Ты уже записан!"); return
@@ -7680,9 +7939,9 @@ mod_stats = defaultdict(lambda: defaultdict(int))  # {cid: {admin_name: count}}
 #  📢 АВТО-РАССЫЛКА «УДАЛЕНИЕ ПО ПРОСЬБЕ АДМИНА»
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 ADMIN_REMOVE_REMINDER = (
-    "🌿 <b>Удаление постов</b>\n"
+    "🌴 <b>Удаление постов</b>\n"
     "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-    "🤍 любой пост в чате может быть удалён по личной просьбе одного из админов\n"
+    "💛 любой пост в чате может быть удалён по личной просьбе одного из админов\n"
     "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
     "👑 <b>наши админы</b>\n"
     "🍃 @Severarin\n"
@@ -7696,9 +7955,9 @@ ADMIN_REMOVE_REMINDER = (
 )
 
 ADMIN_REMOVE_REMINDER_CHAT2 = (
-    "🌿 <b>Удаление постов</b>\n"
+    "🌴 <b>Удаление постов</b>\n"
     "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-    "🤍 любой пост в чате может быть удалён по личной просьбе одного из админов\n"
+    "💛 любой пост в чате может быть удалён по личной просьбе одного из админов\n"
     "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
     "👑 <b>наши админы</b>\n"
     "🍃 @fuckhexok"
@@ -7788,9 +8047,9 @@ async def cmd_send_reminder_now(message: Message):
             f"📢 <b>Рассылка завершена</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
             f"✨ отправлено — <b>{sent}</b>\n"
-            f"🥀 ошибок — <b>{failed}</b>\n"
+            f"🌵 ошибок — <b>{failed}</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"<i>🤍 следующая автоматическая — через 4 часа</i>",
+            f"<i>💛 следующая автоматическая — через 4 часа</i>",
             parse_mode="HTML")
     except: pass
 
@@ -7805,7 +8064,7 @@ WARN_TEMPLATES = {
     "7": {"label": "👤 Личные данные",     "text": "Нарушение: публикация личных данных других участников"},
     "8": {"label": "🤖 Флуд ботами",       "text": "Нарушение: использование ботов и спам-команд"},
     "9": {"label": "🗣 Оффтоп",            "text": "Нарушение: систематический оффтоп и мусор в чате"},
-    "10": {"label": "🌿 Правила",          "text": "Нарушение правил чата"},
+    "10": {"label": "🌴 Правила",          "text": "Нарушение правил чата"},
 }
 
 async def tempban_unban(cid: int, uid: int, uname: str, days: int):
@@ -7858,7 +8117,7 @@ SHOP_ITEMS = {
     "2":   {"name": "🐣 Птенец",           "price": 15,    "type": "title"},
     "3":   {"name": "🍃 Росток",           "price": 20,    "type": "title"},
     "4":   {"name": "🌊 Волна",            "price": 30,    "type": "title"},
-    "5":   {"name": "🌙 Лунатик",          "price": 40,    "type": "title"},
+    "5":   {"name": "🌅 Лунатик",          "price": 40,    "type": "title"},
     "6":   {"name": "🎈 Воздушный",        "price": 50,    "type": "title"},
     "7":   {"name": "🐢 Черепаха",         "price": 60,    "type": "title"},
     "8":   {"name": "🌸 Сакура",           "price": 75,    "type": "title"},
@@ -7884,9 +8143,9 @@ SHOP_ITEMS = {
     "28":  {"name": "🍓 Клубника",         "price": 48,    "type": "title"},
     "29":  {"name": "🎀 Бантик",           "price": 52,    "type": "title"},
     "30":  {"name": "🫧 Пузырёк",          "price": 58,    "type": "title"},
-    "31":  {"name": "🌿 Травка",           "price": 62,    "type": "title"},
+    "31":  {"name": "🌴 Травка",           "price": 62,    "type": "title"},
     "32":  {"name": "🍁 Листик",           "price": 68,    "type": "title"},
-    "33":  {"name": "❄️ Снежинка",         "price": 72,    "type": "title"},
+    "33":  {"name": "🍉 Снежинка",         "price": 72,    "type": "title"},
     "34":  {"name": "🌞 Солнышко",         "price": 78,    "type": "title"},
     "35":  {"name": "🍩 Пончик",           "price": 85,    "type": "title"},
     "36":  {"name": "🧁 Капкейк",          "price": 92,    "type": "title"},
@@ -7943,7 +8202,7 @@ SHOP_ITEMS = {
     "85":  {"name": "👑 Легенда",          "price": 1000,  "type": "title"},
     "86":  {"name": "🔱 Посейдон",         "price": 1200,  "type": "title"},
     "87":  {"name": "⚔️ Воитель",          "price": 1500,  "type": "title"},
-    "88":  {"name": "🌌 Галактика",        "price": 1800,  "type": "title"},
+    "88":  {"name": "🏝 Галактика",        "price": 1800,  "type": "title"},
     "89":  {"name": "🏆 Чемпион",          "price": 2000,  "type": "title"},
     "90":  {"name": "🧬 Учёный",           "price": 650,   "type": "title"},
     "91":  {"name": "🎖 Генерал",          "price": 750,   "type": "title"},
@@ -7959,7 +8218,7 @@ SHOP_ITEMS = {
     "101": {"name": "🦂 Скорпион",         "price": 620,   "type": "title"},
     "102": {"name": "🐍 Змея",             "price": 680,   "type": "title"},
     "103": {"name": "🦈 Акула",            "price": 720,   "type": "title"},
-    "104": {"name": "🐻‍❄️ Полярный",       "price": 760,   "type": "title"},
+    "104": {"name": "🐻‍🍉 Полярный",       "price": 760,   "type": "title"},
     "105": {"name": "🦬 Бизон",            "price": 820,   "type": "title"},
     "106": {"name": "🐘 Слон",             "price": 880,   "type": "title"},
     "107": {"name": "🦏 Носорог",          "price": 920,   "type": "title"},
@@ -7983,20 +8242,20 @@ SHOP_ITEMS = {
     "124": {"name": "⚡ Громовержец",      "price": 4000,  "type": "title"},
     "125": {"name": "🌑 Тёмный лорд",      "price": 4500,  "type": "title"},
     "126": {"name": "☄️ Метеорит",         "price": 5000,  "type": "title"},
-    "127": {"name": "🌌 Повелитель тьмы",  "price": 6000,  "type": "title"},
+    "127": {"name": "🏝 Повелитель тьмы",  "price": 6000,  "type": "title"},
     "128": {"name": "🧠 Оракул",           "price": 7000,  "type": "title"},
     "129": {"name": "👁 Всевидящий",       "price": 8000,  "type": "title"},
     "130": {"name": "🌀 Хаос",             "price": 9000,  "type": "title"},
     "131": {"name": "💀 Бессмертный",      "price": 10000, "type": "title"},
-    "132": {"name": "🕯 Призрак",          "price": 12000, "type": "title"},
+    "132": {"name": "🏖 Призрак",          "price": 12000, "type": "title"},
     "133": {"name": "⚗️ Алхимик богов",    "price": 15000, "type": "title"},
     "134": {"name": "🌟 Полубог",          "price": 20000, "type": "title"},
     "135": {"name": "👹 Демон",            "price": 25000, "type": "title"},
     "136": {"name": "😈 Сатана",           "price": 30000, "type": "title"},
     "137": {"name": "⚜️ Абсолют",          "price": 40000, "type": "title"},
-    "138": {"name": "🌌 Творец",           "price": 50000, "type": "title"},
+    "138": {"name": "🏝 Творец",           "price": 50000, "type": "title"},
     "139": {"name": "☠️ Апокалипсис",      "price": 75000, "type": "title"},
-    "140": {"name": "💫 БОГ",              "price": 100000,"type": "title"},
+    "140": {"name": "🌞 БОГ",              "price": 100000,"type": "title"},
     "141": {"name": "🗡 Убийца теней",     "price": 2700,  "type": "title"},
     "142": {"name": "🧟 Зомби",            "price": 2800,  "type": "title"},
     "143": {"name": "🧜 Русалка",          "price": 3200,  "type": "title"},
@@ -8012,13 +8271,13 @@ SHOP_ITEMS = {
     "153": {"name": "🔱 Нептун",           "price": 5500,  "type": "title"},
     "154": {"name": "⚡ Зевс",             "price": 5800,  "type": "title"},
     "155": {"name": "🔥 Прометей",         "price": 6200,  "type": "title"},
-    "156": {"name": "🌙 Артемида",         "price": 6500,  "type": "title"},
+    "156": {"name": "🌅 Артемида",         "price": 6500,  "type": "title"},
     "157": {"name": "☀️ Аполлон",          "price": 6800,  "type": "title"},
     "158": {"name": "⚔️ Арес",             "price": 7200,  "type": "title"},
     "159": {"name": "🦅 Зоркий",           "price": 7500,  "type": "title"},
     "160": {"name": "🌊 Посейдон II",      "price": 7800,  "type": "title"},
     "161": {"name": "🏛 Олимпиец",         "price": 8200,  "type": "title"},
-    "162": {"name": "🌌 Вселенная",        "price": 8500,  "type": "title"},
+    "162": {"name": "🏝 Вселенная",        "price": 8500,  "type": "title"},
     "163": {"name": "🔮 Мистик",           "price": 8800,  "type": "title"},
     "164": {"name": "💥 Взрыв",            "price": 9200,  "type": "title"},
     "165": {"name": "🌠 Сверхновая",       "price": 9500,  "type": "title"},
@@ -8026,8 +8285,8 @@ SHOP_ITEMS = {
     "167": {"name": "👾 Пришелец",         "price": 11000, "type": "title"},
     "168": {"name": "🛸 НЛО",              "price": 13000, "type": "title"},
     "169": {"name": "🌍 Планета",          "price": 14000, "type": "title"},
-    "170": {"name": "⭐ Квазар",           "price": 16000, "type": "title"},
-    "171": {"name": "🌌 Туманность",       "price": 17000, "type": "title"},
+    "170": {"name": "✨ Квазар",           "price": 16000, "type": "title"},
+    "171": {"name": "🏝 Туманность",       "price": 17000, "type": "title"},
     "172": {"name": "💠 Кристалл",         "price": 18000, "type": "title"},
     "173": {"name": "🔱 Трезубец богов",   "price": 19000, "type": "title"},
     "174": {"name": "👁‍🗨 Третий глаз",     "price": 21000, "type": "title"},
@@ -8042,7 +8301,7 @@ SHOP_ITEMS = {
     "183": {"name": "⚡ Молния богов",     "price": 32000, "type": "title"},
     "184": {"name": "🌊 Великий потоп",    "price": 33000, "type": "title"},
     "185": {"name": "🔥 Адское пламя",     "price": 34000, "type": "title"},
-    "186": {"name": "❄️ Ледяной трон",     "price": 35000, "type": "title"},
+    "186": {"name": "🍉 Ледяной трон",     "price": 35000, "type": "title"},
     "187": {"name": "🌪 Буря хаоса",       "price": 36000, "type": "title"},
     "188": {"name": "🌑 Тьма вечная",      "price": 37000, "type": "title"},
     "189": {"name": "✨ Свет вечный",      "price": 38000, "type": "title"},
@@ -8055,35 +8314,35 @@ SHOP_ITEMS = {
     "196": {"name": "👁 Мировое зло",      "price": 46000, "type": "title"},
     "197": {"name": "🔱 Владыка",          "price": 47000, "type": "title"},
     "198": {"name": "💎 Алмазный трон",    "price": 48000, "type": "title"},
-    "199": {"name": "🌌 Антиматерия",      "price": 49000, "type": "title"},
+    "199": {"name": "🏝 Антиматерия",      "price": 49000, "type": "title"},
     "200": {"name": "🕳 Сингулярность",    "price": 55000, "type": "title"},
     "201": {"name": "🌑 Конец света",      "price": 60000, "type": "title"},
     "202": {"name": "⚡ Первозданный",     "price": 65000, "type": "title"},
     "203": {"name": "🔥 Феникс богов",     "price": 70000, "type": "title"},
     "204": {"name": "💀 Жнец душ",         "price": 80000, "type": "title"},
-    "205": {"name": "🌌 Омега",            "price": 85000, "type": "title"},
+    "205": {"name": "🏝 Омега",            "price": 85000, "type": "title"},
     "206": {"name": "⚜️ Альфа",            "price": 90000, "type": "title"},
     "207": {"name": "👁 Всесущий",         "price": 95000, "type": "title"},
     "208": {"name": "🌀 Абсолютный хаос",  "price": 110000,"type": "title"},
-    "209": {"name": "💫 Архангел",         "price": 120000,"type": "title"},
+    "209": {"name": "🌞 Архангел",         "price": 120000,"type": "title"},
     "210": {"name": "☠️ Конец всего",      "price": 130000,"type": "title"},
-    "211": {"name": "🌌 Начало времён",    "price": 140000,"type": "title"},
+    "211": {"name": "🏝 Начало времён",    "price": 140000,"type": "title"},
     "212": {"name": "⚡ Источник силы",    "price": 150000,"type": "title"},
     "213": {"name": "🔱 Трон богов",       "price": 175000,"type": "title"},
     "214": {"name": "💀 Вечная тьма",      "price": 200000,"type": "title"},
     "215": {"name": "🌟 Вечный свет",      "price": 200000,"type": "title"},
-    "216": {"name": "🌌 Мультивселенная",  "price": 250000,"type": "title"},
+    "216": {"name": "🏝 Мультивселенная",  "price": 250000,"type": "title"},
     "217": {"name": "👁 Создатель миров",  "price": 300000,"type": "title"},
     "218": {"name": "⚜️ Высший разум",     "price": 350000,"type": "title"},
-    "219": {"name": "💫 Всемогущий",       "price": 400000,"type": "title"},
+    "219": {"name": "🌞 Всемогущий",       "price": 400000,"type": "title"},
     "220": {"name": "🌀 Первопричина",     "price": 450000,"type": "title"},
     "221": {"name": "🐉 Древний дракон",   "price": 500000,"type": "title"},
-    "222": {"name": "🌌 Бесконечность²",   "price": 600000,"type": "title"},
+    "222": {"name": "🏝 Бесконечность²",   "price": 600000,"type": "title"},
     "223": {"name": "⚡ Над богами",       "price": 700000,"type": "title"},
     "224": {"name": "👑 Король королей",   "price": 800000,"type": "title"},
     "225": {"name": "🌟 Сверхсущество",    "price": 900000,"type": "title"},
     "226": {"name": "💀 Смерть богов",     "price": 1000000,"type": "title"},
-    "227": {"name": "🌌 Пустота богов",    "price": 1000000,"type": "title"},
+    "227": {"name": "🏝 Пустота богов",    "price": 1000000,"type": "title"},
     "228": {"name": "🔥 Огонь творения",   "price": 1000000,"type": "title"},
     "229": {"name": "⚜️ Абсолют богов",    "price": 1000000,"type": "title"},
     "230": {"name": "👁 Создатель",        "price": 1000000,"type": "title"},
@@ -8110,9 +8369,9 @@ SHOP_ITEMS = {
 
     # ── Роли (специальные теги) ──
     "r1":  {"name": "🔥 [ОГОНЬ]",        "price": 500,    "type": "role", "desc": "Тег в профиле"},
-    "r2":  {"name": "❄️ [ЛЁД]",           "price": 500,    "type": "role", "desc": "Тег в профиле"},
+    "r2":  {"name": "🍉 [ЛЁД]",           "price": 500,    "type": "role", "desc": "Тег в профиле"},
     "r3":  {"name": "⚡ [ГРОМ]",          "price": 500,    "type": "role", "desc": "Тег в профиле"},
-    "r4":  {"name": "🌙 [НОЧЬ]",          "price": 500,    "type": "role", "desc": "Тег в профиле"},
+    "r4":  {"name": "🌅 [НОЧЬ]",          "price": 500,    "type": "role", "desc": "Тег в профиле"},
     "r5":  {"name": "☀️ [СОЛНЦЕ]",        "price": 500,    "type": "role", "desc": "Тег в профиле"},
     "r6":  {"name": "💀 [ТЬМА]",          "price": 750,    "type": "role", "desc": "Тег в профиле"},
     "r7":  {"name": "👑 [КОРОЛЬ]",         "price": 1000,   "type": "role", "desc": "Тег в профиле"},
@@ -8128,7 +8387,7 @@ SHOP_ITEMS = {
     "c6":  {"name": "⚫ Чёрный ник",      "price": 2000,   "type": "color", "desc": "Редкий цвет"},
     "c7":  {"name": "🌈 Радужный ник",    "price": 10000,  "type": "color", "desc": "Легендарный цвет"},
     # ── Эффекты ──
-    "e1":  {"name": "💫 Эффект: Звезда",  "price": 2000,   "type": "effect", "desc": "+15% к репе постоянно"},
+    "e1":  {"name": "🌞 Эффект: Звезда",  "price": 2000,   "type": "effect", "desc": "+15% к репе постоянно"},
     "e2":  {"name": "🔮 Эффект: Магия",   "price": 3000,   "type": "effect", "desc": "+20% к XP постоянно"},
     "e3":  {"name": "🛡 Эффект: Щит",    "price": 5000,   "type": "effect", "desc": "Защита от -репы"},
     "e4":  {"name": "⚡ Эффект: Молния",  "price": 7500,   "type": "effect", "desc": "x1.5 XP навсегда"},
@@ -8149,7 +8408,7 @@ def kb_shop(cid: int, uid: int, page: int = 0) -> InlineKeyboardMarkup:
             owned = item["name"] in user_titles[uid].get("purchased", [])
             active = user_titles[uid].get("title") == item["name"]
             icon = "🟢" if active else ("✅" if owned else "🛒")
-            label = f"{icon} {item['name']} {item['price']}⭐"
+            label = f"{icon} {item['name']} {item['price']}✨"
             row.append(InlineKeyboardButton(text=label, callback_data=f"shop:buy:{item_id}:{uid}:{cid}:{page}"))
         rows.append(row)
     nav = []
@@ -8189,7 +8448,7 @@ async def cb_shop(call: CallbackQuery):
     elif action == "page":
         page, uid, cid = int(parts[2]), int(parts[3]), int(parts[4])
         if call.from_user.id != uid:
-            await call.answer("🥀 Это не твой магазин!", show_alert=True); return
+            await call.answer("🌵 Это не твой магазин!", show_alert=True); return
         rep = reputation[cid].get(uid, 0)
         await call.message.edit_text(
             f"🏪 <b>Магазин титулов</b>\n\n"
@@ -8204,10 +8463,10 @@ async def cb_shop(call: CallbackQuery):
         item_id, uid, cid = parts[2], int(parts[3]), int(parts[4])
         page = int(parts[5]) if len(parts) > 5 else 0
         if call.from_user.id != uid:
-            await call.answer("🥀 Это не твой магазин!", show_alert=True); return
+            await call.answer("🌵 Это не твой магазин!", show_alert=True); return
         item = SHOP_ITEMS.get(item_id)
         if not item:
-            await call.answer("🥀 Товар не найден!", show_alert=True); return
+            await call.answer("🌵 Товар не найден!", show_alert=True); return
         purchased = user_titles[uid].get("purchased", [])
         if item["name"] in purchased:
             user_titles[uid]["title"] = item["name"]
@@ -8239,7 +8498,7 @@ async def cb_shop(call: CallbackQuery):
     elif action == "mytitle":
         uid, cid = int(parts[2]), int(parts[3])
         if call.from_user.id != uid:
-            await call.answer("🥀 Это не твой магазин!", show_alert=True); return
+            await call.answer("🌵 Это не твой магазин!", show_alert=True); return
         title = user_titles[uid].get("title", "нет")
         purchased = user_titles[uid].get("purchased", [])
         bought_str = ", ".join(purchased) if purchased else "ничего"
@@ -8269,7 +8528,7 @@ def kb_report_category(target_id: int, msg_id: int) -> InlineKeyboardMarkup:
                 callback_data=f"report_cat:{key}:{target_id}:{msg_id}"
             ))
         rows.append(row)
-    rows.append([InlineKeyboardButton(text="🥀 Отмена", callback_data="report_cat:cancel:0:0")])
+    rows.append([InlineKeyboardButton(text="🌵 Отмена", callback_data="report_cat:cancel:0:0")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 def kb_report_action_v2(cid: int, idx: int, target_id: int) -> InlineKeyboardMarkup:
@@ -8277,7 +8536,7 @@ def kb_report_action_v2(cid: int, idx: int, target_id: int) -> InlineKeyboardMar
         [InlineKeyboardButton(text="✨ Варн",      callback_data=f"rpt2:warn:{cid}:{idx}:{target_id}"),
          InlineKeyboardButton(text="🔇 Мут 1ч",   callback_data=f"rpt2:mute:{cid}:{idx}:{target_id}")],
         [InlineKeyboardButton(text="🔨 Бан",       callback_data=f"rpt2:ban:{cid}:{idx}:{target_id}"),
-         InlineKeyboardButton(text="🥀 Отклонить", callback_data=f"rpt2:reject:{cid}:{idx}:{target_id}")],
+         InlineKeyboardButton(text="🌵 Отклонить", callback_data=f"rpt2:reject:{cid}:{idx}:{target_id}")],
         [InlineKeyboardButton(text="📝 Заметка",   callback_data=f"rpt2:note:{cid}:{idx}:{target_id}")],
     ])
 
@@ -8334,7 +8593,7 @@ async def cb_report_category(call: CallbackQuery):
     cid = call.message.chat.id
     p = pending.get(call.from_user.id, {})
     if not p or p.get("action") != "report_pending":
-        await call.answer("🌿 Устарело", show_alert=True); return
+        await call.answer("🌴 Устарело", show_alert=True); return
     cat_emoji, cat_label = REPORT_CATEGORIES.get(cat, ("⚠️", "Другое"))
     reason = p.get("reason") or cat_label
     context = p.get("context", [])
@@ -8384,7 +8643,7 @@ async def cb_report_category(call: CallbackQuery):
         f"📝 Причина: <b>{reason}</b>\n"
         f"💬 Чат: <b>{call.message.chat.title}</b>\n"
         f"🔗 <a href=\'https://t.me/c/{str(cid)[4:]}/{msg_id}\'>перейти</a>\n"
-        f"📜 Контекст:\n{ctx_text}{auto_action}"
+        f"🗺 Контекст:\n{ctx_text}{auto_action}"
     )
     await log_action(report_log)
     if is_admin_target:
@@ -8392,10 +8651,10 @@ async def cb_report_category(call: CallbackQuery):
         report_mod_votes[vote_key] = {}
         vote_kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="✨ Подтвердить", callback_data=f"rpt_vote:yes:{vote_key}"),
-            InlineKeyboardButton(text="🥀 Отклонить",   callback_data=f"rpt_vote:no:{vote_key}"),
+            InlineKeyboardButton(text="🌵 Отклонить",   callback_data=f"rpt_vote:no:{vote_key}"),
         ]])
         await bot.send_message(OWNER_ID,
-            f"🌿 <b>Репорт на администратора</b>\n🎯 {target_name}\n{cat_emoji} {cat_label}\n📝 {reason}\nТребует 2 голоса:",
+            f"🌴 <b>Репорт на администратора</b>\n🎯 {target_name}\n{cat_emoji} {cat_label}\n📝 {reason}\nТребует 2 голоса:",
             parse_mode="HTML", reply_markup=vote_kb)
         await call.message.edit_text("✨ <b>Жалоба отправлена</b>\nОжидает подтверждения 2 модераторов.")
     else:
@@ -8431,7 +8690,7 @@ async def cb_report_action_v2(call: CallbackQuery):
     action, cid, idx, target_id = parts[1], int(parts[2]), int(parts[3]), int(parts[4])
     queue = report_queue.get(cid, [])
     if idx >= len(queue):
-        await call.answer("🥀 Уже обработан", show_alert=True); return
+        await call.answer("🌵 Уже обработан", show_alert=True); return
     report = queue[idx]
     mod_name = call.from_user.full_name
     if action == "reject":
@@ -8440,7 +8699,7 @@ async def cb_report_action_v2(call: CallbackQuery):
         try: await bot.send_message(report["reporter"], f"ℹ️ Твоя жалоба на <b>{report['target_name']}</b> отклонена.", parse_mode="HTML")
         except: pass
         await call.message.edit_text(
-            f"🥀 Отклонено | 👮 {mod_name}",
+            f"🌵 Отклонено | 👮 {mod_name}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="🔄 Взять снова", callback_data=f"rpt2:takeover:{cid}:{idx}:{target_id}")
             ]]))
@@ -8455,14 +8714,14 @@ async def cb_report_action_v2(call: CallbackQuery):
         pending[call.from_user.id] = {"action": "report_note", "chat_id": cid, "report_idx": idx, "target_id": target_id}
         await call.message.edit_text("📝 Напиши заметку к репорту:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="🥀 Отмена", callback_data=f"rpt2:cancel_note:{cid}:{idx}:{target_id}")
+                InlineKeyboardButton(text="🌵 Отмена", callback_data=f"rpt2:cancel_note:{cid}:{idx}:{target_id}")
             ]]))
         await call.answer(); return
     elif action == "cancel_note":
         await call.message.edit_text("📋 Репорт:", reply_markup=kb_report_action_v2(cid, idx, target_id))
         await call.answer(); return
     if report.get("status") != "new":
-        await call.answer(f"🌿 Уже обработан: {report.get('assigned_mod','?')}", show_alert=True); return
+        await call.answer(f"🌴 Уже обработан: {report.get('assigned_mod','?')}", show_alert=True); return
     try:
         result = ""
         if action == "warn":
@@ -8481,7 +8740,7 @@ async def cb_report_action_v2(call: CallbackQuery):
         await call.message.edit_text(f"✨ <b>Обработано</b>\n{result}\n👮 {mod_name}", parse_mode="HTML")
         await call.answer("✨ Выполнено.")
     except Exception as e:
-        await call.answer(f"🥀 {e}", show_alert=True)
+        await call.answer(f"🌵 {e}", show_alert=True)
 
 @dp.callback_query(F.data.startswith("rpt_vote:"))
 async def cb_report_vote(call: CallbackQuery):
@@ -8495,10 +8754,10 @@ async def cb_report_vote(call: CallbackQuery):
     await call.answer(f"Твой голос: {'✅' if vote=='yes' else '❌'}")
     if yes_v >= 2:
         await call.message.edit_text("✨ <b>Репорт подтверждён</b>\n2 модератора проголосовали. Решение — за владельцем.")
-        await bot.send_message(OWNER_ID, f"🌿 <b>2 голоса за репорт на админа!</b>\nКлюч: {vote_key}", parse_mode="HTML")
+        await bot.send_message(OWNER_ID, f"🌴 <b>2 голоса за репорт на админа!</b>\nКлюч: {vote_key}", parse_mode="HTML")
         del report_mod_votes[vote_key]
     elif no_v >= 2:
-        await call.message.edit_text("🥀 Репорт на администратора отклонён (2 против)")
+        await call.message.edit_text("🌵 Репорт на администратора отклонён (2 против)")
         del report_mod_votes[vote_key]
     else:
         await call.message.edit_text(f"🗳 Голоса: ✅ {yes_v} / ❌ {no_v} (нужно 2)", reply_markup=call.message.reply_markup)
@@ -8639,19 +8898,19 @@ async def cmd_giverep(message: Message, command: CommandObject):
             "💸 Реплайни на сообщение и напиши:\n<code>/giverep 50</code>",
             parse_mode="HTML"); return
     if not command.args:
-        await reply_auto_delete(message, "🌿 Укажи сумму: <code>/giverep 50</code>", parse_mode="HTML"); return
+        await reply_auto_delete(message, "🌴 Укажи сумму: <code>/giverep 50</code>", parse_mode="HTML"); return
     try:
         amount = int(command.args.strip())
         if amount <= 0: raise ValueError
     except:
-        await reply_auto_delete(message, "🥀 Сумма должна быть числом больше 0"); return
+        await reply_auto_delete(message, "🌵 Сумма должна быть числом больше 0"); return
     uid = message.from_user.id
     cid = message.chat.id
     target = message.reply_to_message.from_user
     if target.id == uid:
-        await reply_auto_delete(message, "🥀 Нельзя переводить самому себе!"); return
+        await reply_auto_delete(message, "🌵 Нельзя переводить самому себе!"); return
     if target.is_bot:
-        await reply_auto_delete(message, "🥀 Нельзя переводить боту!"); return
+        await reply_auto_delete(message, "🌵 Нельзя переводить боту!"); return
     from time import time
     now = time()
     cd_key = f"{uid}_{cid}"
@@ -8661,7 +8920,7 @@ async def cmd_giverep(message: Message, command: CommandObject):
     sender_rep = reputation[cid].get(uid, 0)
     if sender_rep < amount:
         await reply_auto_delete(message,
-            f"🥀 Недостаточно репутации!\nУ тебя: <b>{sender_rep}</b> | Нужно: <b>{amount}</b>",
+            f"🌵 Недостаточно репутации!\nУ тебя: <b>{sender_rep}</b> | Нужно: <b>{amount}</b>",
             parse_mode="HTML"); return
     reputation[cid][uid] -= amount
     reputation[cid][target.id] = reputation[cid].get(target.id, 0) + amount
@@ -8693,7 +8952,7 @@ ROLES_LIST = [
     ("🦊", "Хитрый лис"), ("🐺", "Одинокий волк"), ("🌪", "Хаос"),
     ("🧠", "Главный умник"), ("💀", "Тёмный лорд"), ("🌈", "Радужный"),
     ("🎯", "Снайпер слова"), ("🦋", "Свободная душа"), ("🔥", "Огонь"),
-    ("❄️", "Ледяной"),
+    ("🍉", "Ледяной"),
 ]
 
 async def cmd_role(message: Message):
@@ -8793,7 +9052,7 @@ async def cmd_meme(message: Message, command: CommandObject):
             f"📸 <b>МЕМ</b> от {message.from_user.mention_html()}\n\n" + "\n".join(lines),
             parse_mode="HTML")
     except Exception as e:
-        await reply_auto_delete(message, f"🌿 Ошибка генерации: {e}")
+        await reply_auto_delete(message, f"🌴 Ошибка генерации: {e}")
 
 # ===== 📢 РАССЫЛКА ПО ВСЕМ ЧАТАМ (только владелец) =====
 @dp.message(Command("broadcast"))
@@ -8807,7 +9066,7 @@ async def cmd_broadcast(message: Message, command: CommandObject):
             parse_mode="HTML"); return
     text = command.args.strip()
     if len(text) < 3:
-        await reply_auto_delete(message, "🌿 Слишком короткий текст!"); return
+        await reply_auto_delete(message, "🌴 Слишком короткий текст!"); return
     broadcast_text = (
 
         f"{text}\n\n"
@@ -8826,7 +9085,7 @@ async def cmd_broadcast(message: Message, command: CommandObject):
     await status_msg.edit_text(
         f"📢  <b>Рассылка завершена</b>\n"
         f"✨ Доставлено: <b>{sent_ok}</b> чатов\n"
-        f"🥀 Ошибок: <b>{sent_fail}</b>\n"
+        f"🌵 Ошибок: <b>{sent_fail}</b>\n"
         f"📊 Всего чатов: <b>{len(known_chats)}</b>",
         parse_mode="HTML")
 
@@ -8878,9 +9137,9 @@ ARTIFACTS_LIST = [
     ("🗡️", "Меч Судьбы",      "legendary", "+15% к дуэлям"),
     ("🔮", "Хрустальный шар", "epic",      "Приносит удачу в играх"),
     ("👑", "Корона Хаоса",    "divine",    "x2 репа от всех источников 24ч"),
-    ("🌙", "Лунный амулет",   "rare",      "+10 репы каждую ночь"),
+    ("🌅", "Лунный амулет",   "rare",      "+10 репы каждую ночь"),
     ("🔑", "Ключ удачи",      "epic",      "Открывает секретный бонус"),
-    ("📜", "Древний свиток",  "legendary", "+50 репы при получении"),
+    ("🗺", "Древний свиток",  "legendary", "+50 репы при получении"),
     ("🐉", "Чешуя дракона",   "divine",    "Иммунитет к потерям репы 1ч"),
     ("⚗️", "Зелье силы",      "rare",      "x2 XP на 2 часа"),
     ("🎭", "Маска обмана",    "epic",      "+30% в дуэлях на 1 день"),
@@ -8912,7 +9171,7 @@ async def cmd_like(message: Message):
     mid = target_msg.message_id
     uid = message.from_user.id
     if target_msg.from_user and target_msg.from_user.id == uid:
-        await reply_auto_delete(message, "🥀 Нельзя лайкать себя!"); return
+        await reply_auto_delete(message, "🌵 Нельзя лайкать себя!"); return
     if uid in reactions_data[mid]["👍"]:
         reactions_data[mid]["👍"].discard(uid)
         await reply_auto_delete(message, "👎 Лайк убран")
@@ -8931,7 +9190,7 @@ async def cmd_dislike(message: Message):
     mid = target_msg.message_id
     uid = message.from_user.id
     if target_msg.from_user and target_msg.from_user.id == uid:
-        await reply_auto_delete(message, "🥀 Нельзя дизлайкать себя!"); return
+        await reply_auto_delete(message, "🌵 Нельзя дизлайкать себя!"); return
     if uid in reactions_data[mid]["👎"]:
         reactions_data[mid]["👎"].discard(uid)
         await reply_auto_delete(message, "✨ Дизлайк убран")
@@ -9017,24 +9276,24 @@ async def cmd_start_ref(message: Message, command: CommandObject):
     user_warns = sum(warnings[c].get(uid, 0) for c in warnings)
 
     await message.answer(
-        f"🤍 Привет, <b>{name}</b>\n"
+        f"💛 Привет, <b>{name}</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"\n"
         f"🌸  <b>Твой статус</b>\n"
-        f"🌿  предупреждений — <b>{user_warns}</b>\n"
+        f"🌴  предупреждений — <b>{user_warns}</b>\n"
         f"\n"
-        f"🌷  <b>Возможности</b>\n"
+        f"🌺  <b>Возможности</b>\n"
         f"🛡  модерация чата\n"
         f"💌  тикеты поддержки\n"
         f"🌐  веб-дашборд админа\n"
         f"\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"<i>с тобой уже {h} ч {m} м 🍂</i>",
+        f"<i>с тобой уже {h} ч {m} м 🌻</i>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🍃 Команды",      callback_data="start:help"),
              InlineKeyboardButton(text="💌 Тикет",        callback_data="start:ticket")],
-            [InlineKeyboardButton(text="📜 Правила",      callback_data="start:rules"),
+            [InlineKeyboardButton(text="🗺 Правила",      callback_data="start:rules"),
              InlineKeyboardButton(text="🌐 Веб-дашборд",
              url=f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME','mybot.onrender.com')}/")],
         ])
@@ -9052,7 +9311,7 @@ async def cb_start_menu(call: CallbackQuery):
             
             f"╚‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧╝\n"
             f"\n"
-            f"🤍 <b>Профиль</b>\n"
+            f"💛 <b>Профиль</b>\n"
             f"├ /profile — мой профиль\n"
             f"├ /setbio — установить биографию\n"
             f"└ /setmood — настроение\n"
@@ -9083,12 +9342,12 @@ async def cb_start_menu(call: CallbackQuery):
         )
 
     elif action == "profile":
-        # 🌫 Профиль выпилен (вместе с системой рейтинга)
+        # 🌊 Профиль выпилен (вместе с системой рейтинга)
         await call.message.edit_text(
-            f"🌫 <b>Профиль больше не доступен</b>\n"
+            f"🌊 <b>Профиль больше не доступен</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🍂 уровни / опыт / репутация / магазин выпилены\n"
-            f"🤍 чат стал чище без рейтинга",
+            f"🌻 уровни / опыт / репутация / магазин выпилены\n"
+            f"💛 чат стал чище без рейтинга",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")
@@ -9107,7 +9366,7 @@ async def cb_start_menu(call: CallbackQuery):
             f"📋 <b>Правила чата</b>\n"
             f"╚‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧╝\n"
             f"\n"
-            f"🌿 <b>Нарушения и санкции</b>\n"
+            f"🌴 <b>Нарушения и санкции</b>\n"
             f"├ 🔞 Контент 18+ → варн → бан\n"
             f"├ 💊 Наркотики → бан без предупреждений\n"
             f"├ 📢 Реклама / спам → мут / бан\n"
@@ -9134,7 +9393,7 @@ async def cb_start_menu(call: CallbackQuery):
         conn.close()
         header = (
             f"╔‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧╗\n"
-            f"🤍 <b>Профиль</b>\n"
+            f"💛 <b>Профиль</b>\n"
             f"╚‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧╝\n"
             f"\n"
         )
@@ -9173,24 +9432,24 @@ async def cb_start_menu(call: CallbackQuery):
         h, m = uptime // 3600, (uptime % 3600) // 60
         user_warns2 = sum(warnings[c].get(uid, 0) for c in warnings)
         await call.message.edit_text(
-            f"🤍 Привет, <b>{name}</b>\n"
+            f"💛 Привет, <b>{name}</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
             f"\n"
             f"🌸  <b>Твой статус</b>\n"
-            f"🌿  предупреждений — <b>{user_warns2}</b>\n"
+            f"🌴  предупреждений — <b>{user_warns2}</b>\n"
             f"\n"
-            f"🌷  <b>Возможности</b>\n"
+            f"🌺  <b>Возможности</b>\n"
             f"🛡  модерация чата\n"
             f"💌  тикеты поддержки\n"
             f"🌐  веб-дашборд админа\n"
             f"\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"<i>с тобой уже {h} ч {m} м 🍂</i>",
+            f"<i>с тобой уже {h} ч {m} м 🌻</i>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🍃 Команды",      callback_data="start:help"),
                  InlineKeyboardButton(text="💌 Тикет",        callback_data="start:ticket")],
-                [InlineKeyboardButton(text="📜 Правила",      callback_data="start:rules"),
+                [InlineKeyboardButton(text="🗺 Правила",      callback_data="start:rules"),
                  InlineKeyboardButton(text="🌐 Веб-дашборд",
                  url=f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME','mybot.onrender.com')}/")],
             ])
@@ -9217,7 +9476,7 @@ def get_color_badge(rep: int) -> tuple:
             badge = (emoji, title)
     return badge
 
-AVATAR_EMOJIS = ["😎","🐉","👑","🔥","💎","🌙","⚡","🦊","🐺","🎭","🌌","💀","🤖","🦋","🌈","❄️","🎯","🗡️","🔮","🌸"]
+AVATAR_EMOJIS = ["😎","🐉","👑","🔥","💎","🌅","⚡","🦊","🐺","🎭","🏝","💀","🤖","🦋","🌈","🍉","🎯","🗡️","🔮","🌸"]
 
 async def cmd_avatar(message: Message, command: CommandObject):
     uid = str(message.from_user.id)
@@ -9236,7 +9495,7 @@ async def cmd_avatar(message: Message, command: CommandObject):
         avatars[uid] = emoji
         await reply_auto_delete(message, f"✨ Аватар установлен: {emoji}")
     else:
-        await reply_auto_delete(message, f"🥀 Выбери из списка: {' '.join(AVATAR_EMOJIS)}")
+        await reply_auto_delete(message, f"🌵 Выбери из списка: {' '.join(AVATAR_EMOJIS)}")
 
 @dp.callback_query(F.data.startswith("setavatar:"))
 async def cb_setavatar(call: CallbackQuery):
@@ -9269,11 +9528,11 @@ async def cmd_boost(message: Message, command: CommandObject):
         return
     bid = command.args.strip().lower()
     if bid not in BOOSTERS_SHOP:
-        await reply_auto_delete(message, "🥀 Такого бустера нет. /boost — список"); return
+        await reply_auto_delete(message, "🌵 Такого бустера нет. /boost — список"); return
     b = BOOSTERS_SHOP[bid]
     rep = reputation[cid].get(message.from_user.id, 0)
     if rep < b["price"]:
-        await reply_auto_delete(message, f"🥀 Нужно {b['price']} репы, у тебя {rep}"); return
+        await reply_auto_delete(message, f"🌵 Нужно {b['price']} репы, у тебя {rep}"); return
     from time import time
     now = time()
     reputation[cid][message.from_user.id] -= b["price"]
@@ -9301,10 +9560,10 @@ async def cmd_roulette(message: Message, command: CommandObject):
         bet = int(command.args.strip())
         if bet <= 0: raise ValueError
     except:
-        await reply_auto_delete(message, "🥀 Ставка должна быть числом больше 0"); return
+        await reply_auto_delete(message, "🌵 Ставка должна быть числом больше 0"); return
     rep = reputation[cid].get(uid, 0)
     if rep < bet:
-        await reply_auto_delete(message, f"🥀 Недостаточно репы! У тебя {rep}"); return
+        await reply_auto_delete(message, f"🌵 Недостаточно репы! У тебя {rep}"); return
     roulette_cd[uid] = now
     # Спин
     result = random.randint(0, 36)
@@ -9360,7 +9619,7 @@ async def cmd_artifact_roll(message: Message):
         await reply_auto_delete(message, f"⏳ Следующий ролл через {left} ч."); return
     rep = reputation[cid].get(message.from_user.id, 0)
     if rep < 100:
-        await reply_auto_delete(message, "🥀 Нужно 100 репы для ролла артефакта!"); return
+        await reply_auto_delete(message, "🌵 Нужно 100 репы для ролла артефакта!"); return
     reputation[cid][message.from_user.id] -= 100
     artifact_cd[uid] = now
     # Шанс получить артефакт 40%
@@ -9406,7 +9665,7 @@ async def cmd_lottery_buy(message: Message):
         await reply_auto_delete(message, "✨ Ты уже купил билет на сегодня!"); return
     rep = reputation[cid].get(uid, 0)
     if rep < 20:
-        await reply_auto_delete(message, "🥀 Нужно 20 репы для билета!"); return
+        await reply_auto_delete(message, "🌵 Нужно 20 репы для билета!"); return
     reputation[cid][uid] -= 20
     lottery_tickets[cid].add(uid)
     save_data()
@@ -9477,10 +9736,10 @@ async def cmd_stock_invest(message: Message, command: CommandObject):
         amount = int(command.args.strip())
         if amount <= 0: raise ValueError
     except:
-        await reply_auto_delete(message, "🥀 Введи число больше 0"); return
+        await reply_auto_delete(message, "🌵 Введи число больше 0"); return
     rep = reputation[cid].get(uid, 0)
     if rep < amount:
-        await reply_auto_delete(message, f"🥀 Недостаточно репы! У тебя {rep}"); return
+        await reply_auto_delete(message, f"🌵 Недостаточно репы! У тебя {rep}"); return
     reputation[cid][uid] -= amount
     stock_invested[cid][uid] = stock_invested[cid].get(uid, 0) + amount
     save_data()
@@ -9496,7 +9755,7 @@ async def cmd_stock_withdraw(message: Message):
     uid = message.from_user.id
     invested = stock_invested[cid].get(uid, 0)
     if invested == 0:
-        await reply_auto_delete(message, "🥀 У тебя нет вложений!"); return
+        await reply_auto_delete(message, "🌵 У тебя нет вложений!"); return
     # Вывод с штрафом 10%
     withdraw = int(invested * 0.9)
     reputation[cid][uid] = reputation[cid].get(uid, 0) + withdraw
@@ -9544,7 +9803,7 @@ async def cmd_quote_save(message: Message):
     author = message.reply_to_message.from_user
     text = message.reply_to_message.text
     if len(text) > 300:
-        await reply_auto_delete(message, "🥀 Цитата слишком длинная (макс 300 символов)"); return
+        await reply_auto_delete(message, "🌵 Цитата слишком длинная (макс 300 символов)"); return
     quotes_data[cid].append({
         "text": text,
         "author": author.full_name if author else "Аноним",
@@ -9588,7 +9847,7 @@ async def cmd_journal(message: Message, command: CommandObject):
     if command.args:
         text = command.args.strip()
         if len(text) < 3:
-            await reply_auto_delete(message, "🌿 Слишком короткая запись!"); return
+            await reply_auto_delete(message, "🌴 Слишком короткая запись!"); return
         journal_data[uid].append({
             "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
             "text": text
@@ -9655,45 +9914,45 @@ async def handle_trivia_answer(message: Message):
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 @dp.message(Command("clan"))
 async def cmd_clan(message: Message, command: CommandObject):
-    # 🌫 Команда /clan отключена (система рейтинга выпилена)
+    # 🌊 Команда /clan отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
 @dp.message(Command("clan_create"))
 async def cmd_clan_create(message: Message, command: CommandObject):
-    # 🌫 Команда /clan_create отключена (система рейтинга выпилена)
+    # 🌊 Команда /clan_create отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
 @dp.message(Command("clan_join"))
 async def cmd_clan_join(message: Message, command: CommandObject):
-    # 🌫 Команда /clan_join отключена (система рейтинга выпилена)
+    # 🌊 Команда /clan_join отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
 @dp.message(Command("clan_leave"))
 async def cmd_clan_leave(message: Message):
-    # 🌫 Команда /clan_leave отключена (система рейтинга выпилена)
+    # 🌊 Команда /clan_leave отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -9782,7 +10041,7 @@ async def handle_private_message(message: Message):
             chat_list = [(r["cid"], r["title"]) for r in chats]
         if not chat_list:
             await message.answer(
-                "🥀 Бот ещё не добавлен ни в один чат.\n"
+                "🌵 Бот ещё не добавлен ни в один чат.\n"
                 "Сначала добавь бота в группу и напиши там любое сообщение.",
                 parse_mode="HTML"
             )
@@ -9819,7 +10078,7 @@ async def handle_private_message(message: Message):
         reply = (
             "🤖 <b>Я CHAT GUARD!</b>\n\n"
             "Умею:\n"
-            "⭐ Система репутации и XP\n"
+            "✨ Система репутации и XP\n"
             "🏆 Уровни до 250\n"
             "🤝 Кланы\n"
             "🎰 Лотерея и биржа\n"
@@ -9830,7 +10089,7 @@ async def handle_private_message(message: Message):
     elif any(w in tl for w in ["привет", "хай", "здарова", "hi", "hello"]):
         reply = f"👋 Привет, {message.from_user.first_name}!\nЯ работаю в групповых чатах. Добавь меня туда!"
     elif any(w in tl for w in ["репа", "репутация", "уровень", "xp"]):
-        reply = "⭐ Репутация и XP доступны только в групповых чатах!\nДобавь меня в свою группу."
+        reply = "✨ Репутация и XP доступны только в групповых чатах!\nДобавь меня в свою группу."
     elif any(w in tl for w in ["спасибо", "благодар", "thanks"]):
         reply = f"😊 Пожалуйста, {message.from_user.first_name}! Рад помочь!"
     else:
@@ -9910,7 +10169,7 @@ async def cmd_activity(message: Message):
         await reply_auto_delete(message, "📊 Данных пока нет!"); return
     max_val = max(hour_totals.values()) or 1
     lines = ["✨ <b>CHAT GUARD</b> — Карта активности"]
-    periods = [("🌙 Ночь", range(0,6)), ("🌅 Утро", range(6,12)), ("☀️ День", range(12,18)), ("🌆 Вечер", range(18,24))]
+    periods = [("🌅 Ночь", range(0,6)), ("🌅 Утро", range(6,12)), ("☀️ День", range(12,18)), ("🌆 Вечер", range(18,24))]
     for period_name, hours in periods:
         lines.append(f"\n<b>{period_name}</b>")
         for h in hours:
@@ -9978,7 +10237,7 @@ async def cb_silentban(call: CallbackQuery):
         await call.message.edit_text("🔕 Тихий бан применён.\n<i>Сообщение в чат не отправлено.</i>", parse_mode="HTML")
         asyncio.create_task(auto_delete(call.message))
     except Exception as e:
-        await call.answer(f"🥀 Ошибка: {e}", show_alert=True)
+        await call.answer(f"🌵 Ошибка: {e}", show_alert=True)
 
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 #  📝 ЗАМЕТКИ НА УЧАСТНИКА (/usernote)
@@ -10085,7 +10344,7 @@ def kb_report_action(reporter_id: int, target_id: int, idx: int) -> InlineKeyboa
         [InlineKeyboardButton(text="✨ Принять — варн",   callback_data=f"rpt:warn:{target_id}:{idx}"),
          InlineKeyboardButton(text="🔇 Принять — мут",    callback_data=f"rpt:mute:{target_id}:{idx}")],
         [InlineKeyboardButton(text="🔨 Принять — бан",    callback_data=f"rpt:ban:{target_id}:{idx}"),
-         InlineKeyboardButton(text="🥀 Отклонить",         callback_data=f"rpt:reject:{target_id}:{idx}")],
+         InlineKeyboardButton(text="🌵 Отклонить",         callback_data=f"rpt:reject:{target_id}:{idx}")],
     ])
 
 @dp.callback_query(F.data.startswith("rpt:"))
@@ -10096,11 +10355,11 @@ async def cb_report_action(call: CallbackQuery):
     cid = call.message.chat.id
     queue = report_queue.get(cid, [])
     if idx >= len(queue):
-        await call.answer("🥀 Жалоба уже обработана", show_alert=True); return
+        await call.answer("🌵 Жалоба уже обработана", show_alert=True); return
     report = queue[idx]
     if action == "reject":
         queue.pop(idx)
-        await call.message.edit_text("🥀 Жалоба отклонена.")
+        await call.message.edit_text("🌵 Жалоба отклонена.")
         asyncio.create_task(auto_delete(call.message))
         await call.answer("Отклонено")
         return
@@ -10123,7 +10382,7 @@ async def cb_report_action(call: CallbackQuery):
         asyncio.create_task(schedule_delete(call.message))
         await call.answer("✨ Выполнено.")
     except Exception as e:
-        await call.answer(f"🥀 {e}", show_alert=True)
+        await call.answer(f"🌵 {e}", show_alert=True)
 
 @dp.callback_query(F.data.startswith("panel:reports:"))
 async def cb_panel_reports(call: CallbackQuery):
@@ -10178,12 +10437,12 @@ async def cb_panel_topxp(call: CallbackQuery):
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 @dp.message(Command("gift"))
 async def cmd_gift(message: Message, command: CommandObject):
-    # 🌫 Команда /gift отключена (система рейтинга выпилена)
+    # 🌊 Команда /gift отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -10236,7 +10495,7 @@ async def cmd_announce_slash(message: Message, command: CommandObject):
     if not await require_admin(message): return
     text = command.args or (message.reply_to_message.text if message.reply_to_message else None)
     if not text:
-        await reply_auto_delete(message, "🌿 Укажи текст: /announce текст"); return
+        await reply_auto_delete(message, "🌴 Укажи текст: /announce текст"); return
     try: await message.delete()
     except: pass
     await bot.send_message(message.chat.id,
@@ -10285,7 +10544,7 @@ async def cmd_give_role(message: Message):
             parse_mode="HTML"); return
     role_arg = args[-1].lower()
     if role_arg not in MOD_ROLE_PERMISSIONS:
-        await reply_auto_delete(message, "🌿 Роль: junior / senior / head"); return
+        await reply_auto_delete(message, "🌴 Роль: junior / senior / head"); return
     target = None
     if message.reply_to_message:
         target = message.reply_to_message.from_user
@@ -10296,7 +10555,7 @@ async def cmd_give_role(message: Message):
             target = target_member.user
         except: pass
     if not target:
-        await reply_auto_delete(message, "🌿 Юзер не найден"); return
+        await reply_auto_delete(message, "🌴 Юзер не найден"); return
     cid = message.chat.id
     mod_roles[cid][target.id] = role_arg
     save_data()
@@ -10322,9 +10581,9 @@ async def cmd_take_role(message: Message):
         old = MOD_ROLE_LABELS.get(mod_roles[cid].pop(target.id), "")
         save_data()
         await reply_auto_delete(message,
-            f"🥀 У {target.mention_html()} забрана роль <b>{old}</b>", parse_mode="HTML")
+            f"🌵 У {target.mention_html()} забрана роль <b>{old}</b>", parse_mode="HTML")
     else:
-        await reply_auto_delete(message, "🌿 У юзера нет роли")
+        await reply_auto_delete(message, "🌴 У юзера нет роли")
 
 @dp.message(Command("roles"))
 async def cmd_roles(message: Message):
@@ -10349,7 +10608,7 @@ async def cmd_roles(message: Message):
 PLUGIN_LABELS = {
     "economy":   "💰 Экономика",
     "games":     "🎮 Игры",
-    "xp":        "⭐ XP система",
+    "xp":        "✨ XP система",
     "antispam":  "🛡 Антиспам",
     "antimat":   "🧼 Антимат",
     "reports":   "🚨 Репорты",
@@ -10387,7 +10646,7 @@ async def cb_plugin(call: CallbackQuery):
         await call.message.delete(); await call.answer(); return
     cid = int(cid_str)
     plugins[cid][key] = not plugins[cid].get(key, True)
-    status = "✨ включён" if plugins[cid][key] else "🥀 выключен"
+    status = "✨ включён" if plugins[cid][key] else "🌵 выключен"
     # Обновить клавиатуру
     p = plugins[cid]
     rows = []
@@ -10445,7 +10704,7 @@ async def cmd_appeal(message: Message):
     }
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✨ Разбанить", callback_data=f"appeal:accept:{uid}"),
-        InlineKeyboardButton(text="🥀 Отклонить", callback_data=f"appeal:reject:{uid}"),
+        InlineKeyboardButton(text="🌵 Отклонить", callback_data=f"appeal:reject:{uid}"),
     ]])
     await bot.send_message(OWNER_ID,
         f"🔁 <b>Апелляция</b>\n"
@@ -10475,9 +10734,9 @@ async def cb_appeal(call: CallbackQuery):
         except: pass
         await call.message.edit_text(f"✨ Апелляция одобрена — ID{uid} разбанен")
     else:
-        try: await bot.send_message(uid, "🥀 Твоя апелляция <b>отклонена</b>.", parse_mode="HTML")
+        try: await bot.send_message(uid, "🌵 Твоя апелляция <b>отклонена</b>.", parse_mode="HTML")
         except: pass
-        await call.message.edit_text(f"🥀 Апелляция отклонена — ID{uid}")
+        await call.message.edit_text(f"🌵 Апелляция отклонена — ID{uid}")
     await call.answer("Готово")
 
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
@@ -10485,12 +10744,12 @@ async def cb_appeal(call: CallbackQuery):
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 @dp.message(Command("profile"), F.chat.type == "private")
 async def cmd_profile_dm(message: Message):
-    # 🌫 Команда /profile отключена (система рейтинга выпилена)
+    # 🌊 Команда /profile отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -10518,7 +10777,7 @@ async def cb_profile(call: CallbackQuery):
         )
         score = report_score.get(uid, 0)
         await call.answer(
-            f"🚨 Репортов подано: {my_reports}\n✅ Принято: {accepted}\n⭐ Скор: {score}",
+            f"🚨 Репортов подано: {my_reports}\n✅ Принято: {accepted}\n✨ Скор: {score}",
             show_alert=True)
 
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
@@ -10624,14 +10883,14 @@ async def cb_mypanel(call: CallbackQuery):
             await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
             await call.answer(f"🔇 Локдаун в {known_chats.get(cid,'чате')}!", show_alert=True)
         except Exception as e:
-            await call.answer(f"🥀 {e}", show_alert=True)
+            await call.answer(f"🌵 {e}", show_alert=True)
     elif action == "announce":
         cid = int(val)
         pending[call.from_user.id] = {"action": "mypanel_announce", "chat_id": cid}
         await call.message.edit_text(
             "📢 Напиши текст объявления для отправки в чат:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="🥀 Отмена", callback_data=f"mypanel:chat:{cid}")
+                InlineKeyboardButton(text="🌵 Отмена", callback_data=f"mypanel:chat:{cid}")
             ]]))
     elif action == "reports":
         cid = int(val)
@@ -10740,7 +10999,7 @@ async def cmd_blacklist(message: Message):
         await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML"); return
     uid = target.id
     if uid in global_blacklist:
-        await reply_auto_delete(message, f"🌿 {target.full_name} уже в чёрном списке"); return
+        await reply_auto_delete(message, f"🌴 {target.full_name} уже в чёрном списке"); return
     global_blacklist.add(uid)
     save_data()
     # Банить во всех чатах
@@ -10851,10 +11110,10 @@ async def cmd_reset_chat(message: Message):
     pending[message.from_user.id] = {"action": "confirm_reset", "chat_id": cid}
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💥 ДА, СБРОСИТЬ", callback_data=f"resetchat:yes:{cid}"),
-        InlineKeyboardButton(text="🥀 Отмена",         callback_data=f"resetchat:no:{cid}"),
+        InlineKeyboardButton(text="🌵 Отмена",         callback_data=f"resetchat:no:{cid}"),
     ]])
     await reply_auto_delete(message,
-        f"🌿 <b>Сброс данных чата</b>\n\n"
+        f"🌴 <b>Сброс данных чата</b>\n\n"
         f"Будут удалены: варны, репа, XP, история, статистика\n"
         f"💬 Чат: <b>{message.chat.title}</b>\n\n<b>Уверен?</b>",
         parse_mode="HTML")
@@ -11085,7 +11344,7 @@ async def cb_captcha_skip(call: CallbackQuery):
 
     pending = _captcha_pending.get(cid, {}).get(uid)
     if not pending:
-        await call.answer("🌿 Капча уже завершена.", show_alert=True)
+        await call.answer("🌴 Капча уже завершена.", show_alert=True)
         return
 
     name = pending.get("name", str(uid))
@@ -11184,7 +11443,7 @@ async def cb_captcha(call: CallbackQuery):
         except: pass
 
         note = await call.message.answer(
-            f"🥀 <b>{name}</b> ввёл неверный ответ и был удалён.",
+            f"🌵 <b>{name}</b> ввёл неверный ответ и был удалён.",
             parse_mode="HTML"
         )
         await asyncio.sleep(8)
@@ -11248,7 +11507,7 @@ async def cmd_cleanup(message: Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text=f"💥 Удалить {len(inactive_uids)} юзеров",
                              callback_data=f"cleanup:yes:{cid}:{len(inactive_uids)}"),
-        InlineKeyboardButton(text="🥀 Отмена", callback_data="cleanup:no:0:0"),
+        InlineKeyboardButton(text="🌵 Отмена", callback_data="cleanup:no:0:0"),
     ]])
     sent = await message.answer(
         f"🧹 <b>Зачистка</b>\n\n"
@@ -11303,7 +11562,7 @@ async def cmd_clone_chat(message: Message):
     try:
         src, dst = int(args[0]), int(args[1])
     except:
-        await reply_auto_delete(message, "🌿 Укажи числовые ID чатов"); return
+        await reply_auto_delete(message, "🌴 Укажи числовые ID чатов"); return
     # Копируем плагины и настройки
     plugins[dst] = dict(plugins[src])
     mod_roles[dst] = dict(mod_roles[src])
@@ -11327,7 +11586,7 @@ DB_FILE = "skinvault.db"
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 LANGS = {
     "ru": {
-        "warn_issued": "🌿 {name} получает варн! ({count}/{max})",
+        "warn_issued": "🌴 {name} получает варн! ({count}/{max})",
         "ban_issued":  "🔨 {name} забанен!",
         "mute_issued": "🔇 {name} заглушён на {time}",
         "welcome":     "👋 Добро пожаловать, {name}!",
@@ -11335,7 +11594,7 @@ LANGS = {
         "lang_changed":"✨ Язык изменён на Русский 🇷🇺",
     },
     "en": {
-        "warn_issued": "🌿 {name} gets a warning! ({count}/{max})",
+        "warn_issued": "🌴 {name} gets a warning! ({count}/{max})",
         "ban_issued":  "🔨 {name} is banned!",
         "mute_issued": "🔇 {name} is muted for {time}",
         "welcome":     "👋 Welcome, {name}!",
@@ -11343,7 +11602,7 @@ LANGS = {
         "lang_changed":"✨ Language changed to English 🇬🇧",
     },
     "uk": {
-        "warn_issued": "🌿 {name} отримує попередження! ({count}/{max})",
+        "warn_issued": "🌴 {name} отримує попередження! ({count}/{max})",
         "ban_issued":  "🔨 {name} заблокований!",
         "mute_issued": "🔇 {name} заглушений на {time}",
         "welcome":     "👋 Ласкаво просимо, {name}!",
@@ -11456,7 +11715,7 @@ async def cmd_set_shift(message: Message):
             parse_mode="HTML"); return
     target = message.reply_to_message.from_user
     try: start, end = int(args[0]), int(args[1])
-    except: await reply_auto_delete(message, "🌿 Часы числами"); return
+    except: await reply_auto_delete(message, "🌴 Часы числами"); return
     cid = message.chat.id
     conn = db_connect()
     conn.execute("INSERT OR REPLACE INTO mod_shifts VALUES (?,?,?,?,?)",
@@ -11487,12 +11746,12 @@ async def cmd_shifts(message: Message):
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 @dp.message(Command("modrating"))
 async def cmd_mod_rating(message: Message):
-    # 🌫 Команда /modrating отключена (система рейтинга выпилена)
+    # 🌊 Команда /modrating отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -11538,14 +11797,14 @@ async def cmd_task(message: Message):
 async def cmd_done_task(message: Message):
     args = message.text.split()[1:] if message.text else []
     if not args:
-        await reply_auto_delete(message, "🌿 Укажи ID задачи: /donetask 5"); return
+        await reply_auto_delete(message, "🌴 Укажи ID задачи: /donetask 5"); return
     try: task_id = int(args[0])
-    except: await reply_auto_delete(message, "🌿 ID числом"); return
+    except: await reply_auto_delete(message, "🌴 ID числом"); return
     uid = message.from_user.id
     conn = db_connect()
     row = conn.execute("SELECT * FROM mod_tasks WHERE id=? AND mod_id=?", (task_id, uid)).fetchone()
     if not row:
-        conn.close(); await reply_auto_delete(message, "🥀 Задача не найдена"); return
+        conn.close(); await reply_auto_delete(message, "🌵 Задача не найдена"); return
     conn.execute("UPDATE mod_tasks SET done=1 WHERE id=?", (task_id,))
     conn.commit(); conn.close()
     await reply_auto_delete(message, f"✨ Задача #{task_id} выполнена!")
@@ -11573,7 +11832,7 @@ async def cmd_tasks(message: Message):
     lines = [f"🎯 <b>Активные задачи</b>\n"]
     for r in rows:
         dl = datetime.fromtimestamp(r["deadline"]).strftime("%d.%m %H:%M")
-        overdue = "🌿 ПРОСРОЧЕНО" if r["deadline"] < _tsk.time() else ""
+        overdue = "🌴 ПРОСРОЧЕНО" if r["deadline"] < _tsk.time() else ""
         lines.append(f"#{r['id']} {r['mod_name'] if is_owner else ''} — {r['task']}\n"
                      f"  ⏰ {dl} {overdue}\n")
     await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML")
@@ -11754,12 +12013,12 @@ async def cmd_auto_rules(message: Message):
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 @dp.message(Command("vip"))
 async def cmd_vip(message: Message):
-    # 🌫 Команда /vip отключена (система рейтинга выпилена)
+    # 🌊 Команда /vip отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -11855,11 +12114,11 @@ async def cmd_restore_db(message: Message):
         await reply_auto_delete(message,
             "💾 <b>Восстановление базы</b>\n\n"
             "Реплайни на .db файл из бэкапа и напиши /restoredb\n\n"
-            "🌿 Текущие данные будут заменены!",
+            "🌴 Текущие данные будут заменены!",
             parse_mode="HTML"); return
     doc = message.reply_to_message.document
     if not doc.file_name.endswith(".db"):
-        await reply_auto_delete(message, "🌿 Нужен файл с расширением .db"); return
+        await reply_auto_delete(message, "🌴 Нужен файл с расширением .db"); return
     status = await message.answer("⏳ Скачиваю и восстанавливаю базу...")
     try:
         import io as _io3
@@ -11884,7 +12143,7 @@ async def cmd_restore_db(message: Message):
             parse_mode="HTML")
         await log_action(f"💾 <b>База восстановлена</b>\n👑 {message.from_user.full_name}")
     except Exception as e:
-        await status.edit_text(f"🥀 Ошибка восстановления: {e}")
+        await status.edit_text(f"🌵 Ошибка восстановления: {e}")
 
 @dp.message(Command("backupnow"))
 async def cmd_backup_now(message: Message):
@@ -11895,7 +12154,7 @@ async def cmd_backup_now(message: Message):
     save_data()
     db_path = "skinvault.db"
     if not _osbn.path.exists(db_path):
-        await reply_auto_delete(message, "🥀 База данных не найдена"); return
+        await reply_auto_delete(message, "🌵 База данных не найдена"); return
     size = _osbn.path.getsize(db_path)
     with open(db_path, "rb") as f:
         buf = _iobn.BytesIO(f.read())
@@ -11928,7 +12187,7 @@ async def smart_notify_loop():
                 "SELECT * FROM mod_tasks WHERE done=0 AND deadline < ?", (now,)).fetchall()
             conn.close()
             if overdue:
-                lines = [f"🌿 <b>Просроченные задачи ({len(overdue)})</b>\n"]
+                lines = [f"🌴 <b>Просроченные задачи ({len(overdue)})</b>\n"]
                 for t2 in overdue:
                     dl = datetime.fromtimestamp(t2["deadline"]).strftime("%d.%m %H:%M")
                     lines.append(f"▸ {t2['mod_name']}: {t2['task']} (до {dl})")
@@ -11957,7 +12216,7 @@ async def smart_notify_loop():
                 if open_reps >= 5:
                     await safe_send(bot.send_message(OWNER_ID,
                         f"📡 <b>Мониторинг 24/7</b>\n"
-                        f"🌿 В <b>{known_chats.get(cid,'?')}</b> накопилось <b>{open_reps}</b> необработанных репортов!\n"
+                        f"🌴 В <b>{known_chats.get(cid,'?')}</b> накопилось <b>{open_reps}</b> необработанных репортов!\n"
                         f"🔗 Открой /mypanel → Репорты",
                         parse_mode="HTML"))
 
@@ -12107,11 +12366,11 @@ async def cmd_set_welcome(message: Message):
     if not text:
         # Показать текущие настройки
         s = welcome_get(cid)
-        status = "✨ включён" if s["enabled"] else "🥀 выключен"
+        status = "✨ включён" if s["enabled"] else "🌵 выключен"
         await reply_auto_delete(message,
             f"🎨 <b>Настройки Welcome</b>\n"
             f"Статус: {status}\n"
-            f"Медиа: {'✨ есть' if s['photo'] else '🥀 нет'}\n\n"
+            f"Медиа: {'✨ есть' if s['photo'] else '🌵 нет'}\n\n"
             f"📝 Текст:\n{s['text']}\n\n"
             f"<b>Команды:</b>\n"
             f"/setwelcome текст — изменить текст\n"
@@ -12138,7 +12397,7 @@ async def cmd_welcome_off(message: Message):
     s = welcome_get(message.chat.id)
     s["enabled"] = False
     welcome_save(message.chat.id, s)
-    await reply_auto_delete(message, "🥀 Welcome выключен")
+    await reply_auto_delete(message, "🌵 Welcome выключен")
 
 @dp.message(Command("welcomeon"))
 async def cmd_welcome_on(message: Message):
@@ -12292,7 +12551,7 @@ MOOD_LIST = ["😊 Отлично", "😐 Нормально", "😔 Груст�
 
 GIFT_LIST = {
     "🌹": ("Роза", 10),    "🎂": ("Торт", 20),   "💎": ("Алмаз", 50),
-    "🍕": ("Пицца", 15),   "🎵": ("Музыка", 5),  "⭐": ("Звезда", 30),
+    "🍕": ("Пицца", 15),   "🎵": ("Музыка", 5),  "✨": ("Звезда", 30),
     "🏆": ("Кубок", 40),   "🎁": ("Сюрприз", 25),"💐": ("Цветы", 12),
     "🍫": ("Шоколад", 8),
 }
@@ -12303,23 +12562,23 @@ ANON_NICKS = ["Призрак", "Тень", "Ветер", "Загадка", "Т�
 # ── Профиль ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 @dp.message(Command("setbio"))
 async def cmd_set_bio(message: Message):
-    # 🌫 Команда /setbio отключена (система рейтинга выпилена)
+    # 🌊 Команда /setbio отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
 @dp.message(Command("setmood"))
 async def cmd_set_mood(message: Message):
-    # 🌫 Команда /setmood отключена (система рейтинга выпилена)
+    # 🌊 Команда /setmood отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -12337,12 +12596,12 @@ async def cb_mood(call: CallbackQuery):
 
 @dp.message(Command("myprofile"))
 async def cmd_my_profile(message: Message):
-    # 🌫 Команда /myprofile отключена (система рейтинга выпилена)
+    # 🌊 Команда /myprofile отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -12368,7 +12627,7 @@ async def cb_profile_edit(call: CallbackQuery):
                      "ON CONFLICT(uid) DO UPDATE SET anon_enabled=excluded.anon_enabled, anon_nick=excluded.anon_nick",
                      (uid, new_val, nick))
         conn.commit(); conn.close()
-        status = "✨ включён" if new_val else "🥀 выключен"
+        status = "✨ включён" if new_val else "🌵 выключен"
         await call.answer(f"🎭 Анонимный режим {status}\nНик: {nick}", show_alert=True)
     elif field in ("bio", "interests"):
         pending[call.from_user.id] = {"action": f"set_{field}", "chat_id": call.message.chat.id,
@@ -12397,7 +12656,7 @@ async def cmd_add_friend(message: Message):
     conn.commit(); conn.close()
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✨ Принять", callback_data=f"friend:accept:{uid}"),
-        InlineKeyboardButton(text="🥀 Отклонить", callback_data=f"friend:reject:{uid}"),
+        InlineKeyboardButton(text="🌵 Отклонить", callback_data=f"friend:reject:{uid}"),
     ]])
     try:
         await bot.send_message(target.id,
@@ -12433,7 +12692,7 @@ async def cb_friend(call: CallbackQuery):
         except: pass
     else:
         conn.commit(); conn.close()
-        await call.message.edit_text(f"🥀 Запрос от {req['from_name']} отклонён")
+        await call.message.edit_text(f"🌵 Запрос от {req['from_name']} отклонён")
     await call.answer()
 
 @dp.message(Command("friends"))
@@ -12464,12 +12723,12 @@ async def cmd_unfriend(message: Message):
 # ── Система отношений ─────
 @dp.message(Command("propose"))
 async def cmd_propose(message: Message):
-    # 🌫 Команда /propose отключена (система рейтинга выпилена)
+    # 🌊 Команда /propose отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -12503,12 +12762,12 @@ async def cb_rel(call: CallbackQuery):
 
 @dp.message(Command("breakup"))
 async def cmd_breakup(message: Message):
-    # 🌫 Команда /breakup отключена (система рейтинга выпилена)
+    # 🌊 Команда /breakup отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -12522,7 +12781,7 @@ async def cmd_anon_msg(message: Message):
             parse_mode="HTML"); return
     text = message.text.replace("/anonmsg", "").strip()
     if not text:
-        await reply_auto_delete(message, "🌿 Напиши текст сообщения"); return
+        await reply_auto_delete(message, "🌴 Напиши текст сообщения"); return
     target = message.reply_to_message.from_user
     uid = message.from_user.id
     # Получаем аноним-ник отправителя
@@ -12539,7 +12798,7 @@ async def cmd_anon_msg(message: Message):
             f"📝 {text}",
             parse_mode="HTML")
     except:
-        await reply_auto_delete(message, "🥀 Не удалось отправить — юзер закрыл ЛС"); return
+        await reply_auto_delete(message, "🌵 Не удалось отправить — юзер закрыл ЛС"); return
     await reply_auto_delete(message, f"✨ Анонимное сообщение отправлено!", parse_mode="HTML")
 
 # ── Подписки ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
@@ -12611,9 +12870,9 @@ async def cmd_scan_qr(message: Message):
     conn = db_connect()
     qr = conn.execute("SELECT * FROM qr_codes WHERE code=?", (code,)).fetchone()
     if not qr:
-        conn.close(); await reply_auto_delete(message, "🥀 Код не найден"); return
+        conn.close(); await reply_auto_delete(message, "🌵 Код не найден"); return
     if qr["used"]:
-        conn.close(); await reply_auto_delete(message, "🌿 Код уже использован"); return
+        conn.close(); await reply_auto_delete(message, "🌴 Код уже использован"); return
     if qr["uid"] == uid:
         conn.close(); await reply_auto_delete(message, "😅 Нельзя активировать свой код"); return
     conn.execute("UPDATE qr_codes SET used=1 WHERE code=?", (code,))
@@ -12636,7 +12895,7 @@ DAILY_IDEAS = [
     "🚀 Если бы можно было улететь в космос — полетели бы?",
     "💭 О чём вы мечтаете прямо сейчас?",
     "🎬 Какой фильм смотрели последним?",
-    "🌙 Вы жаворонок или сова?",
+    "🌅 Вы жаворонок или сова?",
     "🔥 Что вас мотивирует каждый день?",
     "🤝 Что для вас важнее — дружба или карьера?",
     "🎯 Какова ваша цель на этот год?",
@@ -12695,7 +12954,7 @@ async def cmd_translate_msg(message: Message):
     lang = args[0] if args else "en"
     text = message.reply_to_message.text or message.reply_to_message.caption or ""
     if not text:
-        await reply_auto_delete(message, "🌿 Нет текста для перевода"); return
+        await reply_auto_delete(message, "🌴 Нет текста для перевода"); return
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -12707,7 +12966,7 @@ async def cmd_translate_msg(message: Message):
         await reply_auto_delete(message,
             f"🌐 <b>Перевод ({lang}):</b>\n{translated}", parse_mode="HTML")
     except Exception as e:
-        await reply_auto_delete(message, f"🥀 Ошибка перевода: {e}")
+        await reply_auto_delete(message, f"🌵 Ошибка перевода: {e}")
 
 # ── Поиск музыки ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 @dp.message(Command("music"))
@@ -12745,7 +13004,7 @@ async def cmd_music(message: Message):
         await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML",
                                 disable_web_page_preview=True)
     except Exception as e:
-        await reply_auto_delete(message, f"🥀 Ошибка поиска: {e}")
+        await reply_auto_delete(message, f"🌵 Ошибка поиска: {e}")
 
 # ── Генерация изображений через Pollinations ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 @dp.message(Command("imagine"))
@@ -12773,9 +13032,9 @@ async def cmd_imagine(message: Message):
                         parse_mode="HTML")
                     await status.delete()
                 else:
-                    await status.edit_text("🥀 Не удалось сгенерировать")
+                    await status.edit_text("🌵 Не удалось сгенерировать")
     except Exception as e:
-        await status.edit_text(f"🥀 Ошибка: {e}")
+        await status.edit_text(f"🌵 Ошибка: {e}")
 
 # ── Система прав доступа ──
 CMD_ROLES = {}  # {cid: {cmd: min_role}}
@@ -12793,7 +13052,7 @@ async def cmd_set_perm(message: Message):
             parse_mode="HTML"); return
     cmd, role = args[0].lower(), args[1].lower()
     if role not in ("junior", "senior", "head", "admin", "owner"):
-        await reply_auto_delete(message, "🌿 Роли: junior / senior / head / admin / owner"); return
+        await reply_auto_delete(message, "🌴 Роли: junior / senior / head / admin / owner"); return
     cid = message.chat.id
     conn = db_connect()
     conn.execute("INSERT OR REPLACE INTO cmd_permissions VALUES (?,?,?)", (cid, cmd, role))
@@ -12931,7 +13190,7 @@ async def cmd_botupdate(message: Message, command: CommandObject):
         await status_msg.edit_text(
             f"✨ <b>Рассылка завершена</b>\n"
             f"📨 Отправлено: <b>{sent}</b> чатов\n"
-            f"🥀 Ошибок: <b>{failed}</b>",
+            f"🌵 Ошибок: <b>{failed}</b>",
             parse_mode="HTML"
         )
     except: pass
@@ -12955,7 +13214,7 @@ async def cmd_note_mod(message: Message, command: CommandObject):
     target = message.reply_to_message.from_user
     text   = command.args or ""
     if not text:
-        await reply_auto_delete(message, "🌿 Напиши текст заметки")
+        await reply_auto_delete(message, "🌴 Напиши текст заметки")
         return
 
     cid = message.chat.id
@@ -12990,7 +13249,7 @@ async def cmd_notes_mod(message: Message):
     if not await check_admin(message):
         return
     if not message.reply_to_message:
-        await reply_auto_delete(message, "🌿 Реплай на сообщение юзера")
+        await reply_auto_delete(message, "🌴 Реплай на сообщение юзера")
         return
 
     target = message.reply_to_message.from_user
@@ -13029,7 +13288,7 @@ async def cmd_delnote_mod(message: Message, command: CommandObject):
     if not await check_admin(message):
         return
     if not message.reply_to_message:
-        await reply_auto_delete(message, "🌿 Реплай на сообщение юзера + номер заметки")
+        await reply_auto_delete(message, "🌴 Реплай на сообщение юзера + номер заметки")
         return
 
     target = message.reply_to_message.from_user
@@ -13047,9 +13306,9 @@ async def cmd_delnote_mod(message: Message, command: CommandObject):
             conn.commit()
             await reply_auto_delete(message, f"✨ Заметка #{num} удалена")
         else:
-            await reply_auto_delete(message, "🥀 Заметка не найдена")
+            await reply_auto_delete(message, "🌵 Заметка не найдена")
     except:
-        await reply_auto_delete(message, "🌿 Произошла ошибка.")
+        await reply_auto_delete(message, "🌴 Произошла ошибка.")
     conn.close()
 
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
@@ -13172,7 +13431,7 @@ async def _vc_execute(parsed: dict, admin_uid: int, admin_name: str) -> str:
     # (в ЛС нет cid — берём из known_chats)
     chats = list(known_chats.keys())
     if not chats:
-        return "🥀 Бот не добавлен ни в один чат"
+        return "🌵 Бот не добавлен ни в один чат"
 
     if action == "status":
         total_msgs  = sum(sum(v.values()) for v in chat_stats.values())
@@ -13196,7 +13455,7 @@ async def _vc_execute(parsed: dict, admin_uid: int, admin_name: str) -> str:
 
     if action in ("ban", "mute", "unmute", "warn", "unban", "kick"):
         if not target:
-            return f"🥀 Укажи цель: «{action} ID 123456789»"
+            return f"🌵 Укажи цель: «{action} ID 123456789»"
         # Ищем цель в каждом чате
         executed = []
         for cid in chats:
@@ -13245,9 +13504,9 @@ async def _vc_execute(parsed: dict, admin_uid: int, admin_name: str) -> str:
                     executed.append(f"👟 Кикнут {name} из {known_chats.get(cid, cid)}")
 
             except Exception as e:
-                executed.append(f"🥀 {known_chats.get(cid, cid)}: {e}")
+                executed.append(f"🌵 {known_chats.get(cid, cid)}: {e}")
 
-        return "\n".join(executed) if executed else f"🥀 Пользователь {target} не найден ни в одном чате"
+        return "\n".join(executed) if executed else f"🌵 Пользователь {target} не найден ни в одном чате"
 
     if action == "lockdown":
         locked = 0
@@ -13275,7 +13534,7 @@ async def _vc_execute(parsed: dict, admin_uid: int, admin_name: str) -> str:
 
     if action == "announce":
         if not arg:
-            return "🥀 Укажи текст объявления"
+            return "🌵 Укажи текст объявления"
         sent = 0
         for cid in chats:
             try:
@@ -13300,7 +13559,7 @@ async def handle_voice_command(message: Message):
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
         await message.answer(
-            "🌿 <b>OPENAI_API_KEY не задан</b>\n\n"
+            "🌴 <b>OPENAI_API_KEY не задан</b>\n\n"
             "Добавь в переменные окружения Render:\n"
             "<code>OPENAI_API_KEY=sk-...</code>",
             parse_mode="HTML")
@@ -13319,7 +13578,7 @@ async def handle_voice_command(message: Message):
         tmp.close()
         await bot.download_file(file.file_path, destination=tmp_path)
     except Exception as e:
-        await processing.edit_text(f"🥀 Ошибка загрузки файла: {e}")
+        await processing.edit_text(f"🌵 Ошибка загрузки файла: {e}")
         return
 
     # Транскрипция
@@ -13331,7 +13590,7 @@ async def handle_voice_command(message: Message):
 
     if not transcript:
         await processing.edit_text(
-            "🥀 Не удалось распознать речь.\n"
+            "🌵 Не удалось распознать речь.\n"
             "Говори чётко и близко к микрофону.")
         return
 
@@ -13413,7 +13672,7 @@ TECHWORK_TEXTS = [
         "☕ Выпейте кофе пока ждёте\n\n"
         "⏳ Это займёт совсем немного времени\n"
         ""
-        "💫 Возвращаемся скоро!"
+        "🌞 Возвращаемся скоро!"
     ),
     (
 
@@ -13467,7 +13726,7 @@ async def cmd_techwork(message: Message):
                 can_add_web_page_previews=True, can_invite_users=True))
             await bot.send_message(cid, end_text, parse_mode="HTML")
         except Exception as e:
-            await reply_auto_delete(message, f"🥀 Ошибка: {e}"); return
+            await reply_auto_delete(message, f"🌵 Ошибка: {e}"); return
         await log_action(f"✨ <b>ТЕХ.РАБОТЫ ЗАВЕРШЕНЫ</b>\n💬 {message.chat.title}\n👑 {message.from_user.full_name}")
     else:
         # Запускаем
@@ -13477,7 +13736,7 @@ async def cmd_techwork(message: Message):
             await bot.send_message(cid, text, parse_mode="HTML")
             await bot.set_chat_permissions(cid, ChatPermissions(can_send_messages=False))
         except Exception as e:
-            await reply_auto_delete(message, f"🥀 Ошибка: {e}"); return
+            await reply_auto_delete(message, f"🌵 Ошибка: {e}"); return
         await reply_auto_delete(message,
             "🔧 Тех.работы запущены!\n💡 Завершить: /techwork", parse_mode="HTML")
         await log_action(f"🔧 <b>ТЕХ.РАБОТЫ</b>\n💬 {message.chat.title}\n👑 {message.from_user.full_name}")
@@ -13504,7 +13763,7 @@ async def cmd_techstatus(message: Message):
 
 COMPLIMENTS = [
     "✨ Ты реально крутой человек — даже если сам этого не замечаешь!",
-    "💫 С тобой в чате гораздо интереснее. Серьёзно!",
+    "🌞 С тобой в чате гораздо интереснее. Серьёзно!",
     "🌟 Ты один из тех кто делает этот чат живым!",
     "🔥 Харизма зашкаливает. Так держать!",
     "💎 Редкий человек — умный, интересный и не нудный!",
@@ -13517,7 +13776,7 @@ COMPLIMENTS = [
     "💪 Ты вдохновляешь других даже не зная об этом!",
     "🎭 С тобой никогда не скучно — это ценность!",
     "🚀 Ты точно добьёшься всего чего хочешь!",
-    "🌙 Даже когда молчишь — твоё присутствие ощущается!",
+    "🌅 Даже когда молчишь — твоё присутствие ощущается!",
     "😎 Ты просто огонь. Без лишних слов.",
     "🎵 Ты как хорошая музыка — поднимаешь настроение!",
     "🦋 Удача точно на твоей стороне сегодня!",
@@ -13834,15 +14093,15 @@ async def cmd_setq(message: Message):
         lines = ["⚡ <b>Мои горячие команды</b>\n"]
         for slot in [1, 2, 3]:
             text = hk.get(slot, "не задана")
-            lines.append(f"▸ /q{slot} — {text[:50] if text != 'не задана' else '🥀 не задана'}")
+            lines.append(f"▸ /q{slot} — {text[:50] if text != 'не задана' else '🌵 не задана'}")
         lines.append("\n📝 <b>Как настроить:</b>\n<code>/setq 1 твой текст</code>")
         await reply_auto_delete(message, "\n".join(lines), parse_mode="HTML"); return
     try:
         slot = int(args[0])
         if slot not in (1, 2, 3):
-            await reply_auto_delete(message, "🌿 Слот должен быть 1, 2 или 3"); return
+            await reply_auto_delete(message, "🌴 Слот должен быть 1, 2 или 3"); return
     except:
-        await reply_auto_delete(message, "🌿 Укажи номер слота: /setq 1 текст"); return
+        await reply_auto_delete(message, "🌴 Укажи номер слота: /setq 1 текст"); return
     text = args[1]
     hotkey_set(message.from_user.id, slot, text)
     await reply_auto_delete(message,
@@ -13856,7 +14115,7 @@ async def _send_hotkey(message: Message, slot: int):
     text = hotkey_get(message.from_user.id, slot)
     if not text:
         await reply_auto_delete(message,
-            f"🥀 <b>/q{slot} не настроена</b>\n"
+            f"🌵 <b>/q{slot} не настроена</b>\n"
             f"Установи через: <code>/setq {slot} твой текст</code>",
             parse_mode="HTML"); return
     if message.reply_to_message:
@@ -13893,7 +14152,7 @@ async def cmd_privacy(message: Message):
         "▸ Счётчик сообщений — для XP и уровней\n"
         "▸ История варнов/банов — для модерации\n"
         "▸ Данные профиля — только те что ты указал\n\n"
-        "🥀 <b>Что НЕ собираем:</b>\n"
+        "🌵 <b>Что НЕ собираем:</b>\n"
         "▸ Содержимое личных сообщений\n"
         "▸ Медиафайлы и голосовые\n"
         "▸ Геолокацию и контакты\n"
@@ -13912,7 +14171,7 @@ async def cmd_deleteme(message: Message):
     uid = message.from_user.id
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✨ Да, удалить", callback_data=f"deleteme:confirm:{uid}"),
-        InlineKeyboardButton(text="🥀 Отмена",      callback_data=f"deleteme:cancel:{uid}"),
+        InlineKeyboardButton(text="🌵 Отмена",      callback_data=f"deleteme:cancel:{uid}"),
     ]])
     await reply_auto_delete(message,
         "🗑 <b>Удаление данных</b>\n\n"
@@ -13954,7 +14213,7 @@ async def cb_deleteme(call: CallbackQuery):
             parse_mode="HTML")
         await log_action(f"🗑 <b>DELETEME</b>\n👤 {call.from_user.full_name} (<code>{uid}</code>)")
     except Exception as e:
-        await call.message.edit_text(f"🥀 Ошибка: {e}")
+        await call.message.edit_text(f"🌵 Ошибка: {e}")
     await call.answer()
 
 # ── Новые команды для обычных пользователей ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
@@ -13986,7 +14245,7 @@ async def cmd_me(message: Message):
         f"{emoji_lvl} <b>{message.from_user.full_name}</b>\n"
         f"{mood}  •  {bio}\n"
         f"🏅 Ур. {lvl} — {title_lvl}\n"
-        f"⭐ XP: {xp}  •  💬 Сообщ: {msgs}\n"
+        f"✨ XP: {xp}  •  💬 Сообщ: {msgs}\n"
         f"⚡ Варнов: {warns}/{MAX_WARNINGS}\n"
         f"👥 Друзей: {friends}"
         f"{rel_text}",
@@ -13994,34 +14253,34 @@ async def cmd_me(message: Message):
 
 @dp.message(Command("top"))
 async def cmd_top(message: Message):
-    # 🌫 Команда /top отключена (система рейтинга выпилена)
+    # 🌊 Команда /top отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
 @dp.message(Command("stats"))
 async def cmd_stats(message: Message):
-    # 🌫 Команда /stats отключена (система рейтинга выпилена)
+    # 🌊 Команда /stats отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
 @dp.message(Command("daily"))
 async def cmd_daily(message: Message):
-    # 🌫 Команда /daily отключена (система рейтинга выпилена)
+    # 🌊 Команда /daily отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -14055,7 +14314,7 @@ async def cmd_rate(message: Message):
         text = message.reply_to_message.text or "это"
     if not text: text = "это"
     score = random.randint(0, 10)
-    bar   = "⭐" * score + "☆" * (10 - score)
+    bar   = "✨" * score + "☆" * (10 - score)
     comments = {
         (0,2):  "💀 Полный провал",
         (3,4):  "😬 Так себе",
@@ -14074,7 +14333,7 @@ async def cmd_rate(message: Message):
         parse_mode="HTML")
 
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
-#  📜 ФЕЙК-ДОКС — абсурдное досье (фановая команда)
+#  🗺 ФЕЙК-ДОКС — абсурдное досье (фановая команда)
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 _DOX_NAMES = [
     "Виталий Анатольевич", "Аркадий Эдуардович", "Сёма Петрович",
@@ -14174,13 +14433,13 @@ _DOX_DIAGNOSES = [
 
 @dp.message(Command("dox"))
 async def cmd_dox_slash(message: Message, command: CommandObject):
-    """📜 Фейк-докс по команде /dox"""
+    """🗺 Фейк-докс по команде /dox"""
     await _do_fake_dox(message)
 
 
 @dp.message(F.text.regexp(r"^\s*\.dox(\s|$)"))
 async def cmd_dox_dot(message: Message):
-    """📜 Фейк-докс по триггеру .dox"""
+    """🗺 Фейк-докс по триггеру .dox"""
     await _do_fake_dox(message)
 
 
@@ -14226,10 +14485,10 @@ async def _do_fake_dox(message: Message):
     file_size = rng.randint(666, 9999)
 
     text = (
-        f"📜 <b>ДОСЬЕ ‧ DOX REPORT</b>\n"
+        f"🗺 <b>ДОСЬЕ ‧ DOX REPORT</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"🎯 цель — {target.mention_html()}\n"
-        f"🌫 toлщина дела — <b>{file_size} стр.</b>\n"
+        f"🌊 toлщина дела — <b>{file_size} стр.</b>\n"
         f"📂 классификация — <i>совершенно несекретно</i>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n\n"
 
@@ -14262,8 +14521,8 @@ async def _do_fake_dox(message: Message):
         f"└ статус — <i>можно сдать на металлолом</i>\n\n"
 
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"<i>🤍 данные сгенерированы случайно ‧ совпадения вымышленны</i>\n"
-        f"<i>🍂 досье обнуляется каждый день</i>"
+        f"<i>💛 данные сгенерированы случайно ‧ совпадения вымышленны</i>\n"
+        f"<i>🌻 досье обнуляется каждый день</i>"
     )
 
     await message.answer(text, parse_mode="HTML")
@@ -14479,9 +14738,9 @@ async def cmd_fun_gp(message: Message):
         f"⚖️ <b>ПРИГОВОР ВЫНЕСЕН</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"🔨 жертва — {prefix}{mention}\n"
-        f"📜 наказание — <b>{verdict}</b>\n"
+        f"🗺 наказание — <b>{verdict}</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"<i>🤍 решение окончательное и обжалованию не подлежит</i>",
+        f"<i>💛 решение окончательное и обжалованию не подлежит</i>",
         parse_mode="HTML"
     )
 
@@ -14494,7 +14753,7 @@ async def cmd_fun_kill(message: Message):
     uid, name, mention, is_random = await _fun_resolve_target(message)
     if uid == message.from_user.id and not is_random:
         # Сам себя — суицидальная шутка нежелательна, перенаправляем
-        await message.answer("🌿 реплайни на жертву или скажи «убей кого-нибудь»", parse_mode="HTML")
+        await message.answer("🌴 реплайни на жертву или скажи «убей кого-нибудь»", parse_mode="HTML")
         return
 
     import random as _r
@@ -14508,10 +14767,10 @@ async def cmd_fun_kill(message: Message):
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"🩸 жертва — {prefix}{mention}\n"
         f"🔪 убийца — {killer}\n"
-        f"📜 как — <i>{method}</i>\n"
+        f"🗺 как — <i>{method}</i>\n"
         f"❓ за что — <i>{reason}</i>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"<i>🍂 тело уже остыло</i>",
+        f"<i>🌻 тело уже остыло</i>",
         parse_mode="HTML"
     )
 
@@ -14530,9 +14789,9 @@ async def cmd_fun_pidor(message: Message):
     elif pct < 40:
         verdict = "🍃 в норме ‧ можно расслабиться"
     elif pct < 60:
-        verdict = "🌫 серая зона ‧ есть над чем подумать"
+        verdict = "🌊 серая зона ‧ есть над чем подумать"
     elif pct < 80:
-        verdict = "🌷 ну такое, бывает хуже"
+        verdict = "🌺 ну такое, бывает хуже"
     else:
         verdict = "🦄 короля гей-парада возьмут с радостью"
 
@@ -14544,7 +14803,7 @@ async def cmd_fun_pidor(message: Message):
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"👤 субъект — {prefix}{mention}\n"
         f"📊 {bar} <b>{pct}%</b>\n"
-        f"📜 вердикт — {verdict}",
+        f"🗺 вердикт — {verdict}",
         parse_mode="HTML"
     )
 
@@ -14561,11 +14820,11 @@ async def cmd_fun_ebanat(message: Message):
     if pct < 25:
         verdict = "🧠 умный, гладит кота правильно"
     elif pct < 50:
-        verdict = "🌿 средний дегенерат, ничего страшного"
+        verdict = "🌴 средний дегенерат, ничего страшного"
     elif pct < 75:
-        verdict = "🌫 уже подозрительно ‧ держим под наблюдением"
+        verdict = "🌊 уже подозрительно ‧ держим под наблюдением"
     elif pct < 90:
-        verdict = "🥀 клинический случай ‧ психбольница ждёт"
+        verdict = "🌵 клинический случай ‧ психбольница ждёт"
     else:
         verdict = "💀 запущенная стадия ‧ лечение бессмысленно"
 
@@ -14577,7 +14836,7 @@ async def cmd_fun_ebanat(message: Message):
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"👤 пациент — {prefix}{mention}\n"
         f"📊 {bar} <b>{pct}%</b>\n"
-        f"📜 заключение — {verdict}",
+        f"🗺 заключение — {verdict}",
         parse_mode="HTML"
     )
 
@@ -14592,11 +14851,11 @@ async def cmd_fun_pizdezh(message: Message):
     pct = rng.randint(0, 100)
 
     if pct < 30:
-        verdict = "🤍 в основном правда ‧ редкий вид"
+        verdict = "💛 в основном правда ‧ редкий вид"
     elif pct < 60:
-        verdict = "🌿 пиздит как все ‧ умеренно"
+        verdict = "🌴 пиздит как все ‧ умеренно"
     elif pct < 85:
-        verdict = "🥀 пиздит даже когда спит"
+        verdict = "🌵 пиздит даже когда спит"
     else:
         verdict = "💀 живой генератор пиздежа ‧ профессионал"
 
@@ -14608,7 +14867,7 @@ async def cmd_fun_pizdezh(message: Message):
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"👤 объект — {prefix}{mention}\n"
         f"📊 {bar} <b>{pct}%</b>\n"
-        f"📜 вердикт — {verdict}",
+        f"🗺 вердикт — {verdict}",
         parse_mode="HTML"
     )
 
@@ -14622,7 +14881,7 @@ async def cmd_fun_huesos(message: Message):
     cid = message.chat.id
     target_uid, _ = _fun_pick_random_user(cid, exclude_uid=0)
     if not target_uid:
-        await message.answer("🌿 в чате пока некого назначить ‧ ждём активности", parse_mode="HTML")
+        await message.answer("🌴 в чате пока некого назначить ‧ ждём активности", parse_mode="HTML")
         return
 
     import random as _r
@@ -14634,9 +14893,9 @@ async def cmd_fun_huesos(message: Message):
         f"👑 <b>{title.upper()}</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"🎯 жребий пал на — {mention}\n"
-        f"📜 за что — <i>{reason}</i>\n"
+        f"🗺 за что — <i>{reason}</i>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"<i>🍂 поздравляем с заслуженным титулом</i>",
+        f"<i>🌻 поздравляем с заслуженным титулом</i>",
         parse_mode="HTML"
     )
 
@@ -14655,12 +14914,12 @@ async def cmd_fun_naebka(message: Message):
     await message.answer(
         f"📰 <b>СВЕЖАЯ НОВОСТЬ</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"🌫 источник — анонимный пиздабол\n"
+        f"🌊 источник — анонимный пиздабол\n"
         f"📍 герой — {prefix}{mention}\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"💬 <i>{news}</i>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"<i>🤍 за достоверность не отвечаем</i>",
+        f"<i>💛 за достоверность не отвечаем</i>",
         parse_mode="HTML"
     )
 
@@ -14676,11 +14935,11 @@ async def cmd_fun_zaeb(message: Message):
     tox = rng.randint(0, 100)
 
     if pct < 25 and tox < 25:
-        verdict = "🤍 норм пацан/тян ‧ можно дружить"
+        verdict = "💛 норм пацан/тян ‧ можно дружить"
     elif pct < 50:
-        verdict = "🌿 терпимо ‧ но иногда хочется заклеить рот"
+        verdict = "🌴 терпимо ‧ но иногда хочется заклеить рот"
     elif pct < 75:
-        verdict = "🥀 заёбывает каждый день"
+        verdict = "🌵 заёбывает каждый день"
     else:
         verdict = "💀 от него выходят люди из чата"
 
@@ -14692,9 +14951,9 @@ async def cmd_fun_zaeb(message: Message):
         f"📈 <b>ИНДЕКС КРИНЖА И ТОКСА</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"👤 объект — {prefix}{mention}\n"
-        f"🥀 кринж — {bar_z} <b>{pct}%</b>\n"
+        f"🌵 кринж — {bar_z} <b>{pct}%</b>\n"
         f"☠️ токс — {bar_t} <b>{tox}%</b>\n"
-        f"📜 итог — {verdict}",
+        f"🗺 итог — {verdict}",
         parse_mode="HTML"
     )
 
@@ -14709,13 +14968,13 @@ async def cmd_fun_huinya(message: Message):
     tip = rng.choice(_HUINYA_TIPS)
 
     await message.answer(
-        f"🌫 <b>ХУЁВЫЙ СОВЕТ ДНЯ</b>\n"
+        f"🌊 <b>ХУЁВЫЙ СОВЕТ ДНЯ</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"👤 для — {message.from_user.mention_html()}\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"💬 <i>{tip}</i>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"<i>🍂 обновляется раз в сутки</i>",
+        f"<i>🌻 обновляется раз в сутки</i>",
         parse_mode="HTML"
     )
 
@@ -14738,7 +14997,7 @@ async def cmd_fun_battle(message: Message):
     else:
         uid2, name2 = _fun_pick_random_user(cid, exclude_uid=fighter1.id)
         if not uid2:
-            await message.answer("🌿 в чате некого вызвать на бой", parse_mode="HTML")
+            await message.answer("🌴 в чате некого вызвать на бой", parse_mode="HTML")
             return
         fighter2_mention = f"<a href='tg://user?id={uid2}'>избранник</a>"
         fighter2_id = uid2
@@ -14778,19 +15037,19 @@ async def cmd_fun_battle(message: Message):
         + "\n".join(rounds) +
         f"\n<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"👑 победил — {winner_mention}\n"
-        f"🍂 проиграл — {loser_mention}",
+        f"🌻 проиграл — {loser_mention}",
         parse_mode="HTML"
     )
 
 
 @dp.message(Command("ship"))
 async def cmd_ship(message: Message):
-    # 🌫 Команда /ship отключена (система рейтинга выпилена)
+    # 🌊 Команда /ship отключена (система рейтинга выпилена)
     await message.answer(
-        "🌫 <b>Система отключена</b>\n"
+        "🌊 <b>Система отключена</b>\n"
         "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        "🍂 уровни / опыт / репутация / магазин больше не работают\n"
-        "🤍 чат стал чище без рейтинга",
+        "🌻 уровни / опыт / репутация / магазин больше не работают\n"
+        "💛 чат стал чище без рейтинга",
         parse_mode="HTML"
     )
 
@@ -14805,7 +15064,7 @@ async def cmd_zodiac(message: Message):
     await reply_auto_delete(message,
         f"🔮 <b>Гороскоп дня</b>\n\n"
         f"✨ Знак дня: <b>{sign}</b>\n\n"
-        f"📜 {pred}\n\n"
+        f"🗺 {pred}\n\n"
         f"🍀 Счастливое число: <b>{lucky_num}</b>\n"
         f"🎨 Счастливый цвет: {lucky_col}",
         parse_mode="HTML")
@@ -14820,13 +15079,13 @@ FORTUNES = [
     "🌈 После трудностей наступит светлая полоса",
     "🤝 Новая встреча изменит твою жизнь",
     "🔑 Ключ к успеху уже в твоих руках",
-    "🌙 Ночью придёт ответ на твой главный вопрос",
+    "🌅 Ночью придёт ответ на твой главный вопрос",
     "🦋 Маленькое решение изменит всё",
     "💎 Твоя ценность выше чем ты сам думаешь",
     "🚀 2026 год — твой год. Серьёзно.",
     "🏆 Победа близко — не сдавайся на последнем шаге",
     "🌺 Скоро произойдёт что-то о чём ты давно мечтал",
-    "💫 Вселенная уже готовит тебе подарок",
+    "🌞 Вселенная уже готовит тебе подарок",
     "🎪 Жизнь скоро устроит тебе сюрприз — хороший",
     "🌠 Звезда которую ты загадал — слышит тебя",
     "🔥 Твоя уверенность сегодня — твоё главное оружие",
@@ -14853,13 +15112,13 @@ FORTUNES = [
     "🐱 Кот смотрит на тебя с осуждением. Он прав.",
     "🛒 Ты снова купишь что-то ненужное. Но оно такое красивое.",
     "🎮 Ещё один уровень — и спать. Это ложь и ты знаешь.",
-    "🌧 Зонтик оставишь дома. Дождь будет.",
+    "🌞 Зонтик оставишь дома. Дождь будет.",
     "🤳 Ты откроешь холодильник и закроешь его ничего не взяв. Трижды.",
     "💬 Напишешь сообщение и удалишь. Потом напишешь снова.",
     "🛵 Курьер доставит еду именно когда ты зайдёшь в душ.",
 
     # ⚠️ Тревожные
-    "🌿 Осторожно — кто-то завидует твоему успеху",
+    "🌴 Осторожно — кто-то завидует твоему успеху",
     "🎲 Рискни — сегодня удача на твоей стороне",
     "📚 Знание которое ты ищешь — уже внутри тебя",
     "🌊 Плыви против течения — там и есть успех",
@@ -14920,7 +15179,7 @@ async def cmd_calc(message: Message):
         import re as _re
         safe = _re.sub(r'[^0-9+\-*/().% ]', '', expr)
         if not safe:
-            await reply_auto_delete(message, "🌿 Недопустимые символы"); return
+            await reply_auto_delete(message, "🌴 Недопустимые символы"); return
         result = eval(safe, {"__builtins__": {}})
         await reply_auto_delete(message,
             f""
@@ -14929,9 +15188,9 @@ async def cmd_calc(message: Message):
             f"",
             parse_mode="HTML")
     except ZeroDivisionError:
-        await reply_auto_delete(message, "🥀 Делить на ноль нельзя!")
+        await reply_auto_delete(message, "🌵 Делить на ноль нельзя!")
     except Exception:
-        await reply_auto_delete(message, "🥀 Неверное выражение")
+        await reply_auto_delete(message, "🌵 Неверное выражение")
 
 @dp.message(Command("password"))
 async def cmd_password(message: Message):
@@ -14973,9 +15232,9 @@ async def cmd_qr(message: Message):
                     try: await message.delete()
                     except: pass
                 else:
-                    await reply_auto_delete(message, "🥀 Не удалось создать QR-код")
+                    await reply_auto_delete(message, "🌵 Не удалось создать QR-код")
     except Exception as e:
-        await reply_auto_delete(message, f"🥀 Ошибка: {e}")
+        await reply_auto_delete(message, f"🌵 Ошибка: {e}")
 
 @dp.message(Command("ask"))
 async def cmd_ask(message: Message):
@@ -14983,8 +15242,8 @@ async def cmd_ask(message: Message):
     answers = [
         "✨ Определённо да!", "✨ Скорее всего да", "✨ Всё указывает на это",
         "🤔 Не уверен...", "🤔 Спроси позже", "🤔 Сложно сказать",
-        "🥀 Очень сомнительно", "🥀 Скорее нет", "🥀 Определённо нет!",
-        "🔮 Звёзды молчат", "💫 Судьба решит сама", "⚡ Даже не думай об этом",
+        "🌵 Очень сомнительно", "🌵 Скорее нет", "🌵 Определённо нет!",
+        "🔮 Звёзды молчат", "🌞 Судьба решит сама", "⚡ Даже не думай об этом",
     ]
     answer = random.choice(answers)
     q_text = f"\n❓ {question}" if question else ""
@@ -15042,11 +15301,11 @@ async def cmd_banid(message: Message, command: CommandObject):
     if not command.args:
         await reply_auto_delete(message,
             ""
-            "🌿 Использование:\n<code>/banid 123456789 причина</code>", parse_mode="HTML"); return
+            "🌴 Использование:\n<code>/banid 123456789 причина</code>", parse_mode="HTML"); return
     parts = command.args.split(None, 1)
     try: uid = int(parts[0])
     except ValueError:
-        await reply_auto_delete(message, "🌿 Укажи корректный Telegram ID"); return
+        await reply_auto_delete(message, "🌴 Укажи корректный Telegram ID"); return
     reason = parts[1] if len(parts) > 1 else "Нарушение правил"
     cid = message.chat.id
     try:
@@ -15064,7 +15323,7 @@ async def cmd_banid(message: Message, command: CommandObject):
             f"<i>Пользователь заблокирован.</i>", parse_mode="HTML")
         await log_action(f"🔨 <b>Бан по ID</b>\n👤 Кто: {message.from_user.mention_html()}\n🪪 ID: <code>{uid}</code>\n📋 Причина: {reason}\n💬 Чат: {message.chat.title}")
     except Exception as e:
-        await reply_auto_delete(message, f"🥀 Ошибка: <code>{e}</code>", parse_mode="HTML")
+        await reply_auto_delete(message, f"🌵 Ошибка: <code>{e}</code>", parse_mode="HTML")
 
 
 @dp.message(Command("muteid"))
@@ -15073,11 +15332,11 @@ async def cmd_muteid(message: Message, command: CommandObject):
     if not command.args:
         await reply_auto_delete(message,
             ""
-            "🌿 Использование:\n<code>/muteid 123456789 60m причина</code>", parse_mode="HTML"); return
+            "🌴 Использование:\n<code>/muteid 123456789 60m причина</code>", parse_mode="HTML"); return
     parts = command.args.split(None, 2)
     try: uid = int(parts[0])
     except ValueError:
-        await reply_auto_delete(message, "🌿 Укажи корректный Telegram ID"); return
+        await reply_auto_delete(message, "🌴 Укажи корректный Telegram ID"); return
     mins, label = parse_duration(parts[1]) if len(parts) > 1 else (60, "1 ч.")
     if not mins: mins, label = 60, "1 ч."
     reason = parts[2] if len(parts) > 2 else "Нарушение правил"
@@ -15094,7 +15353,7 @@ async def cmd_muteid(message: Message, command: CommandObject):
         await log_action(f"🔇 <b>Мут по ID</b>\n👤 Кто: {message.from_user.mention_html()}\n🪪 ID: <code>{uid}</code>\n⏱ {label}\n📋 {reason}\n💬 Чат: {message.chat.title}")
         schedule_unmute(cid, uid, mins, f"ID {uid}")
     except Exception as e:
-        await reply_auto_delete(message, f"🥀 Ошибка: <code>{e}</code>", parse_mode="HTML")
+        await reply_auto_delete(message, f"🌵 Ошибка: <code>{e}</code>", parse_mode="HTML")
 
 
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
@@ -15291,15 +15550,15 @@ async def cmd_appeals_list(message: Message):
 async def cmd_appeal_approve(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not command.args:
-        await reply_auto_delete(message, "🌿 /appealapprove [user_id]"); return
+        await reply_auto_delete(message, "🌴 /appealapprove [user_id]"); return
     try: uid = int(command.args.split()[0])
-    except: await reply_auto_delete(message, "🌿 Укажи корректный ID"); return
+    except: await reply_auto_delete(message, "🌴 Укажи корректный ID"); return
     conn = db_connect()
     import json as _json
     row = conn.execute("SELECT data FROM appeals_db WHERE uid=?", (uid,)).fetchone()
     if not row:
         conn.close()
-        await reply_auto_delete(message, "🥀 Апелляция не найдена."); return
+        await reply_auto_delete(message, "🌵 Апелляция не найдена."); return
     d = _json.loads(row["data"])
     d["status"] = "approved"
     conn.execute("INSERT OR REPLACE INTO appeals_db VALUES (?,?)", (uid, _json.dumps(d)))
@@ -15323,15 +15582,15 @@ async def cmd_appeal_approve(message: Message, command: CommandObject):
 async def cmd_appeal_deny(message: Message, command: CommandObject):
     if not await require_admin(message): return
     if not command.args:
-        await reply_auto_delete(message, "🌿 /appealdeny [user_id] [причина]"); return
+        await reply_auto_delete(message, "🌴 /appealdeny [user_id] [причина]"); return
     parts = command.args.split(None, 1)
     try: uid = int(parts[0])
-    except: await reply_auto_delete(message, "🌿 Укажи корректный ID"); return
+    except: await reply_auto_delete(message, "🌴 Укажи корректный ID"); return
     reason = parts[1] if len(parts) > 1 else "Без объяснений"
     conn = db_connect()
     import json as _json
     row = conn.execute("SELECT data FROM appeals_db WHERE uid=?", (uid,)).fetchone()
-    if not row: conn.close(); await reply_auto_delete(message, "🥀 Апелляция не найдена."); return
+    if not row: conn.close(); await reply_auto_delete(message, "🌵 Апелляция не найдена."); return
     d = _json.loads(row["data"])
     d["status"] = "rejected"; d["reply"] = reason
     conn.execute("INSERT OR REPLACE INTO appeals_db VALUES (?,?)", (uid, _json.dumps(d)))
@@ -15351,7 +15610,7 @@ async def cmd_appeal_deny(message: Message, command: CommandObject):
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 
 def _bool_str(val) -> str:
-    return "✨ вкл" if val else "🥀 выкл"
+    return "✨ вкл" if val else "🌵 выкл"
 
 
 def kb_chatsettings_main(cid: int) -> InlineKeyboardMarkup:
@@ -15363,12 +15622,12 @@ def kb_chatsettings_main(cid: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=f"🔠 Антикапс {_bool_str(s.get('anticaps_enabled'))}", callback_data=f"cs_toggle:{cid}:anticaps_enabled")],
         [InlineKeyboardButton(text=f"👋 Приветствие {_bool_str(s.get('welcome_enabled'))}", callback_data=f"cs_toggle:{cid}:welcome_enabled")],
         [InlineKeyboardButton(text=f"✨ Верификация {_bool_str(s.get('verify_enabled'))}", callback_data=f"cs_toggle:{cid}:verify_enabled")],
-        [InlineKeyboardButton(text=f"⭐ XP система {_bool_str(s.get('xp_enabled'))}", callback_data=f"cs_toggle:{cid}:xp_enabled")],
+        [InlineKeyboardButton(text=f"✨ XP система {_bool_str(s.get('xp_enabled'))}", callback_data=f"cs_toggle:{cid}:xp_enabled")],
         [InlineKeyboardButton(text=f"💰 Экономика {_bool_str(s.get('economy_enabled'))}", callback_data=f"cs_toggle:{cid}:economy_enabled")],
         [InlineKeyboardButton(text=f"🎮 Игры {_bool_str(s.get('games_enabled'))}", callback_data=f"cs_toggle:{cid}:games_enabled")],
         [InlineKeyboardButton(text=f"📢 Авто-анонс {_bool_str(s.get('announce_enabled'))}", callback_data=f"cs_toggle:{cid}:announce_enabled")],
         [InlineKeyboardButton(text=f"⏰ Расписание {_bool_str(s.get('schedule_enabled'))}", callback_data=f"cs_toggle:{cid}:schedule_enabled")],
-        [InlineKeyboardButton(text=f"🌙 Тихий час {_bool_str(s.get('quiet_enabled'))}", callback_data=f"cs_toggle:{cid}:quiet_enabled")],
+        [InlineKeyboardButton(text=f"🌅 Тихий час {_bool_str(s.get('quiet_enabled'))}", callback_data=f"cs_toggle:{cid}:quiet_enabled")],
         [InlineKeyboardButton(text="⚙️ Параметры модерации", callback_data=f"cs_mod:{cid}")],
         [InlineKeyboardButton(text="🔢 Параметры XP/экономики", callback_data=f"cs_xp:{cid}")],
         [InlineKeyboardButton(text="🕐 Расписание чата", callback_data=f"cs_schedule:{cid}")],
@@ -15378,7 +15637,7 @@ def kb_chatsettings_main(cid: int) -> InlineKeyboardMarkup:
 def kb_cs_mod(cid: int) -> InlineKeyboardMarkup:
     s = cs.get_settings(cid)
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"🌿 Макс варнов: {s.get('max_warns',3)}", callback_data=f"cs_set:{cid}:max_warns")],
+        [InlineKeyboardButton(text=f"🌴 Макс варнов: {s.get('max_warns',3)}", callback_data=f"cs_set:{cid}:max_warns")],
         [InlineKeyboardButton(text=f"⏳ Срок варна: {s.get('warn_expiry_days',30)} дн.", callback_data=f"cs_set:{cid}:warn_expiry_days")],
         [InlineKeyboardButton(text=f"🔇 Мут по умолч.: {s.get('mute_duration',60)} мин.", callback_data=f"cs_set:{cid}:mute_duration")],
         [InlineKeyboardButton(text=f"💬 Флуд порог: {s.get('flood_msgs',15)} за {s.get('flood_window',20)}с", callback_data=f"cs_set:{cid}:flood_msgs")],
@@ -15389,7 +15648,7 @@ def kb_cs_mod(cid: int) -> InlineKeyboardMarkup:
 def kb_cs_xp(cid: int) -> InlineKeyboardMarkup:
     s = cs.get_settings(cid)
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"⭐ XP за сообщение: {s.get('xp_per_msg',5)}", callback_data=f"cs_set:{cid}:xp_per_msg")],
+        [InlineKeyboardButton(text=f"✨ XP за сообщение: {s.get('xp_per_msg',5)}", callback_data=f"cs_set:{cid}:xp_per_msg")],
         [InlineKeyboardButton(text=f"🎁 Дейли бонус: {s.get('daily_bonus',50)}", callback_data=f"cs_set:{cid}:daily_bonus")],
         [InlineKeyboardButton(text=f"🎉 Бонус новичка: {s.get('newcomer_bonus',100)}", callback_data=f"cs_set:{cid}:newcomer_bonus")],
         [InlineKeyboardButton(text=f"⏱ Кулдаун репы: {s.get('rep_cooldown_hours',1)} ч.", callback_data=f"cs_set:{cid}:rep_cooldown_hours")],
@@ -15402,7 +15661,7 @@ def kb_cs_schedule(cid: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"🔒 Закрытие: {s.get('close_time','00:00')}", callback_data=f"cs_set:{cid}:close_time")],
         [InlineKeyboardButton(text=f"🔓 Открытие: {s.get('open_time','08:00')}", callback_data=f"cs_set:{cid}:open_time")],
-        [InlineKeyboardButton(text=f"🌙 Тихий с: {s.get('quiet_start','23:00')}", callback_data=f"cs_set:{cid}:quiet_start")],
+        [InlineKeyboardButton(text=f"🌅 Тихий с: {s.get('quiet_start','23:00')}", callback_data=f"cs_set:{cid}:quiet_start")],
         [InlineKeyboardButton(text=f"☀️ Тихий до: {s.get('quiet_end','07:00')}", callback_data=f"cs_set:{cid}:quiet_end")],
         [InlineKeyboardButton(text="◀️ Назад", callback_data=f"cs_main:{cid}")],
     ])
@@ -15430,7 +15689,7 @@ async def cmd_antivpn(message: Message, command: CommandObject):
     current = _antivpn_get(cid)
 
     if not command.args:
-        status = "✨ включён" if current["enabled"] else "🥀 выключен"
+        status = "✨ включён" if current["enabled"] else "🌵 выключен"
         await reply_auto_delete(message,
             f""
             f"Статус: <b>{status}</b>\n"
@@ -15455,7 +15714,7 @@ async def cmd_antivpn(message: Message, command: CommandObject):
         _antivpn_save(cid, _antivpn_settings[cid])
         await reply_auto_delete(message,
             ""
-            "🥀 АнтиVPN <b>выключен</b>.", parse_mode="HTML")
+            "🌵 АнтиVPN <b>выключен</b>.", parse_mode="HTML")
     elif args[0] == "action" and len(args) > 1 and args[1] in ("warn", "kick", "ban"):
         _antivpn_settings[cid] = {**current, "action": args[1]}
         _antivpn_save(cid, _antivpn_settings[cid])
@@ -15463,7 +15722,7 @@ async def cmd_antivpn(message: Message, command: CommandObject):
             f""
             f"⚙️ Действие изменено: <b>{args[1]}</b>", parse_mode="HTML")
     else:
-        await reply_auto_delete(message, "🌿 /antivpn on/off/action warn|kick|ban")
+        await reply_auto_delete(message, "🌴 /antivpn on/off/action warn|kick|ban")
 
 
 @dp.callback_query(F.data.startswith("cs_toggle:"))
@@ -15572,13 +15831,13 @@ async def handle_cs_input(message: Message):
     if key in time_keys:
         import re as _re
         if not _re.match(r"^\d{2}:\d{2}$", val):
-            await reply_auto_delete(message, "🌿 Формат: HH:MM (например 08:00)"); return
+            await reply_auto_delete(message, "🌴 Формат: HH:MM (например 08:00)"); return
         cs.update_setting(cid, key, val)
     else:
         try:
             cs.update_setting(cid, key, int(val))
         except ValueError:
-            await reply_auto_delete(message, "🌿 Введи числовое значение"); return
+            await reply_auto_delete(message, "🌴 Введи числовое значение"); return
     await reply_auto_delete(message,
         f""
         f"⚙️ <b>{key}</b> = <code>{val}</code>", parse_mode="HTML")
@@ -15775,7 +16034,7 @@ async def cmd_trigger(message: Message, command: CommandObject):
             f""
             f"🔤 <code>{word}</code> удалён из списка.", parse_mode="HTML")
     else:
-        await reply_auto_delete(message, "🌿 /trigger add/del/list")
+        await reply_auto_delete(message, "🌴 /trigger add/del/list")
 
 
 # ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
@@ -16011,7 +16270,7 @@ async def _verify_code_timeout(cid: int, uid: int, name: str, msg_id: int):
     except: pass
     try:
         await bot.edit_message_text(
-            f"🤍 <b>Профиль</b>\n"
+            f"💛 <b>Профиль</b>\n"
             
             f""
             f"👤 <b>{name}</b>\n"
@@ -16104,14 +16363,14 @@ async def cb_vpn_action(call: CallbackQuery):
             await bot.ban_chat_member(cid, uid)
             await call.answer("🔨 Забанен!", show_alert=True)
         except Exception as e:
-            await call.answer(f"🥀 {e}", show_alert=True)
+            await call.answer(f"🌵 {e}", show_alert=True)
     elif action == "vpn_kick":
         try:
             await bot.ban_chat_member(cid, uid)
             await bot.unban_chat_member(cid, uid)
             await call.answer("🚪 Кикнут!", show_alert=True)
         except Exception as e:
-            await call.answer(f"🥀 {e}", show_alert=True)
+            await call.answer(f"🌵 {e}", show_alert=True)
     else:
         await call.answer("✨ Проигнорировано")
     try:
@@ -16125,7 +16384,7 @@ async def cb_vpn_action(call: CallbackQuery):
 
 _casino_jackpot: dict = defaultdict(lambda: 500)
 
-SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "🔔", "⭐", "💎", "7️⃣"]
+SLOT_SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "🔔", "✨", "💎", "7️⃣"]
 SLOT_WEIGHTS  = [30,   25,   20,   15,   5,    3,    1,    1]
 
 def _spin_slots() -> list:
@@ -16136,7 +16395,7 @@ def _slots_payout(symbols: list, bet: int, jackpot: int) -> tuple:
     if s[0] == s[1] == s[2]:
         if s[0] == "💎":    return jackpot,   "💎💎💎 ДЖЕКПОТ! 🎉"
         elif s[0] == "7️⃣":  return bet * 10,  "7️⃣7️⃣7️⃣ СЕМЁРКИ! 🔥"
-        elif s[0] == "⭐":   return bet * 7,   "⭐⭐⭐ ЗВЁЗДЫ! ✨"
+        elif s[0] == "✨":   return bet * 7,   "✨✨✨ ЗВЁЗДЫ! ✨"
         elif s[0] == "🔔":   return bet * 5,   "🔔🔔🔔 КОЛОКОЛА! 🎶"
         else:                return bet * 3,   f"{s[0]}{s[1]}{s[2]} Три в ряд! ×3"
     elif s[0]==s[1] or s[1]==s[2] or s[0]==s[2]:
@@ -16174,8 +16433,8 @@ async def cmd_casino(message: Message):
     rep = reputation[cid].get(uid, 0)
     jackpot = _casino_jackpot[cid]
     text = (
-            f"🤍 <b>Профиль</b>\n"
-            f"🤍 <b>Профиль</b>\n"
+            f"💛 <b>Профиль</b>\n"
+            f"💛 <b>Профиль</b>\n"
         f""
         f"👤 {message.from_user.mention_html()}\n"
         f"💰 Репутация: <b>{rep:+d}</b> 🌟\n"
@@ -16207,7 +16466,7 @@ async def cb_casino(call: CallbackQuery):
 
     target_uid = int(parts[2])
     if uid != target_uid:
-        await call.answer("🥀 Это не твоё казино!", show_alert=True); return
+        await call.answer("🌵 Это не твоё казино!", show_alert=True); return
 
     rep = reputation[cid].get(uid, 0)
 
@@ -16215,7 +16474,7 @@ async def cb_casino(call: CallbackQuery):
     if action == "slots":
         bet = int(parts[3])
         if rep < bet:
-            await call.answer(f"🥀 Нужно {bet} 🌟, есть {rep}", show_alert=True); return
+            await call.answer(f"🌵 Нужно {bet} 🌟, есть {rep}", show_alert=True); return
 
         symbols = _spin_slots()
         win, desc = _slots_payout(symbols, bet, _casino_jackpot[cid])
@@ -16251,7 +16510,7 @@ async def cb_casino(call: CallbackQuery):
         bet_type = parts[3]
         bet = int(parts[4])
         if rep < bet:
-            await call.answer(f"🥀 Нужно {bet} 🌟, есть {rep}", show_alert=True); return
+            await call.answer(f"🌵 Нужно {bet} 🌟, есть {rep}", show_alert=True); return
 
         number = random.randint(0, 36)
         is_even = number != 0 and number % 2 == 0
@@ -16274,7 +16533,7 @@ async def cb_casino(call: CallbackQuery):
         text = (
             f""
             f"{color} Выпало: <b>{number}</b>\n\n"
-            f"{'✨ Победа!' if won else '🥀 Проигрыш.'}\n"
+            f"{'✨ Победа!' if won else '🌵 Проигрыш.'}\n"
             f""
             f"{'🏆' if won else '💸'}: <b>{sign}{delta} 🌟</b>\n"
             f"💰 Репутация: <b>{new_rep:+d}</b>"
@@ -16288,7 +16547,7 @@ async def cb_casino(call: CallbackQuery):
         side = parts[3]
         bet  = int(parts[4])
         if rep < bet:
-            await call.answer(f"🥀 Нужно {bet} 🌟, есть {rep}", show_alert=True); return
+            await call.answer(f"🌵 Нужно {bet} 🌟, есть {rep}", show_alert=True); return
 
         result = random.choice(["heads", "tails"])
         won = result == side
@@ -16303,7 +16562,7 @@ async def cb_casino(call: CallbackQuery):
         text = (
             f""
             f"{icon}!\n\n"
-            f"{'✨ Угадал!' if won else '🥀 Не угадал.'}\n"
+            f"{'✨ Угадал!' if won else '🌵 Не угадал.'}\n"
             f""
             f"{'🏆' if won else '💸'}: <b>{sign}{delta} 🌟</b>\n"
             f"💰 Репутация: <b>{new_rep:+d}</b>"
@@ -16389,7 +16648,7 @@ def _owner_settings_get() -> dict:
         "xp_per_msg_max":     "15",
         "xp_weekend_double":  "1",
         "xp_cooldown_secs":   "60",
-        "level_up_announce":  "0",   # 🌫 выпилено (рейтинг отключён)
+        "level_up_announce":  "0",   # 🌊 выпилено (рейтинг отключён)
         # Модерация
         "max_warns":          "3",
         "warn_expiry_days":   "30",
@@ -16441,7 +16700,7 @@ def _bool_icon(val) -> str:
 # ── Главное меню настроек ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
 def kb_owner_settings_main() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⭐ XP и Уровни",        callback_data="os:menu:xp"),
+        [InlineKeyboardButton(text="✨ XP и Уровни",        callback_data="os:menu:xp"),
          InlineKeyboardButton(text="🏆 Рейтинг/Топы",       callback_data="os:menu:rating")],
         [InlineKeyboardButton(text="🛡 Модерация",           callback_data="os:menu:mod"),
          InlineKeyboardButton(text="💰 Экономика",           callback_data="os:menu:eco")],
@@ -16477,7 +16736,7 @@ def kb_os_rating(s: dict) -> InlineKeyboardMarkup:
             text=f"📊 Размер топа: {s['top_size']} мест",
             callback_data="os:edit:top_size")],
         [InlineKeyboardButton(
-            text=f"⭐ XP в топе: {_bool_icon(s['show_xp_in_top'])}",
+            text=f"✨ XP в топе: {_bool_icon(s['show_xp_in_top'])}",
             callback_data="os:toggle:show_xp_in_top"),
          InlineKeyboardButton(
             text=f"🌟 Репа в топе: {_bool_icon(s['show_rep_in_top'])}",
@@ -16585,7 +16844,7 @@ async def cmd_owner_settings(message: Message):
         f"👑 <b>Настройки владельца</b>\n"
         f"🤖 Бот: <b>{s['bot_name']}</b>\n"
         f"💬 Чатов: <b>{len(known_chats)}</b>\n"
-        f"⭐ XP за сообщение: <b>{s['xp_per_msg_min']}–{s['xp_per_msg_max']}</b>\n"
+        f"✨ XP за сообщение: <b>{s['xp_per_msg_min']}–{s['xp_per_msg_max']}</b>\n"
         f"⚡ Макс варнов: <b>{s['max_warns']}</b>\n"
         f"🎰 Лотерея: <b>{s['lottery_ticket_cost']} репы/билет</b>\n\n"
         f"Выбери раздел для настройки:",
@@ -16626,7 +16885,7 @@ async def cb_owner_settings(call: CallbackQuery):
             )
         elif param == "xp":
             await call.message.edit_text(
-                "⭐ <b>Настройки XP и Уровней</b>",
+                "✨ <b>Настройки XP и Уровней</b>",
                 parse_mode="HTML", reply_markup=kb_os_xp(s))
         elif param == "rating":
             await call.message.edit_text(
@@ -16665,12 +16924,12 @@ async def cb_owner_settings(call: CallbackQuery):
         elif param == "max_warns":
             pass  # применяется через get
 
-        await call.answer(f"{'✨ Включено' if new == '1' else '🥀 Выключено'}")
+        await call.answer(f"{'✨ Включено' if new == '1' else '🌵 Выключено'}")
         # Обновляем нужное меню
         s = _owner_settings_get()
         menus = {
-            "xp_weekend_double":   ("xp",       "⭐ <b>Настройки XP и Уровней</b>"),
-            "level_up_announce":   ("xp",       "⭐ <b>Настройки XP и Уровней</b>"),
+            "xp_weekend_double":   ("xp",       "✨ <b>Настройки XP и Уровней</b>"),
+            "level_up_announce":   ("xp",       "✨ <b>Настройки XP и Уровней</b>"),
             "auto_ban_on_warns":   ("mod",      "🛡 <b>Настройки Модерации</b>"),
             "antimat":             ("mod",      "🛡 <b>Настройки Модерации</b>"),
             "anti_nsfw":           ("mod",      "🛡 <b>Настройки Модерации</b>"),
@@ -16723,7 +16982,7 @@ async def cb_owner_settings(call: CallbackQuery):
             f"Текущее: <b>{s.get(param, '—')}</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="🥀 Отмена", callback_data="os:menu:main")
+                InlineKeyboardButton(text="🌵 Отмена", callback_data="os:menu:main")
             ]])
         )
         await call.answer()
@@ -16733,20 +16992,20 @@ async def cb_owner_settings(call: CallbackQuery):
     elif action == "action":
         if param == "reset_xp":
             await call.message.edit_text(
-                "🌿 <b>Сброс XP ВСЕХ участников</b>\n\nВсе XP и уровни будут обнулены!\nУверен?",
+                "🌴 <b>Сброс XP ВСЕХ участников</b>\n\nВсе XP и уровни будут обнулены!\nУверен?",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text="💥 ДА, СБРОСИТЬ", callback_data="os:confirm:reset_xp"),
-                    InlineKeyboardButton(text="🥀 Отмена",        callback_data="os:menu:rating"),
+                    InlineKeyboardButton(text="🌵 Отмена",        callback_data="os:menu:rating"),
                 ]])
             )
         elif param == "reset_rep":
             await call.message.edit_text(
-                "🌿 <b>Сброс репутации ВСЕХ участников</b>\n\nВся репутация будет обнулена!\nУверен?",
+                "🌴 <b>Сброс репутации ВСЕХ участников</b>\n\nВся репутация будет обнулена!\nУверен?",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text="💥 ДА, СБРОСИТЬ", callback_data="os:confirm:reset_rep"),
-                    InlineKeyboardButton(text="🥀 Отмена",        callback_data="os:menu:rating"),
+                    InlineKeyboardButton(text="🌵 Отмена",        callback_data="os:menu:rating"),
                 ]])
             )
 
@@ -16782,7 +17041,7 @@ async def cb_owner_settings(call: CallbackQuery):
     elif action == "view":
         lines = [
             "📋 <b>Все текущие настройки</b>\n",
-            "⭐ <b>XP</b>",
+            "✨ <b>XP</b>",
             f"  Диапазон: {s['xp_per_msg_min']}–{s['xp_per_msg_max']}",
             f"  Кулдаун: {s['xp_cooldown_secs']}с",
             f"  Двойной в выходные: {_bool_icon(s['xp_weekend_double'])}",
@@ -16819,11 +17078,11 @@ async def cb_owner_settings(call: CallbackQuery):
     elif action == "reset":
         if param == "confirm":
             await call.message.edit_text(
-                "🌿 <b>Сброс ВСЕХ настроек к дефолту</b>\n\nУверен?",
+                "🌴 <b>Сброс ВСЕХ настроек к дефолту</b>\n\nУверен?",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(text="💥 ДА", callback_data="os:reset:do"),
-                    InlineKeyboardButton(text="🥀 Отмена", callback_data="os:menu:main"),
+                    InlineKeyboardButton(text="🌵 Отмена", callback_data="os:menu:main"),
                 ]])
             )
         elif param == "do":
@@ -16891,7 +17150,7 @@ async def handle_os_input(message: Message):
         )
     except Exception as e:
         await message.answer(
-            f"🥀 Неверный формат. Попробуй снова.\n<code>{e}</code>",
+            f"🌵 Неверный формат. Попробуй снова.\n<code>{e}</code>",
             parse_mode="HTML",
             reply_markup=kb_owner_settings_main()
         )
