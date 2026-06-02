@@ -9243,21 +9243,25 @@ async def cmd_start_ref(message: Message, command: CommandObject):
     if message.chat.type in ("group", "supergroup"):
         bot_info = await bot.get_me()
         await message.answer(
-            f"<b>CHAT GUARD</b>\n\n"
-            f"Здравствуйте, <b>{name}</b>.\n\n"
-            f"Я — система автоматической модерации этого чата. "
-            f"По вопросам поддержки обращайтесь в личные сообщения.",
+            f"🌻 <b>CHAT GUARD</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"☀️ привет, <b>{name}</b>\n"
+            f"\n"
+            f"🌊 я слежу за порядком в этом чате\n"
+            f"🌴 по любым вопросам — пиши мне в личку\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"💛 хорошего лета и спокойного чата",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(
-                    text="Написать в поддержку",
+                    text="🏖 Написать в личку",
                     url=f"https://t.me/{bot_info.username}?start=hello"
                 )
             ]])
         )
         return
 
-    # ── В ЛС — terminal-стиль главное меню ───
+    # ── В ЛС — летнее главное меню ───
     import time as _ts
     uptime = int(_ts.time() - bot_start_time)
     h, m = uptime // 3600, (uptime % 3600) // 60
@@ -9266,22 +9270,23 @@ async def cmd_start_ref(message: Message, command: CommandObject):
     user_warns = sum(warnings[c].get(uid, 0) for c in warnings)
 
     await message.answer(
-        f"💛 Привет, <b>{name}</b>\n"
+        f"🌻 Привет, <b>{name}</b>\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
         f"\n"
-        f"🌸  <b>Твой статус</b>\n"
+        f"🏝  <b>Твой статус</b>\n"
         f"🌴  предупреждений — <b>{user_warns}</b>\n"
         f"\n"
-        f"🌺  <b>Возможности</b>\n"
-        f"🛡  модерация чата\n"
-        f"💌  тикеты поддержки\n"
-        f"🌐  веб-дашборд админа\n"
+        f"🌺  <b>Что я умею</b>\n"
+        f"🛡  слежу за порядком в чате\n"
+        f"💌  принимаю тикеты в поддержку\n"
+        f"🌊  защищаю от рейдов и спама\n"
+        f"🌐  веб-дашборд для админов\n"
         f"\n"
         f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"<i>с тобой уже {h} ч {m} м 🌻</i>",
+        f"<i>☀️ с тобой уже {h} ч {m} м</i>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🍃 Команды",      callback_data="start:help"),
+            [InlineKeyboardButton(text="🌴 Команды",      callback_data="start:help"),
              InlineKeyboardButton(text="💌 Тикет",        callback_data="start:ticket")],
             [InlineKeyboardButton(text="🗺 Правила",      callback_data="start:rules"),
              InlineKeyboardButton(text="🌐 Веб-дашборд",
