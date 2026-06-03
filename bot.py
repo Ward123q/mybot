@@ -481,7 +481,7 @@ LOG_CHANNEL_ID   = -1003832428474
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
 OWNER_ID         = 7823802800                       # основной владелец (для обратной совместимости)
-OWNERS           = {7823802800,         # все владельцы — все проверки идут через "in OWNERS"
+OWNERS           = {7823802800, 7412821596}          # все владельцы — все проверки идут через "in OWNERS"
 ADMIN_IDS        = {7823802800, 8046083268, 7397338777, 7991589995, 7412821596 }
 MAX_WARNINGS     = 3
 ANTI_MAT_ENABLED  = False
@@ -4408,6 +4408,7 @@ async def cmd_autist_router(message: Message):
     if not parsed:
         return
     action, remainder = parsed
+    logging.info(f"🎙 AUTIST router: action={action!r} remainder={remainder!r} text={message.text[:40]!r}")
 
     # Все действия Аутиста доступны только админам
     if not await require_admin(message):
@@ -5017,6 +5018,7 @@ async def cmd_autist_router(message: Message):
 
     # ───── 🛡 ЩИТ — антибуллинг защита юзера ─────
     if action == "shield":
+        logging.info(f"🛡 SHIELD triggered: cid={cid} reply={bool(message.reply_to_message)} target={target.id if target else None}")
         if not message.reply_to_message:
             await reply_auto_delete(message, "🌴 Реплайни на участника, кого защитить щитом."); return
         # Щит на 24 часа
@@ -5958,6 +5960,22 @@ async def autist_commands(message: Message):
     if not message.text: return
     text_lower = message.text.strip().lower()
     if not text_lower.startswith("аутист"): return
+    # 🛡 Команды которые обрабатывает НОВЫЙ router (cmd_autist_router) — пропускаем
+    _NEW_ROUTER_WORDS = [
+        "щит", "защита", "оберег", "снять щит", "анщит",
+        "тишина", "молчание", "тень", "невидимка",
+        "амнистия", "амнистируй", "прощение",
+        "фильтр", "стопслово", "анфильтр", "снять фильтр",
+        "проверка", "капча", "проверь",
+        "волна", "чистка",
+        "белый", "вайтлист", "доверенный", "небелый", "анвайтлист", "снять белый",
+        "канал", "забань канал", "бан канал", "разбань канал", "анканал",
+        "бан", "разбан", "мут", "размут", "варн", "снять варн", "анварн",
+        "удали", "удалить", "фриз", "заморозь", "заморозить",
+    ]
+    rest_after = text_lower[len("аутист"):].strip()
+    if any(rest_after.startswith(w) for w in _NEW_ROUTER_WORDS):
+        return  # отдаём новому router'у
     fun_only = ["обозвать", "поженить", "казнить", "диагноз", "профессия", "похитить", "дуэль",
                 "история",
                 "пидорас", "гей", "красавчик", "умник", "дурак", "богатый", "бедный",
