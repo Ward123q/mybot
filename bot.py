@@ -4210,6 +4210,52 @@ async def cmd_captcha(message: Message):
         parse_mode="HTML"
     )
 
+@dp.message(Command("diag"))
+async def cmd_diag(message: Message):
+    """🔧 Диагностика — почему команды не работают."""
+    uid = message.from_user.id
+    cid = message.chat.id
+    lines = ["🔧 <b>Диагностика</b>", "‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧"]
+
+    # 1. Заморожен ли админ
+    try:
+        frozen = ag.is_frozen(uid)
+        lines.append(f"{'🔴' if frozen else '🟢'} заморожен в Guardian: <b>{frozen}</b>")
+    except Exception as e:
+        lines.append(f"⚠️ is_frozen error: {e}")
+
+    # 2. Админ ли
+    try:
+        adm = await is_admin_by_id(cid, uid)
+        lines.append(f"{'🟢' if adm else '🔴'} админ чата: <b>{adm}</b>")
+    except Exception as e:
+        lines.append(f"⚠️ is_admin error: {e}")
+
+    # 3. В ADMIN_IDS
+    lines.append(f"{'🟢' if uid in ADMIN_IDS else '⚪'} в ADMIN_IDS: <b>{uid in ADMIN_IDS}</b>")
+
+    # 4. Владелец
+    lines.append(f"{'🟢' if uid in OWNERS else '⚪'} владелец: <b>{uid in OWNERS}</b>")
+
+    # 5. В pending (перехват)
+    lines.append(f"{'🔴' if uid in pending else '🟢'} в pending (перехват ввода): <b>{uid in pending}</b>")
+
+    # 6. Whitelist / shadow
+    lines.append(f"{'🟢' if is_in_whitelist(cid, uid) else '⚪'} в whitelist: <b>{is_in_whitelist(cid, uid)}</b>")
+    lines.append(f"{'🔴' if is_shadowbanned(cid, uid) else '🟢'} в тени (shadow): <b>{is_shadowbanned(cid, uid)}</b>")
+
+    # 7. Тишина в чате
+    sil = _silence_active.get(cid, 0)
+    sil_on = sil > time.time()
+    lines.append(f"{'🔴' if sil_on else '🟢'} тишина в чате активна: <b>{sil_on}</b>")
+
+    lines.append("‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧")
+    lines.append(f"🆔 твой ID: <code>{uid}</code>")
+    lines.append(f"💬 ID чата: <code>{cid}</code>")
+
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
 @dp.message(Command("ban"))
 async def cmd_ban(message: Message, command: CommandObject):
     if not await require_admin(message): return
@@ -4408,7 +4454,6 @@ async def cmd_autist_router(message: Message):
     if not parsed:
         return
     action, remainder = parsed
-    logging.info(f"🎙 AUTIST router: action={action!r} remainder={remainder!r} text={message.text[:40]!r}")
 
     # Все действия Аутиста доступны только админам
     if not await require_admin(message):
@@ -5018,7 +5063,6 @@ async def cmd_autist_router(message: Message):
 
     # ───── 🛡 ЩИТ — антибуллинг защита юзера ─────
     if action == "shield":
-        logging.info(f"🛡 SHIELD triggered: cid={cid} reply={bool(message.reply_to_message)} target={target.id if target else None}")
         if not message.reply_to_message:
             await reply_auto_delete(message, "🌴 Реплайни на участника, кого защитить щитом."); return
         # Щит на 24 часа
