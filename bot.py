@@ -1713,11 +1713,25 @@ class StatsMiddleware(BaseMiddleware):
                 return  # не обрабатываем дальше
 
             # 🛡 ЩИТ — антибуллинг: агрессия против защищённого юзера
-            if not is_adm and event.reply_to_message and event.reply_to_message.from_user:
-                victim_id = event.reply_to_message.from_user.id
-                if victim_id != uid and is_shielded(cid, victim_id):
-                    # Проверяем агрессивную лексику (словарь _AGGRO_WORDS на уровне модуля)
-                    txt = (event.text or "").lower()
+            # Срабатывает: 1) при реплае на защищённого  2) при @упоминании защищённого
+            if not is_adm and event.text:
+                victim_id = None
+                # 1. Реплай
+                if event.reply_to_message and event.reply_to_message.from_user:
+                    rid = event.reply_to_message.from_user.id
+                    if rid != uid and is_shielded(cid, rid):
+                        victim_id = rid
+                # 2. @упоминание защищённого (по entities)
+                if victim_id is None and event.entities:
+                    for ent in event.entities:
+                        if ent.type == "text_mention" and ent.user:
+                            if ent.user.id != uid and is_shielded(cid, ent.user.id):
+                                victim_id = ent.user.id
+                                break
+
+                if victim_id is not None:
+                    # Нормализуем текст против обходов (звёздочки, цифры, латиница, пробелы)
+                    txt = _normalize_aggro(event.text)
                     if any(w in txt for w in _AGGRO_WORDS):
                         # ⚡ Выдаём предупреждение агрессору (без зова админов)
                         SHIELD_MAX_WARNS = 10
@@ -2054,7 +2068,7 @@ dp.message.middleware(AntiMatMiddleware())
 
 import random as _rnd
 
-CAPTCHA_TIMEOUT = 90  # секунд
+_OLD_CAPTCHA_TIMEOUT = 90  # секунд
 
 def _gen_captcha():
     """Генерирует случайную математическую капчу"""
@@ -2080,7 +2094,7 @@ def _gen_captcha():
 
 async def _captcha_timeout_kick(cid: int, uid: int, name: str, msg_id: int):
     """Кикает участника если не прошёл капчу за 90 секунд"""
-    await asyncio.sleep(CAPTCHA_TIMEOUT)
+    await asyncio.sleep(_OLD_CAPTCHA_TIMEOUT)
     if uid not in _captcha_pending.get(cid, {}):
         return  # уже прошёл
     # Удаляем капчу
@@ -2096,7 +2110,7 @@ async def _captcha_timeout_kick(cid: int, uid: int, name: str, msg_id: int):
     note = await bot.send_message(
         cid,
         f"⏱ <b>Капча не пройдена</b>\n"
-        f"👤 <b>{name}</b> не ответил за {CAPTCHA_TIMEOUT} секунд и был удалён.",
+        f"👤 <b>{name}</b> не ответил за {_OLD_CAPTCHA_TIMEOUT} секунд и был удалён.",
         parse_mode="HTML"
     )
     await asyncio.sleep(10)
@@ -2133,7 +2147,7 @@ async def send_captcha(message: Message, member):
         f"👋 Привет, <b>{name}</b>!\n"
         f"Реши пример чтобы войти в чат:\n\n"
         f"<b>{expr} = ?</b>\n\n"
-        f"⏱ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>",
+        f"⏱ У тебя <b>{_OLD_CAPTCHA_TIMEOUT} секунд</b>",
         parse_mode="HTML",
         reply_markup=kb
     )
@@ -2546,6 +2560,31 @@ except Exception as _e:
 
 # {cid: {uid: expires_at}} — юзеры под щитом
 # 🛡 Словарь токсичных корней для щита (523 корня ≈ тысячи словоформ)
+# 🛡 Нормализация текста против обходов фильтра
+_AGGRO_LAT2CYR = str.maketrans({
+    'a':'а','b':'в','c':'с','d':'д','e':'е','f':'ф','g':'г','h':'н','i':'и','j':'й',
+    'k':'к','l':'л','m':'м','n':'н','o':'о','p':'р','q':'к','r':'г','s':'с','t':'т',
+    'u':'и','v':'в','w':'в','x':'х','y':'у','z':'з',
+    '0':'о','1':'и','3':'е','4':'ч','5':'с','6':'б','8':'в','9':'д',
+    '@':'а','$':'с','!':'и',
+})
+def _normalize_aggro(text: str) -> str:
+    """Устойчиво к обходам: звёздочки, цифры, латиница, повторы, пробелы между букв."""
+    import re as _r
+    t = (text or "").lower()
+    # убираем разделители-маскировку между буквами: т*у*п*о*й, т.у.п, т_у_п
+    t = _r.sub(r'[\*\.\_\-\+\|/\\~`^]', '', t)
+    # схлопываем "р а з н е с ё н н ы е" буквы: одиночные символы через пробел
+    t = _r.sub(r'(?<=\b\w)\s+(?=\w\b)', '', t)
+    t = _r.sub(r'\b(\w)\s(\w)\s(\w)', r'\1\2\3', t)
+    # латиница/цифры → кириллица
+    t = t.translate(_AGGRO_LAT2CYR)
+    # схлопываем повторы букв: туууупой → тупой
+    t = _r.sub(r'(.)\1{2,}', r'\1', t)
+    # убираем оставшиеся пробелы для финальной проверки склеек
+    t_nospace = _r.sub(r'\s+', '', t)
+    return t + " " + t_nospace
+
 _AGGRO_WORDS = [
     'тупой', 'тупая', 'тупиц', 'тупост',
     'туполоб', 'тупорыл', 'тупоумн', 'тупиш',
@@ -11560,7 +11599,7 @@ async def cmd_quarantine(message: Message):
 
 import random as _rnd
 
-CAPTCHA_TIMEOUT = 90  # секунд
+_OLD_CAPTCHA_TIMEOUT = 90  # секунд
 
 def _gen_captcha():
     """Генерирует случайную математическую капчу"""
@@ -11586,7 +11625,7 @@ def _gen_captcha():
 
 async def _captcha_timeout_kick(cid: int, uid: int, name: str, msg_id: int):
     """Кикает участника если не прошёл капчу за 90 секунд"""
-    await asyncio.sleep(CAPTCHA_TIMEOUT)
+    await asyncio.sleep(_OLD_CAPTCHA_TIMEOUT)
     if uid not in _captcha_pending.get(cid, {}):
         return  # уже прошёл
     # Удаляем капчу
@@ -11602,7 +11641,7 @@ async def _captcha_timeout_kick(cid: int, uid: int, name: str, msg_id: int):
     note = await bot.send_message(
         cid,
         f"⏱ <b>Капча не пройдена</b>\n"
-        f"👤 <b>{name}</b> не ответил за {CAPTCHA_TIMEOUT} секунд и был удалён.",
+        f"👤 <b>{name}</b> не ответил за {_OLD_CAPTCHA_TIMEOUT} секунд и был удалён.",
         parse_mode="HTML"
     )
     await asyncio.sleep(10)
@@ -11639,7 +11678,7 @@ async def send_captcha(message: Message, member):
         f"👋 Привет, <b>{name}</b>!\n"
         f"Реши пример чтобы войти в чат:\n\n"
         f"<b>{expr} = ?</b>\n\n"
-        f"⏱ У тебя <b>{CAPTCHA_TIMEOUT} секунд</b>",
+        f"⏱ У тебя <b>{_OLD_CAPTCHA_TIMEOUT} секунд</b>",
         parse_mode="HTML",
         reply_markup=kb
     )
