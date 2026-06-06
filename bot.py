@@ -1757,7 +1757,7 @@ class StatsMiddleware(BaseMiddleware):
             # 🌊 ТИШИНА — общий мут чата
             silence_until = _silence_active.get(cid, 0)
             if silence_until > 0:
-                if silence_until > time.time():
+                if silence_until > time():
                     if not is_adm and not is_wl:
                         try: await event.delete()
                         except: pass
@@ -1792,8 +1792,8 @@ class StatsMiddleware(BaseMiddleware):
                     # Раз в 5 минут напоминаем
                     key = f"capr_{cid}_{uid}"
                     last_reminder = xp_cooldowns.get(key, 0)
-                    if time.time() - last_reminder > 300:
-                        xp_cooldowns[key] = time.time()
+                    if time() - last_reminder > 300:
+                        xp_cooldowns[key] = time()
                         pending = _pending_captcha[(cid, uid)]
                         try:
                             sent = await event.reply(
@@ -2304,7 +2304,7 @@ def _captcha_mark_passed(cid: int, uid: int):
     _captcha_passed.add((cid, uid))
     try:
         conn = sqlite3.connect("captcha_state.db")
-        conn.execute("INSERT OR REPLACE INTO passed (cid, uid, passed_at) VALUES (?, ?, ?)", (cid, uid, time.time()))
+        conn.execute("INSERT OR REPLACE INTO passed (cid, uid, passed_at) VALUES (?, ?, ?)", (cid, uid, time()))
         conn.commit()
         conn.close()
     except: pass
@@ -2318,7 +2318,7 @@ async def _captcha_send(cid: int, member, message_to_reply=None):
 
     _pending_captcha[(cid, member.id)] = {
         "correct": correct, "options": options,
-        "expires_at": time.time() + CAPTCHA_TIMEOUT,
+        "expires_at": time() + CAPTCHA_TIMEOUT,
         "name": member.full_name,
     }
 
@@ -2506,7 +2506,7 @@ def _defense_load_state():
     try:
         conn = sqlite3.connect("captcha_state.db")
         for cid, uid, expires in conn.execute("SELECT cid, uid, expires_at FROM shadowbans"):
-            if expires > time.time(): _shadowbans[cid][uid] = expires
+            if expires > time(): _shadowbans[cid][uid] = expires
         for cid, word in conn.execute("SELECT cid, word FROM chat_filter_words"):
             _chat_filters[cid].add(word.lower())
         for cid, uid in conn.execute("SELECT cid, uid FROM chat_whitelist"):
@@ -2522,7 +2522,7 @@ def is_in_whitelist(cid: int, uid: int) -> bool:
 
 def is_shadowbanned(cid: int, uid: int) -> bool:
     if uid not in _shadowbans.get(cid, {}): return False
-    if _shadowbans[cid][uid] < time.time():
+    if _shadowbans[cid][uid] < time():
         _shadowbans[cid].pop(uid, None); return False
     return True
 
@@ -2557,7 +2557,7 @@ def _antibully_load():
     try:
         conn = sqlite3.connect("captcha_state.db")
         for cid, uid, expires in conn.execute("SELECT cid, uid, expires_at FROM shields"):
-            if expires > time.time():
+            if expires > time():
                 _shield_users[cid][uid] = expires
         conn.close()
     except Exception as e:
@@ -2567,7 +2567,7 @@ def _antibully_load():
 def is_shielded(cid: int, uid: int) -> bool:
     if uid not in _shield_users.get(cid, {}):
         return False
-    if _shield_users[cid][uid] < time.time():
+    if _shield_users[cid][uid] < time():
         _shield_users[cid].pop(uid, None)
         return False
     return True
@@ -2611,11 +2611,11 @@ async def cmd_sos(message: Message):
 
     # Кулдаун
     last = _sos_cooldown.get((cid, uid), 0)
-    if time.time() - last < SOS_COOLDOWN_SEC:
-        wait = int(SOS_COOLDOWN_SEC - (time.time() - last))
+    if time() - last < SOS_COOLDOWN_SEC:
+        wait = int(SOS_COOLDOWN_SEC - (time() - last))
         await reply_auto_delete(message, f"🌊 подожди ещё {wait}с прежде чем звать снова")
         return
-    _sos_cooldown[(cid, uid)] = time.time()
+    _sos_cooldown[(cid, uid)] = time()
 
     # Контекст — на что реплай (если есть)
     context = ""
@@ -4246,7 +4246,7 @@ async def cmd_diag(message: Message):
 
     # 7. Тишина в чате
     sil = _silence_active.get(cid, 0)
-    sil_on = sil > time.time()
+    sil_on = sil > time()
     lines.append(f"{'🔴' if sil_on else '🟢'} тишина в чате активна: <b>{sil_on}</b>")
 
     lines.append("‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧")
@@ -4621,7 +4621,7 @@ async def cmd_autist_router(message: Message):
             target_id=target.id, target_name=target.full_name,
             cid=cid, reason=reason,
             extra={"chat_title": message.chat.title, "trigger": "autist"})
-        ban_list[cid][target.id] = {"reason": reason, "by": message.from_user.full_name, "ts": time.time()}
+        ban_list[cid][target.id] = {"reason": reason, "by": message.from_user.full_name, "ts": time()}
         mod_reasons[cid][target.id]["ban"] = reason
         return
 
@@ -4747,7 +4747,7 @@ async def cmd_autist_router(message: Message):
                 target_id=target.id, target_name=target.full_name,
                 cid=cid, reason=f"Автобан после {MAX_WARNINGS} варнов: {reason}",
                 extra={"chat_title": message.chat.title, "trigger": "autist_warn_autoban"})
-            ban_list[cid][target.id] = {"reason": reason, "by": message.from_user.full_name, "ts": time.time()}
+            ban_list[cid][target.id] = {"reason": reason, "by": message.from_user.full_name, "ts": time()}
             return
 
         if message.reply_to_message.text:
@@ -4805,7 +4805,7 @@ async def cmd_autist_router(message: Message):
             await reply_auto_delete(message, "🌴 Реплайни на участника, кого скрыть."); return
         if await is_admin_by_id(cid, target.id):
             await reply_auto_delete(message, "💛 К администратору так нельзя."); return
-        expires = time.time() + 3600  # 1 час
+        expires = time() + 3600  # 1 час
         _shadowbans[cid][target.id] = expires
         try:
             conn = sqlite3.connect("captcha_state.db")
@@ -4840,7 +4840,7 @@ async def cmd_autist_router(message: Message):
                 try: mins = int(remainder.split()[0])
                 except: pass
         mins = max(1, min(mins, 1440))  # 1 мин — 24ч
-        _silence_active[cid] = time.time() + mins * 60
+        _silence_active[cid] = time() + mins * 60
         await message.answer(
             f"🌊 <b>Штиль накрыл чат</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
@@ -4914,7 +4914,7 @@ async def cmd_autist_router(message: Message):
         try:
             conn = sqlite3.connect("captcha_state.db")
             conn.execute("INSERT OR REPLACE INTO chat_filter_words (cid, word, added_at, added_by) VALUES (?, ?, ?, ?)",
-                         (cid, word, time.time(), message.from_user.id))
+                         (cid, word, time(), message.from_user.id))
             conn.commit(); conn.close()
         except: pass
         await message.answer(
@@ -5029,7 +5029,7 @@ async def cmd_autist_router(message: Message):
         try:
             conn = sqlite3.connect("captcha_state.db")
             conn.execute("INSERT OR REPLACE INTO chat_whitelist (cid, uid, added_at, added_by) VALUES (?, ?, ?, ?)",
-                         (cid, target.id, time.time(), message.from_user.id))
+                         (cid, target.id, time(), message.from_user.id))
             conn.commit(); conn.close()
         except: pass
         await message.answer(
@@ -5066,7 +5066,7 @@ async def cmd_autist_router(message: Message):
         if not message.reply_to_message:
             await reply_auto_delete(message, "🌴 Реплайни на участника, кого защитить щитом."); return
         # Щит на 24 часа
-        expires = time.time() + 24 * 3600
+        expires = time() + 24 * 3600
         _shield_users[cid][target.id] = expires
         try:
             conn = sqlite3.connect("captcha_state.db")
