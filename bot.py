@@ -1727,32 +1727,45 @@ class StatsMiddleware(BaseMiddleware):
                         "ненавижу тебя", "ты ничто",
                     ]
                     if any(w in txt for w in _AGGRO_WORDS):
-                        victim = event.reply_to_message.from_user
-                        alert = (
-                            f"🛡 <b>Агрессия против защищённого</b>\n"
-                            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                            f"☀️ чат — «{event.chat.title}»\n"
-                            f"💛 под щитом — {victim.mention_html()}\n"
-                            f"🌵 пишет — {event.from_user.mention_html()} (<code>{uid}</code>)\n"
-                            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                            f"🌴 <i>сообщение:</i> {(event.text or '')[:200]}\n"
-                            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-                            f"<i>🌺 загляни в чат — возможна травля</i>"
-                        )
-                        asyncio.create_task(_notify_admins(cid, alert, exclude_uid=uid))
-                        # Мягкое предупреждение в чат
-                        try:
-                            warn_msg = await event.reply(
-                                f"🌴 {event.from_user.mention_html()}, полегче ‧ "
-                                f"этот человек под защитой\n"
-                                f"<i>💛 админы уже в курсе</i>",
-                                parse_mode="HTML")
-                            async def _del_warn(m):
-                                await asyncio.sleep(20)
-                                try: await m.delete()
-                                except: pass
-                            asyncio.create_task(_del_warn(warn_msg))
+                        # ⚡ Выдаём предупреждение агрессору (без зова админов)
+                        SHIELD_MAX_WARNS = 10
+                        warnings[cid][uid] += 1
+                        cur = warnings[cid][uid]
+                        try: save_data()
                         except: pass
+                        add_mod_history(cid, uid, f"🛡 Щит: предупреждение ({cur}/{SHIELD_MAX_WARNS})",
+                                        "Агрессия к защищённому", "AutoMod · Shield")
+                        if cur >= SHIELD_MAX_WARNS:
+                            # Автобан после 10 предупреждений
+                            try:
+                                await bot.ban_chat_member(cid, uid)
+                            except: pass
+                            warnings[cid][uid] = 0
+                            try: save_data()
+                            except: pass
+                            try:
+                                await event.reply(
+                                    f"🍂 {event.from_user.mention_html()} забанен\n"
+                                    f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                                    f"⚡ {SHIELD_MAX_WARNS} предупреждений за травлю защищённого",
+                                    parse_mode="HTML")
+                            except: pass
+                            add_mod_history(cid, uid, "🍂 Автобан (щит)",
+                                            f"{SHIELD_MAX_WARNS} предупреждений", "AutoMod · Shield")
+                        else:
+                            try:
+                                warn_msg = await event.reply(
+                                    f"🛡 {event.from_user.mention_html()}, полегче ‧ "
+                                    f"этот человек под защитой\n"
+                                    f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                                    f"⚡ предупреждение <b>{cur}/{SHIELD_MAX_WARNS}</b> ‧ дальше бан",
+                                    parse_mode="HTML")
+                                async def _del_warn(m):
+                                    await asyncio.sleep(20)
+                                    try: await m.delete()
+                                    except: pass
+                                asyncio.create_task(_del_warn(warn_msg))
+                            except: pass
 
             # 🌊 ТИШИНА — общий мут чата
             silence_until = _silence_active.get(cid, 0)
@@ -4210,52 +4223,6 @@ async def cmd_captcha(message: Message):
         parse_mode="HTML"
     )
 
-@dp.message(Command("diag"))
-async def cmd_diag(message: Message):
-    """🔧 Диагностика — почему команды не работают."""
-    uid = message.from_user.id
-    cid = message.chat.id
-    lines = ["🔧 <b>Диагностика</b>", "‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧"]
-
-    # 1. Заморожен ли админ
-    try:
-        frozen = ag.is_frozen(uid)
-        lines.append(f"{'🔴' if frozen else '🟢'} заморожен в Guardian: <b>{frozen}</b>")
-    except Exception as e:
-        lines.append(f"⚠️ is_frozen error: {e}")
-
-    # 2. Админ ли
-    try:
-        adm = await is_admin_by_id(cid, uid)
-        lines.append(f"{'🟢' if adm else '🔴'} админ чата: <b>{adm}</b>")
-    except Exception as e:
-        lines.append(f"⚠️ is_admin error: {e}")
-
-    # 3. В ADMIN_IDS
-    lines.append(f"{'🟢' if uid in ADMIN_IDS else '⚪'} в ADMIN_IDS: <b>{uid in ADMIN_IDS}</b>")
-
-    # 4. Владелец
-    lines.append(f"{'🟢' if uid in OWNERS else '⚪'} владелец: <b>{uid in OWNERS}</b>")
-
-    # 5. В pending (перехват)
-    lines.append(f"{'🔴' if uid in pending else '🟢'} в pending (перехват ввода): <b>{uid in pending}</b>")
-
-    # 6. Whitelist / shadow
-    lines.append(f"{'🟢' if is_in_whitelist(cid, uid) else '⚪'} в whitelist: <b>{is_in_whitelist(cid, uid)}</b>")
-    lines.append(f"{'🔴' if is_shadowbanned(cid, uid) else '🟢'} в тени (shadow): <b>{is_shadowbanned(cid, uid)}</b>")
-
-    # 7. Тишина в чате
-    sil = _silence_active.get(cid, 0)
-    sil_on = sil > time()
-    lines.append(f"{'🔴' if sil_on else '🟢'} тишина в чате активна: <b>{sil_on}</b>")
-
-    lines.append("‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧")
-    lines.append(f"🆔 твой ID: <code>{uid}</code>")
-    lines.append(f"💬 ID чата: <code>{cid}</code>")
-
-    await message.answer("\n".join(lines), parse_mode="HTML")
-
-
 @dp.message(Command("ban"))
 async def cmd_ban(message: Message, command: CommandObject):
     if not await require_admin(message): return
@@ -5065,8 +5032,8 @@ async def cmd_autist_router(message: Message):
     if action == "shield":
         if not message.reply_to_message:
             await reply_auto_delete(message, "🌴 Реплайни на участника, кого защитить щитом."); return
-        # Щит на 24 часа
-        expires = time() + 24 * 3600
+        # Щит на 12 часов
+        expires = time() + 12 * 3600
         _shield_users[cid][target.id] = expires
         try:
             conn = sqlite3.connect("captcha_state.db")
@@ -5078,11 +5045,12 @@ async def cmd_autist_router(message: Message):
             f"🛡 <b>Щит установлен</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
             f"💛 под защитой — {target.mention_html()}\n"
-            f"🌴 любая агрессия в его сторону сразу позовёт админов\n"
-            f"🕊 щит держится 24 часа\n"
+            f"🌴 кто будет агрессивен к нему — получит предупреждение\n"
+            f"⚡ после 10 предупреждений — автобан\n"
+            f"🕊 щит держится 12 часов\n"
             f"🌺 установил — {message.from_user.mention_html()}",
             parse_mode="HTML")
-        add_mod_history(cid, target.id, "🛡 Аутист щит (24ч)", "Антибуллинг", message.from_user.full_name)
+        add_mod_history(cid, target.id, "🛡 Аутист щит (12ч)", "Антибуллинг", message.from_user.full_name)
         return
 
     # ───── 🛡 СНЯТЬ ЩИТ ─────
