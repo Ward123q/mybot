@@ -1827,6 +1827,31 @@ class StatsMiddleware(BaseMiddleware):
                             asyncio.create_task(_del_rem(sent))
                         except: pass
 
+                # #20 Повторная капча при спаме сразу после прохождения
+                passed_ts = _captcha_passed_at.get((cid, uid), 0)
+                if passed_ts and (time() - passed_ts) < 120:
+                    # Юзер прошёл капчу менее 2 минут назад — следим за частотой
+                    _captcha_postpass_msgs[(cid, uid)] += 1
+                    if _captcha_postpass_msgs[(cid, uid)] >= 8:
+                        # Подозрительно: 8+ сообщений за 2 минуты после капчи → повторная капча
+                        _captcha_postpass_msgs.pop((cid, uid), None)
+                        _captcha_passed_at.pop((cid, uid), None)
+                        _captcha_passed.discard((cid, uid))
+                        try:
+                            conn = sqlite3.connect("captcha_state.db")
+                            conn.execute("DELETE FROM passed WHERE cid=? AND uid=?", (cid, uid))
+                            conn.commit(); conn.close()
+                        except: pass
+                        try:
+                            await event.reply(
+                                f"🌊 {event.from_user.mention_html()}, подозрительная активность\n"
+                                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                                f"🔐 пройди капчу ещё раз",
+                                parse_mode="HTML")
+                            asyncio.create_task(_captcha_send(cid, event.from_user, event, force_stages=3))
+                        except: pass
+                        return
+
             # ═══════════════════════════════
             # Сохраняем чат в БД
             try:
@@ -2298,6 +2323,17 @@ _pending_captcha: dict = {}
 _captcha_passed: set = set()
 CAPTCHA_TIMEOUT = 600  # 10 минут на прохождение
 
+# 🔐 Статистика капчи: {cid: {"passed": N, "kicked": N, "via_admin": N, "bot_caught": N}}
+_captcha_stats: dict = defaultdict(lambda: {"passed": 0, "kicked": 0, "via_admin": 0, "bot_caught": 0})
+# Кастомный текст капчи: {cid: text}
+_captcha_custom_text: dict = {}
+# Счётчик неудачных входов (для ЧС вечных непрошедших): {(cid,uid): count}
+_captcha_fail_count: dict = defaultdict(int)
+# Когда юзер прошёл капчу (для #20 — повторная капча при спаме): {(cid,uid): ts}
+_captcha_passed_at: dict = {}
+# Счётчик сообщений сразу после прохождения: {(cid,uid): count}
+_captcha_postpass_msgs: dict = defaultdict(int)
+
 
 def _captcha_init_db():
     conn = sqlite3.connect("captcha_state.db")
@@ -2305,8 +2341,65 @@ def _captcha_init_db():
     conn.execute("CREATE TABLE IF NOT EXISTS shadowbans (cid INTEGER NOT NULL, uid INTEGER NOT NULL, expires_at REAL NOT NULL, PRIMARY KEY (cid, uid))")
     conn.execute("CREATE TABLE IF NOT EXISTS chat_filter_words (cid INTEGER NOT NULL, word TEXT NOT NULL, added_at REAL NOT NULL, added_by INTEGER, PRIMARY KEY (cid, word))")
     conn.execute("CREATE TABLE IF NOT EXISTS chat_whitelist (cid INTEGER NOT NULL, uid INTEGER NOT NULL, added_at REAL NOT NULL, added_by INTEGER, PRIMARY KEY (cid, uid))")
+    conn.execute("CREATE TABLE IF NOT EXISTS captcha_stats (cid INTEGER PRIMARY KEY, passed INTEGER DEFAULT 0, kicked INTEGER DEFAULT 0, via_admin INTEGER DEFAULT 0, bot_caught INTEGER DEFAULT 0)")
+    conn.execute("CREATE TABLE IF NOT EXISTS captcha_text (cid INTEGER PRIMARY KEY, text TEXT)")
     conn.commit()
     conn.close()
+
+
+def _captcha_stats_load():
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        for cid, p, k, va, bc in conn.execute("SELECT cid, passed, kicked, via_admin, bot_caught FROM captcha_stats"):
+            _captcha_stats[cid] = {"passed": p, "kicked": k, "via_admin": va, "bot_caught": bc}
+        for cid, txt in conn.execute("SELECT cid, text FROM captcha_text"):
+            if txt: _captcha_custom_text[cid] = txt
+        conn.close()
+    except Exception as e:
+        logging.warning(f"captcha stats load: {e}")
+
+
+def _captcha_stat_inc(cid: int, key: str):
+    """Увеличить счётчик статистики и сохранить."""
+    _captcha_stats[cid][key] = _captcha_stats[cid].get(key, 0) + 1
+    try:
+        s = _captcha_stats[cid]
+        conn = sqlite3.connect("captcha_state.db")
+        conn.execute("INSERT OR REPLACE INTO captcha_stats (cid, passed, kicked, via_admin, bot_caught) VALUES (?, ?, ?, ?, ?)",
+                     (cid, s["passed"], s["kicked"], s.get("via_admin", 0), s.get("bot_caught", 0)))
+        conn.commit(); conn.close()
+    except: pass
+
+
+def _captcha_risk(member) -> int:
+    """Оценка риска что юзер — бот (0-100). Чем выше, тем подозрительнее."""
+    risk = 0
+    try:
+        # Нет аватара — частый признак бота (проверяется отдельно через get_user_profile_photos)
+        # Свежий аккаунт — высокий Telegram ID
+        if member.id > 7_000_000_000:
+            risk += 30
+        elif member.id > 6_000_000_000:
+            risk += 15
+        # Имя из спецсимволов/цифр/нечитаемое
+        name = member.full_name or ""
+        import re as _re
+        # Много спецсимволов или цифр в имени
+        special = len(_re.findall(r'[^\w\sа-яёА-ЯЁ]', name))
+        digits = len(_re.findall(r'\d', name))
+        if special >= 3:
+            risk += 20
+        if digits >= 4:
+            risk += 15
+        # Юзернейм отсутствует
+        if not member.username:
+            risk += 15
+        # Имя очень короткое или пустое
+        if len(name.strip()) <= 1:
+            risk += 20
+    except Exception:
+        pass
+    return min(risk, 100)
 
 
 def _captcha_load_passed():
@@ -2321,6 +2414,7 @@ def _captcha_load_passed():
 
 def _captcha_mark_passed(cid: int, uid: int):
     _captcha_passed.add((cid, uid))
+    _captcha_passed_at[(cid, uid)] = time()
     try:
         conn = sqlite3.connect("captcha_state.db")
         conn.execute("INSERT OR REPLACE INTO passed (cid, uid, passed_at) VALUES (?, ?, ?)", (cid, uid, time()))
@@ -2329,8 +2423,38 @@ def _captcha_mark_passed(cid: int, uid: int):
     except: pass
 
 
-async def _captcha_send(cid: int, member, message_to_reply=None):
+async def _captcha_welcome_after(cid: int, member):
+    """Приветствие после прохождения капчи — с кнопками."""
+    try:
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📜 Правила чата", callback_data="capw:rules")],
+            [InlineKeyboardButton(text="👑 Обратиться к владельцу", url="https://t.me/Severarin")],
+            [InlineKeyboardButton(text="🛡 Отдел безопасности", url="https://t.me/Wardibeat")],
+            [InlineKeyboardButton(text="🛡 Отдел безопасности #2", url="https://t.me/AltFnDel")],
+        ])
+        sent = await bot.send_message(cid,
+            f"🌺 <b>Добро пожаловать, {member.mention_html()}!</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"☀️ ты прошёл проверку — приятного общения\n"
+            f"🌴 ниже всё что может понадобиться",
+            parse_mode="HTML", reply_markup=kb)
+        # Автоудаление через 2 минуты чтобы не засорять
+        async def _del(m):
+            await asyncio.sleep(120)
+            try: await m.delete()
+            except: pass
+        asyncio.create_task(_del(sent))
+    except Exception as e:
+        logging.warning(f"captcha welcome: {e}")
+
+
+async def _captcha_send(cid: int, member, message_to_reply=None, force_stages=None):
     import random as _r
+
+    # 🥥 Антибот-эвристика: если риск высокий → 3 этапа
+    risk = _captcha_risk(member)
+    stages = force_stages if force_stages else (3 if risk >= 40 else 1)
+
     correct = _r.choice(_CAPTCHA_EMOJI_POOL)
     options = _r.sample([e for e in _CAPTCHA_EMOJI_POOL if e != correct], 3) + [correct]
     _r.shuffle(options)
@@ -2339,16 +2463,29 @@ async def _captcha_send(cid: int, member, message_to_reply=None):
         "correct": correct, "options": options,
         "expires_at": time() + CAPTCHA_TIMEOUT,
         "name": member.full_name,
+        "stages_total": stages,
+        "stage": 1,
+        "risk": risk,
     }
 
-    text = (
-        f"🔐 <b>Капча для {member.mention_html()}</b>\n"
-        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"🌺 нажми кнопку с эмодзи <b>{correct}</b>\n"
-        f"🕊 у тебя <b>{CAPTCHA_TIMEOUT // 60} минут</b>\n"
-        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-        f"<i>💛 если бот ты — просто не нажимай</i>"
-    )
+    # Кастомный текст или стандартный
+    custom = _captcha_custom_text.get(cid)
+    stage_hint = f"🧩 этап <b>1/{stages}</b>\n" if stages > 1 else ""
+    risk_hint = "🌵 <i>аккаунт выглядит подозрительно — усиленная проверка</i>\n" if risk >= 40 else ""
+
+    if custom:
+        body = custom.replace("{name}", member.mention_html())
+    else:
+        body = (
+            f"🔐 <b>Капча для {member.mention_html()}</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"{stage_hint}"
+            f"{risk_hint}"
+            f"🌺 нажми кнопку с эмодзи <b>{correct}</b>\n"
+            f"🕊 у тебя <b>{CAPTCHA_TIMEOUT // 60} минут</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"<i>💛 если бот ты — просто не нажимай</i>"
+        )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=options[i], callback_data=f"cap:try:{cid}:{member.id}:{options[i]}") for i in range(4)],
@@ -2360,15 +2497,42 @@ async def _captcha_send(cid: int, member, message_to_reply=None):
 
     try:
         if message_to_reply:
-            sent = await message_to_reply.answer(text, parse_mode="HTML", reply_markup=kb)
+            sent = await message_to_reply.answer(body, parse_mode="HTML", reply_markup=kb)
         else:
-            sent = await bot.send_message(cid, text, parse_mode="HTML", reply_markup=kb)
+            sent = await bot.send_message(cid, body, parse_mode="HTML", reply_markup=kb)
         _pending_captcha[(cid, member.id)]["msg_id"] = sent.message_id
     except Exception as e:
         logging.warning(f"captcha send: {e}")
         return
 
     asyncio.create_task(_captcha_timeout_task(cid, member.id, member.full_name))
+
+
+async def _captcha_next_stage(cid: int, uid: int, call):
+    """Переход на следующий этап капчи (для 3-этапной)."""
+    import random as _r
+    pending = _pending_captcha.get((cid, uid))
+    if not pending: return
+    pending["stage"] += 1
+    correct = _r.choice(_CAPTCHA_EMOJI_POOL)
+    options = _r.sample([e for e in _CAPTCHA_EMOJI_POOL if e != correct], 3) + [correct]
+    _r.shuffle(options)
+    pending["correct"] = correct
+    pending["options"] = options
+    stages = pending["stages_total"]
+    cur = pending["stage"]
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=options[i], callback_data=f"cap:try:{cid}:{uid}:{options[i]}") for i in range(4)],
+    ])
+    try:
+        await call.message.edit_text(
+            f"🔐 <b>Капча ‧ этап {cur}/{stages}</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌺 нажми кнопку с эмодзи <b>{correct}</b>\n"
+            f"🕊 продолжай, осталось этапов: {stages - cur + 1}",
+            parse_mode="HTML", reply_markup=kb)
+    except: pass
 
 
 async def _captcha_timeout_task(cid: int, uid: int, name: str):
@@ -2379,6 +2543,9 @@ async def _captcha_timeout_task(cid: int, uid: int, name: str):
         _pending_captcha.pop((cid, uid), None)
         return
     _pending_captcha.pop((cid, uid), None)
+    # Счётчик неудач (для ЧС вечных непрошедших)
+    _captcha_fail_count[(cid, uid)] += 1
+    _captcha_stat_inc(cid, "kicked")
     try:
         await bot.ban_chat_member(cid, uid)
         await bot.unban_chat_member(cid, uid)
@@ -2406,8 +2573,18 @@ async def cb_captcha_try(call: CallbackQuery):
     if not pending:
         await call.answer("✨ уже не актуально", show_alert=True); return
     if choice == pending["correct"]:
+        stages = pending.get("stages_total", 1)
+        cur = pending.get("stage", 1)
+        # Если ещё есть этапы — переходим на следующий
+        if cur < stages:
+            await call.answer(f"✨ этап {cur} пройден ‧ дальше {cur+1}/{stages}")
+            await _captcha_next_stage(cid, target_uid, call)
+            return
+        # Последний этап пройден
         _pending_captcha.pop((cid, target_uid), None)
         _captcha_mark_passed(cid, target_uid)
+        _captcha_fail_count.pop((cid, target_uid), None)
+        _captcha_stat_inc(cid, "passed")
         try:
             await call.message.edit_text(
                 f"✨ <b>{pending['name']}</b> прошёл капчу\n"
@@ -2415,8 +2592,21 @@ async def cb_captcha_try(call: CallbackQuery):
                 f"💛 добро пожаловать", parse_mode="HTML")
         except: pass
         await call.answer("🌺 проверка пройдена")
+        # Приветствие после капчи с кнопками
+        asyncio.create_task(_captcha_welcome_after(cid, call.from_user))
     else:
         await call.answer(f"🌊 не та кнопка ‧ нажми {pending['correct']}", show_alert=True)
+
+
+@dp.callback_query(F.data == "capw:rules")
+async def cb_captcha_welcome_rules(call: CallbackQuery):
+    cid = call.message.chat.id
+    settings = cs.get_settings(cid)
+    rules = settings.get("rules", "")
+    if rules:
+        await call.answer(rules[:200], show_alert=True)
+    else:
+        await call.answer("📜 Правила чата пока не заданы. Спроси у админов.", show_alert=True)
 
 
 @dp.callback_query(F.data.startswith("cap:askadmin:"))
@@ -2455,6 +2645,7 @@ async def cb_captcha_approve(call: CallbackQuery):
         await call.answer("✨ уже не актуально", show_alert=True); return
     _pending_captcha.pop((cid, target_uid), None)
     _captcha_mark_passed(cid, target_uid)
+    _captcha_stat_inc(cid, "via_admin")
     try:
         await call.message.edit_text(
             f"✨ <b>{pending['name']}</b> допущен в чат\n"
@@ -2500,6 +2691,7 @@ async def cb_captcha_kick(call: CallbackQuery):
     pending = _pending_captcha.get((cid, target_uid))
     name = pending["name"] if pending else f"ID {target_uid}"
     _pending_captcha.pop((cid, target_uid), None)
+    _captcha_stat_inc(cid, "bot_caught")
     try:
         await bot.ban_chat_member(cid, target_uid)
         await bot.unban_chat_member(cid, target_uid)
@@ -2549,6 +2741,7 @@ def is_shadowbanned(cid: int, uid: int) -> bool:
 try:
     _captcha_init_db()
     _captcha_load_passed()
+    _captcha_stats_load()
     _defense_load_state()
 except Exception as _e:
     logging.warning(f"defense init: {_e}")
@@ -3135,7 +3328,30 @@ async def on_new_member(message: Message):
             )
 
         # 🔐 Капча для нового юзера (если ещё не проходил)
-        if (cid, member.id) not in _captcha_passed:
+        # #19 Доверенный приглашающий: если добавил админ — капча пропускается
+        added_by_admin = False
+        try:
+            if message.from_user and message.from_user.id != member.id:
+                # Кто-то добавил юзера (не сам зашёл)
+                if await is_admin_by_id(cid, message.from_user.id):
+                    added_by_admin = True
+        except: pass
+
+        if added_by_admin:
+            _captcha_mark_passed(cid, member.id)
+            try:
+                sent = await message.answer(
+                    f"🌴 <b>{member.full_name}</b> добавлен админом\n"
+                    f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                    f"💛 капча пропущена — свой человек",
+                    parse_mode="HTML")
+                async def _del_trust(m):
+                    await asyncio.sleep(15)
+                    try: await m.delete()
+                    except: pass
+                asyncio.create_task(_del_trust(sent))
+            except: pass
+        elif (cid, member.id) not in _captcha_passed:
             asyncio.create_task(_captcha_send(cid, member, message))
 
         # Автомут новичков
@@ -4549,6 +4765,76 @@ async def cmd_send_captcha_manual(message: Message):
 
     # Иначе — выдаём капчу самому себе (для теста)
     await _captcha_send(cid, message.from_user, message)
+
+
+@dp.message(Command("captchastats"))
+async def cmd_captcha_stats(message: Message):
+    """🌺 Статистика капчи в чате."""
+    if not await check_admin(message): return
+    cid = message.chat.id
+    s = _captcha_stats.get(cid, {"passed": 0, "kicked": 0, "via_admin": 0, "bot_caught": 0})
+    total = s["passed"] + s["kicked"] + s.get("via_admin", 0) + s.get("bot_caught", 0)
+    pass_rate = round((s["passed"] / total * 100), 1) if total else 0
+    await message.answer(
+        f"🌺 <b>Статистика капчи</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"✨ прошли сами — <b>{s['passed']}</b>\n"
+        f"🌴 через админа — <b>{s.get('via_admin', 0)}</b>\n"
+        f"🌊 кикнуто (таймаут) — <b>{s['kicked']}</b>\n"
+        f"🌻 удалено админом — <b>{s.get('bot_caught', 0)}</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"📊 всего проверок — <b>{total}</b>\n"
+        f"🍉 успешность — <b>{pass_rate}%</b>",
+        parse_mode="HTML"
+    )
+
+
+@dp.message(Command("setcaptchatext"))
+async def cmd_set_captcha_text(message: Message, command: CommandObject):
+    """🕶 Задать кастомный текст капчи. {name} — имя юзера."""
+    if not await check_admin(message): return
+    cid = message.chat.id
+    if not command.args:
+        cur = _captcha_custom_text.get(cid)
+        if cur:
+            await message.answer(
+                f"🕶 <b>Текущий текст капчи</b>\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n{cur}\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"🌴 сбросить — <code>/setcaptchatext сброс</code>",
+                parse_mode="HTML")
+        else:
+            await message.answer(
+                f"🕶 <b>Кастомный текст капчи</b>\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"🌴 задать — <code>/setcaptchatext твой текст</code>\n"
+                f"🌺 можно использовать <code>{{name}}</code> — подставит имя\n"
+                f"💛 сейчас используется стандартный текст",
+                parse_mode="HTML")
+        return
+    if command.args.strip().lower() in ("сброс", "reset", "default"):
+        _captcha_custom_text.pop(cid, None)
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("DELETE FROM captcha_text WHERE cid=?", (cid,))
+            conn.commit(); conn.close()
+        except: pass
+        await message.answer("✨ Текст капчи сброшен на стандартный")
+        return
+    txt = command.args.strip()[:500]
+    _captcha_custom_text[cid] = txt
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        conn.execute("INSERT OR REPLACE INTO captcha_text (cid, text) VALUES (?, ?)", (cid, txt))
+        conn.commit(); conn.close()
+    except: pass
+    await message.answer(
+        f"🕶 <b>Текст капчи обновлён</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"💛 новые участники увидят твой текст\n"
+        f"<i>🌴 не забудь что нажать кнопку с эмодзи всё равно нужно</i>",
+        parse_mode="HTML"
+    )
 
 
 @dp.message(Command("captcha"))
