@@ -2282,7 +2282,7 @@ async def cb_captcha(call: CallbackQuery):
 _CAPTCHA_EMOJI_POOL = ["🌸", "🍃", "🌴", "🦋", "🌺", "🌱", "💛", "🌅", "✨", "🌊", "🌻", "🥥"]
 _pending_captcha: dict = {}
 _captcha_passed: set = set()
-CAPTCHA_TIMEOUT = 1000
+CAPTCHA_TIMEOUT = 600  # 10 минут на прохождение
 
 
 def _captcha_init_db():
@@ -4476,6 +4476,40 @@ async def cmd_panel(message: Message):
             f"👁 Наблюдение: <b>{'вкл' if surveillance_enabled(cid) else 'выкл'}</b>",
             parse_mode="HTML",
             reply_markup=kb_main_menu())
+
+
+@dp.message(Command("sendcaptcha", "checkme", "проверка"))
+async def cmd_send_captcha_manual(message: Message):
+    """🔐 Выдать капчу вручную: себе или (реплай) другому участнику (админ)."""
+    if message.chat.type not in ("group", "supergroup"):
+        await reply_auto_delete(message, "🌴 Команда работает только в группах")
+        return
+
+    cid = message.chat.id
+
+    # Если реплай — выдаём капчу тому, на кого реплай (только для админов)
+    if message.reply_to_message and message.reply_to_message.from_user:
+        if not await check_admin(message):
+            await reply_auto_delete(message, "🍃 Выдавать капчу другим могут только админы")
+            return
+        target = message.reply_to_message.from_user
+        if target.is_bot:
+            await reply_auto_delete(message, "🤖 Боту капчу не выдать")
+            return
+        # Сбрасываем флаг прохождения и выдаём капчу заново
+        _captcha_passed.discard((cid, target.id))
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("DELETE FROM passed WHERE cid=? AND uid=?", (cid, target.id))
+            conn.commit(); conn.close()
+        except: pass
+        await _captcha_send(cid, target, message)
+        await reply_auto_delete(message,
+            f"🔐 Капча выдана {target.mention_html()}", parse_mode="HTML")
+        return
+
+    # Иначе — выдаём капчу самому себе (для теста)
+    await _captcha_send(cid, message.from_user, message)
 
 
 @dp.message(Command("captcha"))
