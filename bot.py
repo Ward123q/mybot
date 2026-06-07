@@ -2321,7 +2321,7 @@ async def cb_captcha(call: CallbackQuery):
 _CAPTCHA_EMOJI_POOL = ["🌸", "🍃", "🌴", "🦋", "🌺", "🌱", "💛", "🌅", "✨", "🌊", "🌻", "🥥"]
 _pending_captcha: dict = {}
 _captcha_passed: set = set()
-CAPTCHA_TIMEOUT = 600  # 10 минут на прохождение
+CAPTCHA_TIMEOUT = 7200  # 120 минут (2 часа) на прохождение
 
 # 🔐 Статистика капчи: {cid: {"passed": N, "kicked": N, "via_admin": N, "bot_caught": N}}
 _captcha_stats: dict = defaultdict(lambda: {"passed": 0, "kicked": 0, "via_admin": 0, "bot_caught": 0})
