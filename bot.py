@@ -2431,6 +2431,7 @@ async def _captcha_welcome_after(cid: int, member):
             [InlineKeyboardButton(text="👑 Обратиться к владельцу", url="https://t.me/Severarin")],
             [InlineKeyboardButton(text="🛡 Отдел безопасности", url="https://t.me/Wardibeat")],
             [InlineKeyboardButton(text="🛡 Отдел безопасности #2", url="https://t.me/AltFnDel")],
+            [InlineKeyboardButton(text="📨 Все анонки", url="https://t.me/HubAnon")],
         ])
         sent = await bot.send_message(cid,
             f"🌺 <b>Добро пожаловать, {member.mention_html()}!</b>\n"
@@ -2489,6 +2490,7 @@ async def _captcha_send(cid: int, member, message_to_reply=None, force_stages=No
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=options[i], callback_data=f"cap:try:{cid}:{member.id}:{options[i]}") for i in range(4)],
+        [InlineKeyboardButton(text="🔄 Обновить капчу", callback_data=f"cap:refresh:{cid}:{member.id}")],
         [
             InlineKeyboardButton(text="🌴 Зайти через админа", callback_data=f"cap:askadmin:{cid}:{member.id}"),
             InlineKeyboardButton(text="🌻 Удалить юзера",       callback_data=f"cap:kick:{cid}:{member.id}"),
@@ -2607,6 +2609,51 @@ async def cb_captcha_welcome_rules(call: CallbackQuery):
         await call.answer(rules[:200], show_alert=True)
     else:
         await call.answer("📜 Правила чата пока не заданы. Спроси у админов.", show_alert=True)
+
+
+@dp.callback_query(F.data.startswith("cap:refresh:"))
+async def cb_captcha_refresh(call: CallbackQuery):
+    import random as _r
+    parts = call.data.split(":")
+    cid, target_uid = int(parts[2]), int(parts[3])
+    if call.from_user.id != target_uid:
+        await call.answer("🌊 капча не для тебя", show_alert=True); return
+    pending = _pending_captcha.get((cid, target_uid))
+    if not pending:
+        await call.answer("✨ уже не актуально", show_alert=True); return
+
+    # Генерируем новые эмодзи
+    correct = _r.choice(_CAPTCHA_EMOJI_POOL)
+    options = _r.sample([e for e in _CAPTCHA_EMOJI_POOL if e != correct], 3) + [correct]
+    _r.shuffle(options)
+    pending["correct"] = correct
+    pending["options"] = options
+
+    stages = pending.get("stages_total", 1)
+    cur = pending.get("stage", 1)
+    stage_hint = f"🧩 этап <b>{cur}/{stages}</b>\n" if stages > 1 else ""
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=options[i], callback_data=f"cap:try:{cid}:{target_uid}:{options[i]}") for i in range(4)],
+        [InlineKeyboardButton(text="🔄 Обновить капчу", callback_data=f"cap:refresh:{cid}:{target_uid}")],
+        [
+            InlineKeyboardButton(text="🌴 Зайти через админа", callback_data=f"cap:askadmin:{cid}:{target_uid}"),
+            InlineKeyboardButton(text="🌻 Удалить юзера",       callback_data=f"cap:kick:{cid}:{target_uid}"),
+        ],
+    ])
+    try:
+        await call.message.edit_text(
+            f"🔐 <b>Капча для {call.from_user.mention_html()}</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"{stage_hint}"
+            f"🌺 нажми кнопку с эмодзи <b>{correct}</b>\n"
+            f"🕊 у тебя <b>{CAPTCHA_TIMEOUT // 60} минут</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"<i>💛 если бот ты — просто не нажимай</i>",
+            parse_mode="HTML", reply_markup=kb)
+        await call.answer("🔄 новые эмодзи")
+    except: 
+        await call.answer()
 
 
 @dp.callback_query(F.data.startswith("cap:askadmin:"))
