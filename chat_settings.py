@@ -64,6 +64,8 @@ DEFAULT_SETTINGS = {
 
     # 👋 Приветствие
     "welcome_enabled":    True,
+    "captcha_enabled":    True,
+    "captcha_difficulty": "auto",
     "welcome_text":       "👋 Добро пожаловать, {name}!",
     "welcome_delete_prev":True,
     "welcome_delete_mins":5,

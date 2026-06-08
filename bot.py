@@ -2563,9 +2563,23 @@ async def _captcha_welcome_after(cid: int, member):
 async def _captcha_send(cid: int, member, message_to_reply=None, force_stages=None):
     import random as _r
 
-    # 🥥 Антибот-эвристика: если риск высокий → 3 этапа
+    # 🥥 Антибот-эвристика + #12 сложность из настроек чата
     risk = _captcha_risk(member)
-    stages = force_stages if force_stages else (3 if risk >= 40 else 1)
+    try:
+        difficulty = cs.get_settings(cid).get("captcha_difficulty", "auto")
+    except:
+        difficulty = "auto"
+
+    if force_stages:
+        stages = force_stages
+    elif difficulty == "easy":
+        stages = 1
+    elif difficulty == "medium":
+        stages = 2
+    elif difficulty == "hard":
+        stages = 3
+    else:  # auto
+        stages = 3 if risk >= 40 else 1
 
     correct = _r.choice(_CAPTCHA_EMOJI_POOL)
     options = _r.sample([e for e in _CAPTCHA_EMOJI_POOL if e != correct], 3) + [correct]
@@ -2578,6 +2592,9 @@ async def _captcha_send(cid: int, member, message_to_reply=None, force_stages=No
         "stages_total": stages,
         "stage": 1,
         "risk": risk,
+        "sent_at": time(),         # #5 для проверки времени реакции
+        "wrong": 0,                # #4 счётчик неверных нажатий
+        "fast_checked": False,     # #5 чтобы один раз сработало
     }
 
     # Кастомный текст или стандартный
@@ -2601,7 +2618,11 @@ async def _captcha_send(cid: int, member, message_to_reply=None, force_stages=No
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=options[i], callback_data=f"cap:try:{cid}:{member.id}:{options[i]}") for i in range(4)],
-        [InlineKeyboardButton(text="🔄 Обновить капчу", callback_data=f"cap:refresh:{cid}:{member.id}")],
+        [InlineKeyboardButton(text="🪤 Не жми меня - активируется 15 этапов проверки", callback_data=f"cap:honeypot:{cid}:{member.id}")],
+        [
+            InlineKeyboardButton(text="🔄 Обновить", callback_data=f"cap:refresh:{cid}:{member.id}"),
+            InlineKeyboardButton(text="❓ Помощь", callback_data=f"cap:help:{cid}:{member.id}"),
+        ],
         [
             InlineKeyboardButton(text="🌴 Зайти через админа", callback_data=f"cap:askadmin:{cid}:{member.id}"),
             InlineKeyboardButton(text="🌻 Удалить юзера",       callback_data=f"cap:kick:{cid}:{member.id}"),
@@ -2621,12 +2642,15 @@ async def _captcha_send(cid: int, member, message_to_reply=None, force_stages=No
     asyncio.create_task(_captcha_timeout_task(cid, member.id, member.full_name))
 
 
-async def _captcha_next_stage(cid: int, uid: int, call):
-    """Переход на следующий этап капчи (для 3-этапной)."""
+async def _captcha_next_stage(cid: int, uid: int, call, reset_to_stage=None):
+    """Переход на следующий этап капчи. reset_to_stage — начать заново с этапа N."""
     import random as _r
     pending = _pending_captcha.get((cid, uid))
     if not pending: return
-    pending["stage"] += 1
+    if reset_to_stage is not None:
+        pending["stage"] = reset_to_stage
+    else:
+        pending["stage"] += 1
     correct = _r.choice(_CAPTCHA_EMOJI_POOL)
     options = _r.sample([e for e in _CAPTCHA_EMOJI_POOL if e != correct], 3) + [correct]
     _r.shuffle(options)
@@ -2637,6 +2661,7 @@ async def _captcha_next_stage(cid: int, uid: int, call):
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=options[i], callback_data=f"cap:try:{cid}:{uid}:{options[i]}") for i in range(4)],
+        [InlineKeyboardButton(text="❓ Помощь", callback_data=f"cap:help:{cid}:{uid}")],
     ])
     try:
         await call.message.edit_text(
@@ -2685,6 +2710,17 @@ async def cb_captcha_try(call: CallbackQuery):
     pending = _pending_captcha.get((cid, target_uid))
     if not pending:
         await call.answer("✨ уже не актуально", show_alert=True); return
+
+    # #5 Проверка времени реакции — нажал слишком быстро (<3 сек) → 3 этапа
+    if not pending.get("fast_checked"):
+        pending["fast_checked"] = True
+        reacted = time() - pending.get("sent_at", 0)
+        if reacted < 3 and pending.get("stages_total", 1) < 3:
+            pending["stages_total"] = 3
+            await call.answer("🌵 слишком быстро ‧ усиленная проверка (3 этапа)", show_alert=True)
+            await _captcha_next_stage(cid, target_uid, call, reset_to_stage=1)
+            return
+
     if choice == pending["correct"]:
         stages = pending.get("stages_total", 1)
         cur = pending.get("stage", 1)
@@ -2708,7 +2744,50 @@ async def cb_captcha_try(call: CallbackQuery):
         # Приветствие после капчи с кнопками
         asyncio.create_task(_captcha_welcome_after(cid, call.from_user))
     else:
-        await call.answer(f"🌊 не та кнопка ‧ нажми {pending['correct']}", show_alert=True)
+        # #4 Неверное нажатие — счётчик и эскалация
+        pending["wrong"] = pending.get("wrong", 0) + 1
+        w = pending["wrong"]
+        if w == 5 and pending.get("stages_total", 1) < 3:
+            pending["stages_total"] = 3
+            await call.answer("🌵 5 ошибок ‧ теперь 3 этапа проверки", show_alert=True)
+            await _captcha_next_stage(cid, target_uid, call, reset_to_stage=1)
+        elif w == 10 and pending.get("stages_total", 1) < 5:
+            pending["stages_total"] = 5
+            await call.answer("🌵 10 ошибок ‧ теперь 5 этапов проверки", show_alert=True)
+            await _captcha_next_stage(cid, target_uid, call, reset_to_stage=1)
+        else:
+            await call.answer(f"🌊 не та кнопка ({w}) ‧ нажми {pending['correct']}", show_alert=True)
+
+
+@dp.callback_query(F.data.startswith("cap:honeypot:"))
+async def cb_captcha_honeypot(call: CallbackQuery):
+    parts = call.data.split(":")
+    cid, target_uid = int(parts[2]), int(parts[3])
+    if call.from_user.id != target_uid:
+        await call.answer("🌊 капча не для тебя", show_alert=True); return
+    pending = _pending_captcha.get((cid, target_uid))
+    if not pending:
+        await call.answer("✨ уже не актуально", show_alert=True); return
+    # 🪤 Попался в ловушку → 15 этапов
+    pending["stages_total"] = 15
+    await call.answer("🪤 ловушка! теперь 15 этапов проверки", show_alert=True)
+    await _captcha_next_stage(cid, target_uid, call, reset_to_stage=1)
+
+
+@dp.callback_query(F.data.startswith("cap:help:"))
+async def cb_captcha_help(call: CallbackQuery):
+    parts = call.data.split(":")
+    cid, target_uid = int(parts[2]), int(parts[3])
+    pending = _pending_captcha.get((cid, target_uid))
+    if not pending:
+        await call.answer("✨ уже не актуально", show_alert=True); return
+    correct = pending["correct"]
+    await call.answer(
+        f"❓ Как пройти:\n\n"
+        f"Просто найди среди кнопок-эмодзи вот этот значок: {correct}\n"
+        f"и нажми на него. Всё!\n\n"
+        f"Кнопки эмодзи — в самом верхнем ряду.",
+        show_alert=True)
 
 
 @dp.callback_query(F.data == "capw:rules")
@@ -16729,10 +16808,15 @@ def _bool_str(val) -> str:
     return "✨ вкл" if val else "🌵 выкл"
 
 
+def _captcha_diff_label(val) -> str:
+    return {"auto": "🤖 авто", "easy": "🌱 лёгкая", "medium": "🌿 средняя", "hard": "🌵 жёсткая"}.get(val, "🤖 авто")
+
+
 def kb_chatsettings_main(cid: int) -> InlineKeyboardMarkup:
     s = cs.get_settings(cid)
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"🔐 Капча {_bool_str(s.get('captcha_enabled'))}", callback_data=f"cs_toggle:{cid}:captcha_enabled")],
+        [InlineKeyboardButton(text=f"🧩 Сложность капчи: {_captcha_diff_label(s.get('captcha_difficulty','auto'))}", callback_data=f"cs_capdiff:{cid}")],
         [InlineKeyboardButton(text=f"🛡 Антиспам {_bool_str(s.get('antispam_enabled'))}", callback_data=f"cs_toggle:{cid}:antispam_enabled")],
         [InlineKeyboardButton(text=f"🧼 Антимат {_bool_str(s.get('antimat_enabled'))}", callback_data=f"cs_toggle:{cid}:antimat_enabled")],
         [InlineKeyboardButton(text=f"🔗 Антиссылки {_bool_str(s.get('antilink_enabled'))}", callback_data=f"cs_toggle:{cid}:antilink_enabled")],
@@ -16849,6 +16933,26 @@ async def cb_cs_toggle(call: CallbackQuery):
     cs.save_settings(cid, s)
     val_str = "включено ✅" if s[key] else "выключено ❌"
     await call.answer(f"{key}: {val_str}")
+    try:
+        await call.message.edit_reply_markup(reply_markup=kb_chatsettings_main(cid))
+    except: pass
+
+
+@dp.callback_query(F.data.startswith("cs_capdiff:"))
+async def cb_cs_capdiff(call: CallbackQuery):
+    if call.from_user.id not in ADMIN_IDS and not await is_admin_by_id(int(call.data.split(":")[1]), call.from_user.id):
+        await call.answer("⛔ Только для админов", show_alert=True); return
+    cid = int(call.data.split(":")[1])
+    s = cs.get_settings(cid)
+    # Цикл: auto → easy → medium → hard → auto
+    order = ["auto", "easy", "medium", "hard"]
+    cur = s.get("captcha_difficulty", "auto")
+    nxt = order[(order.index(cur) + 1) % len(order)] if cur in order else "auto"
+    s["captcha_difficulty"] = nxt
+    cs.save_settings(cid, s)
+    labels = {"auto": "🤖 авто (по риску)", "easy": "🌱 лёгкая (1 этап)",
+              "medium": "🌿 средняя (2 этапа)", "hard": "🌵 жёсткая (3 этапа)"}
+    await call.answer(f"Сложность капчи: {labels[nxt]}", show_alert=True)
     try:
         await call.message.edit_reply_markup(reply_markup=kb_chatsettings_main(cid))
     except: pass
