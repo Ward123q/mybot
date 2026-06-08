@@ -483,8 +483,61 @@ WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
 OWNER_ID         = 7823802800                       # основной владелец (для обратной совместимости)
 OWNERS           = {7823802800, 7412821596}          # все владельцы — все проверки идут через "in OWNERS"
 ADMIN_IDS        = {7823802800, 8046083268, 7397338777, 7991589995, 7412821596 }
+# Базовые (зашитые) владельцы/админы — их нельзя снять командой, защита от блокировки
+_HARDCODED_OWNERS = set(OWNERS)
+_HARDCODED_ADMINS = set(ADMIN_IDS)
 MAX_WARNINGS     = 3
 ANTI_MAT_ENABLED  = False
+
+
+def _roles_init_db():
+    """БД для динамических владельцев/админов."""
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        conn.execute("CREATE TABLE IF NOT EXISTS bot_roles (uid INTEGER PRIMARY KEY, role TEXT NOT NULL, added_by INTEGER, added_at REAL)")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.warning(f"roles init: {e}")
+
+
+def _roles_load():
+    """Загрузить динамические роли из БД в OWNERS/ADMIN_IDS."""
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        for uid, role in conn.execute("SELECT uid, role FROM bot_roles"):
+            if role == "owner":
+                OWNERS.add(uid)
+                ADMIN_IDS.add(uid)  # владелец всегда и админ
+            elif role == "admin":
+                ADMIN_IDS.add(uid)
+        conn.close()
+    except Exception as e:
+        logging.warning(f"roles load: {e}")
+
+
+def _roles_save(uid: int, role: str, added_by: int):
+    """Сохранить роль в БД."""
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        conn.execute("INSERT OR REPLACE INTO bot_roles (uid, role, added_by, added_at) VALUES (?, ?, ?, ?)",
+                     (uid, role, added_by, time()))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.warning(f"roles save: {e}")
+
+
+def _roles_remove(uid: int):
+    """Удалить роль из БД."""
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        conn.execute("DELETE FROM bot_roles WHERE uid=?", (uid,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.warning(f"roles remove: {e}")
+
 
 # 📸 Кэш последних сообщений для доказательной базы
 # {cid: {uid: [msg_id, msg_id, ...]}}  — хранит последние 10 msg_id
@@ -2790,6 +2843,8 @@ try:
     _captcha_load_passed()
     _captcha_stats_load()
     _defense_load_state()
+    _roles_init_db()
+    _roles_load()
 except Exception as _e:
     logging.warning(f"defense init: {_e}")
 
@@ -3375,6 +3430,9 @@ async def on_new_member(message: Message):
             )
 
         # 🔐 Капча для нового юзера (если ещё не проходил)
+        # Уважаем настройку captcha_enabled (по умолчанию включена)
+        captcha_on = chat_cfg.get("captcha_enabled", True)
+
         # #19 Доверенный приглашающий: если добавил админ — капча пропускается
         added_by_admin = False
         try:
@@ -3384,7 +3442,9 @@ async def on_new_member(message: Message):
                     added_by_admin = True
         except: pass
 
-        if added_by_admin:
+        if not captcha_on:
+            pass  # капча выключена в настройках
+        elif added_by_admin:
             _captcha_mark_passed(cid, member.id)
             try:
                 sent = await message.answer(
@@ -5059,6 +5119,10 @@ _AUTIST_ACTIONS = {
     "unbanchannel":["разбань канал", "анканал", "unbanchannel"],
     "shield":    ["щит", "защита", "оберег", "shield"],
     "unshield":  ["снять щит", "анщит", "unshield"],
+    "makeadmin": ["назначь админа", "выдай админку", "сделай админом", "админка", "makeadmin"],
+    "deladmin":  ["сними админа", "забери админку", "разжалуй", "deladmin"],
+    "makeowner": ["назначь владельца", "сделай владельцем", "выдай владельца", "makeowner"],
+    "delowner":  ["сними владельца", "забери владельца", "delowner"],
 }
 
 def _autist_match_action(text: str):
@@ -5748,6 +5812,120 @@ async def cmd_autist_router(message: Message):
         add_mod_history(cid, target.id, "🌻 Аутист снят щит", "—", message.from_user.full_name)
         return
 
+    # ───── 👑 НАЗНАЧЕНИЕ АДМИНА ─────
+    if action == "makeadmin":
+        # Назначать админов могут только владельцы
+        if message.from_user.id not in OWNERS:
+            await reply_auto_delete(message, "👑 Назначать админов может только владелец")
+            return
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌴 Реплайни на того, кого назначить админом")
+            return
+        if target.is_bot:
+            await reply_auto_delete(message, "🤖 Бота админом не сделать")
+            return
+        if target.id in ADMIN_IDS:
+            await reply_auto_delete(message, "💛 Этот человек уже админ")
+            return
+        ADMIN_IDS.add(target.id)
+        _roles_save(target.id, "admin", message.from_user.id)
+        await message.answer(
+            f"👮 <b>Назначен администратор</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌴 кто — {target.mention_html()}\n"
+            f"✨ теперь может пользоваться админ-командами бота\n"
+            f"👑 назначил — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "👮 Назначен админом бота", "—", message.from_user.full_name)
+        return
+
+    # ───── 👮 СНЯТИЕ АДМИНА ─────
+    if action == "deladmin":
+        if message.from_user.id not in OWNERS:
+            await reply_auto_delete(message, "👑 Снимать админов может только владелец")
+            return
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌴 Реплайни на того, у кого забрать админку")
+            return
+        if target.id in _HARDCODED_ADMINS:
+            await reply_auto_delete(message, "🛡 Это базовый админ — его нельзя снять командой")
+            return
+        if target.id not in ADMIN_IDS:
+            await reply_auto_delete(message, "🌵 Этот человек не админ")
+            return
+        ADMIN_IDS.discard(target.id)
+        OWNERS.discard(target.id)  # если был владельцем — тоже снимаем
+        _roles_remove(target.id)
+        await message.answer(
+            f"🌻 <b>Админка снята</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌴 у кого — {target.mention_html()}\n"
+            f"🌫 больше не может пользоваться админ-командами\n"
+            f"👑 снял — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "🌻 Снят с админов бота", "—", message.from_user.full_name)
+        return
+
+    # ───── 👑 НАЗНАЧЕНИЕ ВЛАДЕЛЬЦА ─────
+    if action == "makeowner":
+        if message.from_user.id not in OWNERS:
+            await reply_auto_delete(message, "👑 Назначать владельцев может только владелец")
+            return
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌴 Реплайни на того, кого сделать владельцем")
+            return
+        if target.is_bot:
+            await reply_auto_delete(message, "🤖 Бота владельцем не сделать")
+            return
+        if target.id in OWNERS:
+            await reply_auto_delete(message, "💛 Этот человек уже владелец")
+            return
+        OWNERS.add(target.id)
+        ADMIN_IDS.add(target.id)
+        _roles_save(target.id, "owner", message.from_user.id)
+        await message.answer(
+            f"👑 <b>Назначен владелец</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌴 кто — {target.mention_html()}\n"
+            f"✨ полный доступ ко всем командам бота\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"⚠️ <i>владелец может назначать/снимать других — будь уверен в человеке</i>\n"
+            f"👑 назначил — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "👑 Назначен владельцем бота", "—", message.from_user.full_name)
+        return
+
+    # ───── 👑 СНЯТИЕ ВЛАДЕЛЬЦА ─────
+    if action == "delowner":
+        if message.from_user.id not in OWNERS:
+            await reply_auto_delete(message, "👑 Снимать владельцев может только владелец")
+            return
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌴 Реплайни на того, у кого забрать владельца")
+            return
+        if target.id in _HARDCODED_OWNERS:
+            await reply_auto_delete(message, "🛡 Это базовый владелец — его нельзя снять командой")
+            return
+        if target.id == message.from_user.id:
+            await reply_auto_delete(message, "🤨 Себя владельцем снять нельзя")
+            return
+        if target.id not in OWNERS:
+            await reply_auto_delete(message, "🌵 Этот человек не владелец")
+            return
+        OWNERS.discard(target.id)
+        # Оставляем админом или полностью снимаем? Снимаем владельца, но оставим админку если была через БД
+        _roles_save(target.id, "admin", message.from_user.id)  # понижаем до админа
+        await message.answer(
+            f"🌻 <b>Владелец понижен до админа</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌴 кто — {target.mention_html()}\n"
+            f"🌫 больше не владелец, но остался админом\n"
+            f"<i>(чтобы снять полностью — «Аутист сними админа»)</i>\n"
+            f"👑 снял — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "🌻 Снят с владельцев бота", "—", message.from_user.full_name)
+        return
+
 
 @dp.message(Command("warn"))
 async def cmd_warn(message: Message, command: CommandObject):
@@ -6028,6 +6206,27 @@ async def cmd_rban(message: Message):
         f"🎲 {target.mention_html()} получил <b>шуточный бан</b>!\n"
         f"📝 Причина: {random.choice(RANDOM_BAN_REASONS)} 😄\n<i>(реального бана нет)</i>",
         parse_mode="HTML")
+
+@dp.message(Command("botroles", "роли", "botadmins"))
+async def cmd_bot_roles(message: Message):
+    """👑 Показать владельцев и админов бота."""
+    if not await check_admin(message): return
+    lines = ["👑 <b>Роли бота</b>", "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>", "", "👑 <b>Владельцы:</b>"]
+    for oid in sorted(OWNERS):
+        base = " 🛡" if oid in _HARDCODED_OWNERS else ""
+        lines.append(f"  • <code>{oid}</code>{base}")
+    lines.append("")
+    lines.append("👮 <b>Администраторы:</b>")
+    for aid in sorted(ADMIN_IDS):
+        if aid in OWNERS:
+            continue  # владельцев уже показали
+        base = " 🛡" if aid in _HARDCODED_ADMINS else ""
+        lines.append(f"  • <code>{aid}</code>{base}")
+    lines.append("")
+    lines.append("<i>🛡 — базовый (нельзя снять командой)</i>")
+    lines.append("<i>🌴 назначить: «Аутист назначь админа» (реплай)</i>")
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
 
 @dp.message(Command("adminlist"))
 async def cmd_adminlist(message: Message):
@@ -6661,6 +6860,10 @@ async def autist_commands(message: Message):
         "канал", "забань канал", "бан канал", "разбань канал", "анканал",
         "бан", "разбан", "мут", "размут", "варн", "снять варн", "анварн",
         "удали", "удалить", "фриз", "заморозь", "заморозить",
+        "назначь админа", "выдай админку", "сделай админом", "админка",
+        "сними админа", "забери админку", "разжалуй",
+        "назначь владельца", "сделай владельцем", "выдай владельца",
+        "сними владельца", "забери владельца",
     ]
     rest_after = text_lower[len("аутист"):].strip()
     if any(rest_after.startswith(w) for w in _NEW_ROUTER_WORDS):
@@ -16318,20 +16521,16 @@ def _bool_str(val) -> str:
 def kb_chatsettings_main(cid: int) -> InlineKeyboardMarkup:
     s = cs.get_settings(cid)
     return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"🔐 Капча {_bool_str(s.get('captcha_enabled'))}", callback_data=f"cs_toggle:{cid}:captcha_enabled")],
         [InlineKeyboardButton(text=f"🛡 Антиспам {_bool_str(s.get('antispam_enabled'))}", callback_data=f"cs_toggle:{cid}:antispam_enabled")],
         [InlineKeyboardButton(text=f"🧼 Антимат {_bool_str(s.get('antimat_enabled'))}", callback_data=f"cs_toggle:{cid}:antimat_enabled")],
         [InlineKeyboardButton(text=f"🔗 Антиссылки {_bool_str(s.get('antilink_enabled'))}", callback_data=f"cs_toggle:{cid}:antilink_enabled")],
         [InlineKeyboardButton(text=f"🔠 Антикапс {_bool_str(s.get('anticaps_enabled'))}", callback_data=f"cs_toggle:{cid}:anticaps_enabled")],
-        [InlineKeyboardButton(text=f"👋 Приветствие {_bool_str(s.get('welcome_enabled'))}", callback_data=f"cs_toggle:{cid}:welcome_enabled")],
-        [InlineKeyboardButton(text=f"✨ Верификация {_bool_str(s.get('verify_enabled'))}", callback_data=f"cs_toggle:{cid}:verify_enabled")],
-        [InlineKeyboardButton(text=f"✨ XP система {_bool_str(s.get('xp_enabled'))}", callback_data=f"cs_toggle:{cid}:xp_enabled")],
-        [InlineKeyboardButton(text=f"💰 Экономика {_bool_str(s.get('economy_enabled'))}", callback_data=f"cs_toggle:{cid}:economy_enabled")],
-        [InlineKeyboardButton(text=f"🎮 Игры {_bool_str(s.get('games_enabled'))}", callback_data=f"cs_toggle:{cid}:games_enabled")],
+        [InlineKeyboardButton(text=f"🌴 Приветствие {_bool_str(s.get('welcome_enabled'))}", callback_data=f"cs_toggle:{cid}:welcome_enabled")],
         [InlineKeyboardButton(text=f"📢 Авто-анонс {_bool_str(s.get('announce_enabled'))}", callback_data=f"cs_toggle:{cid}:announce_enabled")],
         [InlineKeyboardButton(text=f"⏰ Расписание {_bool_str(s.get('schedule_enabled'))}", callback_data=f"cs_toggle:{cid}:schedule_enabled")],
         [InlineKeyboardButton(text=f"🌅 Тихий час {_bool_str(s.get('quiet_enabled'))}", callback_data=f"cs_toggle:{cid}:quiet_enabled")],
         [InlineKeyboardButton(text="⚙️ Параметры модерации", callback_data=f"cs_mod:{cid}")],
-        [InlineKeyboardButton(text="🔢 Параметры XP/экономики", callback_data=f"cs_xp:{cid}")],
         [InlineKeyboardButton(text="🕐 Расписание чата", callback_data=f"cs_schedule:{cid}")],
     ])
 
@@ -16369,17 +16568,18 @@ def kb_cs_schedule(cid: int) -> InlineKeyboardMarkup:
     ])
 
 
-@dp.message(Command("chatsettings"))
+@dp.message(Command("chatsettings", "настройки", "settings"))
 async def cmd_chatsettings(message: Message):
     if not await require_admin(message): return
     cid = message.chat.id
-    s = cs.get_settings(cid)
     text = (
-        f""
-        f"💬 Чат: <b>{message.chat.title}</b>\n"
-        f"🪪 ID: <code>{cid}</code>\n"
-        f""
-        f"Нажми кнопку чтобы переключить настройку:"
+        f"⚙️ <b>Настройки чата</b>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"💬 чат — <b>{message.chat.title}</b>\n"
+        f"🪪 ID — <code>{cid}</code>\n"
+        f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        f"🌴 нажми кнопку чтобы переключить\n"
+        f"✨ зелёная — включено, 🌵 — выключено"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=kb_chatsettings_main(cid))
 
