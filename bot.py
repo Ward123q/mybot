@@ -494,21 +494,41 @@ def _roles_init_db():
     """БД для динамических владельцев/админов."""
     try:
         conn = sqlite3.connect("captcha_state.db")
-        conn.execute("CREATE TABLE IF NOT EXISTS bot_roles (uid INTEGER PRIMARY KEY, role TEXT NOT NULL, added_by INTEGER, added_at REAL)")
+        conn.execute("CREATE TABLE IF NOT EXISTS bot_roles (uid INTEGER PRIMARY KEY, role TEXT NOT NULL, added_by INTEGER, added_at REAL, expires_at REAL DEFAULT 0, frozen INTEGER DEFAULT 0)")
+        # Миграция: добавляем колонки если их нет (для старых БД)
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(bot_roles)").fetchall()]
+        if "expires_at" not in cols:
+            conn.execute("ALTER TABLE bot_roles ADD COLUMN expires_at REAL DEFAULT 0")
+        if "frozen" not in cols:
+            conn.execute("ALTER TABLE bot_roles ADD COLUMN frozen INTEGER DEFAULT 0")
         conn.commit()
         conn.close()
     except Exception as e:
         logging.warning(f"roles init: {e}")
 
 
+# Заморозенные админы: {uid}
+_frozen_roles: set = set()
+# Срок действия роли: {uid: expires_ts}
+_role_expires: dict = {}
+
+
 def _roles_load():
     """Загрузить динамические роли из БД в OWNERS/ADMIN_IDS."""
     try:
         conn = sqlite3.connect("captcha_state.db")
-        for uid, role in conn.execute("SELECT uid, role FROM bot_roles"):
+        now = time()
+        for uid, role, expires, frozen in conn.execute("SELECT uid, role, expires_at, frozen FROM bot_roles"):
+            # Истёкшие — пропускаем (будут вычищены)
+            if expires and expires > 0 and expires < now:
+                continue
+            if frozen:
+                _frozen_roles.add(uid)
+            if expires and expires > 0:
+                _role_expires[uid] = expires
             if role == "owner":
                 OWNERS.add(uid)
-                ADMIN_IDS.add(uid)  # владелец всегда и админ
+                ADMIN_IDS.add(uid)
             elif role == "admin":
                 ADMIN_IDS.add(uid)
         conn.close()
@@ -516,16 +536,37 @@ def _roles_load():
         logging.warning(f"roles load: {e}")
 
 
-def _roles_save(uid: int, role: str, added_by: int):
+def _roles_save(uid: int, role: str, added_by: int, expires_at: float = 0):
     """Сохранить роль в БД."""
     try:
         conn = sqlite3.connect("captcha_state.db")
-        conn.execute("INSERT OR REPLACE INTO bot_roles (uid, role, added_by, added_at) VALUES (?, ?, ?, ?)",
-                     (uid, role, added_by, time()))
+        conn.execute("INSERT OR REPLACE INTO bot_roles (uid, role, added_by, added_at, expires_at, frozen) VALUES (?, ?, ?, ?, ?, ?)",
+                     (uid, role, added_by, time(), expires_at, 1 if uid in _frozen_roles else 0))
         conn.commit()
         conn.close()
     except Exception as e:
         logging.warning(f"roles save: {e}")
+    if expires_at and expires_at > 0:
+        _role_expires[uid] = expires_at
+
+
+def _roles_set_frozen(uid: int, frozen: bool):
+    """Заморозить/разморозить роль."""
+    if frozen:
+        _frozen_roles.add(uid)
+    else:
+        _frozen_roles.discard(uid)
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        conn.execute("UPDATE bot_roles SET frozen=? WHERE uid=?", (1 if frozen else 0, uid))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.warning(f"roles freeze: {e}")
+
+
+def _is_role_frozen(uid: int) -> bool:
+    return uid in _frozen_roles
 
 
 def _roles_remove(uid: int):
@@ -1071,15 +1112,32 @@ async def start_web():
     await web.TCPSite(runner, "0.0.0.0", 8080).start()
 
 async def check_admin(message: Message) -> bool:
-    if message.from_user.id in ADMIN_IDS:
+    uid = message.from_user.id
+    # 🧊 Заморожённая бот-роль — нет доступа (если не реальный админ чата)
+    if _is_role_frozen(uid) and uid not in _HARDCODED_ADMINS:
+        try:
+            m = await bot.get_chat_member(message.chat.id, uid)
+            if m.status not in ("administrator", "creator"):
+                return False
+        except:
+            return False
+    if uid in ADMIN_IDS:
         return True
     try:
-        m = await bot.get_chat_member(message.chat.id, message.from_user.id)
+        m = await bot.get_chat_member(message.chat.id, uid)
         return m.status in ("administrator", "creator")
     except:
         return False
 
 async def is_admin_by_id(chat_id: int, user_id: int) -> bool:
+    # 🧊 Заморожённая бот-роль — нет доступа (если не реальный админ чата)
+    if _is_role_frozen(user_id) and user_id not in _HARDCODED_ADMINS:
+        try:
+            m = await bot.get_chat_member(chat_id, user_id)
+            if m.status not in ("administrator", "creator"):
+                return False
+        except:
+            return False
     if user_id in ADMIN_IDS:
         return True
     try:
@@ -5123,6 +5181,8 @@ _AUTIST_ACTIONS = {
     "deladmin":  ["сними админа", "забери админку", "разжалуй", "deladmin"],
     "makeowner": ["назначь владельца", "сделай владельцем", "выдай владельца", "makeowner"],
     "delowner":  ["сними владельца", "забери владельца", "delowner"],
+    "freezerole":["заморозь админа", "заморозь роль", "freezerole"],
+    "unfreezerole":["разморозь админа", "разморозь роль", "unfreezerole"],
 }
 
 def _autist_match_action(text: str):
@@ -5827,16 +5887,46 @@ async def cmd_autist_router(message: Message):
         if target.id in ADMIN_IDS:
             await reply_auto_delete(message, "💛 Этот человек уже админ")
             return
+        # #6 Временная роль: парсим "на N дней / часов / минут"
+        expires_at = 0
+        dur_text = ""
+        if remainder:
+            import re as _re
+            mt = _re.search(r'на\s+(\d+)\s*(день|дня|дней|д|час|часа|часов|ч|минут|минуты|мин|м|недел)', remainder.lower())
+            if mt:
+                num = int(mt.group(1))
+                unit = mt.group(2)
+                if unit.startswith(("день", "дня", "дней", "д")):
+                    secs = num * 86400; dur_text = f"{num} дн."
+                elif unit.startswith("недел"):
+                    secs = num * 7 * 86400; dur_text = f"{num} нед."
+                elif unit.startswith(("час", "ч")):
+                    secs = num * 3600; dur_text = f"{num} ч."
+                else:
+                    secs = num * 60; dur_text = f"{num} мин."
+                expires_at = time() + secs
         ADMIN_IDS.add(target.id)
-        _roles_save(target.id, "admin", message.from_user.id)
+        _roles_save(target.id, "admin", message.from_user.id, expires_at)
+        dur_line = f"⏱ срок — <b>{dur_text}</b> (потом авто-снятие)\n" if expires_at else "♾ срок — бессрочно\n"
         await message.answer(
             f"👮 <b>Назначен администратор</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
             f"🌴 кто — {target.mention_html()}\n"
+            f"{dur_line}"
             f"✨ теперь может пользоваться админ-командами бота\n"
             f"👑 назначил — {message.from_user.mention_html()}",
             parse_mode="HTML")
-        add_mod_history(cid, target.id, "👮 Назначен админом бота", "—", message.from_user.full_name)
+        # Уведомление в ЛС
+        try:
+            await bot.send_message(target.id,
+                f"🎉 <b>Тебя назначили админом</b>\n"
+                f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                f"💬 чат — {message.chat.title}\n"
+                f"{dur_line}"
+                f"🌴 команды смотри в /help",
+                parse_mode="HTML")
+        except: pass
+        add_mod_history(cid, target.id, f"👮 Назначен админом{' ('+dur_text+')' if dur_text else ''}", "—", message.from_user.full_name)
         return
 
     # ───── 👮 СНЯТИЕ АДМИНА ─────
@@ -5866,7 +5956,7 @@ async def cmd_autist_router(message: Message):
         add_mod_history(cid, target.id, "🌻 Снят с админов бота", "—", message.from_user.full_name)
         return
 
-    # ───── 👑 НАЗНАЧЕНИЕ ВЛАДЕЛЬЦА ─────
+    # ───── 👑 НАЗНАЧЕНИЕ ВЛАДЕЛЬЦА (с подтверждением) ─────
     if action == "makeowner":
         if message.from_user.id not in OWNERS:
             await reply_auto_delete(message, "👑 Назначать владельцев может только владелец")
@@ -5880,19 +5970,19 @@ async def cmd_autist_router(message: Message):
         if target.id in OWNERS:
             await reply_auto_delete(message, "💛 Этот человек уже владелец")
             return
-        OWNERS.add(target.id)
-        ADMIN_IDS.add(target.id)
-        _roles_save(target.id, "owner", message.from_user.id)
+        # #8 Подтверждение — владелец это много прав
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Да, назначить владельцем", callback_data=f"role:confirmowner:{target.id}:{message.from_user.id}"),
+            InlineKeyboardButton(text="🌫 Отмена", callback_data=f"role:cancel:{message.from_user.id}"),
+        ]])
         await message.answer(
-            f"👑 <b>Назначен владелец</b>\n"
+            f"⚠️ <b>Подтверждение</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🌴 кто — {target.mention_html()}\n"
-            f"✨ полный доступ ко всем командам бота\n"
+            f"👑 назначить владельцем — {target.mention_html()}?\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"⚠️ <i>владелец может назначать/снимать других — будь уверен в человеке</i>\n"
-            f"👑 назначил — {message.from_user.mention_html()}",
-            parse_mode="HTML")
-        add_mod_history(cid, target.id, "👑 Назначен владельцем бота", "—", message.from_user.full_name)
+            f"🌵 <i>владелец получит ПОЛНЫЙ доступ: сможет назначать/снимать "
+            f"других, менять настройки, всё. Убедись что доверяешь человеку.</i>",
+            parse_mode="HTML", reply_markup=kb)
         return
 
     # ───── 👑 СНЯТИЕ ВЛАДЕЛЬЦА ─────
@@ -5925,6 +6015,97 @@ async def cmd_autist_router(message: Message):
             parse_mode="HTML")
         add_mod_history(cid, target.id, "🌻 Снят с владельцев бота", "—", message.from_user.full_name)
         return
+
+    # ───── 🧊 ЗАМОРОЗКА АДМИНА ─────
+    if action == "freezerole":
+        if message.from_user.id not in OWNERS:
+            await reply_auto_delete(message, "👑 Замораживать роли может только владелец")
+            return
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌴 Реплайни на админа, чью роль заморозить")
+            return
+        if target.id in _HARDCODED_OWNERS or target.id in _HARDCODED_ADMINS:
+            await reply_auto_delete(message, "🛡 Базового владельца/админа заморозить нельзя")
+            return
+        if target.id not in ADMIN_IDS:
+            await reply_auto_delete(message, "🌵 Этот человек не админ бота")
+            return
+        _roles_set_frozen(target.id, True)
+        await message.answer(
+            f"🧊 <b>Роль заморожена</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌴 кто — {target.mention_html()}\n"
+            f"🌫 права временно отключены (роль сохранена)\n"
+            f"💛 разморозить — «Аутист разморозь админа»\n"
+            f"👑 заморозил — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "🧊 Роль заморожена", "—", message.from_user.full_name)
+        return
+
+    # ───── 🧃 РАЗМОРОЗКА АДМИНА ─────
+    if action == "unfreezerole":
+        if message.from_user.id not in OWNERS:
+            await reply_auto_delete(message, "👑 Размораживать роли может только владелец")
+            return
+        if not message.reply_to_message:
+            await reply_auto_delete(message, "🌴 Реплайни на админа, чью роль разморозить")
+            return
+        if not _is_role_frozen(target.id):
+            await reply_auto_delete(message, "🌵 Эта роль не заморожена")
+            return
+        _roles_set_frozen(target.id, False)
+        await message.answer(
+            f"🧃 <b>Роль разморожена</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌴 кто — {target.mention_html()}\n"
+            f"✨ права снова активны\n"
+            f"👑 разморозил — {message.from_user.mention_html()}",
+            parse_mode="HTML")
+        add_mod_history(cid, target.id, "🧃 Роль разморожена", "—", message.from_user.full_name)
+        return
+
+
+@dp.callback_query(F.data.startswith("role:confirmowner:"))
+async def cb_role_confirm_owner(call: CallbackQuery):
+    parts = call.data.split(":")
+    target_id, requester_id = int(parts[2]), int(parts[3])
+    # Подтвердить может только тот владелец кто инициировал (и вообще владелец)
+    if call.from_user.id not in OWNERS:
+        await call.answer("👑 только владелец", show_alert=True); return
+    if call.from_user.id != requester_id:
+        await call.answer("🌫 подтвердить должен тот кто назначал", show_alert=True); return
+    OWNERS.add(target_id)
+    ADMIN_IDS.add(target_id)
+    _roles_save(target_id, "owner", call.from_user.id)
+    try:
+        await call.message.edit_text(
+            f"👑 <b>Назначен владелец</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🌴 ID — <code>{target_id}</code>\n"
+            f"✨ полный доступ ко всем командам бота\n"
+            f"👑 назначил — {call.from_user.mention_html()}",
+            parse_mode="HTML")
+    except: pass
+    try:
+        await bot.send_message(target_id,
+            f"👑 <b>Тебя назначили владельцем бота</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"✨ у тебя полный доступ ко всем функциям",
+            parse_mode="HTML")
+    except: pass
+    await call.answer("👑 владелец назначен")
+
+
+@dp.callback_query(F.data.startswith("role:cancel:"))
+async def cb_role_cancel(call: CallbackQuery):
+    parts = call.data.split(":")
+    requester_id = int(parts[2])
+    if call.from_user.id != requester_id and call.from_user.id not in OWNERS:
+        await call.answer("🌫 не для тебя", show_alert=True); return
+    try:
+        await call.message.edit_text("🌫 Назначение отменено")
+    except: pass
+    await call.answer("отменено")
 
 
 @dp.message(Command("warn"))
@@ -6864,6 +7045,7 @@ async def autist_commands(message: Message):
         "сними админа", "забери админку", "разжалуй",
         "назначь владельца", "сделай владельцем", "выдай владельца",
         "сними владельца", "забери владельца",
+        "заморозь админа", "заморозь роль", "разморозь админа", "разморозь роль",
     ]
     rest_after = text_lower[len("аутист"):].strip()
     if any(rest_after.startswith(w) for w in _NEW_ROUTER_WORDS):
@@ -8815,6 +8997,35 @@ async def cmd_join(message: Message):
         f"👥 Участников: <b>{len(parts)}</b>", parse_mode="HTML")
 
 # ===== НЕДЕЛЬНАЯ СТАТИСТИКА =====
+async def role_expiry_checker():
+    """Каждые 10 минут снимает истёкшие временные роли."""
+    while True:
+        await asyncio.sleep(600)  # 10 минут
+        try:
+            now = time()
+            expired = [uid for uid, exp in list(_role_expires.items()) if exp and exp < now]
+            for uid in expired:
+                if uid in _HARDCODED_OWNERS or uid in _HARDCODED_ADMINS:
+                    _role_expires.pop(uid, None)
+                    continue
+                OWNERS.discard(uid)
+                ADMIN_IDS.discard(uid)
+                _role_expires.pop(uid, None)
+                _frozen_roles.discard(uid)
+                _roles_remove(uid)
+                # Уведомляем человека
+                try:
+                    await bot.send_message(uid,
+                        "🌅 <b>Срок твоих прав истёк</b>\n"
+                        "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+                        "🌴 временная роль администратора закончилась",
+                        parse_mode="HTML")
+                except: pass
+                logging.info(f"role expired & removed: {uid}")
+        except Exception as e:
+            logging.warning(f"role expiry: {e}")
+
+
 async def warn_expiry_checker():
     """Каждые 6 часов чистит истёкшие варны и уведомляет если они сгорели"""
     while True:
@@ -17384,6 +17595,7 @@ async def main():
     asyncio.create_task(birthday_checker())
     asyncio.create_task(send_weekly_stats())
     asyncio.create_task(warn_expiry_checker())
+    asyncio.create_task(role_expiry_checker())  # ⏱ снятие истёкших временных ролей
     asyncio.create_task(admin_reminder_broadcaster())  # 📢 рассылка про админов раз в 4ч
     asyncio.create_task(run_lottery())
     asyncio.create_task(autosave_loop())
