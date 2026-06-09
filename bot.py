@@ -4650,13 +4650,23 @@ async def cb_start_help(call: CallbackQuery):
     )
     await call.answer()
 
-@dp.message(Command("rules"))
+@dp.message(Command("rules", "правила"))
 async def cmd_rules(message: Message):
     await reply_auto_delete(message,
-        "📋 <b>Правила сообщества</b>\n\nОзнакомьтесь с правилами, нажав кнопку ниже.",
+        "🌻 <b>Правила сообщества</b>\n"
+        "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        "🌴 <b>Коротко:</b>\n"
+        "├ 🔞 18+ не по теме, 💊 запрещёнка → бан\n"
+        "├ 📢 реклама / спам / скам → мут / бан\n"
+        "├ 🤬 травля участников → предупреждения → бан\n"
+        "├ 🌊 флуд → мут\n"
+        "└ ☀️ уважай других — здесь летний вайб\n"
+        "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+        "<i>📜 полная версия — по кнопке</i>",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Читать правила", url="https://telegra.ph/Pravila-soobshchestva-03-13-6")]
+            [InlineKeyboardButton(text="📜 Полные правила", url="https://telegra.ph/Pravila-soobshchestva-03-13-6")],
+            [InlineKeyboardButton(text="📨 Все анонки", url="https://t.me/HubAnon")],
         ])
     )
 
@@ -10818,28 +10828,36 @@ async def cb_start_menu(call: CallbackQuery):
 
     elif action == "rules":
         await call.message.edit_text(
-            f"╔‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧╗\n"
-            f"📋 <b>Правила чата</b>\n"
-            f"╚‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧╝\n"
+            f"🌻 <b>Правила сообщества</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
             f"\n"
             f"🌴 <b>Нарушения и санкции</b>\n"
-            f"├ 🔞 Контент 18+ → варн → бан\n"
-            f"├ 💊 Наркотики → бан без предупреждений\n"
-            f"├ 📢 Реклама / спам → мут / бан\n"
+            f"├ 🔞 Контент 18+ не по теме → варн → бан\n"
+            f"├ 💊 Наркотики / запрещёнка → бан сразу\n"
+            f"├ 📢 Реклама / спам / скам → мут / бан\n"
             f"├ 🛡 Оскорбление администрации → варн → бан\n"
-            f"└ 🌊 Флуд → мут\n"
+            f"├ 🌊 Флуд и оффтоп-завал → мут\n"
+            f"├ 🤬 Травля участников → щит + предупреждения → бан\n"
+            f"└ 🤖 Боты и мульти-аккаунты → бан\n"
             f"\n"
-            f"‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧\n"
-            f"🔒 <b>Конфиденциальность</b>\n"
-            f"├ Бот не хранит личные данные\n"
-            f"├ Анонимность гарантирована\n"
-            f"└ Данные используются только для модерации\n"
+            f"💛 <b>Как у нас принято</b>\n"
+            f"├ ☀️ уважай других — здесь летний вайб\n"
+            f"├ 🌺 спорь по делу, без перехода на личности\n"
+            f"└ 🏝 не нравится — выйди молча, без драмы\n"
             f"\n"
-            f"<i>🤝 Соблюдай правила — чат будет комфортным для всех!</i>",
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"🔒 <b>Приватность</b>\n"
+            f"├ бот не хранит личные данные\n"
+            f"├ жалобы анонимны\n"
+            f"└ данные — только для модерации\n"
+            f"\n"
+            f"<i>🤝 Полная версия правил — по кнопке ниже</i>",
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")
-            ]])
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📜 Полные правила", url="https://telegra.ph/Pravila-soobshchestva-03-13-6")],
+                [InlineKeyboardButton(text="📨 Все анонки", url="https://t.me/HubAnon")],
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="start:back")],
+            ])
         )
 
     elif action == "friends":
