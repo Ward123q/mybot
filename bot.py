@@ -480,6 +480,8 @@ def get_xp_for_next(level: int) -> int:
 LOG_CHANNEL_ID   = -1003832428474
 BOT_TOKEN        = os.getenv("BOT_TOKEN")
 WEATHER_API_KEY  = os.getenv("WEATHER_API_KEY", "")
+GEMINI_API_KEY   = os.getenv("GEMINI_API_KEY", "")   # 🧠 ИИ-ассистент (бесплатный Google Gemini)
+GEMINI_MODEL     = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")  # модель по умолчанию
 OWNER_ID         = 7823802800                       # основной владелец (для обратной совместимости)
 OWNERS           = {7823802800, 7412821596}          # все владельцы — все проверки идут через "in OWNERS"
 ADMIN_IDS        = {7823802800, 8046083268, 7397338777, 7991589995, 7412821596 }
@@ -8723,6 +8725,144 @@ async def guess_handler(message: Message):
         await reply_auto_delete(message, f"⬇️ Меньше! Попытка {game['attempts']}/10")
 
 # ===== АСК =====
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+#  🧠 ИИ-АССИСТЕНТ ‧ Google Gemini (бесплатный)
+# ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧
+
+# Кулдаун на /ai: {uid: last_ts}
+_ai_cooldown: dict = {}
+AI_COOLDOWN_SEC = 15  # 1 запрос раз в 15 сек на юзера
+# История диалога: {(cid,uid): [(role, text), ...]} — последние реплики
+_ai_history: dict = defaultdict(list)
+AI_HISTORY_MAX = 6  # помним последние 6 реплик
+
+# Личность бота (летний характер)
+_AI_SYSTEM_PROMPT = (
+    "Ты — дружелюбный ИИ-ассистент в Telegram-чате под названием Chat Guard. "
+    "У тебя лёгкий летний вайб ☀️. Отвечай на русском, по делу, но тепло и с лёгким юмором. "
+    "Будь кратким (2-5 предложений обычно), не используй сложное форматирование. "
+    "Можешь использовать эмодзи в меру. Если вопрос некорректный или о чём-то вредном — "
+    "вежливо откажись. Не притворяйся человеком, ты бот-ассистент."
+)
+
+
+async def _gemini_ask(user_text: str, history: list = None) -> str:
+    """Запрос к Gemini API. Возвращает текст ответа или сообщение об ошибке."""
+    if not GEMINI_API_KEY:
+        return "🌵 ИИ не настроен — владельцу нужно добавить GEMINI_API_KEY"
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+
+    # Собираем контекст диалога
+    contents = []
+    if history:
+        for role, txt in history:
+            contents.append({"role": role, "parts": [{"text": txt}]})
+    contents.append({"role": "user", "parts": [{"text": user_text}]})
+
+    payload = {
+        "system_instruction": {"parts": [{"text": _AI_SYSTEM_PROMPT}]},
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.8,
+            "maxOutputTokens": 800,
+        },
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
+        ],
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                url,
+                headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                if resp.status == 429:
+                    return "🌊 Слишком много запросов к ИИ ‧ подожди минутку"
+                if resp.status != 200:
+                    err = await resp.text()
+                    logging.warning(f"gemini {resp.status}: {err[:200]}")
+                    return "🌵 ИИ временно недоступен ‧ попробуй позже"
+                data = await resp.json()
+                # Извлекаем текст
+                cands = data.get("candidates", [])
+                if not cands:
+                    # Возможно заблокировано фильтром
+                    return "🌫 Не могу ответить на это"
+                parts = cands[0].get("content", {}).get("parts", [])
+                text = "".join(p.get("text", "") for p in parts).strip()
+                return text or "🌫 Пустой ответ ‧ переформулируй вопрос"
+    except asyncio.TimeoutError:
+        return "🌊 ИИ долго думает ‧ попробуй ещё раз"
+    except Exception as e:
+        logging.warning(f"gemini error: {e}")
+        return "🌵 Ошибка связи с ИИ ‧ попробуй позже"
+
+
+@dp.message(Command("ai", "ии", "gpt", "gemini"))
+async def cmd_ai(message: Message, command: CommandObject):
+    """🧠 Спросить ИИ-ассистента."""
+    uid = message.from_user.id
+    cid = message.chat.id
+
+    # Текст вопроса: из аргументов команды или из реплая
+    question = (command.args or "").strip()
+    if not question and message.reply_to_message and message.reply_to_message.text:
+        question = message.reply_to_message.text.strip()
+
+    if not question:
+        await reply_auto_delete(message,
+            "🧠 <b>ИИ-ассистент</b>\n"
+            "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            "🌴 спроси что-нибудь: <code>/ai как сварить борщ?</code>\n"
+            "💛 или реплайни на сообщение с вопросом",
+            parse_mode="HTML")
+        return
+
+    # Кулдаун
+    last = _ai_cooldown.get(uid, 0)
+    if time() - last < AI_COOLDOWN_SEC and uid not in OWNERS:
+        wait = int(AI_COOLDOWN_SEC - (time() - last))
+        await reply_auto_delete(message, f"🌊 подожди {wait}с перед следующим вопросом")
+        return
+    _ai_cooldown[uid] = time()
+
+    # Показываем "печатает..."
+    try:
+        await bot.send_chat_action(cid, "typing")
+    except: pass
+
+    # История диалога этого юзера
+    hist = _ai_history.get((cid, uid), [])
+    answer = await _gemini_ask(question[:2000], hist)
+
+    # Обновляем историю
+    hist.append(("user", question[:2000]))
+    hist.append(("model", answer))
+    _ai_history[(cid, uid)] = hist[-AI_HISTORY_MAX:]
+
+    # Отправляем ответ (с учётом лимита Telegram 4096)
+    out = f"🧠 {answer}"
+    if len(out) > 4000:
+        out = out[:4000] + "…"
+    await message.reply(out, parse_mode=None)
+
+
+@dp.message(Command("aireset", "иисброс"))
+async def cmd_ai_reset(message: Message):
+    """🧠 Сбросить историю диалога с ИИ."""
+    cid = message.chat.id
+    uid = message.from_user.id
+    _ai_history.pop((cid, uid), None)
+    await reply_auto_delete(message, "🌴 История диалога с ИИ очищена ‧ начнём заново")
+
+
 ask_targets = {}
 
 async def cmd_ask(message: Message):
