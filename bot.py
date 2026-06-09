@@ -5251,7 +5251,7 @@ _AUTIST_ACTIONS = {
     "filter":    ["фильтр", "стопслово", "filter"],
     "unfilter":  ["анфильтр", "снять фильтр", "unfilter"],
     "verify":    ["проверка", "капча", "проверь", "verify"],
-    "wave":      ["волна", "чистка", "wave", "clean"],
+    "wave":      ["волна", "чистка", "чисти", "очисти", "очистка", "wave", "clean", "снеси"],
     "whitelist": ["белый", "вайтлист", "доверенный", "whitelist"],
     "unwhitelist":["небелый", "анвайтлист", "снять белый", "unwhitelist"],
     "banchannel":["канал", "забань канал", "бан канал", "channel", "banchannel"],
@@ -5828,32 +5828,40 @@ async def cmd_autist_router(message: Message):
             try: n = int(remainder.split()[0])
             except: pass
         n = max(1, min(n, 500))  # лимит 500
+
+        # Удаляем по диапазону ID: от текущего сообщения назад на N.
+        # Telegram позволяет удалять пачками до 100 ID за раз (delete_messages).
+        base_id = message.message_id
+        # ID для удаления: текущее и N предыдущих
+        ids_to_delete = list(range(max(1, base_id - n), base_id + 1))
+
         deleted = 0
-        # Используем кэш user_msg_ids чтобы найти ID для удаления
-        all_msgs = []
-        try:
-            for u_msgs in user_msg_ids.get(cid, {}).values():
-                all_msgs.extend(u_msgs)
-            all_msgs.sort(key=lambda x: -x[1])  # новейшие первыми
-            for msg_id, _ts in all_msgs[:n]:
-                try:
-                    await bot.delete_message(cid, msg_id)
-                    deleted += 1
-                except: pass
-        except Exception as e:
-            logging.warning(f"wave: {e}")
-        sent = await message.answer(
+        # Бьём на пачки по 100
+        for i in range(0, len(ids_to_delete), 100):
+            batch = ids_to_delete[i:i+100]
+            try:
+                await bot.delete_messages(cid, batch)
+                deleted += len(batch)
+            except Exception:
+                # Если пачкой не вышло — пробуем по одному (часть ID может быть уже удалена/недоступна)
+                for mid in batch:
+                    try:
+                        await bot.delete_message(cid, mid)
+                        deleted += 1
+                    except: pass
+
+        sent = await bot.send_message(cid,
             f"🌊 <b>Волна прошла</b>\n"
             f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            f"🌻 удалено — <b>{deleted}</b> из {n}\n"
-            f"💛 объявил — {message.from_user.mention_html()}",
+            f"🌻 очищено до <b>{n}</b> сообщений\n"
+            f"💛 объявил — {message.from_user.full_name}",
             parse_mode="HTML")
         async def _del_self(m):
-            await asyncio.sleep(10)
+            await asyncio.sleep(8)
             try: await m.delete()
             except: pass
         asyncio.create_task(_del_self(sent))
-        add_mod_history(cid, 0, f"🌊 Аутист волна ({deleted})", "—", message.from_user.full_name)
+        add_mod_history(cid, 0, f"🌊 Аутист волна ({n})", "—", message.from_user.full_name)
         return
 
     # ───── 🌴 БЕЛЫЙ СПИСОК — добавить ─────
@@ -7117,7 +7125,7 @@ async def autist_commands(message: Message):
         "амнистия", "амнистируй", "прощение",
         "фильтр", "стопслово", "анфильтр", "снять фильтр",
         "проверка", "капча", "проверь",
-        "волна", "чистка",
+        "волна", "чистка", "чисти", "очисти", "очистка", "снеси",
         "белый", "вайтлист", "доверенный", "небелый", "анвайтлист", "снять белый",
         "канал", "забань канал", "бан канал", "разбань канал", "анканал",
         "бан", "разбан", "мут", "размут", "варн", "снять варн", "анварн",
@@ -8806,24 +8814,10 @@ async def _gemini_ask(user_text: str, history: list = None) -> str:
 
 
 @dp.message(Command("ai", "ии", "gpt", "gemini"))
-async def cmd_ai(message: Message, command: CommandObject):
-    """🧠 Спросить ИИ-ассистента."""
+async def _ai_respond(message: Message, question: str):
+    """Общая логика ответа ИИ — используется и командой, и триггерами."""
     uid = message.from_user.id
     cid = message.chat.id
-
-    # Текст вопроса: из аргументов команды или из реплая
-    question = (command.args or "").strip()
-    if not question and message.reply_to_message and message.reply_to_message.text:
-        question = message.reply_to_message.text.strip()
-
-    if not question:
-        await reply_auto_delete(message,
-            "🧠 <b>ИИ-ассистент</b>\n"
-            "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
-            "🌴 спроси что-нибудь: <code>/ai как сварить борщ?</code>\n"
-            "💛 или реплайни на сообщение с вопросом",
-            parse_mode="HTML")
-        return
 
     # Кулдаун
     last = _ai_cooldown.get(uid, 0)
@@ -8833,25 +8827,39 @@ async def cmd_ai(message: Message, command: CommandObject):
         return
     _ai_cooldown[uid] = time()
 
-    # Показываем "печатает..."
     try:
         await bot.send_chat_action(cid, "typing")
     except: pass
 
-    # История диалога этого юзера
     hist = _ai_history.get((cid, uid), [])
     answer = await _gemini_ask(question[:2000], hist)
 
-    # Обновляем историю
     hist.append(("user", question[:2000]))
     hist.append(("model", answer))
     _ai_history[(cid, uid)] = hist[-AI_HISTORY_MAX:]
 
-    # Отправляем ответ (с учётом лимита Telegram 4096)
     out = f"🧠 {answer}"
     if len(out) > 4000:
         out = out[:4000] + "…"
     await message.reply(out, parse_mode=None)
+
+
+async def cmd_ai(message: Message, command: CommandObject):
+    """🧠 Спросить ИИ-ассистента."""
+    question = (command.args or "").strip()
+    if not question and message.reply_to_message and message.reply_to_message.text:
+        question = message.reply_to_message.text.strip()
+
+    if not question:
+        await reply_auto_delete(message,
+            "🧠 <b>ИИ-ассистент</b>\n"
+            "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            "🌴 спроси что-нибудь: <code>/ai как сварить борщ?</code>\n"
+            "💛 или реплайни на сообщение с вопросом\n"
+            "🌊 или просто напиши <b>бот, ...</b> в чате",
+            parse_mode="HTML")
+        return
+    await _ai_respond(message, question)
 
 
 @dp.message(Command("aireset", "иисброс"))
@@ -8861,6 +8869,119 @@ async def cmd_ai_reset(message: Message):
     uid = message.from_user.id
     _ai_history.pop((cid, uid), None)
     await reply_auto_delete(message, "🌴 История диалога с ИИ очищена ‧ начнём заново")
+
+
+# 🧠 Слова-триггеры для вызова ИИ без команды
+_AI_DEFAULT_TRIGGERS = ["бот", "гард", "гвард", "guard", "ботик", "гардик"]
+_ai_triggers: dict = defaultdict(lambda: list(_AI_DEFAULT_TRIGGERS))  # {cid: [words]}
+_ai_enabled: dict = {}  # {cid: bool} — включён ли вызов по словам
+
+
+def _ai_triggers_init_db():
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        conn.execute("CREATE TABLE IF NOT EXISTS ai_triggers (cid INTEGER NOT NULL, word TEXT NOT NULL, PRIMARY KEY (cid, word))")
+        conn.execute("CREATE TABLE IF NOT EXISTS ai_chat_enabled (cid INTEGER PRIMARY KEY, enabled INTEGER)")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.warning(f"ai triggers init: {e}")
+
+
+def _ai_triggers_load():
+    try:
+        conn = sqlite3.connect("captcha_state.db")
+        bycid = {}
+        for cid, word in conn.execute("SELECT cid, word FROM ai_triggers"):
+            bycid.setdefault(cid, []).append(word)
+        for cid, words in bycid.items():
+            _ai_triggers[cid] = words
+        for cid, en in conn.execute("SELECT cid, enabled FROM ai_chat_enabled"):
+            _ai_enabled[cid] = bool(en)
+        conn.close()
+    except Exception as e:
+        logging.warning(f"ai triggers load: {e}")
+
+
+try:
+    _ai_triggers_init_db()
+    _ai_triggers_load()
+except Exception as _e:
+    logging.warning(f"ai triggers init: {_e}")
+
+
+@dp.message(Command("aitriggers", "иислова"))
+async def cmd_ai_triggers(message: Message, command: CommandObject):
+    """🧠 Управление словами-триггерами ИИ."""
+    if not await check_admin(message): return
+    cid = message.chat.id
+    args = (command.args or "").strip()
+
+    if not args:
+        words = _ai_triggers.get(cid, list(_AI_DEFAULT_TRIGGERS))
+        en = _ai_enabled.get(cid, True)
+        await message.answer(
+            f"🧠 <b>Слова-триггеры ИИ</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"⚡ вызов по словам: {'✨ вкл' if en else '🌵 выкл'}\n"
+            f"🌴 слова: <b>{', '.join(words)}</b>\n"
+            f"<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            f"➕ добавить — <code>/aitriggers + слово</code>\n"
+            f"➖ убрать — <code>/aitriggers - слово</code>\n"
+            f"🔘 вкл/выкл — <code>/aitriggers вкл</code> / <code>выкл</code>",
+            parse_mode="HTML")
+        return
+
+    if args.lower() in ("вкл", "on", "включить"):
+        _ai_enabled[cid] = True
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("INSERT OR REPLACE INTO ai_chat_enabled (cid, enabled) VALUES (?, 1)", (cid,))
+            conn.commit(); conn.close()
+        except: pass
+        await message.answer("✨ Вызов ИИ по словам включён")
+        return
+    if args.lower() in ("выкл", "off", "выключить"):
+        _ai_enabled[cid] = False
+        try:
+            conn = sqlite3.connect("captcha_state.db")
+            conn.execute("INSERT OR REPLACE INTO ai_chat_enabled (cid, enabled) VALUES (?, 0)", (cid,))
+            conn.commit(); conn.close()
+        except: pass
+        await message.answer("🌵 Вызов ИИ по словам выключен (команда /ai работает)")
+        return
+
+    if args.startswith("+"):
+        word = args[1:].strip().lower()
+        if not word:
+            await reply_auto_delete(message, "🌴 укажи слово после +"); return
+        words = _ai_triggers.get(cid, list(_AI_DEFAULT_TRIGGERS))
+        if word not in words:
+            words.append(word)
+            _ai_triggers[cid] = words
+            try:
+                conn = sqlite3.connect("captcha_state.db")
+                conn.execute("INSERT OR REPLACE INTO ai_triggers (cid, word) VALUES (?, ?)", (cid, word))
+                conn.commit(); conn.close()
+            except: pass
+        await message.answer(f"➕ Слово-триггер добавлено: <b>{word}</b>", parse_mode="HTML")
+        return
+
+    if args.startswith("-"):
+        word = args[1:].strip().lower()
+        words = _ai_triggers.get(cid, list(_AI_DEFAULT_TRIGGERS))
+        if word in words:
+            words.remove(word)
+            _ai_triggers[cid] = words
+            try:
+                conn = sqlite3.connect("captcha_state.db")
+                conn.execute("DELETE FROM ai_triggers WHERE cid=? AND word=?", (cid, word))
+                conn.commit(); conn.close()
+            except: pass
+        await message.answer(f"➖ Слово-триггер убрано: <b>{word}</b>", parse_mode="HTML")
+        return
+
+    await reply_auto_delete(message, "🌵 Не понял ‧ используй + слово, - слово, вкл, выкл")
 
 
 ask_targets = {}
