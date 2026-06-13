@@ -6213,6 +6213,41 @@ async def cmd_send_captcha_manual(message: Message):
     await _captcha_send(cid, message.from_user, message)
 
 
+@dp.message(Command("emojiid"))
+async def cmd_emoji_id(message: Message):
+    """🌟 Достать custom_emoji_id из сообщения с кастомными эмодзи."""
+    if not await check_admin(message): return
+
+    # Берём сообщение с эмодзи — из реплая или из самой команды
+    src = message.reply_to_message if message.reply_to_message else message
+    entities = src.entities or src.caption_entities or []
+    text = src.text or src.caption or ""
+
+    found = []
+    for ent in entities:
+        if ent.type == "custom_emoji":
+            emoji_char = text[ent.offset:ent.offset + ent.length]
+            found.append((emoji_char, ent.custom_emoji_id))
+
+    if not found:
+        await message.reply(
+            "🌟 <b>Как достать ID кастомного эмодзи</b>\n"
+            "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            "🌴 1. Напиши сообщение с премиум-эмодзи\n"
+            "🌴 2. Реплайни на него командой <code>/emojiid</code>\n"
+            "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>\n"
+            "<i>💛 я выдам ID каждого кастомного эмодзи</i>",
+            parse_mode="HTML")
+        return
+
+    lines = ["🌟 <b>Найденные кастомные эмодзи</b>", "<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>"]
+    for emoji_char, eid in found:
+        lines.append(f"{emoji_char} → <code>{eid}</code>")
+    lines.append("<i>‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧</i>")
+    lines.append("<i>🌴 скопируй ID и пришли мне — вставлю в бота</i>")
+    await message.reply("\n".join(lines), parse_mode="HTML")
+
+
 @dp.message(Command("captchastats"))
 async def cmd_captcha_stats(message: Message):
     """🌺 Статистика капчи в чате."""
@@ -6437,6 +6472,7 @@ _AUTIST_PREFIX = r"^\s*[АаAa][уyУY][тtТT][иiИI][сcСsCс][тtТT]\s+"
 _AUTIST_ACTIONS = {
     "ban":   ["бан", "забань", "забан", "ban"],
     "unban": ["разбан", "разбань", "unban"],
+    "kick":  ["кик", "кикни", "выгони", "выгнать", "выкинь", "kick"],
     "mute":  ["мут", "замут", "замутить", "mute"],
     "unmute":["размут", "размутить", "unmute"],
     "warn":  ["варн", "варнить", "предупреждение", "warn"],
@@ -6632,7 +6668,7 @@ async def cmd_autist_router(message: Message):
         if target.is_bot:
             await reply_auto_delete(message, "🤖 С ботами так нельзя.")
             return
-        if action in ("ban", "mute", "warn", "freeze", "shadow", "verify") and await is_admin_by_id(cid, target.id):
+        if action in ("ban", "kick", "mute", "warn", "freeze", "shadow", "verify") and await is_admin_by_id(cid, target.id):
             await reply_auto_delete(message, "💛 К администратору так нельзя")
             return
 
@@ -6672,6 +6708,38 @@ async def cmd_autist_router(message: Message):
             extra={"chat_title": message.chat.title, "trigger": "autist"})
         ban_list[cid][target.id] = {"reason": reason, "by": message.from_user.full_name, "ts": time()}
         mod_reasons[cid][target.id]["ban"] = reason
+        return
+
+    # ───── КИК (выгнать без бана) ─────
+    if action == "kick":
+        try:
+            await bot.ban_chat_member(cid, target.id)
+            await bot.unban_chat_member(cid, target.id, only_if_banned=True)
+        except Exception as e:
+            await reply_auto_delete(message, f"🌵 Не удалось кикнуть: <code>{e}</code>", parse_mode="HTML")
+            return
+        dm_ok = await dm_warn_user(target.id, target.full_name, reason,
+                                    message.chat.title, "👢 Аутист кик", message.from_user.full_name)
+        reply = (
+            f"👢 <b>Аутист · Кик</b>\n"
+            f"‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧ ‧\n"
+            f"├ 👤 Цель: {target.mention_html()}\n"
+            f"├ 📝 Причина: {reason}\n"
+            f"├ 🌴 <i>может вернуться по ссылке</i>\n"
+            f"└ 👮 От: {message.from_user.mention_html()}"
+        )
+        if dm_ok: reply += "\n\n<i>Пользователь уведомлён в ЛС.</i>"
+        await reply_auto_delete(message, reply, parse_mode="HTML")
+        await log_action(
+            f"👢 <b>Аутист · Кик</b>\n\n👤 <b>Кто:</b> {message.from_user.mention_html()}\n"
+            f"🎯 <b>Кого:</b> {target.mention_html()}\n📝 <b>Причина:</b> {reason}\n"
+            f"💬 <b>Чат:</b> {message.chat.title}\n🕐 {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+        add_mod_history(cid, target.id, "👢 Аутист кик", reason, message.from_user.full_name)
+        await ag.record_action(message.from_user.id, "kick",
+            admin_name=message.from_user.full_name,
+            target_id=target.id, target_name=target.full_name,
+            cid=cid, reason=reason,
+            extra={"chat_title": message.chat.title, "trigger": "autist"})
         return
 
     # ───── РАЗБАН ─────
@@ -8329,6 +8397,7 @@ async def autist_commands(message: Message):
         "белый", "вайтлист", "доверенный", "небелый", "анвайтлист", "снять белый",
         "канал", "забань канал", "бан канал", "разбань канал", "анканал",
         "бан", "разбан", "мут", "размут", "варн", "снять варн", "анварн",
+        "кик", "кикни", "выгони", "выгнать", "выкинь",
         "удали", "удалить", "фриз", "заморозь", "заморозить",
         "назначь админа", "выдай админку", "сделай админом", "админка",
         "сними админа", "забери админку", "разжалуй",
